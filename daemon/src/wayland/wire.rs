@@ -5,9 +5,6 @@ use std::{
     str::Utf8Error,
 };
 
-pub type ObjectId = u32;
-pub type NewId = u32;
-
 /// Message header from wire protocol.
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash, Pod, Zeroable)]
@@ -16,6 +13,8 @@ pub struct MessageHeader {
     pub request_id: u16,
     pub message_len: u16,
 }
+
+pub const HEADER_SIZE_WORDS: usize = mem::size_of::<MessageHeader>() / mem::size_of::<u32>();
 
 /// Represents a message from Wire protoc#ol.
 #[repr(transparent)]
@@ -65,16 +64,14 @@ impl Message {
 
 /// Reads a message from the stream
 pub fn read_message_into(stream: &mut impl Read, buf: &mut Vec<u32>) -> Result<(), io::Error> {
-    const HEADER_SIZE: usize = mem::size_of::<MessageHeader>() / mem::size_of::<u32>();
-
-    buf.resize(HEADER_SIZE, 0);
+    buf.resize(HEADER_SIZE_WORDS, 0);
     stream.read_exact(bytemuck::cast_slice_mut(buf))?;
 
     let header = bytemuck::from_bytes::<MessageHeader>(bytemuck::cast_slice(&buf));
     let len = header.message_len as usize / mem::size_of::<u32>();
 
     buf.resize(len, 0);
-    stream.read_exact(bytemuck::cast_slice_mut(&mut buf[HEADER_SIZE..]))?;
+    stream.read_exact(bytemuck::cast_slice_mut(&mut buf[HEADER_SIZE_WORDS..]))?;
 
     Ok(())
 }
@@ -109,7 +106,8 @@ impl WireStr {
     /// It will return `None` if raw data does not satify all invariants (see [`WireStr`]).
     pub fn new(raw: &[u32]) -> Option<&WireStr> {
         // has it's length as a first entry
-        if raw.is_empty() || mem::size_of_val(raw) - (raw[0] as usize) >= 2 * mem::size_of::<u32>() {
+        if raw.is_empty() || mem::size_of_val(raw) - (raw[0] as usize) >= 2 * mem::size_of::<u32>()
+        {
             return None;
         }
 
@@ -180,5 +178,91 @@ impl<'r> MessageReader<'r> {
     /// Reads [`WireStr`] if any's present and converts it to a [`str`].
     pub fn read_str(&mut self) -> Option<&'r str> {
         self.read_wire_str().and_then(|s| s.as_str().ok())
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct MessageBuilder<'b> {
+    pub buf: &'b mut Vec<u32>,
+}
+
+impl<'b> MessageBuilder<'b> {
+    pub fn new(buf: &'b mut Vec<u32>) -> Self {
+        Self { buf }
+    }
+
+    pub fn clear(&mut self) {
+        self.buf.clear();
+    }
+
+    pub fn get_message(&'b mut self) -> Option<&'b Message> {
+        let len = self.buf.len() * mem::size_of::<u32>();
+        let header = bytemuck::from_bytes_mut::<MessageHeader>(bytemuck::cast_slice_mut(
+            self.buf.get_mut(..HEADER_SIZE_WORDS)?,
+        ));
+
+        header.message_len = len as u16;
+
+        Some(Message::from_u32_slice(self.buf.as_slice()))
+    }
+
+    pub fn header(&mut self, object_id: u32, request_id: u16) -> &mut Self {
+        if self.buf.len() < HEADER_SIZE_WORDS {
+            self.buf.resize(HEADER_SIZE_WORDS, 0);
+        }
+
+        self.buf[..HEADER_SIZE_WORDS].copy_from_slice(bytemuck::cast_slice(bytemuck::bytes_of(
+            &MessageHeader {
+                object_id,
+                request_id,
+                message_len: 0,
+            },
+        )));
+
+        self
+    }
+
+    pub fn object_id(&mut self, value: u32) -> &mut Self {
+        if self.buf.len() < HEADER_SIZE_WORDS {
+            self.buf.resize(HEADER_SIZE_WORDS, 0);
+        }
+
+        let header =
+            bytemuck::from_bytes_mut::<MessageHeader>(bytemuck::cast_slice_mut(&mut self.buf));
+
+        header.object_id = value;
+
+        self
+    }
+
+    pub fn request_id(&mut self, value: u16) -> &mut Self {
+        if self.buf.len() < HEADER_SIZE_WORDS {
+            self.buf.resize(HEADER_SIZE_WORDS, 0);
+        }
+
+        let header =
+            bytemuck::from_bytes_mut::<MessageHeader>(bytemuck::cast_slice_mut(&mut self.buf));
+
+        header.request_id = value;
+
+        self
+    }
+
+    pub fn event_id(&mut self, value: u16) -> &mut Self {
+        self.request_id(value)
+    }
+
+    pub fn uint(&mut self, value: u32) -> &mut Self {
+        if self.buf.len() < HEADER_SIZE_WORDS {
+            self.buf.resize(HEADER_SIZE_WORDS, 0);
+        }
+
+        self.buf.push(value);
+        self
+    }
+
+    pub fn int(&mut self, value: i32) -> &mut Self {
+        self.uint(value as u32);
+        self
     }
 }
