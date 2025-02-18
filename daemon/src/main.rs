@@ -10,26 +10,37 @@ fn get_socket_path() -> Option<String> {
     Some(format!("{xdg_runtime_dir}/{display_name}"))
 }
 
+#[derive(Clone, Default, Debug, PartialEq, Copy, Eq, PartialOrd, Ord, Hash)]
+struct InterfaceDesc<'s> {
+    numeric_name: u32,
+    interface_name: &'s str,
+    version: u32,
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let socket_path = get_socket_path().expect("failed to get wayland socket path");
     let mut sock = UnixStream::connect(socket_path)?;
 
     sock.write_all(bytemuck::cast_slice(&[0x00000001, 0x000C0001, 0x00000002]))?;
 
-    let mut buf = Vec::new();
-    wire::read_message_into(&mut sock, &mut buf)?;
+    loop {
+        let mut buf = Vec::new();
+        wire::read_message_into(&mut sock, &mut buf)?;
 
-    let message = Message::from_u32_slice(&buf);
+        let message = Message::from_u32_slice(&buf);
 
-    println!("message: {message:?},\nheader: {:?}", message.header());
+        // println!("message: {message:?},\nheader: {:?}", message.header());
 
-    let mut reader = MessageReader::new(&message);
+        let mut reader = MessageReader::new(&message);
 
-    let numeric_name = reader.read_u32().unwrap();
-    let interface_name = reader.read_str().unwrap();
-    let version = reader.read_u32().unwrap();
+        let numeric_name = reader.read_u32().unwrap();
+        let interface_name = reader.read_str().unwrap();
+        let version = reader.read_u32().unwrap();
 
-    println!("name: {numeric_name},\ninterface: '{interface_name}',\nversion: {version}");
-
-    Ok(())
+        eprintln!("{:#?}", InterfaceDesc {
+            numeric_name,
+            interface_name,
+            version
+        });
+    }
 }

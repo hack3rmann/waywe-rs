@@ -109,7 +109,7 @@ impl WireStr {
     /// It will return `None` if raw data does not satify all invariants (see [`WireStr`]).
     pub fn new(raw: &[u32]) -> Option<&WireStr> {
         // has it's length as a first entry
-        if raw.is_empty() || raw[0] as usize != mem::size_of_val(raw) - mem::size_of::<u32>() {
+        if raw.is_empty() || mem::size_of_val(raw) - (raw[0] as usize) >= 2 * mem::size_of::<u32>() {
             return None;
         }
 
