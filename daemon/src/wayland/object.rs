@@ -4,6 +4,13 @@ use std::num::NonZeroU32;
 pub struct ObjectId(pub NonZeroU32);
 
 impl ObjectId {
+    pub const WL_DISPLAY: ObjectId = ObjectId::new(1);
+    pub const WL_REGISTRY: ObjectId = ObjectId::new(2);
+    pub const WL_COMPOSITOR: ObjectId = ObjectId::new(3);
+    pub const WL_SHM: ObjectId = ObjectId::new(4);
+    pub const WP_VIEWPORTER: ObjectId = ObjectId::new(5);
+    pub const ZWLR_LAYER_SHELL_V1: ObjectId = ObjectId::new(6);
+
     pub const fn new(value: u32) -> Self {
         Self(NonZeroU32::new(value).unwrap())
     }
@@ -21,13 +28,6 @@ impl From<ObjectId> for u32 {
     }
 }
 
-pub const WL_DISPLAY: ObjectId = ObjectId::new(1);
-pub const WL_REGISTRY: ObjectId = ObjectId::new(2);
-pub const WL_COMPOSITOR: ObjectId = ObjectId::new(3);
-pub const WL_SHM: ObjectId = ObjectId::new(4);
-pub const WP_VIEWPORTER: ObjectId = ObjectId::new(5);
-pub const ZWLR_LAYER_SHELL_V1: ObjectId = ObjectId::new(6);
-
 #[derive(Clone, Debug, PartialEq, Default, Eq, Copy, PartialOrd, Ord, Hash)]
 pub struct ObjectIdProvider {
     pub last: ObjectId,
@@ -35,7 +35,9 @@ pub struct ObjectIdProvider {
 
 impl ObjectIdProvider {
     pub const fn new() -> Self {
-        Self { last: ObjectId::new(1) }
+        Self {
+            last: ObjectId::new(1),
+        }
     }
 
     pub const fn next_id(&mut self) -> ObjectId {

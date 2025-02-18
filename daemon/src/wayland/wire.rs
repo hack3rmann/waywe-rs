@@ -11,7 +11,7 @@ use std::{
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash, Pod, Zeroable)]
 pub struct MessageHeader {
     pub object_id: u32,
-    pub request_id: u16,
+    pub opcode: u16,
     pub message_len: u16,
 }
 
@@ -215,6 +215,12 @@ impl<'b> MessageBuilder<'b> {
         Some(Message::from_u32_slice(self.buf.as_slice()))
     }
 
+    pub fn build_send(&'b mut self, stream: &mut impl Write) -> Result<(), io::Error> {
+        self.build()
+            .unwrap()
+            .send(stream)
+    }
+
     pub fn header(&mut self, object_id: u32, request_id: u16) -> &mut Self {
         if self.buf.len() < HEADER_SIZE_WORDS {
             self.buf.resize(HEADER_SIZE_WORDS, 0);
@@ -223,7 +229,7 @@ impl<'b> MessageBuilder<'b> {
         self.buf[..HEADER_SIZE_WORDS].copy_from_slice(bytemuck::cast_slice(bytemuck::bytes_of(
             &MessageHeader {
                 object_id,
-                request_id,
+                opcode: request_id,
                 message_len: 0,
             },
         )));
@@ -245,7 +251,7 @@ impl<'b> MessageBuilder<'b> {
         self
     }
 
-    pub fn request_id(&mut self, value: u16) -> &mut Self {
+    pub fn opcode(&mut self, value: u16) -> &mut Self {
         if self.buf.len() < HEADER_SIZE_WORDS {
             self.buf.resize(HEADER_SIZE_WORDS, 0);
         }
@@ -254,13 +260,13 @@ impl<'b> MessageBuilder<'b> {
             &mut self.buf[..HEADER_SIZE_WORDS],
         ));
 
-        header.request_id = value;
+        header.opcode = value;
 
         self
     }
 
     pub fn event_id(&mut self, value: u16) -> &mut Self {
-        self.request_id(value)
+        self.opcode(value)
     }
 
     pub fn uint(&mut self, value: u32) -> &mut Self {
