@@ -17,7 +17,7 @@ pub struct MessageHeader {
     pub message_len: u16,
 }
 
-/// Represents a message from Wire protocol.
+/// Represents a message from Wire protoc#ol.
 #[repr(transparent)]
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Message {
