@@ -1,3 +1,4 @@
+use super::object::ObjectId;
 use bytemuck::{Pod, Zeroable};
 use std::{
     io::{self, Read, Write},
@@ -59,6 +60,14 @@ impl Message {
     /// Message length in bytes
     pub fn len(&self) -> usize {
         self.header().message_len as usize
+    }
+
+    pub fn send(&self, stream: &mut impl Write) -> Result<(), io::Error> {
+        stream.write_all(self.as_bytes())
+    }
+
+    pub fn builder(buf: &mut Vec<u32>) -> MessageBuilder {
+        MessageBuilder::new(buf)
     }
 }
 
@@ -195,7 +204,7 @@ impl<'b> MessageBuilder<'b> {
         self.buf.clear();
     }
 
-    pub fn get_message(&'b mut self) -> Option<&'b Message> {
+    pub fn build(&'b mut self) -> Option<&'b Message> {
         let len = self.buf.len() * mem::size_of::<u32>();
         let header = bytemuck::from_bytes_mut::<MessageHeader>(bytemuck::cast_slice_mut(
             self.buf.get_mut(..HEADER_SIZE_WORDS)?,
@@ -222,15 +231,16 @@ impl<'b> MessageBuilder<'b> {
         self
     }
 
-    pub fn object_id(&mut self, value: u32) -> &mut Self {
+    pub fn object_id(&mut self, value: ObjectId) -> &mut Self {
         if self.buf.len() < HEADER_SIZE_WORDS {
             self.buf.resize(HEADER_SIZE_WORDS, 0);
         }
 
-        let header =
-            bytemuck::from_bytes_mut::<MessageHeader>(bytemuck::cast_slice_mut(&mut self.buf));
+        let header = bytemuck::from_bytes_mut::<MessageHeader>(bytemuck::cast_slice_mut(
+            &mut self.buf[..HEADER_SIZE_WORDS],
+        ));
 
-        header.object_id = value;
+        header.object_id = value.into();
 
         self
     }
@@ -240,8 +250,9 @@ impl<'b> MessageBuilder<'b> {
             self.buf.resize(HEADER_SIZE_WORDS, 0);
         }
 
-        let header =
-            bytemuck::from_bytes_mut::<MessageHeader>(bytemuck::cast_slice_mut(&mut self.buf));
+        let header = bytemuck::from_bytes_mut::<MessageHeader>(bytemuck::cast_slice_mut(
+            &mut self.buf[..HEADER_SIZE_WORDS],
+        ));
 
         header.request_id = value;
 
