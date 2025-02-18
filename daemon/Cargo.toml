@@ -1,0 +1,9 @@
+[package]
+name = "daemon"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bytemuck = { version = "1.21.0", features = ["extern_crate_alloc", "derive"] }
+rustix = { version = "0.38.44", features = ["fs", "net"] }
+tokio = { version = "1.43.0", features = ["full"] }
