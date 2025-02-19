@@ -10,7 +10,7 @@ pub mod request {
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct Bind {
         pub name: ObjectId,
-        pub id: NewId,
+        pub new_id: NewId,
     }
 
     impl Request for Bind {
@@ -25,7 +25,7 @@ pub mod request {
             Message::builder(buf)
                 .header(Self::header_desc())
                 .uint(self.name.into())
-                .uint(self.id.into())
+                .uint(self.new_id.into())
                 .build()
         }
     }

@@ -16,7 +16,8 @@ impl MessageBuffer {
     }
 
     pub fn with_capacity(n_bytes: usize) -> Self {
-        let n_words = (n_bytes + 3) / 2;
+        // (.. + 3) / 4 pads string to u32
+        let n_words = (n_bytes + 3) >> 2;
         Self(Vec::with_capacity(n_words))
     }
 
@@ -108,7 +109,10 @@ impl Message {
 }
 
 /// Reads a message from the stream
-pub fn read_message_into<S: Read + ?Sized>(stream: &mut S, buf: &mut MessageBuffer) -> Result<(), io::Error> {
+pub fn read_message_into<S: Read + ?Sized>(
+    stream: &mut S,
+    buf: &mut MessageBuffer,
+) -> Result<(), io::Error> {
     buf.0.resize(HEADER_SIZE_WORDS, 0);
     stream.read_exact(bytemuck::cast_slice_mut(&mut buf.0))?;
 
@@ -212,7 +216,12 @@ impl<'r> MessageReader<'r> {
         }
 
         let n_bytes = self.data[0];
-        let slice_len = (1 + (n_bytes + 3) / 4) as usize;
+
+        // string(.. + 3) >> 2 pads to u32
+        let string_len_words = (n_bytes + 3) >> 2;
+
+        // first word is length
+        let slice_len = 1 + string_len_words as usize;
 
         let result = self.data.get(..slice_len).and_then(WireStr::new)?;
         self.data = &self.data[slice_len..];
@@ -261,7 +270,9 @@ impl<'b> MessageBuilder<'b> {
 
         header.message_len = len as u16;
 
-        Ok(Message::from_u32_slice(self.buf.0.as_slice()))
+        dbg!(bytemuck::cast_slice::<u32, u8>(self.buf.0.as_slice()));
+
+        Ok(self.buf.get_message())
     }
 
     /// Shorthand for `.build()?.send(stream)?`
@@ -270,11 +281,15 @@ impl<'b> MessageBuilder<'b> {
         Ok(())
     }
 
-    /// Writes entire header. Equivalent to `.object_id(id).opcode(op)`
-    pub fn header(self, desc: MessageHeaderDesc) -> Self {
+    fn correct_header(&mut self) {
         if self.buf.0.len() < HEADER_SIZE_WORDS {
             self.buf.0.resize(HEADER_SIZE_WORDS, 0);
         }
+    }
+
+    /// Writes entire header. Equivalent to `.object_id(id).opcode(op)`
+    pub fn header(mut self, desc: MessageHeaderDesc) -> Self {
+        self.correct_header();
 
         self.buf.0[..HEADER_SIZE_WORDS].copy_from_slice(bytemuck::cast_slice(bytemuck::bytes_of(
             &MessageHeader {
@@ -287,11 +302,9 @@ impl<'b> MessageBuilder<'b> {
         self
     }
 
-    /// Sets object id to send requests to or to receive events from
-    pub fn object_id(self, value: ObjectId) -> Self {
-        if self.buf.0.len() < HEADER_SIZE_WORDS {
-            self.buf.0.resize(HEADER_SIZE_WORDS, 0);
-        }
+    /// Sets object id to send requests to or to receive events from.
+    pub fn object_id(mut self, value: ObjectId) -> Self {
+        self.correct_header();
 
         let header = bytemuck::from_bytes_mut::<MessageHeader>(bytemuck::cast_slice_mut(
             &mut self.buf.0[..HEADER_SIZE_WORDS],
@@ -302,10 +315,8 @@ impl<'b> MessageBuilder<'b> {
     }
 
     /// Sets id for requests and events.
-    pub fn opcode(self, value: u16) -> Self {
-        if self.buf.0.len() < HEADER_SIZE_WORDS {
-            self.buf.0.resize(HEADER_SIZE_WORDS, 0);
-        }
+    pub fn opcode(mut self, value: u16) -> Self {
+        self.correct_header();
 
         let header = bytemuck::from_bytes_mut::<MessageHeader>(bytemuck::cast_slice_mut(
             &mut self.buf.0[..HEADER_SIZE_WORDS],
@@ -316,11 +327,8 @@ impl<'b> MessageBuilder<'b> {
     }
 
     /// Writes 32-bit unsigned integer to the message
-    pub fn uint(self, value: u32) -> Self {
-        if self.buf.0.len() < HEADER_SIZE_WORDS {
-            self.buf.0.resize(HEADER_SIZE_WORDS, 0);
-        }
-
+    pub fn uint(mut self, value: u32) -> Self {
+        self.correct_header();
         self.buf.0.push(value);
         self
     }
@@ -328,6 +336,25 @@ impl<'b> MessageBuilder<'b> {
     /// Writes 32-bit signed integer to the message
     pub fn int(self, value: i32) -> Self {
         self.uint(value as u32)
+    }
+
+    pub fn str(mut self, value: &str) -> Self {
+        self.correct_header();
+
+        // string with zero-byte suffix padded to u32
+        //   = ((len + 1) + 3) / 4 = (len + 4) / 4 = len / 4 + 1
+        //   len + 1: add zero to string
+        //   (.. + 3) / 4: pad to u32
+        let str_len_words = (value.len() >> 2) + 1;
+        let cur_buf_len = self.buf.0.len();
+
+        self.buf.0.resize(cur_buf_len + 1 + str_len_words, 0);
+        self.buf.0[cur_buf_len] = value.len() as u32 + 1;
+
+        let dst_slice: &mut [u8] = bytemuck::cast_slice_mut(&mut self.buf.0[cur_buf_len + 1..]);
+        dst_slice[..value.len()].clone_from_slice(value.as_bytes());
+
+        self
     }
 }
 
