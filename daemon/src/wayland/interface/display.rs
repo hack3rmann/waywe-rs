@@ -1,5 +1,5 @@
 use crate::wayland::{
-    interface::{Event, NewId, Request},
+    interface::{Event, Request},
     object::ObjectId,
     wire::{Message, MessageBuffer, MessageBuildError, MessageHeaderDesc},
 };
@@ -9,7 +9,7 @@ pub mod request {
 
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct Sync {
-        pub callback: NewId,
+        pub callback: ObjectId,
     }
 
     impl Request for Sync {
@@ -30,7 +30,7 @@ pub mod request {
 
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct GetRegistry {
-        pub registry: NewId,
+        pub registry: ObjectId,
     }
 
     impl Request for GetRegistry {

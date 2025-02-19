@@ -1,4 +1,4 @@
-use super::object::ObjectId;
+use super::{interface::NewId, object::ObjectId};
 use bytemuck::{Pod, Zeroable};
 use std::{
     io::{self, Read, Write},
@@ -270,8 +270,6 @@ impl<'b> MessageBuilder<'b> {
 
         header.message_len = len as u16;
 
-        dbg!(bytemuck::cast_slice::<u32, u8>(self.buf.0.as_slice()));
-
         Ok(self.buf.get_message())
     }
 
@@ -355,6 +353,10 @@ impl<'b> MessageBuilder<'b> {
         dst_slice[..value.len()].clone_from_slice(value.as_bytes());
 
         self
+    }
+
+    pub fn new_id(self, value: NewId) -> Self {
+        self.uint(value.version).uint(value.id.into()).str(value.interface)
     }
 }
 

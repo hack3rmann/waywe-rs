@@ -3,7 +3,7 @@ pub mod wayland;
 use std::collections::HashMap;
 use std::{env, error::Error, os::unix::net::UnixStream};
 use wayland::interface::{
-    AnyEvent, Request, WlDisplayGetRegistryRequest, WlDisplaySyncRequest, WlRegistryBindRequest,
+    AnyEvent, Request, WlDisplayGetRegistryRequest, WlDisplaySyncRequest, WlRegistryBindRequest
 };
 use wayland::object::{ObjectId, ObjectIdProvider};
 use wayland::wire::{self, Message, MessageBuffer, MessageBuildError, MessageReader};
@@ -69,6 +69,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     .send(&mut sock, &mut buf)?;
 
     let wl_compositor_id = id_provider.next_id();
+    let wl_compositor = registry["wl_compositor"];
 
     for _ in 0..2 {
         wire::read_message_into(&mut sock, &mut buf)?;
@@ -77,7 +78,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     WlRegistryBindRequest {
-        name: registry["wl_compositor"].object_name,
+        name: wl_compositor.object_name,
         new_id: wl_compositor_id,
     }
     .send(&mut sock, &mut buf)?;

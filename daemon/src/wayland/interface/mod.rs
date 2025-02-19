@@ -21,7 +21,12 @@ pub mod callback;
 pub mod display;
 pub mod registry;
 
-pub type NewId = ObjectId;
+#[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
+pub struct NewId<'s> {
+    pub id: ObjectId,
+    pub interface: &'s str,
+    pub version: u32,
+}
 
 pub trait Request: Copy {
     fn header_desc() -> MessageHeaderDesc;

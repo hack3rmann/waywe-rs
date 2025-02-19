@@ -1,5 +1,5 @@
 use crate::wayland::{
-    interface::{Event, NewId, Request},
+    interface::{Event, Request},
     object::ObjectId,
     wire::{Message, MessageBuffer, MessageBuildError, MessageHeaderDesc},
 };
@@ -10,7 +10,7 @@ pub mod request {
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct Bind {
         pub name: ObjectId,
-        pub new_id: NewId,
+        pub new_id: ObjectId,
     }
 
     impl Request for Bind {
