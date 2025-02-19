@@ -7,6 +7,36 @@ use std::{
 };
 use thiserror::Error;
 
+#[derive(Clone, Debug, PartialEq, Default, Eq, PartialOrd, Ord, Hash)]
+pub struct MessageBuffer(pub(crate) Vec<u32>);
+
+impl MessageBuffer {
+    pub const fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    pub fn with_capacity(n_bytes: usize) -> Self {
+        let n_words = (n_bytes + 3) / 2;
+        Self(Vec::with_capacity(n_words))
+    }
+
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
+    pub fn as_slice(&self) -> &[u32] {
+        &self.0
+    }
+
+    pub fn as_mut_slice(&mut self) -> &mut [u32] {
+        &mut self.0
+    }
+
+    pub fn get_message(&self) -> &Message {
+        Message::from_u32_slice(self.as_slice())
+    }
+}
+
 /// Message header from wire protocol.
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash, Pod, Zeroable)]
@@ -26,6 +56,10 @@ pub struct Message {
 }
 
 impl Message {
+    pub fn reader(&self) -> MessageReader<'_> {
+        MessageReader::new(self)
+    }
+
     /// Cast the message to a [`u32`] slice.
     pub fn as_u32_slice(&self) -> &[u32] {
         unsafe { mem::transmute(self) }
@@ -42,6 +76,7 @@ impl Message {
     ///
     /// Panics if `mem::size_of_val(src) < mem::size_of::<MessageHeader>()`.
     pub fn from_u32_slice(src: &[u32]) -> &Self {
+        // TODO: validate message + return Result type
         assert!(mem::size_of_val(src) >= mem::size_of::<MessageHeader>());
         unsafe { mem::transmute(src) }
     }
@@ -63,25 +98,25 @@ impl Message {
         self.header().message_len as usize
     }
 
-    pub fn send(&self, stream: &mut impl Write) -> Result<(), io::Error> {
+    pub fn send<S: Write + ?Sized>(&self, stream: &mut S) -> Result<(), io::Error> {
         stream.write_all(self.as_bytes())
     }
 
-    pub fn builder(buf: &mut Vec<u32>) -> MessageBuilder {
+    pub fn builder(buf: &mut MessageBuffer) -> MessageBuilder {
         MessageBuilder::new(buf)
     }
 }
 
 /// Reads a message from the stream
-pub fn read_message_into(stream: &mut impl Read, buf: &mut Vec<u32>) -> Result<(), io::Error> {
-    buf.resize(HEADER_SIZE_WORDS, 0);
-    stream.read_exact(bytemuck::cast_slice_mut(buf))?;
+pub fn read_message_into<S: Read + ?Sized>(stream: &mut S, buf: &mut MessageBuffer) -> Result<(), io::Error> {
+    buf.0.resize(HEADER_SIZE_WORDS, 0);
+    stream.read_exact(bytemuck::cast_slice_mut(&mut buf.0))?;
 
-    let header = bytemuck::from_bytes::<MessageHeader>(bytemuck::cast_slice(&buf));
+    let header = bytemuck::from_bytes::<MessageHeader>(bytemuck::cast_slice(&buf.0));
     let len = header.message_len as usize / mem::size_of::<u32>();
 
-    buf.resize(len, 0);
-    stream.read_exact(bytemuck::cast_slice_mut(&mut buf[HEADER_SIZE_WORDS..]))?;
+    buf.0.resize(len, 0);
+    stream.read_exact(bytemuck::cast_slice_mut(&mut buf.0[HEADER_SIZE_WORDS..]))?;
 
     Ok(())
 }
@@ -191,57 +226,59 @@ impl<'r> MessageReader<'r> {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
+pub struct MessageHeaderDesc {
+    pub object_id: ObjectId,
+    pub opcode: u16,
+}
+
 /// Helper struct to build wire messages
 #[derive(Debug, PartialEq)]
 pub struct MessageBuilder<'b> {
-    pub buf: &'b mut Vec<u32>,
+    pub buf: &'b mut MessageBuffer,
 }
 
 impl<'b> MessageBuilder<'b> {
     /// Makes a new builder from buffer
-    pub fn new(buf: &'b mut Vec<u32>) -> Self {
+    pub fn new(buf: &'b mut MessageBuffer) -> Self {
         Self { buf }
-    }
-
-    /// Clears the builder
-    pub fn clear(&mut self) {
-        self.buf.clear();
     }
 
     /// Builds the message.
     ///
     /// # Errors
     ///
-    /// - no header had been written
-    pub fn build(&'b mut self) -> Result<&'b Message, MessageBuildError> {
-        let len = self.buf.len() * mem::size_of::<u32>();
+    /// - no header has been written
+    pub fn build(self) -> Result<&'b Message, MessageBuildError> {
+        let len = self.buf.0.len() * mem::size_of::<u32>();
         let header = bytemuck::from_bytes_mut::<MessageHeader>(bytemuck::cast_slice_mut(
             self.buf
+                .0
                 .get_mut(..HEADER_SIZE_WORDS)
                 .ok_or(MessageBuildError::NoHeader)?,
         ));
 
         header.message_len = len as u16;
 
-        Ok(Message::from_u32_slice(self.buf.as_slice()))
+        Ok(Message::from_u32_slice(self.buf.0.as_slice()))
     }
 
     /// Shorthand for `.build()?.send(stream)?`
-    pub fn build_send(&'b mut self, stream: &mut impl Write) -> Result<(), MessageBuildError> {
+    pub fn build_send(self, stream: &mut impl Write) -> Result<(), MessageBuildError> {
         self.build()?.send(stream)?;
         Ok(())
     }
 
     /// Writes entire header. Equivalent to `.object_id(id).opcode(op)`
-    pub fn header(&mut self, object_id: u32, opcode: u16) -> &mut Self {
-        if self.buf.len() < HEADER_SIZE_WORDS {
-            self.buf.resize(HEADER_SIZE_WORDS, 0);
+    pub fn header(self, desc: MessageHeaderDesc) -> Self {
+        if self.buf.0.len() < HEADER_SIZE_WORDS {
+            self.buf.0.resize(HEADER_SIZE_WORDS, 0);
         }
 
-        self.buf[..HEADER_SIZE_WORDS].copy_from_slice(bytemuck::cast_slice(bytemuck::bytes_of(
+        self.buf.0[..HEADER_SIZE_WORDS].copy_from_slice(bytemuck::cast_slice(bytemuck::bytes_of(
             &MessageHeader {
-                object_id,
-                opcode,
+                object_id: desc.object_id.into(),
+                opcode: desc.opcode,
                 message_len: 0,
             },
         )));
@@ -250,13 +287,13 @@ impl<'b> MessageBuilder<'b> {
     }
 
     /// Sets object id to send requests to or to receive events from
-    pub fn object_id(&mut self, value: ObjectId) -> &mut Self {
-        if self.buf.len() < HEADER_SIZE_WORDS {
-            self.buf.resize(HEADER_SIZE_WORDS, 0);
+    pub fn object_id(self, value: ObjectId) -> Self {
+        if self.buf.0.len() < HEADER_SIZE_WORDS {
+            self.buf.0.resize(HEADER_SIZE_WORDS, 0);
         }
 
         let header = bytemuck::from_bytes_mut::<MessageHeader>(bytemuck::cast_slice_mut(
-            &mut self.buf[..HEADER_SIZE_WORDS],
+            &mut self.buf.0[..HEADER_SIZE_WORDS],
         ));
 
         header.object_id = value.into();
@@ -264,13 +301,13 @@ impl<'b> MessageBuilder<'b> {
     }
 
     /// Sets id for requests and events.
-    pub fn opcode(&mut self, value: u16) -> &mut Self {
-        if self.buf.len() < HEADER_SIZE_WORDS {
-            self.buf.resize(HEADER_SIZE_WORDS, 0);
+    pub fn opcode(self, value: u16) -> Self {
+        if self.buf.0.len() < HEADER_SIZE_WORDS {
+            self.buf.0.resize(HEADER_SIZE_WORDS, 0);
         }
 
         let header = bytemuck::from_bytes_mut::<MessageHeader>(bytemuck::cast_slice_mut(
-            &mut self.buf[..HEADER_SIZE_WORDS],
+            &mut self.buf.0[..HEADER_SIZE_WORDS],
         ));
 
         header.opcode = value;
@@ -278,19 +315,18 @@ impl<'b> MessageBuilder<'b> {
     }
 
     /// Writes 32-bit unsigned integer to the message
-    pub fn uint(&mut self, value: u32) -> &mut Self {
-        if self.buf.len() < HEADER_SIZE_WORDS {
-            self.buf.resize(HEADER_SIZE_WORDS, 0);
+    pub fn uint(self, value: u32) -> Self {
+        if self.buf.0.len() < HEADER_SIZE_WORDS {
+            self.buf.0.resize(HEADER_SIZE_WORDS, 0);
         }
 
-        self.buf.push(value);
+        self.buf.0.push(value);
         self
     }
 
     /// Writes 32-bit signed integer to the message
-    pub fn int(&mut self, value: i32) -> &mut Self {
-        self.uint(value as u32);
-        self
+    pub fn int(self, value: i32) -> Self {
+        self.uint(value as u32)
     }
 }
 

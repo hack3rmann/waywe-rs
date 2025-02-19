@@ -1,10 +1,10 @@
 pub mod wayland;
 
-use rustix::path::Arg;
 use std::collections::HashMap;
 use std::{env, error::Error, os::unix::net::UnixStream};
 use wayland::object::{ObjectId, ObjectIdProvider};
-use wayland::wire::{self, Message, MessageBuildError, MessageReader};
+use wayland::wire::{self, Message, MessageBuffer, MessageBuildError, MessageReader};
+use wayland::interface::{Event, WlDisplayErrorEvent};
 
 fn get_socket_path() -> Option<String> {
     let xdg_runtime_dir = env::var("XDG_RUNTIME_DIR").ok()?;
@@ -21,7 +21,7 @@ struct InterfaceDesc {
 
 fn get_registry(
     sock: &mut UnixStream,
-    buf: &mut Vec<u32>,
+    buf: &mut MessageBuffer,
 ) -> Result<HashMap<String, InterfaceDesc>, MessageBuildError> {
     Message::builder(buf)
         .object_id(ObjectId::WL_DISPLAY)
@@ -34,7 +34,7 @@ fn get_registry(
     for _ in 0..53 {
         wire::read_message_into(sock, buf)?;
 
-        let message = Message::from_u32_slice(&buf);
+        let message = Message::from_u32_slice(buf.as_slice());
         let mut reader = MessageReader::new(&message);
 
         let object_name = reader.read_u32().unwrap();
@@ -53,9 +53,9 @@ fn get_registry(
     Ok(registry)
 }
 
-fn wl_bind(
+fn _wl_bind(
     sock: &mut UnixStream,
-    buf: &mut Vec<u32>,
+    buf: &mut MessageBuffer,
     object_name: u32,
     id: ObjectId,
 ) -> Result<(), MessageBuildError> {
@@ -71,24 +71,18 @@ fn main() -> Result<(), Box<dyn Error>> {
     let socket_path = get_socket_path().expect("failed to get wayland socket path");
     let mut sock = UnixStream::connect(socket_path)?;
 
-    let mut id_provider = ObjectIdProvider::new();
-    let mut buf = Vec::new();
+    let mut _id_provider = ObjectIdProvider::new();
+    let mut buf = MessageBuffer::new();
 
-    let registry = get_registry(&mut sock, &mut buf)?;
+    let _registry = get_registry(&mut sock, &mut buf)?;
 
-    let wl_compositor = registry["wl_compositor"];
-    let wl_compositor_id = id_provider.next_id();
+    Message::builder(&mut buf)
+        .object_id(ObjectId::WL_DISPLAY)
+        .opcode(42)
+        .uint(69)
+        .build_send(&mut sock)?;
 
-    wl_bind(
-        &mut sock,
-        &mut buf,
-        dbg!(wl_compositor.object_name),
-        wl_compositor_id,
-    )?;
+    dbg!(WlDisplayErrorEvent::recv(&mut sock, &mut buf)?);
 
-    loop {
-        wire::read_message_into(&mut sock, &mut buf)?;
-        let message = Message::from_u32_slice(&mut buf);
-        dbg!(message.as_bytes().to_string_lossy(), message.header());
-    }
+    Ok(())
 }
