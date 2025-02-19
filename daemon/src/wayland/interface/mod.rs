@@ -44,3 +44,41 @@ pub trait Event<'s>: Copy {
         Ok(Self::from_message(buf.get_message()))
     }
 }
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AnyEvent<'s> {
+    WlDisplayDeleteId(WlDisplayDeleteIdEvent),
+    WlDisplayError(WlDisplayErrorEvent<'s>),
+    WlRegistryGlobal(WlRegistryGlobalEvent<'s>),
+    WlRegistryGlobalRemove(WlRegistryGlobalRemoveEvent),
+    Other(&'s Message),
+}
+
+impl<'s> From<&'s Message> for AnyEvent<'s> {
+    fn from(message: &'s Message) -> Self {
+        let header = message.header();
+        let mut reader = message.reader();
+
+        match (ObjectId::new(header.object_id), header.opcode) {
+            (ObjectId::WL_REGISTRY, 0) => Self::WlRegistryGlobal(WlRegistryGlobalEvent {
+                name: ObjectId::new(reader.read_u32().unwrap()),
+                interface: reader.read_str().unwrap(),
+                version: reader.read_u32().unwrap(),
+            }),
+            (ObjectId::WL_REGISTRY, 1) => {
+                Self::WlRegistryGlobalRemove(WlRegistryGlobalRemoveEvent {
+                    name: ObjectId::new(reader.read_u32().unwrap()),
+                })
+            }
+            (ObjectId::WL_DISPLAY, 0) => Self::WlDisplayError(WlDisplayErrorEvent {
+                object: ObjectId::new(reader.read_u32().unwrap()),
+                code: reader.read_u32().unwrap(),
+                message: reader.read_str().unwrap(),
+            }),
+            (ObjectId::WL_DISPLAY, 1) => Self::WlDisplayDeleteId(WlDisplayDeleteIdEvent {
+                id: ObjectId::new(reader.read_u32().unwrap()),
+            }),
+            _ => Self::Other(message),
+        }
+    }
+}

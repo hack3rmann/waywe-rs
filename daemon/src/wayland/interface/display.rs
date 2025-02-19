@@ -92,7 +92,7 @@ pub mod event {
         fn header_desc() -> MessageHeaderDesc {
             MessageHeaderDesc {
                 object_id: ObjectId::WL_DISPLAY,
-                opcode: 0,
+                opcode: 1,
             }
         }
 

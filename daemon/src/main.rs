@@ -1,9 +1,8 @@
 pub mod wayland;
 
-use rustix::path::Arg as _;
 use std::collections::HashMap;
 use std::{env, error::Error, os::unix::net::UnixStream};
-use wayland::interface::{Request, WlDisplayGetRegistryRequest, WlRegistryBindRequest};
+use wayland::interface::{AnyEvent, Request, WlDisplayGetRegistryRequest, WlRegistryBindRequest};
 use wayland::object::{ObjectId, ObjectIdProvider};
 use wayland::wire::{self, Message, MessageBuffer, MessageBuildError, MessageReader};
 
@@ -71,9 +70,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     .send(&mut sock, &mut buf)?;
 
-    loop {
-        wire::read_message_into(&mut sock, &mut buf)?;
-        let message = buf.get_message();
-        dbg!(message.header(), message.as_bytes().to_string_lossy());
-    }
+    wire::read_message_into(&mut sock, &mut buf)?;
+    let event = AnyEvent::from(buf.get_message());
+    dbg!(event);
+    
+    Ok(())
 }
