@@ -1,5 +1,6 @@
 use std::num::NonZeroU32;
 
+/// Ids and names for Wayland objects
 #[derive(Clone, Debug, PartialEq, Eq, Copy, PartialOrd, Ord, Hash)]
 pub struct ObjectId(pub NonZeroU32);
 
@@ -11,6 +12,11 @@ impl ObjectId {
     pub const WP_VIEWPORTER: ObjectId = ObjectId::new(5);
     pub const ZWLR_LAYER_SHELL_V1: ObjectId = ObjectId::new(6);
 
+    /// Makes new id from `u32`
+    ///
+    /// # Panic
+    ///
+    /// Panics if `value == 0`.
     pub const fn new(value: u32) -> Self {
         Self(NonZeroU32::new(value).unwrap())
     }
@@ -28,18 +34,21 @@ impl From<ObjectId> for u32 {
     }
 }
 
+/// Unique identifier provider for Wayland objects
 #[derive(Clone, Debug, PartialEq, Default, Eq, Copy, PartialOrd, Ord, Hash)]
 pub struct ObjectIdProvider {
     pub last: ObjectId,
 }
 
 impl ObjectIdProvider {
+    /// Creates new [`ObjectIdProvider`].
     pub const fn new() -> Self {
         Self {
             last: ObjectId::new(1),
         }
     }
 
+    /// Gives the next available id. Basically, `prev_id + 1`
     pub const fn next_id(&mut self) -> ObjectId {
         let result = self.last;
         self.last.0 = NonZeroU32::new(self.last.0.get() + 1).unwrap();
