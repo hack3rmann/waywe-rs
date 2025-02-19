@@ -3,10 +3,12 @@ pub mod wayland;
 use std::collections::HashMap;
 use std::{env, error::Error, os::unix::net::UnixStream};
 use wayland::interface::{
-    AnyEvent, Request, WlDisplayGetRegistryRequest, WlDisplaySyncRequest, WlRegistryBindRequest
+    AnyEvent, Event, Request, WlCallbackDoneEvent, WlDisplayDeleteIdEvent,
+    WlDisplayGetRegistryRequest, WlDisplaySyncRequest, WlRegistryBindRequest,
+    WlRegistryGlobalEvent,
 };
 use wayland::object::{ObjectId, ObjectIdProvider};
-use wayland::wire::{self, Message, MessageBuffer, MessageBuildError, MessageReader};
+use wayland::wire::{self, Message, MessageBuffer, MessageBuildError};
 
 fn get_socket_path() -> Option<String> {
     let xdg_runtime_dir = env::var("XDG_RUNTIME_DIR").ok()?;
@@ -32,24 +34,35 @@ fn get_registry(
 
     let mut registry = HashMap::<String, InterfaceDesc>::new();
 
-    for _ in 0..53 {
+    WlDisplaySyncRequest {
+        callback: ObjectId::WL_CALLBACK,
+    }
+    .send(sock, buf)?;
+
+    loop {
         wire::read_message_into(sock, buf)?;
-
         let message = Message::from_u32_slice(buf.as_slice());
-        let mut reader = MessageReader::new(&message);
 
-        let object_name = ObjectId::new(reader.read_u32().unwrap());
-        let interface_name = reader.read_str().unwrap();
-        let version = reader.read_u32().unwrap();
+        let Some(global) = WlRegistryGlobalEvent::from_message(message) else {
+            let Some(_done) = WlCallbackDoneEvent::from_message(message) else {
+                panic!("wrong message");
+            };
+
+            break;
+        };
 
         registry.insert(
-            interface_name.to_owned(),
+            global.interface.to_owned(),
             InterfaceDesc {
-                object_name,
-                version,
+                object_name: global.name,
+                version: global.version,
             },
         );
     }
+
+    let remove_id = WlDisplayDeleteIdEvent::recv(sock, buf)?;
+
+    assert_eq!(remove_id.id, ObjectId::WL_CALLBACK.into());
 
     Ok(registry)
 }
@@ -63,19 +76,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let registry = get_registry(&mut sock, &mut buf)?;
 
-    WlDisplaySyncRequest {
-        callback: ObjectId::WL_CALLBACK,
-    }
-    .send(&mut sock, &mut buf)?;
-
     let wl_compositor_id = id_provider.next_id();
     let wl_compositor = registry["wl_compositor"];
-
-    for _ in 0..2 {
-        wire::read_message_into(&mut sock, &mut buf)?;
-        let event = AnyEvent::from(buf.get_message());
-        dbg!(event);
-    }
 
     WlRegistryBindRequest {
         name: wl_compositor.object_name,

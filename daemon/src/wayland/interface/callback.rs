@@ -14,10 +14,10 @@ pub mod event {
             None
         }
 
-        fn from_message(message: &'s Message) -> Self {
+        fn from_message(message: &'s Message) -> Option<Self> {
             let mut reader = message.reader();
-            let data = reader.read_u32().unwrap();
-            Self { data }
+            let data = reader.read_u32()?;
+            Some(Self { data })
         }
     }
 }

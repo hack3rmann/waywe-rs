@@ -68,18 +68,25 @@ pub mod event {
             })
         }
 
-        fn from_message(message: &'s Message) -> Self {
+        fn from_message(message: &'s Message) -> Option<Self> {
+            if !message
+                .header()
+                .corresponds_to(&Self::header_desc().unwrap())
+            {
+                return None;
+            }
+
             let mut reader = message.reader();
 
-            let object = reader.read_u32().unwrap();
-            let code = reader.read_u32().unwrap();
-            let message = reader.read_str().unwrap();
+            let object = reader.read_u32()?;
+            let code = reader.read_u32()?;
+            let message = reader.read_str()?;
 
-            Self {
+            Some(Self {
                 object: ObjectId::new(object),
                 code,
                 message,
-            }
+            })
         }
     }
 
@@ -96,10 +103,20 @@ pub mod event {
             })
         }
 
-        fn from_message(message: &'s Message) -> Self {
+        fn from_message(message: &'s Message) -> Option<Self> {
+            if !message
+                .header()
+                .corresponds_to(&Self::header_desc().unwrap())
+            {
+                return None;
+            }
+
             let mut reader = message.reader();
             let id = reader.read_u32().unwrap();
-            Self { id: ObjectId::new(id) }
+
+            Some(Self {
+                id: ObjectId::new(id),
+            })
         }
     }
 }

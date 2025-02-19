@@ -49,18 +49,18 @@ pub mod event {
             })
         }
 
-        fn from_message(message: &'s Message) -> Self {
+        fn from_message(message: &'s Message) -> Option<Self> {
             let mut reader = message.reader();
 
-            let name = reader.read_u32().unwrap();
-            let interface = reader.read_str().unwrap();
-            let version = reader.read_u32().unwrap();
+            let name = reader.read_u32()?;
+            let interface = reader.read_str()?;
+            let version = reader.read_u32()?;
 
-            Self {
+            Some(Self {
                 name: ObjectId::new(name),
                 interface,
                 version,
-            }
+            })
         }
     }
 
@@ -77,13 +77,20 @@ pub mod event {
             })
         }
 
-        fn from_message(message: &'s Message) -> Self {
+        fn from_message(message: &'s Message) -> Option<Self> {
+            if !message
+                .header()
+                .corresponds_to(&Self::header_desc().unwrap())
+            {
+                return None;
+            }
+
             let mut reader = message.reader();
             let name = reader.read_u32().unwrap();
 
-            Self {
+            Some(Self {
                 name: ObjectId::new(name),
-            }
+            })
         }
     }
 }

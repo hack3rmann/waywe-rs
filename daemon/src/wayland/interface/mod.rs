@@ -44,11 +44,12 @@ pub trait Request: Copy {
 
 pub trait Event<'s>: Copy {
     fn header_desc() -> Option<MessageHeaderDesc>;
-    fn from_message(message: &'s Message) -> Self;
+    fn from_message(message: &'s Message) -> Option<Self>;
 
     fn recv(stream: &mut dyn Read, buf: &'s mut MessageBuffer) -> Result<Self, io::Error> {
         wire::read_message_into(stream, buf)?;
-        Ok(Self::from_message(buf.get_message()))
+        // TODO: handle error
+        Ok(Self::from_message(buf.get_message()).unwrap())
     }
 }
 
@@ -68,19 +69,19 @@ impl<'s> From<&'s Message> for AnyEvent<'s> {
 
         match (ObjectId::new(header.object_id), header.opcode) {
             (ObjectId::WL_REGISTRY, 0) => {
-                Self::WlRegistryGlobal(WlRegistryGlobalEvent::from_message(message))
+                Self::WlRegistryGlobal(WlRegistryGlobalEvent::from_message(message).unwrap())
             }
             (ObjectId::WL_REGISTRY, 1) => {
-                Self::WlRegistryGlobalRemove(WlRegistryGlobalRemoveEvent::from_message(message))
+                Self::WlRegistryGlobalRemove(WlRegistryGlobalRemoveEvent::from_message(message).unwrap())
             }
             (ObjectId::WL_DISPLAY, 0) => {
-                Self::WlDisplayError(WlDisplayErrorEvent::from_message(message))
+                Self::WlDisplayError(WlDisplayErrorEvent::from_message(message).unwrap())
             }
             (ObjectId::WL_DISPLAY, 1) => {
-                Self::WlDisplayDeleteId(WlDisplayDeleteIdEvent::from_message(message))
+                Self::WlDisplayDeleteId(WlDisplayDeleteIdEvent::from_message(message).unwrap())
             }
             (ObjectId::WL_CALLBACK, 0) => {
-                Self::WlCallbackDone(WlCallbackDoneEvent::from_message(message))
+                Self::WlCallbackDone(WlCallbackDoneEvent::from_message(message).unwrap())
             }
             _ => Self::Other(message),
         }

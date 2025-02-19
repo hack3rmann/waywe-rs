@@ -47,6 +47,12 @@ pub struct MessageHeader {
     pub message_len: u16,
 }
 
+impl MessageHeader {
+    pub fn corresponds_to(&self, desc: &MessageHeaderDesc) -> bool {
+        self.object_id == desc.object_id.into() && self.opcode == desc.opcode
+    }
+}
+
 const HEADER_SIZE_WORDS: usize = mem::size_of::<MessageHeader>() / mem::size_of::<u32>();
 
 /// Represents a message from Wire protoc#ol.
