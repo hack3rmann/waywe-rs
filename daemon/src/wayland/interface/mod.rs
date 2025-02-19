@@ -21,6 +21,7 @@ pub mod callback;
 pub mod display;
 pub mod registry;
 
+/// An [`ObjectId`] bundled with an interface name and a version
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
 pub struct NewId<'s> {
     pub id: ObjectId,
@@ -28,10 +29,15 @@ pub struct NewId<'s> {
     pub version: u32,
 }
 
+/// Represents requests on Wayland's interfaces
 pub trait Request: Copy {
+    /// The object id and the opcode for this request
     fn header_desc() -> MessageHeaderDesc;
+
+    /// Builds the message on the top of given message buffer
     fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError>;
 
+    /// Sends built message to the stream
     fn send(
         self,
         stream: &mut dyn Write,
@@ -42,10 +48,15 @@ pub trait Request: Copy {
     }
 }
 
+/// Represents events on Wayland's interfaces
 pub trait Event<'s>: Copy {
+    /// The object id and the opcode for this event
     fn header_desc() -> Option<MessageHeaderDesc>;
+
+    /// Tries to read the given message as an event of implementor type
     fn from_message(message: &'s Message) -> Option<Self>;
 
+    /// Receives read message from the stream
     fn recv(stream: &mut dyn Read, buf: &'s mut MessageBuffer) -> Result<Self, io::Error> {
         wire::read_message_into(stream, buf)?;
         // TODO: handle error
@@ -53,6 +64,7 @@ pub trait Event<'s>: Copy {
     }
 }
 
+/// Bundles all implemented events together
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AnyEvent<'s> {
     WlDisplayDeleteId(WlDisplayDeleteIdEvent),
@@ -64,6 +76,7 @@ pub enum AnyEvent<'s> {
 }
 
 impl<'s> From<&'s Message> for AnyEvent<'s> {
+    /// Reads given message into [`AnyEvent`]
     fn from(message: &'s Message) -> Self {
         let header = message.header();
 

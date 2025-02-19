@@ -7,38 +7,49 @@ use std::{
 };
 use thiserror::Error;
 
+/// A buffer for message contents
 #[derive(Clone, Debug, PartialEq, Default, Eq, PartialOrd, Ord, Hash)]
 pub struct MessageBuffer(pub(crate) Vec<u32>);
 
 impl MessageBuffer {
+    /// Constructs new empty [`MessageBuffer`]
     pub const fn new() -> Self {
         Self(Vec::new())
     }
 
+    /// Constructs new [`MessageBuffer`] with capacity in bytes
     pub fn with_capacity(n_bytes: usize) -> Self {
         // (.. + 3) / 4 pads string to u32
         let n_words = (n_bytes + 3) >> 2;
         Self(Vec::with_capacity(n_words))
     }
 
+    /// Clears buffer leaving capacity untouched
     pub fn clear(&mut self) {
         self.0.clear();
     }
 
+    /// Interprets buffer contents as `u32` slice
     pub fn as_slice(&self) -> &[u32] {
         &self.0
     }
 
+    /// Interprets buffer contents as `u32` mutable slice
     pub fn as_mut_slice(&mut self) -> &mut [u32] {
         &mut self.0
     }
 
+    /// Tries to interpret buffer contents as a [`Message`]
+    ///
+    /// # Panic
+    ///
+    /// Panics if the buffer does not contain [`MessageHeader`]
     pub fn get_message(&self) -> &Message {
         Message::from_u32_slice(self.as_slice())
     }
 }
 
-/// Message header from wire protocol.
+/// Message header from wire protocol
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash, Pod, Zeroable)]
 pub struct MessageHeader {
@@ -55,14 +66,15 @@ impl MessageHeader {
 
 const HEADER_SIZE_WORDS: usize = mem::size_of::<MessageHeader>() / mem::size_of::<u32>();
 
-/// Represents a message from Wire protoc#ol.
+/// Represents a message from Wire protocol
 #[repr(transparent)]
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Message {
-    pub raw: [u32],
+    raw: [u32],
 }
 
 impl Message {
+    /// Constructs [`MessageReader`] of this message
     pub fn reader(&self) -> MessageReader<'_> {
         MessageReader::new(self)
     }
@@ -105,10 +117,12 @@ impl Message {
         self.header().message_len as usize
     }
 
+    /// Sends the message to the stream
     pub fn send<S: Write + ?Sized>(&self, stream: &mut S) -> Result<(), io::Error> {
         stream.write_all(self.as_bytes())
     }
 
+    /// Constructs a [`MessageBuilder`] on the top of the given [`MessageBuffer`]
     pub fn builder(buf: &mut MessageBuffer) -> MessageBuilder {
         MessageBuilder::new(buf)
     }
@@ -241,6 +255,7 @@ impl<'r> MessageReader<'r> {
     }
 }
 
+/// Conceptually the same as [`MessageHeader`] but without `message_len` field
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
 pub struct MessageHeaderDesc {
     pub object_id: ObjectId,
@@ -342,6 +357,7 @@ impl<'b> MessageBuilder<'b> {
         self.uint(value as u32)
     }
 
+    /// Writes [`str`] to the message
     pub fn str(mut self, value: &str) -> Self {
         self.correct_header();
 
@@ -361,6 +377,7 @@ impl<'b> MessageBuilder<'b> {
         self
     }
 
+    /// Writes [`NewId`] to the message
     pub fn new_id(self, value: NewId) -> Self {
         self.uint(value.version).uint(value.id.into()).str(value.interface)
     }
