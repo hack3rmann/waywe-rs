@@ -1,10 +1,10 @@
 pub mod wayland;
 
-use std::collections::HashMap;
-use std::{env, error::Error, io, os::unix::net::UnixStream};
 use rustix::path::Arg;
+use std::collections::HashMap;
+use std::{env, error::Error, os::unix::net::UnixStream};
 use wayland::object::{ObjectId, ObjectIdProvider};
-use wayland::wire::{self, Message, MessageReader};
+use wayland::wire::{self, Message, MessageBuildError, MessageReader};
 
 fn get_socket_path() -> Option<String> {
     let xdg_runtime_dir = env::var("XDG_RUNTIME_DIR").ok()?;
@@ -22,7 +22,7 @@ struct InterfaceDesc {
 fn get_registry(
     sock: &mut UnixStream,
     buf: &mut Vec<u32>,
-) -> Result<HashMap<String, InterfaceDesc>, io::Error> {
+) -> Result<HashMap<String, InterfaceDesc>, MessageBuildError> {
     Message::builder(buf)
         .object_id(ObjectId::WL_DISPLAY)
         .opcode(1)
@@ -53,7 +53,12 @@ fn get_registry(
     Ok(registry)
 }
 
-fn wl_bind(sock: &mut UnixStream, buf: &mut Vec<u32>, object_name: u32, id: ObjectId) -> Result<(), io::Error> {
+fn wl_bind(
+    sock: &mut UnixStream,
+    buf: &mut Vec<u32>,
+    object_name: u32,
+    id: ObjectId,
+) -> Result<(), MessageBuildError> {
     Message::builder(buf)
         .object_id(ObjectId::WL_REGISTRY)
         .opcode(0)
@@ -74,15 +79,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let wl_compositor = registry["wl_compositor"];
     let wl_compositor_id = id_provider.next_id();
 
-    wl_bind(&mut sock, &mut buf, dbg!(wl_compositor.object_name), wl_compositor_id)?;
-
-    // let wl_surface_id = id_provider.next_id();
-
-    // Message::builder(&mut buf)
-    //     .object_id(ObjectId::new(wl_compositor.object_name))
-    //     .request_id(0)
-    //     .uint(wl_surface_id.into())
-    //     .build_send(&mut sock)?;
+    wl_bind(
+        &mut sock,
+        &mut buf,
+        dbg!(wl_compositor.object_name),
+        wl_compositor_id,
+    )?;
 
     loop {
         wire::read_message_into(&mut sock, &mut buf)?;

@@ -5,6 +5,7 @@ use std::{
     mem,
     str::Utf8Error,
 };
+use thiserror::Error;
 
 /// Message header from wire protocol.
 #[repr(C)]
@@ -15,7 +16,7 @@ pub struct MessageHeader {
     pub message_len: u16,
 }
 
-pub const HEADER_SIZE_WORDS: usize = mem::size_of::<MessageHeader>() / mem::size_of::<u32>();
+const HEADER_SIZE_WORDS: usize = mem::size_of::<MessageHeader>() / mem::size_of::<u32>();
 
 /// Represents a message from Wire protoc#ol.
 #[repr(transparent)]
@@ -190,38 +191,49 @@ impl<'r> MessageReader<'r> {
     }
 }
 
+/// Helper struct to build wire messages
 #[derive(Debug, PartialEq)]
 pub struct MessageBuilder<'b> {
     pub buf: &'b mut Vec<u32>,
 }
 
 impl<'b> MessageBuilder<'b> {
+    /// Makes a new builder from buffer
     pub fn new(buf: &'b mut Vec<u32>) -> Self {
         Self { buf }
     }
 
+    /// Clears the builder
     pub fn clear(&mut self) {
         self.buf.clear();
     }
 
-    pub fn build(&'b mut self) -> Option<&'b Message> {
+    /// Builds the message.
+    ///
+    /// # Errors
+    ///
+    /// - no header had been written
+    pub fn build(&'b mut self) -> Result<&'b Message, MessageBuildError> {
         let len = self.buf.len() * mem::size_of::<u32>();
         let header = bytemuck::from_bytes_mut::<MessageHeader>(bytemuck::cast_slice_mut(
-            self.buf.get_mut(..HEADER_SIZE_WORDS)?,
+            self.buf
+                .get_mut(..HEADER_SIZE_WORDS)
+                .ok_or(MessageBuildError::NoHeader)?,
         ));
 
         header.message_len = len as u16;
 
-        Some(Message::from_u32_slice(self.buf.as_slice()))
+        Ok(Message::from_u32_slice(self.buf.as_slice()))
     }
 
-    pub fn build_send(&'b mut self, stream: &mut impl Write) -> Result<(), io::Error> {
-        self.build()
-            .unwrap()
-            .send(stream)
+    /// Shorthand for `.build()?.send(stream)?`
+    pub fn build_send(&'b mut self, stream: &mut impl Write) -> Result<(), MessageBuildError> {
+        self.build()?.send(stream)?;
+        Ok(())
     }
 
-    pub fn header(&mut self, object_id: u32, request_id: u16) -> &mut Self {
+    /// Writes entire header. Equivalent to `.object_id(id).opcode(op)`
+    pub fn header(&mut self, object_id: u32, opcode: u16) -> &mut Self {
         if self.buf.len() < HEADER_SIZE_WORDS {
             self.buf.resize(HEADER_SIZE_WORDS, 0);
         }
@@ -229,7 +241,7 @@ impl<'b> MessageBuilder<'b> {
         self.buf[..HEADER_SIZE_WORDS].copy_from_slice(bytemuck::cast_slice(bytemuck::bytes_of(
             &MessageHeader {
                 object_id,
-                opcode: request_id,
+                opcode,
                 message_len: 0,
             },
         )));
@@ -237,6 +249,7 @@ impl<'b> MessageBuilder<'b> {
         self
     }
 
+    /// Sets object id to send requests to or to receive events from
     pub fn object_id(&mut self, value: ObjectId) -> &mut Self {
         if self.buf.len() < HEADER_SIZE_WORDS {
             self.buf.resize(HEADER_SIZE_WORDS, 0);
@@ -247,10 +260,10 @@ impl<'b> MessageBuilder<'b> {
         ));
 
         header.object_id = value.into();
-
         self
     }
 
+    /// Sets id for requests and events.
     pub fn opcode(&mut self, value: u16) -> &mut Self {
         if self.buf.len() < HEADER_SIZE_WORDS {
             self.buf.resize(HEADER_SIZE_WORDS, 0);
@@ -261,14 +274,10 @@ impl<'b> MessageBuilder<'b> {
         ));
 
         header.opcode = value;
-
         self
     }
 
-    pub fn event_id(&mut self, value: u16) -> &mut Self {
-        self.opcode(value)
-    }
-
+    /// Writes 32-bit unsigned integer to the message
     pub fn uint(&mut self, value: u32) -> &mut Self {
         if self.buf.len() < HEADER_SIZE_WORDS {
             self.buf.resize(HEADER_SIZE_WORDS, 0);
@@ -278,8 +287,18 @@ impl<'b> MessageBuilder<'b> {
         self
     }
 
+    /// Writes 32-bit signed integer to the message
     pub fn int(&mut self, value: i32) -> &mut Self {
         self.uint(value as u32);
         self
     }
+}
+
+#[derive(Error, Debug)]
+pub enum MessageBuildError {
+    #[error("header should be written before message build")]
+    NoHeader,
+
+    #[error(transparent)]
+    IoError(#[from] io::Error),
 }
