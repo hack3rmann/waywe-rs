@@ -241,6 +241,7 @@ pub struct MessageBuilder<'b> {
 impl<'b> MessageBuilder<'b> {
     /// Makes a new builder from buffer
     pub fn new(buf: &'b mut MessageBuffer) -> Self {
+        buf.clear();
         Self { buf }
     }
 

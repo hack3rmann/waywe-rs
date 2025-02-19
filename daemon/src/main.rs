@@ -1,11 +1,11 @@
 pub mod wayland;
 
+use rustix::path::Arg as _;
 use std::collections::HashMap;
 use std::{env, error::Error, os::unix::net::UnixStream};
-use rustix::path::Arg as _;
+use wayland::interface::{Request, WlDisplayGetRegistryRequest, WlRegistryBindRequest};
 use wayland::object::{ObjectId, ObjectIdProvider};
 use wayland::wire::{self, Message, MessageBuffer, MessageBuildError, MessageReader};
-use wayland::interface::{Request, WlRegistryBindRequest};
 
 fn get_socket_path() -> Option<String> {
     let xdg_runtime_dir = env::var("XDG_RUNTIME_DIR").ok()?;
@@ -16,7 +16,7 @@ fn get_socket_path() -> Option<String> {
 
 #[derive(Clone, Default, Debug, PartialEq, Copy, Eq, PartialOrd, Ord, Hash)]
 struct InterfaceDesc {
-    object_name: u32,
+    object_name: ObjectId,
     version: u32,
 }
 
@@ -24,11 +24,10 @@ fn get_registry(
     sock: &mut UnixStream,
     buf: &mut MessageBuffer,
 ) -> Result<HashMap<String, InterfaceDesc>, MessageBuildError> {
-    Message::builder(buf)
-        .object_id(ObjectId::WL_DISPLAY)
-        .opcode(1)
-        .uint(2)
-        .build_send(sock)?;
+    WlDisplayGetRegistryRequest {
+        registry: ObjectId::WL_REGISTRY,
+    }
+    .send(sock, buf)?;
 
     let mut registry = HashMap::<String, InterfaceDesc>::new();
 
@@ -38,7 +37,7 @@ fn get_registry(
         let message = Message::from_u32_slice(buf.as_slice());
         let mut reader = MessageReader::new(&message);
 
-        let object_name = reader.read_u32().unwrap();
+        let object_name = ObjectId::new(reader.read_u32().unwrap());
         let interface_name = reader.read_str().unwrap();
         let version = reader.read_u32().unwrap();
 
@@ -67,9 +66,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let wl_compositor_id = id_provider.next_id();
 
     WlRegistryBindRequest {
-        name: ObjectId::new(wl_compositor_name.object_name),
+        name: wl_compositor_name.object_name,
         id: wl_compositor_id,
-    }.send(&mut sock, &mut buf)?;
+    }
+    .send(&mut sock, &mut buf)?;
 
     loop {
         wire::read_message_into(&mut sock, &mut buf)?;

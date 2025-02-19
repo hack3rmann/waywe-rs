@@ -11,6 +11,7 @@ impl ObjectId {
     pub const WL_SHM: ObjectId = ObjectId::new(4);
     pub const WP_VIEWPORTER: ObjectId = ObjectId::new(5);
     pub const ZWLR_LAYER_SHELL_V1: ObjectId = ObjectId::new(6);
+    pub const FIRST_AVAILABLE: ObjectId = ObjectId::new(7);
 
     /// Makes new id from `u32`
     ///
@@ -44,7 +45,7 @@ impl ObjectIdProvider {
     /// Creates new [`ObjectIdProvider`].
     pub const fn new() -> Self {
         Self {
-            last: ObjectId::new(1),
+            last: ObjectId::FIRST_AVAILABLE,
         }
     }
 
