@@ -42,11 +42,11 @@ pub mod event {
     }
 
     impl<'s> Event<'s> for Global<'s> {
-        fn header_desc() -> MessageHeaderDesc {
-            MessageHeaderDesc {
+        fn header_desc() -> Option<MessageHeaderDesc> {
+            Some(MessageHeaderDesc {
                 object_id: ObjectId::WL_REGISTRY,
                 opcode: 0,
-            }
+            })
         }
 
         fn from_message(message: &'s Message) -> Self {
@@ -70,16 +70,15 @@ pub mod event {
     }
 
     impl<'s> Event<'s> for GlobalRemove {
-        fn header_desc() -> MessageHeaderDesc {
-            MessageHeaderDesc {
+        fn header_desc() -> Option<MessageHeaderDesc> {
+            Some(MessageHeaderDesc {
                 object_id: ObjectId::WL_REGISTRY,
                 opcode: 1,
-            }
+            })
         }
 
         fn from_message(message: &'s Message) -> Self {
             let mut reader = message.reader();
-
             let name = reader.read_u32().unwrap();
 
             Self {

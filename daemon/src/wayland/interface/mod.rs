@@ -14,8 +14,10 @@ pub use {
         event::{Global as WlRegistryGlobalEvent, GlobalRemove as WlRegistryGlobalRemoveEvent},
         request::Bind as WlRegistryBindRequest,
     },
+    callback::event::Done as WlCallbackDoneEvent,
 };
 
+pub mod callback;
 pub mod display;
 pub mod registry;
 
@@ -36,7 +38,7 @@ pub trait Request: Copy {
 }
 
 pub trait Event<'s>: Copy {
-    fn header_desc() -> MessageHeaderDesc;
+    fn header_desc() -> Option<MessageHeaderDesc>;
     fn from_message(message: &'s Message) -> Self;
 
     fn recv(stream: &mut dyn Read, buf: &'s mut MessageBuffer) -> Result<Self, io::Error> {
@@ -51,33 +53,30 @@ pub enum AnyEvent<'s> {
     WlDisplayError(WlDisplayErrorEvent<'s>),
     WlRegistryGlobal(WlRegistryGlobalEvent<'s>),
     WlRegistryGlobalRemove(WlRegistryGlobalRemoveEvent),
+    WlCallbackDone(WlCallbackDoneEvent),
     Other(&'s Message),
 }
 
 impl<'s> From<&'s Message> for AnyEvent<'s> {
     fn from(message: &'s Message) -> Self {
         let header = message.header();
-        let mut reader = message.reader();
 
         match (ObjectId::new(header.object_id), header.opcode) {
-            (ObjectId::WL_REGISTRY, 0) => Self::WlRegistryGlobal(WlRegistryGlobalEvent {
-                name: ObjectId::new(reader.read_u32().unwrap()),
-                interface: reader.read_str().unwrap(),
-                version: reader.read_u32().unwrap(),
-            }),
-            (ObjectId::WL_REGISTRY, 1) => {
-                Self::WlRegistryGlobalRemove(WlRegistryGlobalRemoveEvent {
-                    name: ObjectId::new(reader.read_u32().unwrap()),
-                })
+            (ObjectId::WL_REGISTRY, 0) => {
+                Self::WlRegistryGlobal(WlRegistryGlobalEvent::from_message(message))
             }
-            (ObjectId::WL_DISPLAY, 0) => Self::WlDisplayError(WlDisplayErrorEvent {
-                object: ObjectId::new(reader.read_u32().unwrap()),
-                code: reader.read_u32().unwrap(),
-                message: reader.read_str().unwrap(),
-            }),
-            (ObjectId::WL_DISPLAY, 1) => Self::WlDisplayDeleteId(WlDisplayDeleteIdEvent {
-                id: ObjectId::new(reader.read_u32().unwrap()),
-            }),
+            (ObjectId::WL_REGISTRY, 1) => {
+                Self::WlRegistryGlobalRemove(WlRegistryGlobalRemoveEvent::from_message(message))
+            }
+            (ObjectId::WL_DISPLAY, 0) => {
+                Self::WlDisplayError(WlDisplayErrorEvent::from_message(message))
+            }
+            (ObjectId::WL_DISPLAY, 1) => {
+                Self::WlDisplayDeleteId(WlDisplayDeleteIdEvent::from_message(message))
+            }
+            (ObjectId::WL_CALLBACK, 0) => {
+                Self::WlCallbackDone(WlCallbackDoneEvent::from_message(message))
+            }
             _ => Self::Other(message),
         }
     }

@@ -61,11 +61,11 @@ pub mod event {
     }
 
     impl<'s> Event<'s> for Error<'s> {
-        fn header_desc() -> MessageHeaderDesc {
-            MessageHeaderDesc {
+        fn header_desc() -> Option<MessageHeaderDesc> {
+            Some(MessageHeaderDesc {
                 object_id: ObjectId::WL_DISPLAY,
                 opcode: 0,
-            }
+            })
         }
 
         fn from_message(message: &'s Message) -> Self {
@@ -89,11 +89,11 @@ pub mod event {
     }
 
     impl<'s> Event<'s> for DeleteId {
-        fn header_desc() -> MessageHeaderDesc {
-            MessageHeaderDesc {
+        fn header_desc() -> Option<MessageHeaderDesc> {
+            Some(MessageHeaderDesc {
                 object_id: ObjectId::WL_DISPLAY,
                 opcode: 1,
-            }
+            })
         }
 
         fn from_message(message: &'s Message) -> Self {
