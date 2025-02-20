@@ -2,10 +2,11 @@ pub mod callback;
 pub mod compositor;
 pub mod display;
 pub mod registry;
+pub mod wl_surface;
 
 use super::{
     object::ObjectId,
-    wire::{self, Message, MessageBuffer, MessageBuildError, MessageHeaderDesc},
+    wire::{self, Message, MessageBuffer, MessageBuildError, MessageBuilder, MessageHeaderDesc},
 };
 use std::io::{self, Read, Write};
 
@@ -19,9 +20,8 @@ pub use {
         request::{GetRegistry as WlDisplayGetRegistryRequest, Sync as WlDisplaySyncRequest},
         wl_enum::Error as WlDisplayErrorEnum,
     },
-    registry::{
-        event::{Global as WlRegistryGlobalEvent, GlobalRemove as WlRegistryGlobalRemoveEvent},
-        request::Bind as WlRegistryBindRequest,
+    registry::event::{
+        Global as WlRegistryGlobalEvent, GlobalRemove as WlRegistryGlobalRemoveEvent,
     },
 };
 
@@ -31,25 +31,6 @@ pub struct NewId<'s> {
     pub id: ObjectId,
     pub interface: &'s str,
     pub version: u32,
-}
-
-/// Represents requests on Wayland's interfaces
-pub trait Request: Copy {
-    /// The object id and the opcode for this request
-    fn header_desc() -> MessageHeaderDesc;
-
-    /// Builds the message on the top of given message buffer
-    fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError>;
-
-    /// Sends built message to the stream
-    fn send(
-        self,
-        stream: &mut dyn Write,
-        buf: &mut MessageBuffer,
-    ) -> Result<(), MessageBuildError> {
-        self.build_message(buf)?.send(stream)?;
-        Ok(())
-    }
 }
 
 /// Represents events on Wayland's interfaces
@@ -127,5 +108,66 @@ impl<'s> From<&'s Message> for AnyEvent<'s> {
             }
             _ => Self::Other(message),
         }
+    }
+}
+
+#[cfg(test)]
+mod test_interface {
+    use super::wl_surface::*;
+    use super::NewId;
+    use crate::connect_wayland_socket;
+    use crate::wayland::{
+        object::*,
+        wire::{MessageBuffer, MessageBuildError},
+    };
+    use std::os::unix::net::UnixStream;
+
+    #[test]
+    fn test_wl_registry() -> Result<(), MessageBuildError> {
+        let name = ObjectId::new(1);
+        let mut buf = MessageBuffer::new();
+        let mut sock = UnixStream::from(unsafe { connect_wayland_socket().unwrap() });
+        let msg = WL_REGISTRY.bind(
+            name,
+            NewId {
+                id: ObjectId::new(1),
+                interface: "wl_compositor",
+                version: 1,
+            },
+            &mut buf,
+        )?;
+
+        msg.send(&mut sock);
+
+        WL_REGISTRY
+            .bind(
+                name,
+                NewId {
+                    id: ObjectId::new(1),
+                    interface: "wl_compositor",
+                    version: 1,
+                },
+                &mut buf,
+            )?
+            .send(&mut sock);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_wl_surface() -> Result<(), MessageBuildError> {
+        let surface = WlSurface {
+            id: ObjectId::new(10),
+        };
+
+        let mut buf = MessageBuffer::new();
+        let mut sock = UnixStream::from(unsafe { connect_wayland_socket().unwrap() });
+
+        let msg = surface.damage(1, 2, 3, 4, &mut buf)?;
+        msg.send(&mut sock);
+
+        surface.damage(1, 2, 3, 4, &mut buf)?.send(&mut sock);
+
+        Ok(())
     }
 }

@@ -4,54 +4,41 @@
 
 pub mod request {
     use crate::wayland::{
-        interface::Request,
         object::ObjectId,
-        wire::{Message, MessageBuffer, MessageBuildError, MessageHeaderDesc},
+        wire::{Message, MessageBuffer, MessageBuildResult, MessageHeaderDesc},
     };
 
-    /// Ask the compositor to create a new surface.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct CreateSurface {
         /// The new surface
         pub new_id: ObjectId,
     }
 
-    impl Request for CreateSurface {
-        fn header_desc() -> MessageHeaderDesc {
-            MessageHeaderDesc {
+    /// Ask the compositor to create a new surface.
+    pub fn create_surface(req: CreateSurface, buf: &mut MessageBuffer) -> MessageBuildResult {
+        Message::builder(buf)
+            .header(MessageHeaderDesc {
                 object_id: ObjectId::WL_COMPOSITOR,
                 opcode: 0,
-            }
-        }
-
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError> {
-            Message::builder(buf)
-                .header(Self::header_desc())
-                .uint(self.new_id.into())
-                .build()
-        }
+            })
+            .new_id(req.new_id)
+            .build()
     }
 
-	  /// Ask the compositor to create a new region.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct CreateRegion {
         /// The new region
         pub new_id: ObjectId,
     }
 
-    impl Request for CreateRegion {
-        fn header_desc() -> MessageHeaderDesc {
-            MessageHeaderDesc {
+    /// Ask the compositor to create a new region.
+    pub fn craete_region(req: CreateRegion, buf: &mut MessageBuffer) -> MessageBuildResult {
+        Message::builder(buf)
+            .header(MessageHeaderDesc {
                 object_id: ObjectId::WL_COMPOSITOR,
                 opcode: 1,
-            }
-        }
-
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError> {
-            Message::builder(buf)
-                .header(Self::header_desc())
-                .uint(self.new_id.into())
-                .build()
-        }
+            })
+            .new_id(req.new_id)
+            .build()
     }
 }

@@ -1,5 +1,10 @@
 use std::num::NonZeroU32;
 
+use super::{
+    interface::NewId,
+    wire::{Message, MessageBuffer, MessageBuildError, MessageBuilder},
+};
+
 /// Ids and names for Wayland objects
 #[derive(Clone, Debug, PartialEq, Eq, Copy, PartialOrd, Ord, Hash)]
 pub struct ObjectId(pub NonZeroU32);
