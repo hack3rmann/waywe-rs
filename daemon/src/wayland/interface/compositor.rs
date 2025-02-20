@@ -17,7 +17,7 @@ pub mod request {
     }
 
     impl Request for CreateSurface {
-        fn header_desc() -> MessageHeaderDesc {
+        fn header_desc(&self) -> MessageHeaderDesc {
             MessageHeaderDesc {
                 object_id: ObjectId::WL_COMPOSITOR,
                 opcode: 0,
@@ -26,13 +26,13 @@ pub mod request {
 
         fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError> {
             Message::builder(buf)
-                .header(Self::header_desc())
+                .header(Self::header_desc(&self))
                 .uint(self.new_id.into())
                 .build()
         }
     }
 
-	  /// Ask the compositor to create a new region.
+    /// Ask the compositor to create a new region.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct CreateRegion {
         /// The new region
@@ -40,7 +40,7 @@ pub mod request {
     }
 
     impl Request for CreateRegion {
-        fn header_desc() -> MessageHeaderDesc {
+        fn header_desc(&self) -> MessageHeaderDesc {
             MessageHeaderDesc {
                 object_id: ObjectId::WL_COMPOSITOR,
                 opcode: 1,
@@ -49,7 +49,7 @@ pub mod request {
 
         fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError> {
             Message::builder(buf)
-                .header(Self::header_desc())
+                .header(Self::header_desc(&self))
                 .uint(self.new_id.into())
                 .build()
         }

@@ -36,7 +36,7 @@ pub struct NewId<'s> {
 /// Represents requests on Wayland's interfaces
 pub trait Request: Copy {
     /// The object id and the opcode for this request
-    fn header_desc() -> MessageHeaderDesc;
+    fn header_desc(&self) -> MessageHeaderDesc;
 
     /// Builds the message on the top of given message buffer
     fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError>;

@@ -20,7 +20,7 @@
 //! the object.
 
 use crate::wayland::{
-    interface::{Event, Request, NewId},
+    interface::{Event, NewId, Request},
     object::ObjectId,
     wire::{Message, MessageBuffer, MessageBuildError, MessageHeaderDesc},
 };
@@ -39,7 +39,7 @@ pub mod request {
     }
 
     impl Request for Bind<'_> {
-        fn header_desc() -> MessageHeaderDesc {
+        fn header_desc(&self) -> MessageHeaderDesc {
             MessageHeaderDesc {
                 object_id: ObjectId::WL_REGISTRY,
                 opcode: 0,
@@ -48,7 +48,7 @@ pub mod request {
 
         fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError> {
             Message::builder(buf)
-                .header(Self::header_desc())
+                .header(Self::header_desc(&self))
                 .uint(self.name.into())
                 .new_id(self.new_id)
                 .build()
