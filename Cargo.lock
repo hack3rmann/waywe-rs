@@ -81,6 +81,7 @@ name = "daemon"
 version = "0.0.1"
 dependencies = [
  "bytemuck",
+ "raw-window-handle",
  "rustix",
  "thiserror",
  "tokio",
@@ -205,6 +206,12 @@ checksum = "0e4dccaaaf89514f546c693ddc140f729f958c247918a13380cccc6078391acc"
 dependencies = [
  "proc-macro2",
 ]
+
+[[package]]
+name = "raw-window-handle"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20675572f6f24e9e76ef639bc5552774ed45f1c30e2951e1e99c59888861c539"
 
 [[package]]
 name = "redox_syscall"
