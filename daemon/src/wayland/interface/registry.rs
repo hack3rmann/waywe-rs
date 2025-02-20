@@ -20,7 +20,7 @@
 //! the object.
 
 use crate::wayland::{
-    interface::{Event, Request},
+    interface::{Event, Request, NewId},
     object::ObjectId,
     wire::{Message, MessageBuffer, MessageBuildError, MessageHeaderDesc},
 };
@@ -31,14 +31,14 @@ pub mod request {
     /// Binds a new, client-created object to the server using the
     /// specified name as the identifier.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
-    pub struct Bind {
+    pub struct Bind<'s> {
         /// Unique numeric name of the object
         pub name: ObjectId,
         /// Bounded object
-        pub new_id: ObjectId,
+        pub new_id: NewId<'s>,
     }
 
-    impl Request for Bind {
+    impl Request for Bind<'_> {
         fn header_desc() -> MessageHeaderDesc {
             MessageHeaderDesc {
                 object_id: ObjectId::WL_REGISTRY,
@@ -50,7 +50,7 @@ pub mod request {
             Message::builder(buf)
                 .header(Self::header_desc())
                 .uint(self.name.into())
-                .uint(self.new_id.into())
+                .new_id(self.new_id)
                 .build()
         }
     }
@@ -98,12 +98,12 @@ pub mod event {
     }
 
     /// Notify the client of removed global objects.
-    /// 
+    ///
     /// This event notifies the client that the global identified
     /// by name is no longer available.  If the client bound to
     /// the global using the bind request, the client should now
     /// destroy that object.
-    /// 
+    ///
     /// The object remains valid and requests to the object will be
     /// ignored until the client destroys it, to avoid races between
     /// the global going away and a client sending a request to it.

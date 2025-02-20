@@ -379,7 +379,9 @@ impl<'b> MessageBuilder<'b> {
 
     /// Writes [`NewId`] to the message
     pub fn new_id(self, value: NewId) -> Self {
-        self.uint(value.version).uint(value.id.into()).str(value.interface)
+        self.str(value.interface)
+            .uint(value.version)
+            .uint(value.id.into())
     }
 }
 

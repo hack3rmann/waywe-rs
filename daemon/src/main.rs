@@ -3,11 +3,11 @@ pub mod wayland;
 use std::collections::HashMap;
 use std::{env, error::Error, os::unix::net::UnixStream};
 use wayland::interface::{
-    AnyEvent, Event, Request, WlCallbackDoneEvent, WlDisplayDeleteIdEvent,
+    AnyEvent, Event, NewId, Request, WlCallbackDoneEvent, WlDisplayDeleteIdEvent,
     WlDisplayGetRegistryRequest, WlDisplaySyncRequest, WlRegistryBindRequest,
     WlRegistryGlobalEvent,
 };
-use wayland::object::{ObjectId, ObjectIdProvider};
+use wayland::object::ObjectId;
 use wayland::wire::{self, Message, MessageBuffer, MessageBuildError};
 
 fn get_socket_path() -> Option<String> {
@@ -69,19 +69,21 @@ fn get_registry(
 
 fn main() -> Result<(), Box<dyn Error>> {
     let socket_path = get_socket_path().expect("failed to get wayland socket path");
-    let mut sock = UnixStream::connect(socket_path)?;
 
-    let mut id_provider = ObjectIdProvider::new();
+    let mut sock = UnixStream::connect(socket_path)?;
     let mut buf = MessageBuffer::new();
 
     let registry = get_registry(&mut sock, &mut buf)?;
-
-    let wl_compositor_id = id_provider.next_id();
-    let wl_compositor = registry["wl_compositor"];
+    let wl_compositor_interface = "wl_compositor";
+    let wl_compositor = registry[wl_compositor_interface];
 
     WlRegistryBindRequest {
         name: wl_compositor.object_name,
-        new_id: wl_compositor_id,
+        new_id: NewId {
+            id: ObjectId::WL_COMPOSITOR,
+            interface: wl_compositor_interface,
+            version: wl_compositor.version,
+        },
     }
     .send(&mut sock, &mut buf)?;
 
