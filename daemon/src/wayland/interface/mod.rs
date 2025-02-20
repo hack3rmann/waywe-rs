@@ -1,3 +1,8 @@
+pub mod callback;
+pub mod compositor;
+pub mod display;
+pub mod registry;
+
 use super::{
     object::ObjectId,
     wire::{self, Message, MessageBuffer, MessageBuildError, MessageHeaderDesc},
@@ -5,6 +10,10 @@ use super::{
 use std::io::{self, Read, Write};
 
 pub use {
+    callback::event::Done as WlCallbackDoneEvent,
+    compositor::request::{
+        CreateRegion as WlCompositorCreateRegion, CreateSurface as WlCompositorCreateSurface,
+    },
     display::{
         event::{DeleteId as WlDisplayDeleteIdEvent, Error as WlDisplayErrorEvent},
         request::{GetRegistry as WlDisplayGetRegistryRequest, Sync as WlDisplaySyncRequest},
@@ -14,12 +23,7 @@ pub use {
         event::{Global as WlRegistryGlobalEvent, GlobalRemove as WlRegistryGlobalRemoveEvent},
         request::Bind as WlRegistryBindRequest,
     },
-    callback::event::Done as WlCallbackDoneEvent,
 };
-
-pub mod callback;
-pub mod display;
-pub mod registry;
 
 /// An [`ObjectId`] bundled with an interface name and a version
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
@@ -84,9 +88,9 @@ impl<'s> From<&'s Message> for AnyEvent<'s> {
             (ObjectId::WL_REGISTRY, 0) => {
                 Self::WlRegistryGlobal(WlRegistryGlobalEvent::from_message(message).unwrap())
             }
-            (ObjectId::WL_REGISTRY, 1) => {
-                Self::WlRegistryGlobalRemove(WlRegistryGlobalRemoveEvent::from_message(message).unwrap())
-            }
+            (ObjectId::WL_REGISTRY, 1) => Self::WlRegistryGlobalRemove(
+                WlRegistryGlobalRemoveEvent::from_message(message).unwrap(),
+            ),
             (ObjectId::WL_DISPLAY, 0) => {
                 Self::WlDisplayError(WlDisplayErrorEvent::from_message(message).unwrap())
             }
