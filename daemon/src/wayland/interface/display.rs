@@ -2,21 +2,13 @@
 //! is used for internal Wayland protocol features.
 
 use crate::wayland::{
-    interface::Event,
+    interface::{Event, Request},
     object::ObjectId,
     wire::{Message, MessageBuffer, MessageBuildError, MessageHeaderDesc},
 };
 
 pub mod request {
-    use crate::wayland::wire::MessageBuildResult;
-
     use super::*;
-
-    #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
-    pub struct Sync {
-        /// Callback object for the sync request
-        pub callback: ObjectId,
-    }
 
     /// The sync request asks the server to emit the 'done' event
     /// on the returned wl_callback object.  Since requests are
@@ -29,20 +21,26 @@ pub mod request {
     /// attempt to use it after that point.
     ///
     /// The callback_data passed in the callback is undefined and should be ignored.
-    pub fn sync(req: Sync, buf: &mut MessageBuffer) -> MessageBuildResult {
-        Message::builder(buf)
-            .header(MessageHeaderDesc {
-                object_id: ObjectId::WL_DISPLAY,
-                opcode: 0,
-            })
-            .uint(req.callback.into())
-            .build()
+    #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
+    pub struct Sync {
+        /// Callback object for the sync request
+        pub callback: ObjectId,
     }
 
-    #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
-    pub struct GetRegistry {
-        /// Global registry object
-        pub registry: ObjectId,
+    impl Request for Sync {
+        fn header_desc() -> MessageHeaderDesc {
+            MessageHeaderDesc {
+                object_id: ObjectId::WL_DISPLAY,
+                opcode: 0,
+            }
+        }
+
+        fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError> {
+            Message::builder(buf)
+                .header(Self::header_desc())
+                .uint(self.callback.into())
+                .build()
+        }
     }
 
     /// This request creates a registry object that allows the client
@@ -54,14 +52,26 @@ pub mod request {
     /// client disconnects, not when the client side proxy is destroyed.
     /// Therefore, clients should invoke get_registry as infrequently as
     /// possible to avoid wasting memory.
-    pub fn get_registry(req: GetRegistry, buf: &mut MessageBuffer) -> MessageBuildResult {
-        Message::builder(buf)
-            .header(MessageHeaderDesc {
+    #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
+    pub struct GetRegistry {
+        /// Global registry object
+        pub registry: ObjectId,
+    }
+
+    impl Request for GetRegistry {
+        fn header_desc() -> MessageHeaderDesc {
+            MessageHeaderDesc {
                 object_id: ObjectId::WL_DISPLAY,
                 opcode: 1,
-            })
-            .uint(req.registry.into())
-            .build()
+            }
+        }
+
+        fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError> {
+            Message::builder(buf)
+                .header(Self::header_desc())
+                .uint(self.registry.into())
+                .build()
+        }
     }
 }
 

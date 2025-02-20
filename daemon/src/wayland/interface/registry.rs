@@ -20,34 +20,39 @@
 //! the object.
 
 use crate::wayland::{
-    interface::{Event, NewId},
+    interface::{Event, Request, NewId},
     object::ObjectId,
-    wire::{Message, MessageBuffer, MessageHeaderDesc},
+    wire::{Message, MessageBuffer, MessageBuildError, MessageHeaderDesc},
 };
 
 pub mod request {
     use super::*;
 
-    use crate::wayland::wire::MessageBuildResult;
-
-    /// Used for passing arguments to bind request
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
-    pub struct Bind<'a> {
-        name: ObjectId,
-        new_id: NewId<'a>,
-    }
-
     /// Binds a new, client-created object to the server using the
     /// specified name as the identifier.
-    pub fn bind<'a>(req: Bind, buf: &'a mut MessageBuffer) -> MessageBuildResult<'a> {
-        Message::builder(buf)
-            .header(MessageHeaderDesc {
+    #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
+    pub struct Bind<'s> {
+        /// Unique numeric name of the object
+        pub name: ObjectId,
+        /// Bounded object
+        pub new_id: NewId<'s>,
+    }
+
+    impl Request for Bind<'_> {
+        fn header_desc() -> MessageHeaderDesc {
+            MessageHeaderDesc {
                 object_id: ObjectId::WL_REGISTRY,
                 opcode: 0,
-            })
-            .uint(req.name.into())
-            .new_id(req.new_id)
-            .build()
+            }
+        }
+
+        fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError> {
+            Message::builder(buf)
+                .header(Self::header_desc())
+                .uint(self.name.into())
+                .new_id(self.new_id)
+                .build()
+        }
     }
 }
 

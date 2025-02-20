@@ -160,8 +160,6 @@ pub fn write_message(stream: &mut impl Write, message: &Message) -> Result<(), i
     stream.write_all(message.as_bytes())
 }
 
-pub type MessageBuildResult<'a> = Result<&'a Message, MessageBuildError>;
-
 /// A string which
 ///
 /// - null-terminated
