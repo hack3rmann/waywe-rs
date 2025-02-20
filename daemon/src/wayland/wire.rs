@@ -117,6 +117,11 @@ impl Message {
         self.header().message_len as usize
     }
 
+    /// Checks if message is empty
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Sends the message to the stream
     pub fn send<S: Write + ?Sized>(&self, stream: &mut S) -> Result<(), io::Error> {
         stream.write_all(self.as_bytes())
@@ -149,7 +154,7 @@ pub fn read_message_into<S: Read + ?Sized>(
 pub fn write_message(stream: &mut impl Write, message: &Message) -> Result<(), io::Error> {
     assert_eq!(
         message.len(),
-        mem::size_of::<MessageHeader>() + mem::size_of::<u32>() * message.body().len()
+        mem::size_of::<MessageHeader>() + std::mem::size_of_val(message.body())
     );
 
     stream.write_all(message.as_bytes())
@@ -187,7 +192,7 @@ impl WireStr {
             return None;
         }
 
-        Some(unsafe { mem::transmute(raw) })
+        Some(unsafe { mem::transmute::<&[u32], &Self>(raw) })
     }
 
     /// Creates a [`str`] from [`WireStr`] if source string is UTF-8 encoded.
@@ -214,7 +219,7 @@ impl<'r> MessageReader<'r> {
 
     /// Reads [`u32`] from message if any's present
     pub fn read_u32(&mut self) -> Option<u32> {
-        if self.data.len() == 0 {
+        if self.data.is_empty() {
             return None;
         }
 
@@ -231,7 +236,7 @@ impl<'r> MessageReader<'r> {
 
     /// Reads [`WireStr`] from message if any's present
     pub fn read_wire_str(&mut self) -> Option<&'r WireStr> {
-        if self.data.len() == 0 {
+        if self.data.is_empty() {
             return None;
         }
 

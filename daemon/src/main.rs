@@ -78,8 +78,7 @@ fn get_registry(
     }
 
     let remove_id = WlDisplayDeleteIdEvent::recv(sock, buf)?;
-
-    assert_eq!(remove_id.id, ObjectId::WL_CALLBACK.into());
+    assert_eq!(remove_id.id, ObjectId::WL_CALLBACK);
 
     Ok(registry)
 }
