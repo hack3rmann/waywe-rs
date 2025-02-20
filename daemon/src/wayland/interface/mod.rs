@@ -1,7 +1,9 @@
+pub mod buffer;
 pub mod callback;
 pub mod compositor;
 pub mod display;
 pub mod registry;
+pub mod surface;
 
 use super::{
     object::ObjectId,
@@ -55,7 +57,7 @@ pub trait Request: Copy {
 /// Represents events on Wayland's interfaces
 pub trait Event<'s>: Copy {
     /// The object id and the opcode for this event
-    fn header_desc() -> Option<MessageHeaderDesc>;
+    fn header_desc(self) -> MessageHeaderDesc;
 
     /// Tries to read the given message as an event of implementor type
     fn from_message(message: &'s Message) -> Option<Self>;
@@ -95,8 +97,15 @@ pub enum AnyEvent<'s> {
 }
 
 impl<'s> Event<'s> for AnyEvent<'s> {
-    fn header_desc() -> Option<MessageHeaderDesc> {
-        None
+    fn header_desc(self) -> MessageHeaderDesc {
+        match self {
+            Self::WlDisplayDeleteId(event) => event.header_desc(),
+            Self::WlDisplayError(event) => event.header_desc(),
+            Self::WlRegistryGlobal(event) => event.header_desc(),
+            Self::WlRegistryGlobalRemove(event) => event.header_desc(),
+            Self::WlCallbackDone(event) => event.header_desc(),
+            Self::Other(msg) => msg.header().into(),
+        }
     }
 
     fn from_message(message: &'s Message) -> Option<Self> {

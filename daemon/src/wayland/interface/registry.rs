@@ -75,11 +75,11 @@ pub mod event {
     }
 
     impl<'s> Event<'s> for Global<'s> {
-        fn header_desc() -> Option<MessageHeaderDesc> {
-            Some(MessageHeaderDesc {
+        fn header_desc(self) -> MessageHeaderDesc {
+            MessageHeaderDesc {
                 object_id: ObjectId::WL_REGISTRY,
                 opcode: 0,
-            })
+            }
         }
 
         fn from_message(message: &'s Message) -> Option<Self> {
@@ -114,18 +114,15 @@ pub mod event {
     }
 
     impl<'s> Event<'s> for GlobalRemove {
-        fn header_desc() -> Option<MessageHeaderDesc> {
-            Some(MessageHeaderDesc {
+        fn header_desc(self) -> MessageHeaderDesc {
+            MessageHeaderDesc {
                 object_id: ObjectId::WL_REGISTRY,
                 opcode: 1,
-            })
+            }
         }
 
         fn from_message(message: &'s Message) -> Option<Self> {
-            if !message
-                .header()
-                .corresponds_to(&Self::header_desc().unwrap())
-            {
+            if !message.header().opcode == 1 {
                 return None;
             }
 

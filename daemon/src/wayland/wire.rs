@@ -267,6 +267,15 @@ pub struct MessageHeaderDesc {
     pub opcode: u16,
 }
 
+impl From<MessageHeader> for MessageHeaderDesc {
+    fn from(value: MessageHeader) -> Self {
+        Self {
+            object_id: ObjectId::new(value.object_id),
+            opcode: value.opcode,
+        }
+    }
+}
+
 /// Helper struct to build wire messages
 #[derive(Debug, PartialEq)]
 pub struct MessageBuilder<'b> {

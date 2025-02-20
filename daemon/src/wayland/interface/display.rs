@@ -96,18 +96,15 @@ pub mod event {
     }
 
     impl<'s> Event<'s> for Error<'s> {
-        fn header_desc() -> Option<MessageHeaderDesc> {
-            Some(MessageHeaderDesc {
+        fn header_desc(self) -> MessageHeaderDesc {
+            MessageHeaderDesc {
                 object_id: ObjectId::WL_DISPLAY,
                 opcode: 0,
-            })
+            }
         }
 
         fn from_message(message: &'s Message) -> Option<Self> {
-            if !message
-                .header()
-                .corresponds_to(&Self::header_desc().unwrap())
-            {
+            if !message.header().opcode == 0 {
                 return None;
             }
 
@@ -137,18 +134,15 @@ pub mod event {
     }
 
     impl<'s> Event<'s> for DeleteId {
-        fn header_desc() -> Option<MessageHeaderDesc> {
-            Some(MessageHeaderDesc {
+        fn header_desc(self) -> MessageHeaderDesc {
+            MessageHeaderDesc {
                 object_id: ObjectId::WL_DISPLAY,
                 opcode: 1,
-            })
+            }
         }
 
         fn from_message(message: &'s Message) -> Option<Self> {
-            if !message
-                .header()
-                .corresponds_to(&Self::header_desc().unwrap())
-            {
+            if !message.header().opcode == 1 {
                 return None;
             }
 
