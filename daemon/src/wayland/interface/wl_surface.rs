@@ -4,7 +4,6 @@ use crate::wayland::{
 };
 
 pub mod request {
-    use super::*;
     use crate::wayland::wire::{Message, MessageBuildResult, MessageHeaderDesc};
 
     pub fn delete(object_id: ObjectId, buf: &mut MessageBuffer) -> MessageBuildResult {

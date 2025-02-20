@@ -21,7 +21,7 @@ pub mod request {
                 object_id: ObjectId::WL_COMPOSITOR,
                 opcode: 0,
             })
-            .uint(req.new_id.into())
+            .new_id(req.new_id)
             .build()
     }
 
@@ -38,7 +38,7 @@ pub mod request {
                 object_id: ObjectId::WL_COMPOSITOR,
                 opcode: 1,
             })
-            .uint(req.new_id.into())
+            .new_id(req.new_id)
             .build()
     }
 }

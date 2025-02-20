@@ -11,7 +11,7 @@ use std::ptr;
 use std::{error::Error, os::unix::net::UnixStream};
 use wayland::connect_wayland_socket;
 use wayland::interface::{
-    self, AnyEvent, Event, WlCallbackDoneEvent, WlDisplayDeleteIdEvent,
+    self, AnyEvent, Event, Request, WlCallbackDoneEvent, WlDisplayDeleteIdEvent,
     WlDisplayGetRegistryRequest, WlDisplaySyncRequest, WlRegistryGlobalEvent,
 };
 use wayland::object::ObjectId;
@@ -28,9 +28,7 @@ fn sync(
     sock: &mut UnixStream,
     buf: &mut MessageBuffer,
 ) -> Result<(), MessageBuildError> {
-    use interface::display::request::*;
-
-    sync(Sync { callback: on }, buf)?.send(sock)?;
+    interface::send_request(WlDisplaySyncRequest { callback: on }, sock, buf)?;
 
     let _done = interface::recv_event::<WlCallbackDoneEvent>(sock, buf)?;
     let remove_id = interface::recv_event::<WlDisplayDeleteIdEvent>(sock, buf)?;
@@ -43,25 +41,20 @@ fn get_registry(
     sock: &mut UnixStream,
     buf: &mut MessageBuffer,
 ) -> Result<HashMap<String, InterfaceDesc>, MessageBuildError> {
-    use interface::display::request::*;
-
-    get_registry(
-        GetRegistry {
+    interface::send_request(
+        WlDisplayGetRegistryRequest {
             registry: ObjectId::WL_REGISTRY,
         },
+        sock,
         buf,
-    )?
-    .send(sock)?;
+    )?;
 
     let mut registry = HashMap::<String, InterfaceDesc>::new();
 
-    sync(
-        Sync {
-            callback: ObjectId::WL_CALLBACK,
-        },
-        buf,
-    )?
-    .send(sock)?;
+    WlDisplaySyncRequest {
+        callback: ObjectId::WL_CALLBACK,
+    }
+    .send(sock, buf)?;
 
     loop {
         wire::read_message_into(sock, buf)?;
