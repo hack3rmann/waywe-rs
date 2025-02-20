@@ -68,8 +68,23 @@ pub trait Event<'s>: Copy {
     }
 }
 
+pub fn send_request(
+    request: impl Request,
+    stream: &mut dyn Write,
+    buf: &mut MessageBuffer,
+) -> Result<(), MessageBuildError> {
+    request.send(stream, buf)
+}
+
+pub fn recv_event<'b, E: Event<'b>>(
+    stream: &mut dyn Read,
+    buf: &'b mut MessageBuffer,
+) -> Result<E, io::Error> {
+    E::recv(stream, buf)
+}
+
 /// Bundles all implemented events together
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Copy)]
 pub enum AnyEvent<'s> {
     WlDisplayDeleteId(WlDisplayDeleteIdEvent),
     WlDisplayError(WlDisplayErrorEvent<'s>),
@@ -79,8 +94,18 @@ pub enum AnyEvent<'s> {
     Other(&'s Message),
 }
 
+impl<'s> Event<'s> for AnyEvent<'s> {
+    fn header_desc() -> Option<MessageHeaderDesc> {
+        None
+    }
+
+    fn from_message(message: &'s Message) -> Option<Self> {
+        Some(Self::from(message))
+    }
+}
+
 impl<'s> From<&'s Message> for AnyEvent<'s> {
-    /// Reads given message into [`AnyEvent`]
+    /// Reads a given message into [`AnyEvent`]
     fn from(message: &'s Message) -> Self {
         let header = message.header();
 

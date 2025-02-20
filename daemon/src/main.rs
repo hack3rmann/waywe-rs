@@ -3,9 +3,9 @@ pub mod wayland;
 use std::collections::HashMap;
 use std::{env, error::Error, os::unix::net::UnixStream};
 use wayland::interface::{
-    AnyEvent, Event, NewId, Request, WlCallbackDoneEvent, WlDisplayDeleteIdEvent,
-    WlDisplayGetRegistryRequest, WlDisplaySyncRequest, WlRegistryBindRequest,
-    WlRegistryGlobalEvent,
+    self, AnyEvent, Event, NewId, Request, WlCallbackDoneEvent, WlCompositorCreateSurface,
+    WlDisplayDeleteIdEvent, WlDisplayGetRegistryRequest, WlDisplaySyncRequest,
+    WlRegistryBindRequest, WlRegistryGlobalEvent,
 };
 use wayland::object::ObjectId;
 use wayland::wire::{self, Message, MessageBuffer, MessageBuildError};
@@ -77,19 +77,40 @@ fn main() -> Result<(), Box<dyn Error>> {
     let wl_compositor_interface = "wl_compositor";
     let wl_compositor = registry[wl_compositor_interface];
 
-    WlRegistryBindRequest {
-        name: wl_compositor.object_name,
-        new_id: NewId {
-            id: ObjectId::WL_COMPOSITOR,
-            interface: wl_compositor_interface,
-            version: wl_compositor.version,
+    interface::send_request(
+        WlRegistryBindRequest {
+            name: wl_compositor.object_name,
+            new_id: NewId {
+                id: ObjectId::WL_COMPOSITOR,
+                interface: wl_compositor_interface,
+                version: wl_compositor.version,
+            },
         },
-    }
-    .send(&mut sock, &mut buf)?;
+        &mut sock,
+        &mut buf,
+    )?;
 
-    wire::read_message_into(&mut sock, &mut buf)?;
-    let event = AnyEvent::from(buf.get_message());
-    dbg!(event);
+    interface::send_request(
+        WlDisplaySyncRequest {
+            callback: ObjectId::new(4),
+        },
+        &mut sock,
+        &mut buf,
+    )?;
+
+    let _done = interface::recv_event::<WlCallbackDoneEvent>(&mut sock, &mut buf)?;
+    let remove_id = interface::recv_event::<WlDisplayDeleteIdEvent>(&mut sock, &mut buf)?;
+    assert_eq!(remove_id.id, ObjectId::new(4));
+
+    interface::send_request(
+        WlCompositorCreateSurface {
+            new_id: ObjectId::new(5),
+        },
+        &mut sock,
+        &mut buf,
+    )?;
+
+    dbg!(interface::recv_event::<AnyEvent>(&mut sock, &mut buf)?);
 
     Ok(())
 }
