@@ -11,6 +11,7 @@ use std::{
 };
 use thiserror::Error;
 
+pub mod c_api;
 pub mod init;
 pub mod interface;
 pub mod object;
