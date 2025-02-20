@@ -49,14 +49,6 @@ pub trait Event<'s>: Copy {
     }
 }
 
-pub fn send_request(
-    request: impl Request,
-    stream: &mut dyn Write,
-    buf: &mut MessageBuffer,
-) -> Result<(), MessageBuildError> {
-    request.send(stream, buf)
-}
-
 pub fn recv_event<'b, E: Event<'b>>(
     stream: &mut dyn Read,
     buf: &'b mut MessageBuffer,
@@ -108,66 +100,5 @@ impl<'s> From<&'s Message> for AnyEvent<'s> {
             }
             _ => Self::Other(message),
         }
-    }
-}
-
-#[cfg(test)]
-mod test_interface {
-    use super::wl_surface::*;
-    use super::NewId;
-    use crate::connect_wayland_socket;
-    use crate::wayland::{
-        object::*,
-        wire::{MessageBuffer, MessageBuildError},
-    };
-    use std::os::unix::net::UnixStream;
-
-    #[test]
-    fn test_wl_registry() -> Result<(), MessageBuildError> {
-        let name = ObjectId::new(1);
-        let mut buf = MessageBuffer::new();
-        let mut sock = UnixStream::from(unsafe { connect_wayland_socket().unwrap() });
-        let msg = WL_REGISTRY.bind(
-            name,
-            NewId {
-                id: ObjectId::new(1),
-                interface: "wl_compositor",
-                version: 1,
-            },
-            &mut buf,
-        )?;
-
-        msg.send(&mut sock);
-
-        WL_REGISTRY
-            .bind(
-                name,
-                NewId {
-                    id: ObjectId::new(1),
-                    interface: "wl_compositor",
-                    version: 1,
-                },
-                &mut buf,
-            )?
-            .send(&mut sock);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_wl_surface() -> Result<(), MessageBuildError> {
-        let surface = WlSurface {
-            id: ObjectId::new(10),
-        };
-
-        let mut buf = MessageBuffer::new();
-        let mut sock = UnixStream::from(unsafe { connect_wayland_socket().unwrap() });
-
-        let msg = surface.damage(1, 2, 3, 4, &mut buf)?;
-        msg.send(&mut sock);
-
-        surface.damage(1, 2, 3, 4, &mut buf)?.send(&mut sock);
-
-        Ok(())
     }
 }
