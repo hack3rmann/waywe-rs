@@ -1,7 +1,8 @@
 pub mod wayland;
 
 use std::collections::HashMap;
-use std::{env, error::Error, os::unix::net::UnixStream};
+use std::{error::Error, os::unix::net::UnixStream};
+use wayland::connect_wayland_socket;
 use wayland::interface::{
     self, AnyEvent, Event, NewId, Request, WlCallbackDoneEvent, WlCompositorCreateSurface,
     WlDisplayDeleteIdEvent, WlDisplayGetRegistryRequest, WlDisplaySyncRequest,
@@ -9,13 +10,6 @@ use wayland::interface::{
 };
 use wayland::object::ObjectId;
 use wayland::wire::{self, Message, MessageBuffer, MessageBuildError};
-
-fn get_socket_path() -> Option<String> {
-    let xdg_runtime_dir = env::var("XDG_RUNTIME_DIR").ok()?;
-    let display_name = env::var("WAYLAND_DISPLAY").unwrap_or_else(|_| String::from("wayland-0"));
-
-    Some(format!("{xdg_runtime_dir}/{display_name}"))
-}
 
 #[derive(Clone, Default, Debug, PartialEq, Copy, Eq, PartialOrd, Ord, Hash)]
 struct InterfaceDesc {
@@ -84,9 +78,7 @@ fn get_registry(
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let socket_path = get_socket_path().expect("failed to get wayland socket path");
-
-    let mut sock = UnixStream::connect(socket_path)?;
+    let mut sock = UnixStream::from(unsafe { connect_wayland_socket()? });
     let mut buf = MessageBuffer::new();
 
     let registry = get_registry(&mut sock, &mut buf)?;
