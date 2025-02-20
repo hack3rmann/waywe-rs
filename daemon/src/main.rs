@@ -23,14 +23,31 @@ struct InterfaceDesc {
     version: u32,
 }
 
+fn sync(
+    on: ObjectId,
+    sock: &mut UnixStream,
+    buf: &mut MessageBuffer,
+) -> Result<(), MessageBuildError> {
+    interface::send_request(WlDisplaySyncRequest { callback: on }, sock, buf)?;
+
+    let _done = interface::recv_event::<WlCallbackDoneEvent>(sock, buf)?;
+    let remove_id = interface::recv_event::<WlDisplayDeleteIdEvent>(sock, buf)?;
+    assert_eq!(remove_id.id, on);
+
+    Ok(())
+}
+
 fn get_registry(
     sock: &mut UnixStream,
     buf: &mut MessageBuffer,
 ) -> Result<HashMap<String, InterfaceDesc>, MessageBuildError> {
-    WlDisplayGetRegistryRequest {
-        registry: ObjectId::WL_REGISTRY,
-    }
-    .send(sock, buf)?;
+    interface::send_request(
+        WlDisplayGetRegistryRequest {
+            registry: ObjectId::WL_REGISTRY,
+        },
+        sock,
+        buf,
+    )?;
 
     let mut registry = HashMap::<String, InterfaceDesc>::new();
 
@@ -90,25 +107,34 @@ fn main() -> Result<(), Box<dyn Error>> {
         &mut buf,
     )?;
 
+    sync(ObjectId::new(4), &mut sock, &mut buf)?;
+
+    let surface_id = ObjectId::new(5);
     interface::send_request(
-        WlDisplaySyncRequest {
-            callback: ObjectId::new(4),
+        WlCompositorCreateSurface { new_id: surface_id },
+        &mut sock,
+        &mut buf,
+    )?;
+
+    sync(ObjectId::new(6), &mut sock, &mut buf)?;
+
+    let xdg_wm_base_interface = "xdg_wm_base";
+    let xdg_wm_base = registry[xdg_wm_base_interface];
+
+    interface::send_request(
+        WlRegistryBindRequest {
+            name: xdg_wm_base.object_name,
+            new_id: NewId {
+                id: ObjectId::new(7),
+                interface: xdg_wm_base_interface,
+                version: xdg_wm_base.version,
+            },
         },
         &mut sock,
         &mut buf,
     )?;
 
-    let _done = interface::recv_event::<WlCallbackDoneEvent>(&mut sock, &mut buf)?;
-    let remove_id = interface::recv_event::<WlDisplayDeleteIdEvent>(&mut sock, &mut buf)?;
-    assert_eq!(remove_id.id, ObjectId::new(4));
-
-    interface::send_request(
-        WlCompositorCreateSurface {
-            new_id: ObjectId::new(5),
-        },
-        &mut sock,
-        &mut buf,
-    )?;
+    sync(ObjectId::new(8), &mut sock, &mut buf)?;
 
     dbg!(interface::recv_event::<AnyEvent>(&mut sock, &mut buf)?);
 
