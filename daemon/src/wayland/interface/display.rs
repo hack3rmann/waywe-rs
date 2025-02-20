@@ -28,7 +28,7 @@ pub mod request {
     }
 
     impl Request for Sync {
-        fn header_desc(&self) -> MessageHeaderDesc {
+        fn header_desc(self) -> MessageHeaderDesc {
             MessageHeaderDesc {
                 object_id: ObjectId::WL_DISPLAY,
                 opcode: 0,
@@ -37,7 +37,7 @@ pub mod request {
 
         fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError> {
             Message::builder(buf)
-                .header(Self::header_desc(&self))
+                .header(Self::header_desc(self))
                 .uint(self.callback.into())
                 .build()
         }
@@ -59,7 +59,7 @@ pub mod request {
     }
 
     impl Request for GetRegistry {
-        fn header_desc(&self) -> MessageHeaderDesc {
+        fn header_desc(self) -> MessageHeaderDesc {
             MessageHeaderDesc {
                 object_id: ObjectId::WL_DISPLAY,
                 opcode: 1,
@@ -68,7 +68,7 @@ pub mod request {
 
         fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError> {
             Message::builder(buf)
-                .header(Self::header_desc(&self))
+                .header(Self::header_desc(self))
                 .uint(self.registry.into())
                 .build()
         }
