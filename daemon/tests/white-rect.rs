@@ -13,8 +13,8 @@ async fn t1() -> Result<(), Box<dyn std::error::Error>> {
         ..Default::default()
     });
 
-    let raw_window_handle = unsafe { wayland.extern_context().raw_window_handle() };
-    let raw_display_handle = unsafe { wayland.extern_context().raw_display_handle() };
+    let raw_window_handle = unsafe { wayland.external_context().raw_window_handle() };
+    let raw_display_handle = unsafe { wayland.external_context().raw_display_handle() };
 
     let surface = unsafe {
         instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {

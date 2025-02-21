@@ -264,7 +264,9 @@ pub(crate) unsafe fn initialize_wayland(
     tracing::info!("wl_display_roundtrip()");
 
     // TODO(hack3rmann): handle errors
-    assert_ne!(-1, unsafe { wl_display_roundtrip(display.as_ptr()) });
+    if unsafe { wl_display_roundtrip(display.as_ptr()) } == -1 {
+        return Err(ExternalWaylandError::WlDisplayRoundtripFailed);
+    }
 
     let registry_data = registry_data.into_inner();
 
@@ -316,10 +318,11 @@ impl ExternalWaylandContext {
         RawWindowHandle::Wayland(WaylandWindowHandle::new(self.surface))
     }
 
-    pub unsafe fn close_connection(self) -> Result<(), rustix::io::Errno> {
+    pub unsafe fn close_connection(self) {
+        unsafe { wl_proxy_destroy(self.surface.as_ptr()) };
+        unsafe { wl_proxy_destroy(self.compositor.as_ptr()) };
         unsafe { wl_registry_destroy(self.registry.as_ptr()) };
         unsafe { wl_display_disconnect(self.display.as_ptr()) };
-        Ok(())
     }
 }
 
@@ -344,6 +347,8 @@ pub enum ExternalWaylandError {
     WlCompositorIsNull,
     #[error("external wayland error: wl_surface is null")]
     WlSurfaceIsNull,
+    #[error("external wayland error: wl_display_roundtrip failed")]
+    WlDisplayRoundtripFailed,
 }
 
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
