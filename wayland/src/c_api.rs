@@ -1,7 +1,13 @@
 #![allow(non_camel_case_types, clippy::missing_safety_doc)]
 
 use std::{
-    cell::UnsafeCell, collections::HashMap, ffi::{c_char, c_int, c_void, CStr}, mem::offset_of, os::fd::RawFd, process, ptr::{self, NonNull}
+    cell::UnsafeCell,
+    collections::HashMap,
+    ffi::{CStr, c_char, c_int, c_void},
+    mem::offset_of,
+    os::fd::RawFd,
+    process,
+    ptr::{self, NonNull},
 };
 
 use raw_window_handle::{
@@ -36,7 +42,7 @@ pub struct wl_registry_listener {
 }
 
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
-pub struct WlRegistryDataHeader {
+pub struct WlRegistryDataItem {
     pub name: ObjectId,
     pub version: u32,
 }
@@ -45,7 +51,7 @@ pub struct WlRegistryDataHeader {
 #[derive(Clone, Debug, PartialEq)]
 pub struct WlRegistryData {
     pub wl_compositor: *mut wl_compositor,
-    pub globals: HashMap<String, WlRegistryDataHeader>,
+    pub globals: HashMap<String, WlRegistryDataItem>,
 }
 
 impl Default for WlRegistryData {
@@ -131,7 +137,7 @@ pub unsafe extern "C" fn registry_handle_global(
         };
     }
 
-    let header = WlRegistryDataHeader {
+    let header = WlRegistryDataItem {
         name: ObjectId::try_from(name).unwrap_or_else(|_| {
             // TODO(ArnoDarkrose): replace with error
             eprintln!("invalid wayland global object name = 0 on '{interface}' interface");
@@ -231,65 +237,81 @@ pub struct ExternalWaylandContext {
     pub(crate) surface: NonNull<wl_surface>,
 }
 
-#[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
-pub struct MappedNames {
-    pub list: [ObjectId; 5],
-}
+pub(crate) unsafe fn initialize_wayland(
+    wayland_socket_fd: RawFd,
+) -> Result<(ExternalWaylandContext, ExternalObjectInformation), ExternalWaylandError> {
+    let display = NonNull::new(unsafe { wl_display_connect_to_fd(wayland_socket_fd) })
+        .ok_or(ExternalWaylandError::WlDisplayIsNull)?;
 
-pub struct ExternalObjectInformation {
-    pub registry_data: HashMap<String, WlRegistryData>,
-    pub mapped_names: MappedNames,
-}
+    // TODO(ArnoDarkrose): replace with info
+    eprintln!("wl_display_get_registry()");
 
-impl ExternalWaylandContext {
-    pub unsafe fn from_raw_fd(wayland_socket_fd: RawFd) -> Result<Self, ExternalWaylandError> {
-        let display = NonNull::new(unsafe { wl_display_connect_to_fd(wayland_socket_fd) })
-            .ok_or(ExternalWaylandError::WlDisplayIsNull)?;
+    let registry = NonNull::new(unsafe { wl_display_get_registry(display.as_ptr()) })
+        .ok_or(ExternalWaylandError::WlRegistryIsNull)?;
 
-        // TODO(ArnoDarkrose): replace with info
-        eprintln!("wl_display_get_registry()");
+    // TODO(hack3rmann): extend WlRegistryData lifetime to ExternalWaylandContext's one
+    let registry_data = UnsafeCell::<WlRegistryData>::default();
 
-        let registry = NonNull::new(unsafe { wl_display_get_registry(display.as_ptr()) })
-            .ok_or(ExternalWaylandError::WlRegistryIsNull)?;
+    // TODO(ArnoDarkrose): replace with info
+    eprintln!("wl_registry_add_listener()");
 
-        let registry_data = UnsafeCell::<WlRegistryData>::default();
+    unsafe {
+        wl_registry_add_listener(
+            registry.as_ptr(),
+            &raw const WL_REGISTRY_LISTENER,
+            registry_data.get().cast(),
+        );
+    }
 
-        // TODO(ArnoDarkrose): replace with info
-        eprintln!("wl_registry_add_listener()");
+    // TODO(ArnoDarkrose): replace with info
+    eprintln!("wl_display_roundtrip()");
 
-        unsafe {
-            wl_registry_add_listener(
-                registry.as_ptr(),
-                &raw const WL_REGISTRY_LISTENER,
-                registry_data.get().cast(),
-            );
-        }
+    // TODO(hack3rmann): handle errors
+    assert_ne!(-1, unsafe { wl_display_roundtrip(display.as_ptr()) });
 
-        // TODO(ArnoDarkrose): replace with info
-        eprintln!("wl_display_roundtrip()");
+    let registry_data = registry_data.into_inner();
 
-        // TODO: replace with our implementation
-        assert_ne!(-1, unsafe { wl_display_roundtrip(display.as_ptr()) });
+    let compositor = NonNull::new(registry_data.wl_compositor)
+        .ok_or(ExternalWaylandError::WlCompositorIsNull)?;
 
-        let registry_data = registry_data.into_inner();
+    // TODO(ArnoDarkrose): replace with info
+    eprintln!("wl_compositor_create_surface()");
 
-        let compositor = NonNull::new(registry_data.wl_compositor)
-            .ok_or(ExternalWaylandError::WlCompositorIsNull)?;
+    let surface = NonNull::new(unsafe { wl_compositor_create_surface(compositor.as_ptr()) })
+        .ok_or(ExternalWaylandError::WlSurfaceIsNull)?;
 
-        // TODO(ArnoDarkrose): replace with info
-        eprintln!("wl_compositor_create_surface()");
+    let mut mapped_names = GlobalNameMap::default();
 
-        let surface = NonNull::new(unsafe { wl_compositor_create_surface(compositor.as_ptr()) })
-            .ok_or(ExternalWaylandError::WlSurfaceIsNull)?;
+    mapped_names.set_id(
+        ObjectId::WL_DISPLAY,
+        ObjectId::new(unsafe { wl_proxy_get_id(display.as_ptr()) }),
+    );
 
-        Ok(Self {
+    mapped_names.set_id(
+        ObjectId::WL_REGISTRY,
+        ObjectId::new(unsafe { wl_proxy_get_id(registry.as_ptr()) }),
+    );
+
+    mapped_names.set_id(
+        ObjectId::WL_COMPOSITOR,
+        ObjectId::new(unsafe { wl_proxy_get_id(compositor.as_ptr()) }),
+    );
+
+    Ok((
+        ExternalWaylandContext {
             display,
             registry,
             compositor,
             surface,
-        })
-    }
+        },
+        ExternalObjectInformation {
+            globals: registry_data.globals,
+            mapped_names,
+        },
+    ))
+}
 
+impl ExternalWaylandContext {
     pub unsafe fn raw_display_handle(self) -> RawDisplayHandle {
         RawDisplayHandle::Wayland(WaylandDisplayHandle::new(self.display))
     }
@@ -326,4 +348,37 @@ pub enum ExternalWaylandError {
     WlCompositorIsNull,
     #[error("external wayland error: wl_surface is null")]
     WlSurfaceIsNull,
+}
+
+#[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
+pub struct GlobalNameMap {
+    pub list: [u32; 6],
+}
+
+impl GlobalNameMap {
+    pub fn get_id(&self, name: ObjectId) -> Option<ObjectId> {
+        self.list
+            .get(name.0.get() as usize - 1)
+            .and_then(|&x| x.try_into().ok())
+    }
+
+    pub fn set_id(&mut self, name: ObjectId, id: ObjectId) {
+        self.list[name.0.get() as usize - 1] = id.into();
+    }
+
+    pub fn get_name(&self, id: ObjectId) -> Option<ObjectId> {
+        for i in 0..self.list.len() {
+            if self.list[i] == id.into() {
+                return Some(ObjectId::new(i as u32 + 1));
+            }
+        }
+
+        None
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct ExternalObjectInformation {
+    pub globals: HashMap<String, WlRegistryDataItem>,
+    pub mapped_names: GlobalNameMap,
 }

@@ -1,8 +1,8 @@
-use crate::c_api::ExternalWaylandError;
-
+use super::GetSocketPathError;
 use super::c_api::ExternalWaylandContext;
 use super::connect_wayland_socket;
-use super::GetSocketPathError;
+use crate::c_api::ExternalWaylandError;
+use crate::c_api::initialize_wayland;
 use std::os::fd::BorrowedFd;
 use std::os::fd::IntoRawFd as _;
 use std::os::fd::RawFd;
@@ -16,7 +16,7 @@ pub struct WaylandContext {
 impl WaylandContext {
     pub fn new() -> Result<Self, WaylandInitError> {
         let sock = unsafe { connect_wayland_socket()?.into_raw_fd() };
-        let extern_context = unsafe { ExternalWaylandContext::from_raw_fd(sock)? };
+        let (extern_context, _object_info) = unsafe { initialize_wayland(sock)? };
 
         Ok(Self {
             sock,
