@@ -57,7 +57,7 @@ pub unsafe extern "C" fn wl_display_get_registry(display: *mut wl_display) -> *m
 }
 
 pub unsafe extern "C" fn wl_registry_destroy(registry: *mut wl_registry) {
-    wl_proxy_destroy(registry.cast());
+    unsafe { wl_proxy_destroy(registry.cast()) };
 }
 
 pub unsafe extern "C" fn wl_registry_add_listener(
@@ -65,7 +65,7 @@ pub unsafe extern "C" fn wl_registry_add_listener(
     listener: *const wl_registry_listener,
     data: *mut c_void,
 ) -> c_int {
-    wl_proxy_add_listener(registry.cast(), listener.cast_mut().cast(), data)
+    unsafe { wl_proxy_add_listener(registry.cast(), listener.cast_mut().cast(), data) }
 }
 
 pub unsafe extern "C" fn registry_handle_global(
@@ -75,16 +75,18 @@ pub unsafe extern "C" fn registry_handle_global(
     interface: *const c_char,
     version: u32,
 ) {
-    if strcmp(interface, wl_compositor_interface.name) == 0 {
+    if unsafe { strcmp(interface, wl_compositor_interface.name) } == 0 {
         let global_data = NonNull::new(data.cast::<WlGlobalData>())
             .expect("invalid data argument in registry global event handler");
 
         let wl_compositor =
-            unsafe { wl_registry_bind(registry, name, &wl_compositor_interface, version) };
+            unsafe { wl_registry_bind(registry, name, &raw const wl_compositor_interface, version) };
 
-        global_data
-            .add(offset_of!(WlGlobalData, wl_compositor))
-            .write(WlGlobalData { wl_compositor });
+        unsafe {
+            global_data
+                .add(offset_of!(WlGlobalData, wl_compositor))
+                .write(WlGlobalData { wl_compositor });
+        }
     }
 }
 
@@ -126,7 +128,7 @@ pub unsafe extern "C" fn wl_compositor_create_surface(
         wl_proxy_marshal_flags(
             wl_compositor.cast(),
             WL_COMPOSITOR_CREATE_SURFACE,
-            &wl_surface_interface,
+            &raw const wl_surface_interface,
             version,
             0,
             ptr::null_mut::<c_void>(),
@@ -135,7 +137,7 @@ pub unsafe extern "C" fn wl_compositor_create_surface(
     .cast()
 }
 
-pub const WL_REGISTRY_LISTENER: wl_registry_listener = wl_registry_listener {
+pub static WL_REGISTRY_LISTENER: wl_registry_listener = wl_registry_listener {
     global: registry_handle_global,
     global_remove: registry_handle_global_remove,
 };
@@ -191,7 +193,7 @@ impl ExternWaylandContext {
         });
 
         unsafe {
-            wl_registry_add_listener(registry, &WL_REGISTRY_LISTENER, global_data.get().cast());
+            wl_registry_add_listener(registry, &raw const WL_REGISTRY_LISTENER, global_data.get().cast());
         }
 
         // TODO: replace with our implementation
