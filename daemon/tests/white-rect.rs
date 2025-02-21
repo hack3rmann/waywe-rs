@@ -113,7 +113,6 @@ async fn t1() -> Result<(), Box<dyn std::error::Error>> {
                 zero_initialize_workgroup_memory: false,
             },
             targets: &[Some(wgpu::ColorTargetState {
-                // FIXME(hack3rmann): figure out wayland's texture format
                 format: surface_format,
                 blend: None,
                 write_mask: wgpu::ColorWrites::ALL,
