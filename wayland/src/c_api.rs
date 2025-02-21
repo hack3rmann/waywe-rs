@@ -83,10 +83,6 @@ pub unsafe extern "C" fn wl_display_get_registry(display: *mut wl_display) -> *m
     .cast()
 }
 
-pub unsafe extern "C" fn wl_registry_destroy(registry: *mut wl_registry) {
-    unsafe { wl_proxy_destroy(registry.cast()) };
-}
-
 pub unsafe extern "C" fn wl_registry_add_listener(
     registry: *mut wl_registry,
     listener: *const wl_registry_listener,
@@ -321,7 +317,7 @@ impl ExternalWaylandContext {
     pub unsafe fn close_connection(self) {
         unsafe { wl_proxy_destroy(self.surface.as_ptr()) };
         unsafe { wl_proxy_destroy(self.compositor.as_ptr()) };
-        unsafe { wl_registry_destroy(self.registry.as_ptr()) };
+        unsafe { wl_proxy_destroy(self.registry.as_ptr()) };
         unsafe { wl_display_disconnect(self.display.as_ptr()) };
     }
 }
