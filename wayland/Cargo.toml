@@ -8,3 +8,4 @@ bytemuck = { version = "1.21.0", features = ["extern_crate_alloc", "derive"] }
 raw-window-handle = "0.6.2"
 rustix = { version = "0.38.44", features = ["fs", "net", "process"] }
 thiserror = "2.0.11"
+tracing.workspace = true

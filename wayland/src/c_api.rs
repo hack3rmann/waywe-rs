@@ -103,8 +103,8 @@ pub unsafe extern "C" fn registry_handle_global(
     version: u32,
 ) {
     if interface.is_null() {
-        // TODO(ArnoDarkrose): replace with error
-        eprintln!("invalid null interface c-string");
+        tracing::error!("invalid null interface c-string");
+
         process::abort();
     }
 
@@ -115,15 +115,15 @@ pub unsafe extern "C" fn registry_handle_global(
     let interface = interface
         .as_str()
         .unwrap_or_else(|_| {
-            // TODO(ArnoDarkrose): replace with error
-            eprintln!("invalid non-UTF8 interface string");
+            tracing::error!("invalid non-UTF8 interface string");
+
             process::abort();
         })
         .to_owned();
 
     let mut global_data = NonNull::new(data.cast::<WlRegistryData>()).unwrap_or_else(|| {
-        // TODO(ArnoDarkrose): replace with error
-        eprintln!("invalid null data pointer in registry callback");
+        tracing::error!("invalid null data pointer in registry callback");
+
         process::abort();
     });
 
@@ -139,8 +139,8 @@ pub unsafe extern "C" fn registry_handle_global(
 
     let header = WlRegistryDataItem {
         name: ObjectId::try_from(name).unwrap_or_else(|_| {
-            // TODO(ArnoDarkrose): replace with error
-            eprintln!("invalid wayland global object name = 0 on '{interface}' interface");
+            tracing::error!("invalid wayland global object name = 0 on '{interface}' interface");
+
             process::abort();
         }),
         version,
@@ -243,8 +243,7 @@ pub(crate) unsafe fn initialize_wayland(
     let display = NonNull::new(unsafe { wl_display_connect_to_fd(wayland_socket_fd) })
         .ok_or(ExternalWaylandError::WlDisplayIsNull)?;
 
-    // TODO(ArnoDarkrose): replace with info
-    eprintln!("wl_display_get_registry()");
+    tracing::info!("wl_display_get_registry()");
 
     let registry = NonNull::new(unsafe { wl_display_get_registry(display.as_ptr()) })
         .ok_or(ExternalWaylandError::WlRegistryIsNull)?;
@@ -252,8 +251,7 @@ pub(crate) unsafe fn initialize_wayland(
     // TODO(hack3rmann): extend WlRegistryData lifetime to ExternalWaylandContext's one
     let registry_data = UnsafeCell::<WlRegistryData>::default();
 
-    // TODO(ArnoDarkrose): replace with info
-    eprintln!("wl_registry_add_listener()");
+    tracing::info!("wl_registry_add_listener()");
 
     unsafe {
         wl_registry_add_listener(
@@ -263,8 +261,7 @@ pub(crate) unsafe fn initialize_wayland(
         );
     }
 
-    // TODO(ArnoDarkrose): replace with info
-    eprintln!("wl_display_roundtrip()");
+    tracing::info!("wl_display_roundtrip()");
 
     // TODO(hack3rmann): handle errors
     assert_ne!(-1, unsafe { wl_display_roundtrip(display.as_ptr()) });
@@ -274,8 +271,7 @@ pub(crate) unsafe fn initialize_wayland(
     let compositor = NonNull::new(registry_data.wl_compositor)
         .ok_or(ExternalWaylandError::WlCompositorIsNull)?;
 
-    // TODO(ArnoDarkrose): replace with info
-    eprintln!("wl_compositor_create_surface()");
+    tracing::info!("wl_compositor_create_surface()");
 
     let surface = NonNull::new(unsafe { wl_compositor_create_surface(compositor.as_ptr()) })
         .ok_or(ExternalWaylandError::WlSurfaceIsNull)?;

@@ -8,3 +8,4 @@ edition = "2024"
 
 [workspace.dependencies]
 wayland = {path = "wayland"}
+tracing = "0.1.41"

@@ -41,7 +41,8 @@ pub unsafe fn connect_wayland_socket() -> Result<OwnedFd, GetSocketPathError> {
 
     let xdg_runtime_dir: PathBuf = env::var_os("XDG_RUNTIME_DIR")
         .unwrap_or_else(|| {
-            // TODO: print warn user about this
+            tracing::warn!("XDG_RUNTIME_DIR env variable not set");
+
             let real_user_id = rustix::process::getuid();
             OsString::from(format!("/run/user/{}", real_user_id.as_raw()))
         })
