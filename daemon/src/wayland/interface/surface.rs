@@ -462,6 +462,7 @@ pub mod event {
 
 pub mod wl_enum {
     /// These errors can be emitted in response to wl_surface requests.
+    #[derive(Clone, Debug, PartialEq, Copy, Eq, PartialOrd, Ord, Hash)]
     pub enum Error {
         /// buffer scale value is invalid
         InvalidScale = 0,
