@@ -5,7 +5,7 @@
 //! factory interfaces, the wl_callback interface is frozen at version 1.
 
 pub mod event {
-    use crate::wayland::{
+    use crate::{
         interface::Event,
         object::ObjectId,
         wire::{Message, MessageHeaderDesc},

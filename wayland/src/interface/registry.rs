@@ -19,7 +19,7 @@
 //! emit events to the client and lets the client invoke requests on
 //! the object.
 
-use crate::wayland::{
+use crate::{
     interface::{Event, NewId, Request},
     object::ObjectId,
     wire::{Message, MessageBuffer, MessageBuildError, MessageHeaderDesc},

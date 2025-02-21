@@ -79,8 +79,9 @@ pub unsafe extern "C" fn registry_handle_global(
         let global_data = NonNull::new(data.cast::<WlGlobalData>())
             .expect("invalid data argument in registry global event handler");
 
-        let wl_compositor =
-            unsafe { wl_registry_bind(registry, name, &raw const wl_compositor_interface, version) };
+        let wl_compositor = unsafe {
+            wl_registry_bind(registry, name, &raw const wl_compositor_interface, version)
+        };
 
         unsafe {
             global_data
@@ -193,7 +194,11 @@ impl ExternWaylandContext {
         });
 
         unsafe {
-            wl_registry_add_listener(registry, &raw const WL_REGISTRY_LISTENER, global_data.get().cast());
+            wl_registry_add_listener(
+                registry,
+                &raw const WL_REGISTRY_LISTENER,
+                global_data.get().cast(),
+            );
         }
 
         // TODO: replace with our implementation

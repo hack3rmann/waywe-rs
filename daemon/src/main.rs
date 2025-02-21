@@ -1,5 +1,3 @@
-pub mod wayland;
-
 use std::error::Error;
 use wayland::init::WaylandContext;
 

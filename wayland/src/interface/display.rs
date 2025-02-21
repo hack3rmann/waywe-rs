@@ -1,7 +1,7 @@
 //! The core global object. This is a special singleton object. It
 //! is used for internal Wayland protocol features.
 
-use crate::wayland::{
+use crate::{
     interface::{Event, Request},
     object::ObjectId,
     wire::{Message, MessageBuffer, MessageBuildError, MessageHeaderDesc},

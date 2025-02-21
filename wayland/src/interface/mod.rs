@@ -1,4 +1,3 @@
-pub mod buffer;
 pub mod callback;
 pub mod compositor;
 pub mod display;

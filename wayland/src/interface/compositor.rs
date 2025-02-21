@@ -3,7 +3,7 @@
 //! surfaces into one displayable output.
 
 pub mod request {
-    use crate::wayland::{
+    use crate::{
         interface::Request,
         object::ObjectId,
         wire::{Message, MessageBuffer, MessageBuildError, MessageHeaderDesc},
