@@ -1,11 +1,15 @@
-use super::GetSocketPathError;
-use super::c_api::ExternalWaylandContext;
-use super::c_api::ExternalWaylandError;
-use super::c_api::initialize_wayland;
-use super::connect_wayland_socket;
-use std::os::fd::BorrowedFd;
-use std::os::fd::IntoRawFd as _;
-use std::os::fd::RawFd;
+use super::c_api::{ExternalWaylandContext, ExternalWaylandError, initialize_wayland};
+use rustix::net::SocketAddrAny;
+use std::{
+    env,
+    ffi::OsString,
+    io,
+    os::{
+        fd::{AsRawFd, BorrowedFd, FromRawFd as _, IntoRawFd as _, OwnedFd, RawFd},
+        unix::net::UnixStream,
+    },
+    path::PathBuf,
+};
 use thiserror::Error;
 
 #[derive(Debug, PartialEq)]
@@ -15,12 +19,15 @@ pub struct WaylandContext {
 }
 
 impl WaylandContext {
-    pub fn new() -> Result<Self, WaylandInitError> {
+    /// # Safety
+    ///
+    /// Wayland socket's file desc should not be owned anywhere else in this program.
+    pub unsafe fn new() -> Result<Self, WaylandInitError> {
         let sock = unsafe { connect_wayland_socket()?.into_raw_fd() };
         let (external_context, _object_info) = unsafe { initialize_wayland(sock)? };
 
         Ok(Self {
-            sock,
+            sock: sock.as_raw_fd(),
             external_context,
         })
     }
@@ -49,4 +56,64 @@ pub enum WaylandInitError {
     GetSocketPath(#[from] GetSocketPathError),
     #[error(transparent)]
     ExternalError(#[from] ExternalWaylandError),
+}
+
+/// # Safety
+///
+/// Wayland socket's file desc should not be owned anywhere else in this program.
+pub unsafe fn connect_wayland_socket() -> Result<OwnedFd, GetSocketPathError> {
+    if let Ok(sock) = env::var("WAYLAND_SOCKET") {
+        let file_desc_number = sock
+            .parse::<i32>()
+            .map_err(|_| GetSocketPathError::InvallidWaylandSocketEnvVar(sock))?;
+
+        // Safety: see safety invariant above
+        let file_desc = unsafe { OwnedFd::from_raw_fd(file_desc_number) };
+
+        let socket_address =
+            rustix::net::getsockname(&file_desc).map_err(GetSocketPathError::GetSockNameFailed)?;
+
+        if !matches!(socket_address, SocketAddrAny::Unix(..)) {
+            return Err(GetSocketPathError::SocketAddrIsNotUnix(socket_address));
+        }
+
+        return Ok(file_desc);
+    }
+
+    let xdg_runtime_dir: PathBuf = env::var_os("XDG_RUNTIME_DIR")
+        .unwrap_or_else(|| {
+            tracing::warn!("XDG_RUNTIME_DIR env variable not set");
+
+            let real_user_id = rustix::process::getuid();
+            OsString::from(format!("/run/user/{}", real_user_id.as_raw()))
+        })
+        .into();
+
+    let display_name =
+        env::var_os("WAYLAND_DISPLAY").unwrap_or_else(|| OsString::from("wayland-0"));
+
+    let mut socket_path = xdg_runtime_dir;
+    socket_path.push(&display_name);
+
+    UnixStream::connect(&socket_path)
+        .map(Into::<OwnedFd>::into)
+        .map_err(|error| GetSocketPathError::FailedToConnectToPath {
+            error,
+            path: socket_path,
+        })
+}
+
+#[derive(Debug, Error)]
+pub enum GetSocketPathError {
+    #[error("invalid $WAYLAND_SOCKET env variable '{0}'")]
+    InvallidWaylandSocketEnvVar(String),
+
+    #[error(transparent)]
+    GetSockNameFailed(#[from] rustix::io::Errno),
+
+    #[error("socket address '{0:?}' is not unix")]
+    SocketAddrIsNotUnix(SocketAddrAny),
+
+    #[error("failed to connect to wayland socket from '{path}': {error}")]
+    FailedToConnectToPath { error: io::Error, path: PathBuf },
 }

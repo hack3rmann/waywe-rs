@@ -5,7 +5,7 @@ use wgpu::util::DeviceExt as _;
 
 #[tokio::test]
 async fn t1() -> Result<(), Box<dyn std::error::Error>> {
-    let wayland = WaylandContext::new()?;
+    let wayland = unsafe { WaylandContext::new()? };
 
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
         backends: wgpu::Backends::VULKAN,
