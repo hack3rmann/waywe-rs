@@ -1,15 +1,16 @@
 #![allow(non_camel_case_types, clippy::missing_safety_doc)]
 
 use std::{
-    cell::UnsafeCell,
-    ffi::{c_char, c_int, c_void},
-    mem::offset_of,
-    ptr::{self, NonNull},
+    cell::UnsafeCell, collections::HashMap, ffi::{c_char, c_int, c_void, CStr}, mem::offset_of, os::fd::RawFd, process, ptr::{self, NonNull}
 };
 
 use raw_window_handle::{
     RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle, WaylandWindowHandle,
 };
+use rustix::path::Arg as _;
+use thiserror::Error;
+
+use crate::object::ObjectId;
 
 pub type wl_display = c_void;
 pub type wl_registry = c_void;
@@ -34,10 +35,26 @@ pub struct wl_registry_listener {
     pub global_remove: unsafe extern "C" fn(*mut c_void, *mut wl_registry, u32),
 }
 
+#[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
+pub struct WlRegistryDataHeader {
+    pub name: ObjectId,
+    pub version: u32,
+}
+
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq)]
-pub struct WlGlobalData {
+pub struct WlRegistryData {
     pub wl_compositor: *mut wl_compositor,
+    pub globals: HashMap<String, WlRegistryDataHeader>,
+}
+
+impl Default for WlRegistryData {
+    fn default() -> Self {
+        Self {
+            wl_compositor: ptr::null_mut(),
+            globals: HashMap::new(),
+        }
+    }
 }
 
 pub const WL_REGISTRY_BIND: u32 = 0;
@@ -79,20 +96,51 @@ pub unsafe extern "C" fn registry_handle_global(
     interface: *const c_char,
     version: u32,
 ) {
-    if unsafe { strcmp(interface, wl_compositor_interface.name) } == 0 {
-        let global_data = NonNull::new(data.cast::<WlGlobalData>())
-            .expect("invalid data argument in registry global event handler");
+    if interface.is_null() {
+        // TODO(ArnoDarkrose): replace with error
+        eprintln!("invalid null interface c-string");
+        process::abort();
+    }
 
-        let wl_compositor = unsafe {
+    // Safety:
+    // - wayland-client ensures the string is valid c-string
+    let interface = unsafe { CStr::from_ptr(interface) };
+
+    let interface = interface
+        .as_str()
+        .unwrap_or_else(|_| {
+            // TODO(ArnoDarkrose): replace with error
+            eprintln!("invalid non-UTF8 interface string");
+            process::abort();
+        })
+        .to_owned();
+
+    let mut global_data = NonNull::new(data.cast::<WlRegistryData>()).unwrap_or_else(|| {
+        // TODO(ArnoDarkrose): replace with error
+        eprintln!("invalid null data pointer in registry callback");
+        process::abort();
+    });
+
+    // Safety: as long as wayland-client calls this handler in-sync
+    // all accesses to `WlGlobalData` are mutually excluded.
+    let global_data = unsafe { global_data.as_mut() };
+
+    if interface == "wl_compositor" {
+        global_data.wl_compositor = unsafe {
             wl_registry_bind(registry, name, &raw const wl_compositor_interface, version)
         };
-
-        unsafe {
-            global_data
-                .add(offset_of!(WlGlobalData, wl_compositor))
-                .write(WlGlobalData { wl_compositor });
-        }
     }
+
+    let header = WlRegistryDataHeader {
+        name: ObjectId::try_from(name).unwrap_or_else(|_| {
+            // TODO(ArnoDarkrose): replace with error
+            eprintln!("invalid wayland global object name = 0 on '{interface}' interface");
+            process::abort();
+        }),
+        version,
+    };
+
+    global_data.globals.insert(interface, header);
 }
 
 pub unsafe extern "C" fn registry_handle_global_remove(
@@ -147,11 +195,6 @@ pub static WL_REGISTRY_LISTENER: wl_registry_listener = wl_registry_listener {
     global_remove: registry_handle_global_remove,
 };
 
-#[link(name = "c")]
-unsafe extern "C" {
-    pub fn strcmp(a: *const c_char, b: *const c_char) -> c_int;
-}
-
 #[link(name = "wayland-client")]
 unsafe extern "C" {
     static wl_registry_interface: wl_interface;
@@ -177,74 +220,110 @@ unsafe extern "C" {
         implementation: *mut extern "C" fn(),
         data: *mut c_void,
     ) -> c_int;
+    pub fn wl_proxy_get_id(proxy: *mut wl_proxy) -> u32;
 }
 
 #[derive(Clone, Debug, PartialEq, Copy, Eq, PartialOrd, Ord, Hash)]
-pub struct ExternWaylandContext {
-    pub(crate) display: *mut wl_display,
-    pub(crate) registry: *mut wl_registry,
-    pub(crate) compositor: *mut wl_compositor,
-    pub(crate) surface: *mut wl_surface,
+pub struct ExternalWaylandContext {
+    pub(crate) display: NonNull<wl_display>,
+    pub(crate) registry: NonNull<wl_registry>,
+    pub(crate) compositor: NonNull<wl_compositor>,
+    pub(crate) surface: NonNull<wl_surface>,
 }
 
-impl ExternWaylandContext {
-    // TODO: check all extern object are non-null
-    pub unsafe fn from_raw_fd(wayland_socket_fd: c_int) -> Self {
-        let display = unsafe { wl_display_connect_to_fd(wayland_socket_fd) };
-        let registry = unsafe { wl_display_get_registry(display) };
+#[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
+pub struct MappedNames {
+    pub list: [ObjectId; 5],
+}
 
-        let global_data = UnsafeCell::new(WlGlobalData {
-            wl_compositor: ptr::null_mut(),
-        });
+pub struct ExternalObjectInformation {
+    pub registry_data: HashMap<String, WlRegistryData>,
+    pub mapped_names: MappedNames,
+}
+
+impl ExternalWaylandContext {
+    pub unsafe fn from_raw_fd(wayland_socket_fd: RawFd) -> Result<Self, ExternalWaylandError> {
+        let display = NonNull::new(unsafe { wl_display_connect_to_fd(wayland_socket_fd) })
+            .ok_or(ExternalWaylandError::WlDisplayIsNull)?;
+
+        // TODO(ArnoDarkrose): replace with info
+        eprintln!("wl_display_get_registry()");
+
+        let registry = NonNull::new(unsafe { wl_display_get_registry(display.as_ptr()) })
+            .ok_or(ExternalWaylandError::WlRegistryIsNull)?;
+
+        let registry_data = UnsafeCell::<WlRegistryData>::default();
+
+        // TODO(ArnoDarkrose): replace with info
+        eprintln!("wl_registry_add_listener()");
 
         unsafe {
             wl_registry_add_listener(
-                registry,
+                registry.as_ptr(),
                 &raw const WL_REGISTRY_LISTENER,
-                global_data.get().cast(),
+                registry_data.get().cast(),
             );
         }
 
+        // TODO(ArnoDarkrose): replace with info
+        eprintln!("wl_display_roundtrip()");
+
         // TODO: replace with our implementation
-        assert_ne!(-1, unsafe { wl_display_roundtrip(display) });
+        assert_ne!(-1, unsafe { wl_display_roundtrip(display.as_ptr()) });
 
-        let compositor = unsafe { global_data.get().read() }.wl_compositor;
-        let surface = unsafe { wl_compositor_create_surface(compositor) };
+        let registry_data = registry_data.into_inner();
 
-        Self {
+        let compositor = NonNull::new(registry_data.wl_compositor)
+            .ok_or(ExternalWaylandError::WlCompositorIsNull)?;
+
+        // TODO(ArnoDarkrose): replace with info
+        eprintln!("wl_compositor_create_surface()");
+
+        let surface = NonNull::new(unsafe { wl_compositor_create_surface(compositor.as_ptr()) })
+            .ok_or(ExternalWaylandError::WlSurfaceIsNull)?;
+
+        Ok(Self {
             display,
             registry,
             compositor,
             surface,
-        }
+        })
     }
 
     pub unsafe fn raw_display_handle(self) -> RawDisplayHandle {
-        RawDisplayHandle::Wayland(WaylandDisplayHandle::new(
-            NonNull::new(self.display).unwrap(),
-        ))
+        RawDisplayHandle::Wayland(WaylandDisplayHandle::new(self.display))
     }
 
     pub unsafe fn raw_window_handle(self) -> RawWindowHandle {
-        RawWindowHandle::Wayland(WaylandWindowHandle::new(
-            NonNull::new(self.surface).unwrap(),
-        ))
+        RawWindowHandle::Wayland(WaylandWindowHandle::new(self.surface))
     }
 
     pub unsafe fn close_connection(self) -> Result<(), rustix::io::Errno> {
-        unsafe { wl_registry_destroy(self.registry) };
-        unsafe { wl_display_disconnect(self.display) };
+        unsafe { wl_registry_destroy(self.registry.as_ptr()) };
+        unsafe { wl_display_disconnect(self.display.as_ptr()) };
         Ok(())
     }
 }
 
-impl Default for ExternWaylandContext {
+impl Default for ExternalWaylandContext {
     fn default() -> Self {
         Self {
-            display: ptr::null_mut(),
-            registry: ptr::null_mut(),
-            compositor: ptr::null_mut(),
-            surface: ptr::null_mut(),
+            display: NonNull::dangling(),
+            registry: NonNull::dangling(),
+            compositor: NonNull::dangling(),
+            surface: NonNull::dangling(),
         }
     }
+}
+
+#[derive(Debug, Error)]
+pub enum ExternalWaylandError {
+    #[error("external wayland error: wl_display is null")]
+    WlDisplayIsNull,
+    #[error("external wayland error: wl_registry is null")]
+    WlRegistryIsNull,
+    #[error("external wayland error: wl_compositor is null")]
+    WlCompositorIsNull,
+    #[error("external wayland error: wl_surface is null")]
+    WlSurfaceIsNull,
 }

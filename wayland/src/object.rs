@@ -1,5 +1,7 @@
 use std::num::NonZeroU32;
 
+use thiserror::Error;
+
 /// Ids and names for Wayland objects
 #[derive(Clone, Debug, PartialEq, Eq, Copy, PartialOrd, Ord, Hash)]
 pub struct ObjectId(pub NonZeroU32);
@@ -35,6 +37,18 @@ impl From<ObjectId> for u32 {
         value.0.get()
     }
 }
+
+impl TryFrom<u32> for ObjectId {
+    type Error = ZeroObjectIdError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        Ok(Self(NonZeroU32::new(value).ok_or(ZeroObjectIdError)?))
+    }
+}
+
+#[derive(Debug, Error)]
+#[error("invalid zero `ObjectId`")]
+pub struct ZeroObjectIdError;
 
 /// Unique identifier provider for Wayland objects
 #[derive(Clone, Debug, PartialEq, Default, Eq, Copy, PartialOrd, Ord, Hash)]
