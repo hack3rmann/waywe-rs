@@ -25,6 +25,10 @@ impl WaylandContext {
     pub fn wayland_sock(&self) -> BorrowedFd<'_> {
         unsafe { BorrowedFd::borrow_raw(self.sock) }
     }
+
+    pub fn extern_context(&self) -> &ExternWaylandContext {
+        &self.extern_context
+    }
 }
 
 impl Drop for WaylandContext {

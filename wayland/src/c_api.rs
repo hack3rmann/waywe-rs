@@ -7,6 +7,10 @@ use std::{
     ptr::{self, NonNull},
 };
 
+use raw_window_handle::{
+    RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle, WaylandWindowHandle,
+};
+
 pub type wl_display = c_void;
 pub type wl_registry = c_void;
 pub type wl_surface = c_void;
@@ -213,6 +217,18 @@ impl ExternWaylandContext {
             compositor,
             surface,
         }
+    }
+
+    pub unsafe fn raw_display_handle(self) -> RawDisplayHandle {
+        RawDisplayHandle::Wayland(WaylandDisplayHandle::new(
+            NonNull::new(self.display).unwrap(),
+        ))
+    }
+
+    pub unsafe fn raw_window_handle(self) -> RawWindowHandle {
+        RawWindowHandle::Wayland(WaylandWindowHandle::new(
+            NonNull::new(self.surface).unwrap(),
+        ))
     }
 
     pub unsafe fn close_connection(self) -> Result<(), rustix::io::Errno> {
