@@ -4,6 +4,10 @@ pub mod display;
 pub mod registry;
 pub mod surface;
 
+use thiserror::Error;
+
+use crate::c_api::GlobalIdMap;
+
 use super::{
     object::ObjectId,
     wire::{self, Message, MessageBuffer, MessageBuildError, MessageHeaderDesc},
@@ -77,11 +81,21 @@ pub fn send_request(
     request.send(stream, buf)
 }
 
-pub fn recv_event<'b, E: Event<'b>>(
+pub fn recv_event<'b>(
+    id_map: &GlobalIdMap,
     stream: &mut dyn Read,
     buf: &'b mut MessageBuffer,
-) -> Result<E, io::Error> {
-    E::recv(stream, buf)
+) -> Result<AnyEvent<'b>, RecvAnyEventError> {
+    wire::read_message_into(stream, buf)?;
+    AnyEvent::new_global(id_map, buf.get_message()).ok_or(RecvAnyEventError::Parse)
+}
+
+#[derive(Debug, Error)]
+pub enum RecvAnyEventError {
+    #[error(transparent)]
+    Io(#[from] io::Error),
+    #[error("unknown event")]
+    Parse,
 }
 
 /// Bundles all implemented events together
@@ -92,48 +106,32 @@ pub enum AnyEvent<'s> {
     WlRegistryGlobal(WlRegistryGlobalEvent<'s>),
     WlRegistryGlobalRemove(WlRegistryGlobalRemoveEvent),
     WlCallbackDone(WlCallbackDoneEvent),
-    Other(&'s Message),
 }
 
-impl<'s> Event<'s> for AnyEvent<'s> {
-    fn header_desc(self) -> MessageHeaderDesc {
-        match self {
-            Self::WlDisplayDeleteId(event) => event.header_desc(),
-            Self::WlDisplayError(event) => event.header_desc(),
-            Self::WlRegistryGlobal(event) => event.header_desc(),
-            Self::WlRegistryGlobalRemove(event) => event.header_desc(),
-            Self::WlCallbackDone(event) => event.header_desc(),
-            Self::Other(msg) => msg.header().into(),
-        }
-    }
-
-    fn from_message(message: &'s Message) -> Option<Self> {
-        Some(Self::from(message))
-    }
-}
-
-impl<'s> From<&'s Message> for AnyEvent<'s> {
-    /// Reads a given message into [`AnyEvent`]
-    fn from(message: &'s Message) -> Self {
+impl<'s> AnyEvent<'s> {
+    pub fn new_global(id_map: &GlobalIdMap, message: &'s Message) -> Option<Self> {
         let header = message.header();
+        let object_id = ObjectId::try_from(header.object_id).ok()?;
+        let object_name = id_map.get_name(object_id)?;
 
-        match (ObjectId::new(header.object_id), header.opcode) {
+        Some(match (object_name, header.opcode) {
             (ObjectId::WL_REGISTRY, 0) => {
-                Self::WlRegistryGlobal(WlRegistryGlobalEvent::from_message(message).unwrap())
+                Self::WlRegistryGlobal(WlRegistryGlobalEvent::from_message(message)?)
             }
-            (ObjectId::WL_REGISTRY, 1) => Self::WlRegistryGlobalRemove(
-                WlRegistryGlobalRemoveEvent::from_message(message).unwrap(),
-            ),
+            (ObjectId::WL_REGISTRY, 1) => {
+                Self::WlRegistryGlobalRemove(WlRegistryGlobalRemoveEvent::from_message(message)?)
+            }
             (ObjectId::WL_DISPLAY, 0) => {
-                Self::WlDisplayError(WlDisplayErrorEvent::from_message(message).unwrap())
+                Self::WlDisplayError(WlDisplayErrorEvent::from_message(message)?)
             }
             (ObjectId::WL_DISPLAY, 1) => {
-                Self::WlDisplayDeleteId(WlDisplayDeleteIdEvent::from_message(message).unwrap())
+                Self::WlDisplayDeleteId(WlDisplayDeleteIdEvent::from_message(message)?)
             }
+            // TODO(hack3rmann): remove wl_callback from here
             (ObjectId::WL_CALLBACK, 0) => {
-                Self::WlCallbackDone(WlCallbackDoneEvent::from_message(message).unwrap())
+                Self::WlCallbackDone(WlCallbackDoneEvent::from_message(message)?)
             }
-            _ => Self::Other(message),
-        }
+            _ => return None,
+        })
     }
 }

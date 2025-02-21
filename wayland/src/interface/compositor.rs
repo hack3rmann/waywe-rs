@@ -12,6 +12,7 @@ pub mod request {
     /// Ask the compositor to create a new surface.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct CreateSurface {
+        pub object_id: ObjectId,
         /// The new surface
         pub new_id: ObjectId,
     }
@@ -19,7 +20,7 @@ pub mod request {
     impl Request for CreateSurface {
         fn header_desc(self) -> MessageHeaderDesc {
             MessageHeaderDesc {
-                object_id: ObjectId::WL_COMPOSITOR,
+                object_id: self.object_id,
                 opcode: 0,
             }
         }
@@ -35,6 +36,7 @@ pub mod request {
     /// Ask the compositor to create a new region.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct CreateRegion {
+        pub object_id: ObjectId,
         /// The new region
         pub new_id: ObjectId,
     }
@@ -42,7 +44,7 @@ pub mod request {
     impl Request for CreateRegion {
         fn header_desc(self) -> MessageHeaderDesc {
             MessageHeaderDesc {
-                object_id: ObjectId::WL_COMPOSITOR,
+                object_id: self.object_id,
                 opcode: 1,
             }
         }

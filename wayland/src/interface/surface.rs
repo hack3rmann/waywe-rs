@@ -54,13 +54,13 @@ pub mod request {
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub struct Destroy {
         /// id of wl_surface that is being operated on
-        id: ObjectId,
+        pub object_id: ObjectId,
     }
 
     impl Request for Destroy {
         fn header_desc(self) -> MessageHeaderDesc {
             MessageHeaderDesc {
-                object_id: self.id,
+                object_id: self.object_id,
                 opcode: 0,
             }
         }
@@ -139,7 +139,7 @@ pub mod request {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
     pub struct Attach {
         /// id of the surface that is being operated on
-        id: ObjectId,
+        object_id: ObjectId,
         /// buffer of surface contents
         buffer: ObjectId,
         /// surface-local x coordinate
@@ -151,7 +151,7 @@ pub mod request {
     impl Request for Attach {
         fn header_desc(self) -> MessageHeaderDesc {
             MessageHeaderDesc {
-                object_id: self.id,
+                object_id: self.object_id,
                 opcode: 1,
             }
         }
@@ -169,7 +169,7 @@ pub mod request {
     #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub struct Damage {
         /// id of the surface that is being operated on
-        id: ObjectId,
+        object_id: ObjectId,
         /// surface-local x coordinate
         x: i32,
         /// surface-local y coordinate
@@ -183,7 +183,7 @@ pub mod request {
     impl Request for Damage {
         fn header_desc(self) -> MessageHeaderDesc {
             MessageHeaderDesc {
-                object_id: self.id,
+                object_id: self.object_id,
                 opcode: 2,
             }
         }
@@ -234,7 +234,7 @@ pub mod request {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash)]
     pub struct Frame {
         /// id of the surface that is being operated on
-        id: ObjectId,
+        object_id: ObjectId,
         /// callback object for the frame request
         callback: ObjectId,
     }
@@ -242,7 +242,7 @@ pub mod request {
     impl Request for Frame {
         fn header_desc(self) -> MessageHeaderDesc {
             MessageHeaderDesc {
-                object_id: self.id,
+                object_id: self.object_id,
                 opcode: 3,
             }
         }
@@ -282,7 +282,7 @@ pub mod request {
     #[derive(Debug, Clone, Copy, Default, Hash, PartialEq, PartialOrd, Eq, Ord)]
     pub struct SetOpaqueRegion {
         /// id of the surface that is beign operated on
-        id: ObjectId,
+        object_id: ObjectId,
         /// opaque region of the surface
         region: ObjectId,
     }
@@ -290,7 +290,7 @@ pub mod request {
     impl Request for SetOpaqueRegion {
         fn header_desc(self) -> MessageHeaderDesc {
             MessageHeaderDesc {
-                object_id: self.id,
+                object_id: self.object_id,
                 opcode: 4,
             }
         }
@@ -327,7 +327,7 @@ pub mod request {
     #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash, Default)]
     pub struct SetInputRegion {
         /// id of the surface that is being operated on
-        id: ObjectId,
+        object_id: ObjectId,
         /// input region of the surface
         region: ObjectId,
     }
@@ -335,7 +335,7 @@ pub mod request {
     impl Request for SetInputRegion {
         fn header_desc(self) -> MessageHeaderDesc {
             MessageHeaderDesc {
-                object_id: self.id,
+                object_id: self.object_id,
                 opcode: 5,
             }
         }
@@ -370,13 +370,13 @@ pub mod request {
     #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Hash, Default, Eq, Ord)]
     pub struct Commit {
         /// id of the surface that is being operated on
-        id: ObjectId,
+        object_id: ObjectId,
     }
 
     impl Request for Commit {
         fn header_desc(self) -> MessageHeaderDesc {
             MessageHeaderDesc {
-                object_id: self.id,
+                object_id: self.object_id,
                 opcode: 6,
             }
         }
@@ -400,14 +400,14 @@ pub mod event {
     /// Note that a surface may be overlapping with zero or more outputs.
     #[derive(Debug, Clone, Copy, Default, Hash, PartialEq, PartialOrd, Ord, Eq)]
     pub struct Enter {
-        id: ObjectId,
+        object_id: ObjectId,
         output: ObjectId,
     }
 
     impl<'s> Event<'s> for Enter {
         fn header_desc(self) -> MessageHeaderDesc {
             MessageHeaderDesc {
-                object_id: self.id,
+                object_id: self.object_id,
                 opcode: 0,
             }
         }
@@ -415,7 +415,7 @@ pub mod event {
         fn from_message(message: &'s Message) -> Option<Self> {
             let header = message.header();
 
-            if !header.opcode == 0 {
+            if header.opcode != 0 {
                 return None;
             }
 
@@ -423,7 +423,7 @@ pub mod event {
             let output = reader.read_u32()?;
 
             Some(Self {
-                id: ObjectId::new(header.object_id),
+                object_id: ObjectId::try_from(header.object_id).ok()?,
                 output: ObjectId::new(output),
             })
         }
@@ -431,20 +431,21 @@ pub mod event {
 
     #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
     pub struct Leave {
-        id: ObjectId,
+        object_id: ObjectId,
         output: ObjectId,
     }
 
     impl<'s> Event<'s> for Leave {
         fn header_desc(self) -> MessageHeaderDesc {
             MessageHeaderDesc {
-                object_id: self.id,
+                object_id: self.object_id,
                 opcode: 1,
             }
         }
         fn from_message(message: &'s Message) -> Option<Self> {
             let header = message.header();
-            if !header.opcode == 1 {
+
+            if header.opcode != 1 {
                 return None;
             }
 
@@ -452,7 +453,7 @@ pub mod event {
             let output = reader.read_u32()?;
 
             Some(Self {
-                id: ObjectId::new(header.object_id),
+                object_id: ObjectId::try_from(header.object_id).ok()?,
                 output: ObjectId::new(output),
             })
         }

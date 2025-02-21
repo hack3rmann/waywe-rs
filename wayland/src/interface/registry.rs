@@ -32,6 +32,7 @@ pub mod request {
     /// specified name as the identifier.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct Bind<'s> {
+        pub object_id: ObjectId,
         /// Unique numeric name of the object
         pub name: ObjectId,
         /// Bounded object
@@ -41,7 +42,7 @@ pub mod request {
     impl Request for Bind<'_> {
         fn header_desc(self) -> MessageHeaderDesc {
             MessageHeaderDesc {
-                object_id: ObjectId::WL_REGISTRY,
+                object_id: self.object_id,
                 opcode: 0,
             }
         }
@@ -66,6 +67,7 @@ pub mod event {
     /// given version of the given interface.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct Global<'s> {
+        pub object_id: ObjectId,
         /// Numeric name of the global object
         pub name: ObjectId,
         /// Interface implemented by the object
@@ -77,12 +79,18 @@ pub mod event {
     impl<'s> Event<'s> for Global<'s> {
         fn header_desc(self) -> MessageHeaderDesc {
             MessageHeaderDesc {
-                object_id: ObjectId::WL_REGISTRY,
+                object_id: self.object_id,
                 opcode: 0,
             }
         }
 
         fn from_message(message: &'s Message) -> Option<Self> {
+            let header = message.header();
+
+            if header.opcode != 0 {
+                return None;
+            }
+
             let mut reader = message.reader();
 
             let name = reader.read_u32()?;
@@ -90,6 +98,7 @@ pub mod event {
             let version = reader.read_u32()?;
 
             Some(Self {
+                object_id: ObjectId::try_from(header.object_id).ok()?,
                 name: ObjectId::new(name),
                 interface,
                 version,
@@ -109,6 +118,7 @@ pub mod event {
     /// the global going away and a client sending a request to it.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct GlobalRemove {
+        pub object_id: ObjectId,
         /// Numeric name of the global object
         pub name: ObjectId,
     }
@@ -116,13 +126,15 @@ pub mod event {
     impl<'s> Event<'s> for GlobalRemove {
         fn header_desc(self) -> MessageHeaderDesc {
             MessageHeaderDesc {
-                object_id: ObjectId::WL_REGISTRY,
+                object_id: self.object_id,
                 opcode: 1,
             }
         }
 
         fn from_message(message: &'s Message) -> Option<Self> {
-            if !message.header().opcode == 1 {
+            let header = message.header();
+
+            if header.opcode != 1 {
                 return None;
             }
 
@@ -130,6 +142,7 @@ pub mod event {
             let name = reader.read_u32().unwrap();
 
             Some(Self {
+                object_id: ObjectId::try_from(header.object_id).ok()?,
                 name: ObjectId::new(name),
             })
         }

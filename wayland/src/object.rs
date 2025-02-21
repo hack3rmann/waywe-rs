@@ -14,7 +14,6 @@ impl ObjectId {
     pub const WP_VIEWPORTER: ObjectId = ObjectId::new(5);
     pub const ZWLR_LAYER_SHELL_V1: ObjectId = ObjectId::new(6);
     pub const WL_CALLBACK: ObjectId = ObjectId::new(3);
-    pub const FIRST_AVAILABLE: ObjectId = ObjectId::new(7);
 
     /// Makes new id from `u32`
     ///
@@ -58,10 +57,8 @@ pub struct ObjectIdProvider {
 
 impl ObjectIdProvider {
     /// Creates new [`ObjectIdProvider`].
-    pub const fn new() -> Self {
-        Self {
-            last: ObjectId::FIRST_AVAILABLE,
-        }
+    pub const fn new(last_used: ObjectId) -> Self {
+        Self { last: ObjectId::new(last_used.0.get()) }
     }
 
     /// Gives the next available id. Basically, `prev_id + 1`

@@ -1,3 +1,12 @@
+use crate::{
+    interface::{
+        self, Event as _, NewId, RecvAnyEventError, WlCallbackDoneEvent,
+        WlDisplayDeleteIdEvent, WlDisplaySyncRequest, WlRegistryBindRequest,
+    },
+    object::{ObjectId, ObjectIdProvider},
+    wire::{MessageBuffer, MessageBuildError},
+};
+
 use super::c_api::{ExternalWaylandContext, ExternalWaylandError, initialize_wayland};
 use rustix::net::SocketAddrAny;
 use std::{
@@ -5,7 +14,7 @@ use std::{
     ffi::OsString,
     io,
     os::{
-        fd::{AsRawFd, BorrowedFd, FromRawFd as _, IntoRawFd as _, OwnedFd, RawFd},
+        fd::{AsRawFd, BorrowedFd, FromRawFd, IntoRawFd as _, OwnedFd, RawFd},
         unix::net::UnixStream,
     },
     path::PathBuf,
@@ -24,7 +33,54 @@ impl WaylandContext {
     /// Wayland socket's file desc should not be owned anywhere else in this program.
     pub unsafe fn new() -> Result<Self, WaylandInitError> {
         let sock = unsafe { connect_wayland_socket()?.into_raw_fd() };
-        let (external_context, _object_info) = unsafe { initialize_wayland(sock)? };
+        let (external_context, object_info) = unsafe { initialize_wayland(sock)? };
+
+        // Safety: external wayland-client impl
+        // uses this sock no more therefore we can own it
+        let mut sock = unsafe { UnixStream::from_raw_fd(sock) };
+        let mut buf = MessageBuffer::new();
+
+        let mut id_map = object_info.mapped_names;
+
+        let max_id = ObjectId::new(id_map.list.into_iter().max().unwrap());
+        let mut id_provider = ObjectIdProvider::new(max_id);
+
+        let wl_shm_id = id_provider.next_id();
+        let wl_shm_interface = "wl_shm";
+        let wl_shm = object_info.globals[wl_shm_interface];
+        id_map.set_id(ObjectId::WL_SHM, wl_shm_id);
+
+        interface::send_request(
+            WlRegistryBindRequest {
+                object_id: id_map.get_id(ObjectId::WL_REGISTRY).unwrap(),
+                name: wl_shm.name,
+                new_id: NewId {
+                    id: wl_shm_id,
+                    interface: wl_shm_interface,
+                    version: wl_shm.version,
+                },
+            },
+            &mut sock,
+            &mut buf,
+        )?;
+
+        let sync_object_id = id_provider.next_id();
+
+        interface::send_request(
+            WlDisplaySyncRequest {
+                object_id: id_map.get_id(ObjectId::WL_DISPLAY).unwrap(),
+                callback: sync_object_id,
+            },
+            &mut sock,
+            &mut buf,
+        )?;
+
+        while WlCallbackDoneEvent::recv(&mut sock, &mut buf)?.object_id != sync_object_id {}
+
+        assert_eq!(
+            WlDisplayDeleteIdEvent::recv(&mut sock, &mut buf)?.removed_id,
+            sync_object_id
+        );
 
         Ok(Self {
             sock: sock.as_raw_fd(),
@@ -56,6 +112,12 @@ pub enum WaylandInitError {
     GetSocketPath(#[from] GetSocketPathError),
     #[error(transparent)]
     ExternalError(#[from] ExternalWaylandError),
+    #[error(transparent)]
+    MessageBuildError(#[from] MessageBuildError),
+    #[error(transparent)]
+    Io(#[from] io::Error),
+    #[error(transparent)]
+    MessageRecv(#[from] RecvAnyEventError),
 }
 
 /// # Safety

@@ -23,6 +23,7 @@ pub mod request {
     /// The callback_data passed in the callback is undefined and should be ignored.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct Sync {
+        pub object_id: ObjectId,
         /// Callback object for the sync request
         pub callback: ObjectId,
     }
@@ -30,7 +31,7 @@ pub mod request {
     impl Request for Sync {
         fn header_desc(self) -> MessageHeaderDesc {
             MessageHeaderDesc {
-                object_id: ObjectId::WL_DISPLAY,
+                object_id: self.object_id,
                 opcode: 0,
             }
         }
@@ -54,6 +55,7 @@ pub mod request {
     /// possible to avoid wasting memory.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct GetRegistry {
+        pub object_id: ObjectId,
         /// Global registry object
         pub registry: ObjectId,
     }
@@ -61,7 +63,7 @@ pub mod request {
     impl Request for GetRegistry {
         fn header_desc(self) -> MessageHeaderDesc {
             MessageHeaderDesc {
-                object_id: ObjectId::WL_DISPLAY,
+                object_id: self.object_id,
                 opcode: 1,
             }
         }
@@ -87,6 +89,7 @@ pub mod event {
     /// of the error, for (debugging) convenience.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct Error<'s> {
+        pub object_id: ObjectId,
         /// Object where the error occurred
         pub object: ObjectId,
         /// Error code
@@ -98,13 +101,15 @@ pub mod event {
     impl<'s> Event<'s> for Error<'s> {
         fn header_desc(self) -> MessageHeaderDesc {
             MessageHeaderDesc {
-                object_id: ObjectId::WL_DISPLAY,
+                object_id: self.object_id,
                 opcode: 0,
             }
         }
 
         fn from_message(message: &'s Message) -> Option<Self> {
-            if !message.header().opcode == 0 {
+            let header = message.header();
+
+            if header.opcode != 0 {
                 return None;
             }
 
@@ -115,6 +120,7 @@ pub mod event {
             let message = reader.read_str()?;
 
             Some(Self {
+                object_id: ObjectId::try_from(header.object_id).ok()?,
                 object: ObjectId::new(object),
                 code,
                 message,
@@ -129,20 +135,23 @@ pub mod event {
     /// it will know that it can safely reuse the object ID.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct DeleteId {
+        pub object_id: ObjectId,
         /// Deleted object id
-        pub id: ObjectId,
+        pub removed_id: ObjectId,
     }
 
     impl<'s> Event<'s> for DeleteId {
         fn header_desc(self) -> MessageHeaderDesc {
             MessageHeaderDesc {
-                object_id: ObjectId::WL_DISPLAY,
+                object_id: self.object_id,
                 opcode: 1,
             }
         }
 
         fn from_message(message: &'s Message) -> Option<Self> {
-            if !message.header().opcode == 1 {
+            let header = message.header();
+
+            if header.opcode != 1 {
                 return None;
             }
 
@@ -150,7 +159,8 @@ pub mod event {
             let id = reader.read_u32().unwrap();
 
             Some(Self {
-                id: ObjectId::new(id),
+                object_id: ObjectId::try_from(header.object_id).ok()?,
+                removed_id: ObjectId::new(id),
             })
         }
     }

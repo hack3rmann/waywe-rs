@@ -1,5 +1,10 @@
 #![allow(non_camel_case_types, clippy::missing_safety_doc)]
 
+use crate::object::ObjectId;
+use raw_window_handle::{
+    RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle, WaylandWindowHandle,
+};
+use rustix::path::Arg as _;
 use std::{
     cell::UnsafeCell,
     collections::HashMap,
@@ -9,14 +14,7 @@ use std::{
     process,
     ptr::{self, NonNull},
 };
-
-use raw_window_handle::{
-    RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle, WaylandWindowHandle,
-};
-use rustix::path::Arg as _;
 use thiserror::Error;
-
-use crate::object::ObjectId;
 
 pub type wl_display = c_void;
 pub type wl_registry = c_void;
@@ -274,7 +272,7 @@ pub(crate) unsafe fn initialize_wayland(
     let surface = NonNull::new(unsafe { wl_compositor_create_surface(compositor.as_ptr()) })
         .ok_or(ExternalWaylandError::WlSurfaceIsNull)?;
 
-    let mut mapped_names = GlobalNameMap::default();
+    let mut mapped_names = GlobalIdMap::default();
 
     mapped_names.set_id(
         ObjectId::WL_DISPLAY,
@@ -348,11 +346,11 @@ pub enum ExternalWaylandError {
 }
 
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
-pub struct GlobalNameMap {
+pub struct GlobalIdMap {
     pub list: [u32; 6],
 }
 
-impl GlobalNameMap {
+impl GlobalIdMap {
     pub fn get_id(&self, name: ObjectId) -> Option<ObjectId> {
         self.list
             .get(name.0.get() as usize - 1)
@@ -377,5 +375,5 @@ impl GlobalNameMap {
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct ExternalObjectInformation {
     pub globals: HashMap<String, WlRegistryDataItem>,
-    pub mapped_names: GlobalNameMap,
+    pub mapped_names: GlobalIdMap,
 }

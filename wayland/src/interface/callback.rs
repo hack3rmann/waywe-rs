@@ -15,8 +15,7 @@ pub mod event {
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct Done {
         /// id of the callback object
-        pub id: ObjectId,
-
+        pub object_id: ObjectId,
         /// Request-specific data for the callback
         pub data: u32,
     }
@@ -24,7 +23,7 @@ pub mod event {
     impl<'s> Event<'s> for Done {
         fn header_desc(self) -> MessageHeaderDesc {
             MessageHeaderDesc {
-                object_id: self.id,
+                object_id: self.object_id,
                 opcode: 0,
             }
         }
@@ -32,11 +31,16 @@ pub mod event {
         fn from_message(message: &'s Message) -> Option<Self> {
             let header = message.header();
 
+            if header.opcode != 0 {
+                return None;
+            }
+
             let mut reader = message.reader();
             let data = reader.read_u32()?;
+
             Some(Self {
                 data,
-                id: ObjectId::new(header.object_id),
+                object_id: ObjectId::try_from(header.object_id).ok()?,
             })
         }
     }
