@@ -28,7 +28,7 @@ pub mod event {
             }
         }
 
-        fn from_message(message: &'s Message) -> Option<Self> {
+        fn from_message(message: Message<'s>) -> Option<Self> {
             let header = message.header();
 
             if header.opcode != 0 {

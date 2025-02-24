@@ -2,6 +2,7 @@ pub mod callback;
 pub mod compositor;
 pub mod display;
 pub mod registry;
+pub mod shm;
 pub mod surface;
 
 use thiserror::Error;
@@ -12,7 +13,10 @@ use super::{
     object::ObjectId,
     wire::{self, Message, MessageBuffer, MessageBuildError, MessageHeaderDesc},
 };
-use std::io::{self, Read, Write};
+use std::{
+    io::{self, Read},
+    os::fd::AsFd,
+};
 
 pub use {
     callback::event::Done as WlCallbackDoneEvent,
@@ -28,6 +32,7 @@ pub use {
         event::{Global as WlRegistryGlobalEvent, GlobalRemove as WlRegistryGlobalRemoveEvent},
         request::Bind as WlRegistryBindRequest,
     },
+    shm::request::CreatePool as WlShmCreatePoolRequest,
 };
 
 /// An [`ObjectId`] bundled with an interface name and a version
@@ -44,14 +49,10 @@ pub trait Request: Copy {
     fn header_desc(self) -> MessageHeaderDesc;
 
     /// Builds the message on the top of given message buffer
-    fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError>;
+    fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError>;
 
     /// Sends built message to the stream
-    fn send(
-        self,
-        stream: &mut dyn Write,
-        buf: &mut MessageBuffer,
-    ) -> Result<(), MessageBuildError> {
+    fn send(self, stream: impl AsFd, buf: &mut MessageBuffer) -> Result<(), MessageBuildError> {
         self.build_message(buf)?.send(stream)?;
         Ok(())
     }
@@ -63,7 +64,7 @@ pub trait Event<'s>: Copy {
     fn header_desc(self) -> MessageHeaderDesc;
 
     /// Tries to read the given message as an event of implementor type
-    fn from_message(message: &'s Message) -> Option<Self>;
+    fn from_message(message: Message<'s>) -> Option<Self>;
 
     /// Receives read message from the stream
     fn recv(stream: &mut dyn Read, buf: &'s mut MessageBuffer) -> Result<Self, io::Error> {
@@ -75,7 +76,7 @@ pub trait Event<'s>: Copy {
 
 pub fn send_request(
     request: impl Request,
-    stream: &mut dyn Write,
+    stream: impl AsFd,
     buf: &mut MessageBuffer,
 ) -> Result<(), MessageBuildError> {
     request.send(stream, buf)
@@ -109,7 +110,7 @@ pub enum AnyEvent<'s> {
 }
 
 impl<'s> AnyEvent<'s> {
-    pub fn new_global(id_map: &GlobalIdMap, message: &'s Message) -> Option<Self> {
+    pub fn new_global(id_map: &GlobalIdMap, message: Message<'s>) -> Option<Self> {
         let header = message.header();
         let object_id = ObjectId::try_from(header.object_id).ok()?;
         let object_name = id_map.get_name(object_id)?;

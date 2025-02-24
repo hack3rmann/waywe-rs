@@ -25,7 +25,7 @@ pub mod request {
             }
         }
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError> {
+        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
             Message::builder(buf)
                 .header(Self::header_desc(self))
                 .uint(self.new_id.into())
@@ -49,7 +49,7 @@ pub mod request {
             }
         }
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError> {
+        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
             Message::builder(buf)
                 .header(Self::header_desc(self))
                 .uint(self.new_id.into())

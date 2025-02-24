@@ -65,7 +65,7 @@ pub mod request {
             }
         }
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError> {
+        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
             Message::builder(buf)
                 .header(Self::header_desc(self))
                 .build()
@@ -156,7 +156,7 @@ pub mod request {
             }
         }
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError> {
+        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
             Message::builder(buf)
                 .header(Self::header_desc(self))
                 .uint(self.buffer.into())
@@ -188,7 +188,7 @@ pub mod request {
             }
         }
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError> {
+        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
             Message::builder(buf)
                 .header(Self::header_desc(self))
                 .int(self.x)
@@ -247,7 +247,7 @@ pub mod request {
             }
         }
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError> {
+        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
             Message::builder(buf)
                 .header(Self::header_desc(self))
                 .uint(self.callback.into())
@@ -294,7 +294,7 @@ pub mod request {
                 opcode: 4,
             }
         }
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError> {
+        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
             Message::builder(buf)
                 .header(Self::header_desc(self))
                 .uint(self.region.into())
@@ -340,7 +340,7 @@ pub mod request {
             }
         }
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError> {
+        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
             Message::builder(buf)
                 .header(Self::header_desc(self))
                 .uint(self.region.into())
@@ -381,7 +381,7 @@ pub mod request {
             }
         }
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError> {
+        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
             Message::builder(buf)
                 .header(Self::header_desc(self))
                 .build()
@@ -412,7 +412,7 @@ pub mod event {
             }
         }
 
-        fn from_message(message: &'s Message) -> Option<Self> {
+        fn from_message(message: Message<'s>) -> Option<Self> {
             let header = message.header();
 
             if header.opcode != 0 {
@@ -442,7 +442,7 @@ pub mod event {
                 opcode: 1,
             }
         }
-        fn from_message(message: &'s Message) -> Option<Self> {
+        fn from_message(message: Message<'s>) -> Option<Self> {
             let header = message.header();
 
             if header.opcode != 1 {

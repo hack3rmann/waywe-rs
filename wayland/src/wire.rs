@@ -1,42 +1,54 @@
 use super::{interface::NewId, object::ObjectId};
 use bytemuck::{Pod, Zeroable};
+use rustix::net::SendFlags;
 use std::{
     io::{self, Read, Write},
     mem,
+    os::fd::{AsFd, BorrowedFd, RawFd},
     str::Utf8Error,
 };
 use thiserror::Error;
 
 /// A buffer for message contents
 #[derive(Clone, Debug, PartialEq, Default, Eq, PartialOrd, Ord, Hash)]
-pub struct MessageBuffer(pub(crate) Vec<u32>);
+pub struct MessageBuffer {
+    pub non_fd_data: Vec<u32>,
+    pub fd_data: Vec<RawFd>,
+}
 
 impl MessageBuffer {
     /// Constructs new empty [`MessageBuffer`]
     pub const fn new() -> Self {
-        Self(Vec::new())
+        Self {
+            non_fd_data: vec![],
+            fd_data: vec![],
+        }
     }
 
     /// Constructs new [`MessageBuffer`] with capacity in bytes
     pub fn with_capacity(n_bytes: usize) -> Self {
         // (.. + 3) / 4 pads string to u32
         let n_words = (n_bytes + 3) >> 2;
-        Self(Vec::with_capacity(n_words))
+        Self {
+            non_fd_data: Vec::with_capacity(n_words),
+            fd_data: vec![],
+        }
     }
 
     /// Clears buffer leaving capacity untouched
     pub fn clear(&mut self) {
-        self.0.clear();
+        self.non_fd_data.clear();
+        self.fd_data.clear();
     }
 
     /// Interprets buffer contents as `u32` slice
     pub fn as_slice(&self) -> &[u32] {
-        &self.0
+        &self.non_fd_data
     }
 
     /// Interprets buffer contents as `u32` mutable slice
     pub fn as_mut_slice(&mut self) -> &mut [u32] {
-        &mut self.0
+        &mut self.non_fd_data
     }
 
     /// Tries to interpret buffer contents as a [`Message`]
@@ -44,8 +56,8 @@ impl MessageBuffer {
     /// # Panic
     ///
     /// Panics if the buffer does not contain [`MessageHeader`]
-    pub fn get_message(&self) -> &Message {
-        Message::from_u32_slice(self.as_slice())
+    pub fn get_message(&self) -> Message<'_> {
+        Message::new(&self.non_fd_data, &self.fd_data)
     }
 }
 
@@ -67,21 +79,33 @@ impl MessageHeader {
 const HEADER_SIZE_WORDS: usize = mem::size_of::<MessageHeader>() / mem::size_of::<u32>();
 
 /// Represents a message from Wire protocol
-#[repr(transparent)]
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Message {
-    raw: [u32],
+#[derive(Debug, PartialEq, Clone, Default, Copy, Eq, PartialOrd, Ord, Hash)]
+pub struct Message<'s> {
+    main_body: &'s [u32],
+    file_descs: &'s [RawFd],
 }
 
-impl Message {
+impl<'s> Message<'s> {
+    pub const fn new(main_body: &'s [u32], file_descs: &'s [RawFd]) -> Self {
+        Self {
+            main_body,
+            file_descs,
+        }
+    }
+
     /// Constructs [`MessageReader`] of this message
-    pub fn reader(&self) -> MessageReader<'_> {
+    pub fn reader(self) -> MessageReader<'s> {
         MessageReader::new(self)
     }
 
     /// Cast the message to a [`u32`] slice.
-    pub fn as_u32_slice(&self) -> &[u32] {
-        unsafe { mem::transmute(self) }
+    pub fn as_u32_slice(&self) -> &'s [u32] {
+        self.main_body
+    }
+
+    pub fn file_descs(&self) -> &'s [BorrowedFd<'s>] {
+        // Safety `BorrowedFd` is repr(transparent) of `RawFd`
+        unsafe { mem::transmute(self.file_descs) }
     }
 
     /// Cast the message to a byte slice.
@@ -94,22 +118,26 @@ impl Message {
     /// # Panic
     ///
     /// Panics if `mem::size_of_val(src) < mem::size_of::<MessageHeader>()`.
-    pub fn from_u32_slice(src: &[u32]) -> &Self {
+    pub fn from_u32_slice(src: &'s [u32]) -> Self {
         // TODO: validate message + return Result type
         assert!(mem::size_of_val(src) >= mem::size_of::<MessageHeader>());
-        unsafe { mem::transmute(src) }
+
+        Self {
+            main_body: src,
+            file_descs: &[],
+        }
     }
 
     /// Message header
     pub fn header(&self) -> MessageHeader {
         *bytemuck::from_bytes(bytemuck::cast_slice(
-            &self.raw[..mem::size_of::<MessageHeader>() / mem::size_of::<u32>()],
+            &self.main_body[..mem::size_of::<MessageHeader>() / mem::size_of::<u32>()],
         ))
     }
 
     /// Message body (header removed)
-    pub fn body(&self) -> &[u32] {
-        &self.raw[mem::size_of::<MessageHeader>() / mem::size_of::<u32>()..]
+    pub fn body(&self) -> &'s [u32] {
+        &self.main_body[mem::size_of::<MessageHeader>() / mem::size_of::<u32>()..]
     }
 
     /// Message length in bytes
@@ -122,14 +150,28 @@ impl Message {
         self.len() == 0
     }
 
-    /// Sends the message to the stream
-    pub fn send<S: Write + ?Sized>(&self, stream: &mut S) -> Result<(), io::Error> {
-        stream.write_all(self.as_bytes())
-    }
-
     /// Constructs a [`MessageBuilder`] on the top of the given [`MessageBuffer`]
     pub fn builder(buf: &mut MessageBuffer) -> MessageBuilder {
         MessageBuilder::new(buf)
+    }
+
+    /// Sends the message to the stream
+    /// FIXME(hack3rmann): use SendAncilliaryBuffer for file descs
+    pub fn send(&self, stream: impl AsFd) -> Result<(), rustix::io::Errno> {
+        let mut control_buf = [0u8; rustix::cmsg_space!(ScmRights(1))];
+        let mut control = rustix::net::SendAncillaryBuffer::new(&mut control_buf);
+
+        let msg = rustix::net::SendAncillaryMessage::ScmRights(self.file_descs());
+        control.push(msg);
+
+        rustix::net::sendmsg(
+            stream,
+            &[io::IoSlice::new(self.as_bytes())],
+            &mut control,
+            SendFlags::NOSIGNAL,
+        )?;
+
+        Ok(())
     }
 }
 
@@ -138,14 +180,16 @@ pub fn read_message_into<S: Read + ?Sized>(
     stream: &mut S,
     buf: &mut MessageBuffer,
 ) -> Result<(), io::Error> {
-    buf.0.resize(HEADER_SIZE_WORDS, 0);
-    stream.read_exact(bytemuck::cast_slice_mut(&mut buf.0))?;
+    buf.non_fd_data.resize(HEADER_SIZE_WORDS, 0);
+    stream.read_exact(bytemuck::cast_slice_mut(&mut buf.non_fd_data))?;
 
-    let header = bytemuck::from_bytes::<MessageHeader>(bytemuck::cast_slice(&buf.0));
+    let header = bytemuck::from_bytes::<MessageHeader>(bytemuck::cast_slice(&buf.non_fd_data));
     let len = header.message_len as usize / mem::size_of::<u32>();
 
-    buf.0.resize(len, 0);
-    stream.read_exact(bytemuck::cast_slice_mut(&mut buf.0[HEADER_SIZE_WORDS..]))?;
+    buf.non_fd_data.resize(len, 0);
+    stream.read_exact(bytemuck::cast_slice_mut(
+        &mut buf.non_fd_data[HEADER_SIZE_WORDS..],
+    ))?;
 
     Ok(())
 }
@@ -211,7 +255,7 @@ pub struct MessageReader<'r> {
 
 impl<'r> MessageReader<'r> {
     /// Binds the reader to a message.
-    pub fn new(message: &'r Message) -> Self {
+    pub fn new(message: Message<'r>) -> Self {
         Self {
             data: bytemuck::cast_slice(message.body()),
         }
@@ -294,11 +338,11 @@ impl<'b> MessageBuilder<'b> {
     /// # Errors
     ///
     /// - no header has been written
-    pub fn build(self) -> Result<&'b Message, MessageBuildError> {
-        let len = self.buf.0.len() * mem::size_of::<u32>();
+    pub fn build(self) -> Result<Message<'b>, MessageBuildError> {
+        let len = self.buf.non_fd_data.len() * mem::size_of::<u32>();
         let header = bytemuck::from_bytes_mut::<MessageHeader>(bytemuck::cast_slice_mut(
             self.buf
-                .0
+                .non_fd_data
                 .get_mut(..HEADER_SIZE_WORDS)
                 .ok_or(MessageBuildError::NoHeader)?,
         ));
@@ -309,14 +353,14 @@ impl<'b> MessageBuilder<'b> {
     }
 
     /// Shorthand for `.build()?.send(stream)?`
-    pub fn build_send(self, stream: &mut impl Write) -> Result<(), MessageBuildError> {
+    pub fn build_send(self, stream: impl AsFd) -> Result<(), MessageBuildError> {
         self.build()?.send(stream)?;
         Ok(())
     }
 
     fn correct_header(&mut self) {
-        if self.buf.0.len() < HEADER_SIZE_WORDS {
-            self.buf.0.resize(HEADER_SIZE_WORDS, 0);
+        if self.buf.non_fd_data.len() < HEADER_SIZE_WORDS {
+            self.buf.non_fd_data.resize(HEADER_SIZE_WORDS, 0);
         }
     }
 
@@ -324,13 +368,13 @@ impl<'b> MessageBuilder<'b> {
     pub fn header(mut self, desc: MessageHeaderDesc) -> Self {
         self.correct_header();
 
-        self.buf.0[..HEADER_SIZE_WORDS].copy_from_slice(bytemuck::cast_slice(bytemuck::bytes_of(
-            &MessageHeader {
+        self.buf.non_fd_data[..HEADER_SIZE_WORDS].copy_from_slice(bytemuck::cast_slice(
+            bytemuck::bytes_of(&MessageHeader {
                 object_id: desc.object_id.into(),
                 opcode: desc.opcode,
                 message_len: 0,
-            },
-        )));
+            }),
+        ));
 
         self
     }
@@ -340,7 +384,7 @@ impl<'b> MessageBuilder<'b> {
         self.correct_header();
 
         let header = bytemuck::from_bytes_mut::<MessageHeader>(bytemuck::cast_slice_mut(
-            &mut self.buf.0[..HEADER_SIZE_WORDS],
+            &mut self.buf.non_fd_data[..HEADER_SIZE_WORDS],
         ));
 
         header.object_id = value.into();
@@ -352,7 +396,7 @@ impl<'b> MessageBuilder<'b> {
         self.correct_header();
 
         let header = bytemuck::from_bytes_mut::<MessageHeader>(bytemuck::cast_slice_mut(
-            &mut self.buf.0[..HEADER_SIZE_WORDS],
+            &mut self.buf.non_fd_data[..HEADER_SIZE_WORDS],
         ));
 
         header.opcode = value;
@@ -362,7 +406,13 @@ impl<'b> MessageBuilder<'b> {
     /// Writes 32-bit unsigned integer to the message
     pub fn uint(mut self, value: u32) -> Self {
         self.correct_header();
-        self.buf.0.push(value);
+        self.buf.non_fd_data.push(value);
+        self
+    }
+
+    pub fn file_desc(mut self, value: RawFd) -> Self {
+        self.correct_header();
+        self.buf.fd_data.push(value);
         self
     }
 
@@ -380,12 +430,15 @@ impl<'b> MessageBuilder<'b> {
         //   len + 1: add zero to string
         //   (.. + 3) / 4: pad to u32
         let str_len_words = (value.len() >> 2) + 1;
-        let cur_buf_len = self.buf.0.len();
+        let cur_buf_len = self.buf.non_fd_data.len();
 
-        self.buf.0.resize(cur_buf_len + 1 + str_len_words, 0);
-        self.buf.0[cur_buf_len] = value.len() as u32 + 1;
+        self.buf
+            .non_fd_data
+            .resize(cur_buf_len + 1 + str_len_words, 0);
+        self.buf.non_fd_data[cur_buf_len] = value.len() as u32 + 1;
 
-        let dst_slice: &mut [u8] = bytemuck::cast_slice_mut(&mut self.buf.0[cur_buf_len + 1..]);
+        let dst_slice: &mut [u8] =
+            bytemuck::cast_slice_mut(&mut self.buf.non_fd_data[cur_buf_len + 1..]);
         dst_slice[..value.len()].clone_from_slice(value.as_bytes());
 
         self
@@ -405,5 +458,5 @@ pub enum MessageBuildError {
     NoHeader,
 
     #[error(transparent)]
-    IoError(#[from] io::Error),
+    IoError(#[from] rustix::io::Errno),
 }

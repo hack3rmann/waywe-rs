@@ -1,14 +1,19 @@
 use crate::{
     interface::{
-        self, Event as _, NewId, RecvAnyEventError, WlCallbackDoneEvent,
-        WlDisplayDeleteIdEvent, WlDisplaySyncRequest, WlRegistryBindRequest,
+        self, Event as _, NewId, RecvAnyEventError, WlCallbackDoneEvent, WlDisplayDeleteIdEvent,
+        WlDisplaySyncRequest, WlRegistryBindRequest, WlShmCreatePoolRequest,
     },
     object::{ObjectId, ObjectIdProvider},
     wire::{MessageBuffer, MessageBuildError},
 };
 
 use super::c_api::{ExternalWaylandContext, ExternalWaylandError, initialize_wayland};
-use rustix::net::SocketAddrAny;
+use rustix::{
+    fs::Mode,
+    mm::{MapFlags, ProtFlags},
+    net::SocketAddrAny,
+    shm::OFlags,
+};
 use std::{
     env,
     ffi::OsString,
@@ -18,6 +23,7 @@ use std::{
         unix::net::UnixStream,
     },
     path::PathBuf,
+    ptr,
 };
 use thiserror::Error;
 
@@ -82,6 +88,56 @@ impl WaylandContext {
             sync_object_id
         );
 
+        fn open_shm() -> Result<(OwnedFd, String), rustix::io::Errno> {
+            for i in 0.. {
+                let wl_shm_path = format!("/wl_shm#{i}");
+
+                match rustix::shm::open(
+                    &wl_shm_path,
+                    OFlags::EXCL | OFlags::RDWR | OFlags::CREATE | OFlags::TRUNC,
+                    Mode::RUSR | Mode::WUSR,
+                ) {
+                    Ok(fd) => return Ok((fd, wl_shm_path)),
+                    Err(rustix::io::Errno::EXIST) => continue,
+                    Err(error) => return Err(error),
+                };
+            }
+
+            unreachable!();
+        }
+
+        let (shm_file_desc, wl_shm_path) = open_shm()?;
+
+        const BUFFER_SIZE: usize = 1024;
+
+        rustix::fs::ftruncate(&shm_file_desc, BUFFER_SIZE as u64)?;
+
+        let _shm_ptr = unsafe {
+            rustix::mm::mmap(
+                ptr::null_mut(),
+                BUFFER_SIZE,
+                ProtFlags::READ | ProtFlags::WRITE,
+                MapFlags::SHARED,
+                &shm_file_desc,
+                0,
+            )?
+        };
+
+        let wl_shm_pool_id = id_provider.next_id();
+
+        interface::send_request(
+            WlShmCreatePoolRequest {
+                object_id: id_map.get_id(ObjectId::WL_SHM).unwrap(),
+                id: wl_shm_pool_id,
+                fd: shm_file_desc.as_raw_fd(),
+                size: BUFFER_SIZE as i32,
+            },
+            &mut sock,
+            &mut buf,
+        )?;
+
+        rustix::shm::unlink(wl_shm_path)?;
+
         Ok(Self {
             sock: sock.as_raw_fd(),
             external_context,
@@ -116,6 +172,8 @@ pub enum WaylandInitError {
     MessageBuildError(#[from] MessageBuildError),
     #[error(transparent)]
     Io(#[from] io::Error),
+    #[error(transparent)]
+    RustixIo(#[from] rustix::io::Errno),
     #[error(transparent)]
     MessageRecv(#[from] RecvAnyEventError),
 }

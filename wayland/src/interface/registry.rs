@@ -47,7 +47,7 @@ pub mod request {
             }
         }
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<&Message, MessageBuildError> {
+        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
             Message::builder(buf)
                 .header(Self::header_desc(self))
                 .uint(self.name.into())
@@ -84,7 +84,7 @@ pub mod event {
             }
         }
 
-        fn from_message(message: &'s Message) -> Option<Self> {
+        fn from_message(message: Message<'s>) -> Option<Self> {
             let header = message.header();
 
             if header.opcode != 0 {
@@ -131,7 +131,7 @@ pub mod event {
             }
         }
 
-        fn from_message(message: &'s Message) -> Option<Self> {
+        fn from_message(message: Message<'s>) -> Option<Self> {
             let header = message.header();
 
             if header.opcode != 1 {
