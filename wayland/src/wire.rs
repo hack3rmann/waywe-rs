@@ -156,7 +156,6 @@ impl<'s> Message<'s> {
     }
 
     /// Sends the message to the stream
-    /// FIXME(hack3rmann): use SendAncilliaryBuffer for file descs
     pub fn send(&self, stream: impl AsFd) -> Result<(), rustix::io::Errno> {
         let mut control_buf = [0u8; rustix::cmsg_space!(ScmRights(1))];
         let mut control = rustix::net::SendAncillaryBuffer::new(&mut control_buf);
