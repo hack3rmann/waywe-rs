@@ -99,7 +99,7 @@ impl<'s> Message<'s> {
     }
 
     /// Cast the message to a [`u32`] slice.
-    pub fn as_u32_slice(&self) -> &'s [u32] {
+    pub fn main_body(&self) -> &'s [u32] {
         self.main_body
     }
 
@@ -109,8 +109,8 @@ impl<'s> Message<'s> {
     }
 
     /// Cast the message to a byte slice.
-    pub fn as_bytes(&self) -> &[u8] {
-        bytemuck::cast_slice(self.as_u32_slice())
+    pub fn main_body_bytes(&self) -> &[u8] {
+        bytemuck::cast_slice(self.main_body())
     }
 
     /// Creates a message from raw [`u32`] slice.
@@ -165,7 +165,7 @@ impl<'s> Message<'s> {
 
         rustix::net::sendmsg(
             stream,
-            &[io::IoSlice::new(self.as_bytes())],
+            &[io::IoSlice::new(self.main_body_bytes())],
             &mut control,
             SendFlags::NOSIGNAL,
         )?;
@@ -200,7 +200,7 @@ pub fn write_message(stream: &mut impl Write, message: &Message) -> Result<(), i
         mem::size_of::<MessageHeader>() + std::mem::size_of_val(message.body())
     );
 
-    stream.write_all(message.as_bytes())
+    stream.write_all(message.main_body_bytes())
 }
 
 /// A string which
