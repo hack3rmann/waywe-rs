@@ -339,19 +339,19 @@ pub(crate) unsafe fn initialize_wayland(
     tracing::info!("wl_registry_add_listener()");
 
     REGISTY_DATA.with(|data| {
-        if -1
-            == unsafe {
-                wl_registry_add_listener(
-                    registry.as_ptr(),
-                    &raw const WL_REGISTRY_LISTENER,
-                    data.get().cast(),
-                )
-            }
-        {
-            return Err(ExternalWaylandError::WlRegistryAddListenerFailed);
-        }
+        let result = unsafe {
+            wl_registry_add_listener(
+                registry.as_ptr(),
+                &raw const WL_REGISTRY_LISTENER,
+                data.get().cast(),
+            )
+        };
 
-        Ok(())
+        if result == -1 {
+            Err(ExternalWaylandError::WlRegistryAddListenerFailed)
+        } else {
+            Ok(())
+        }
     })?;
 
     tracing::info!("wl_display_roundtrip()");
@@ -365,8 +365,7 @@ pub(crate) unsafe fn initialize_wayland(
     let compositor = REGISTY_DATA.with(|data| {
         let data = unsafe { data.get().as_ref().unwrap() };
 
-        NonNull::new(data.wl_compositor)
-            .ok_or(ExternalWaylandError::WlCompositorIsNull)
+        NonNull::new(data.wl_compositor).ok_or(ExternalWaylandError::WlCompositorIsNull)
     })?;
 
     tracing::info!("wl_compositor_create_surface()");
@@ -395,7 +394,6 @@ pub(crate) unsafe fn initialize_wayland(
         ObjectId::WL_SURFACE,
         ObjectId::new(unsafe { wl_proxy_get_id(surface.as_ptr()) }),
     );
-
 
     let globals = REGISTY_DATA.with(|data| {
         let data = unsafe { data.get().as_mut().unwrap() };
