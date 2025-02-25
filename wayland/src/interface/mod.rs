@@ -3,9 +3,10 @@ pub mod compositor;
 pub mod display;
 pub mod registry;
 pub mod shm;
+pub mod shm_pool;
 pub mod surface;
 
-use crate::object::ObjectIdMap;
+use crate::object::{ObjectIdMap, ObjectIdProvider};
 
 use super::{
     object::ObjectId,
@@ -13,7 +14,7 @@ use super::{
 };
 use std::{
     io::{self, Read},
-    os::fd::AsFd,
+    os::{fd::AsFd, unix::net::UnixStream},
 };
 use thiserror::Error;
 
@@ -31,7 +32,7 @@ pub use {
         event::{Global as WlRegistryGlobalEvent, GlobalRemove as WlRegistryGlobalRemoveEvent},
         request::Bind as WlRegistryBindRequest,
     },
-    shm::request::CreatePool as WlShmCreatePoolRequest,
+    shm::{request::CreatePool as WlShmCreatePoolRequest, wl_enum::Format as WlShmFormat},
 };
 
 /// An [`ObjectId`] bundled with an interface name and a version
@@ -130,4 +131,49 @@ impl<'s> AnyEvent<'s> {
             _ => return None,
         })
     }
+}
+
+pub fn wayland_sync_with(
+    stream: &mut UnixStream,
+    buf: &mut MessageBuffer,
+    id_map: &ObjectIdMap,
+    id_provider: &mut ObjectIdProvider,
+    wait: impl FnOnce(&mut UnixStream, &mut MessageBuffer, ObjectId) -> Result<(), io::Error>,
+) -> Result<(), WaylandSyncNowError> {
+    let callback_id = id_provider.next_id();
+
+    send_request(
+        WlDisplaySyncRequest {
+            object_id: id_map.get_id(ObjectId::WL_DISPLAY).unwrap(),
+            callback: callback_id,
+        },
+        &mut *stream,
+        buf,
+    )?;
+
+    wait(stream, buf, callback_id)?;
+
+    assert_eq!(
+        WlCallbackDoneEvent::recv(stream, buf)?.object_id,
+        callback_id,
+    );
+
+    Ok(())
+}
+
+pub fn wayland_sync_now(
+    stream: &mut UnixStream,
+    buf: &mut MessageBuffer,
+    id_map: &ObjectIdMap,
+    id_provider: &mut ObjectIdProvider,
+) -> Result<(), WaylandSyncNowError> {
+    wayland_sync_with(stream, buf, id_map, id_provider, |_, _, _| Ok(()))
+}
+
+#[derive(Debug, Error)]
+pub enum WaylandSyncNowError {
+    #[error(transparent)]
+    SendFailed(#[from] MessageBuildError),
+    #[error(transparent)]
+    RecvFailed(#[from] io::Error),
 }
