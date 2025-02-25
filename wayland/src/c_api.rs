@@ -1,6 +1,6 @@
 #![allow(non_camel_case_types, clippy::missing_safety_doc)]
 
-use crate::object::ObjectId;
+use crate::object::{ObjectId, ObjectIdMap};
 use raw_window_handle::{
     RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle, WaylandWindowHandle,
 };
@@ -272,19 +272,19 @@ pub(crate) unsafe fn initialize_wayland(
     let surface = NonNull::new(unsafe { wl_compositor_create_surface(compositor.as_ptr()) })
         .ok_or(ExternalWaylandError::WlSurfaceIsNull)?;
 
-    let mut mapped_names = GlobalIdMap::default();
+    let mut mapped_names = ObjectIdMap::default();
 
-    mapped_names.set_id(
+    mapped_names.map(
         ObjectId::WL_DISPLAY,
         ObjectId::new(unsafe { wl_proxy_get_id(display.as_ptr()) }),
     );
 
-    mapped_names.set_id(
+    mapped_names.map(
         ObjectId::WL_REGISTRY,
         ObjectId::new(unsafe { wl_proxy_get_id(registry.as_ptr()) }),
     );
 
-    mapped_names.set_id(
+    mapped_names.map(
         ObjectId::WL_COMPOSITOR,
         ObjectId::new(unsafe { wl_proxy_get_id(compositor.as_ptr()) }),
     );
@@ -345,35 +345,8 @@ pub enum ExternalWaylandError {
     WlDisplayRoundtripFailed,
 }
 
-#[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
-pub struct GlobalIdMap {
-    pub list: [u32; 6],
-}
-
-impl GlobalIdMap {
-    pub fn get_id(&self, name: ObjectId) -> Option<ObjectId> {
-        self.list
-            .get(name.0.get() as usize - 1)
-            .and_then(|&x| x.try_into().ok())
-    }
-
-    pub fn set_id(&mut self, name: ObjectId, id: ObjectId) {
-        self.list[name.0.get() as usize - 1] = id.into();
-    }
-
-    pub fn get_name(&self, id: ObjectId) -> Option<ObjectId> {
-        for i in 0..self.list.len() {
-            if self.list[i] == id.into() {
-                return Some(ObjectId::new(i as u32 + 1));
-            }
-        }
-
-        None
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct ExternalObjectInformation {
     pub globals: HashMap<String, WlRegistryDataItem>,
-    pub mapped_names: GlobalIdMap,
+    pub mapped_names: ObjectIdMap,
 }

@@ -1,3 +1,4 @@
+use super::c_api::{ExternalWaylandContext, ExternalWaylandError, initialize_wayland};
 use crate::{
     interface::{
         self, Event as _, NewId, RecvAnyEventError, WlCallbackDoneEvent, WlDisplayDeleteIdEvent,
@@ -6,8 +7,6 @@ use crate::{
     object::{ObjectId, ObjectIdProvider},
     wire::{MessageBuffer, MessageBuildError},
 };
-
-use super::c_api::{ExternalWaylandContext, ExternalWaylandError, initialize_wayland};
 use rustix::{
     fs::Mode,
     mm::{MapFlags, ProtFlags},
@@ -48,13 +47,13 @@ impl WaylandContext {
 
         let mut id_map = object_info.mapped_names;
 
-        let max_id = ObjectId::new(id_map.list.into_iter().max().unwrap());
+        let max_id = id_map.iter().map(|(&_name, &id)| id).max().unwrap();
         let mut id_provider = ObjectIdProvider::new(max_id);
 
         let wl_shm_id = id_provider.next_id();
         let wl_shm_interface = "wl_shm";
         let wl_shm = object_info.globals[wl_shm_interface];
-        id_map.set_id(ObjectId::WL_SHM, wl_shm_id);
+        id_map.map(ObjectId::WL_SHM, wl_shm_id);
 
         interface::send_request(
             WlRegistryBindRequest {
@@ -124,6 +123,7 @@ impl WaylandContext {
         };
 
         let wl_shm_pool_id = id_provider.next_id();
+        id_map.map(ObjectId::WL_SHM_POOL, wl_shm_pool_id);
 
         interface::send_request(
             WlShmCreatePoolRequest {

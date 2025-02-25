@@ -5,9 +5,7 @@ pub mod registry;
 pub mod shm;
 pub mod surface;
 
-use thiserror::Error;
-
-use crate::c_api::GlobalIdMap;
+use crate::object::ObjectIdMap;
 
 use super::{
     object::ObjectId,
@@ -17,6 +15,7 @@ use std::{
     io::{self, Read},
     os::fd::AsFd,
 };
+use thiserror::Error;
 
 pub use {
     callback::event::Done as WlCallbackDoneEvent,
@@ -83,7 +82,7 @@ pub fn send_request(
 }
 
 pub fn recv_event<'b>(
-    id_map: &GlobalIdMap,
+    id_map: &ObjectIdMap,
     stream: &mut dyn Read,
     buf: &'b mut MessageBuffer,
 ) -> Result<AnyEvent<'b>, RecvAnyEventError> {
@@ -110,7 +109,7 @@ pub enum AnyEvent<'s> {
 }
 
 impl<'s> AnyEvent<'s> {
-    pub fn new_global(id_map: &GlobalIdMap, message: Message<'s>) -> Option<Self> {
+    pub fn new_global(id_map: &ObjectIdMap, message: Message<'s>) -> Option<Self> {
         let header = message.header();
         let object_id = ObjectId::try_from(header.object_id).ok()?;
         let object_name = id_map.get_name(object_id)?;
@@ -127,10 +126,6 @@ impl<'s> AnyEvent<'s> {
             }
             (ObjectId::WL_DISPLAY, 1) => {
                 Self::WlDisplayDeleteId(WlDisplayDeleteIdEvent::from_message(message)?)
-            }
-            // TODO(hack3rmann): remove wl_callback from here
-            (ObjectId::WL_CALLBACK, 0) => {
-                Self::WlCallbackDone(WlCallbackDoneEvent::from_message(message)?)
             }
             _ => return None,
         })
