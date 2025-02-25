@@ -283,7 +283,7 @@ impl WaylandContext {
         )?;
 
         Ok(Self {
-            sock: sock.as_raw_fd(),
+            sock: sock.into_raw_fd(),
             external_context,
         })
     }

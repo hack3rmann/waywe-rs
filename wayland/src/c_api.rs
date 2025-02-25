@@ -98,7 +98,6 @@ pub unsafe extern "C" fn registry_handle_global(
 ) {
     if interface.is_null() {
         tracing::error!("invalid null interface c-string");
-
         process::abort();
     }
 
@@ -110,14 +109,12 @@ pub unsafe extern "C" fn registry_handle_global(
         .as_str()
         .unwrap_or_else(|_| {
             tracing::error!("invalid non-UTF8 interface string");
-
             process::abort();
         })
         .to_owned();
 
     let mut global_data = NonNull::new(data.cast::<WlRegistryData>()).unwrap_or_else(|| {
         tracing::error!("invalid null data pointer in registry callback");
-
         process::abort();
     });
 
@@ -134,7 +131,6 @@ pub unsafe extern "C" fn registry_handle_global(
     let header = WlRegistryDataItem {
         name: ObjectId::try_from(name).unwrap_or_else(|_| {
             tracing::error!("invalid wayland global object name = 0 on '{interface}' interface");
-
             process::abort();
         }),
         version,
@@ -258,8 +254,9 @@ pub(crate) unsafe fn initialize_wayland(
     tracing::info!("wl_display_roundtrip()");
 
     // TODO(hack3rmann): handle errors
-    if unsafe { wl_display_roundtrip(display.as_ptr()) } == -1 {
-        return Err(ExternalWaylandError::WlDisplayRoundtripFailed);
+    match unsafe { wl_display_roundtrip(display.as_ptr()) } {
+        -1 => return Err(ExternalWaylandError::WlDisplayRoundtripFailed),
+        count => tracing::info!("wl_display_roundtrip() has handled {count} events"),
     }
 
     let registry_data = registry_data.into_inner();
