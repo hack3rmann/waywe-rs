@@ -16,7 +16,7 @@ use rustix::{
 use std::{
     env,
     ffi::OsString,
-    io,
+    io, mem,
     os::{
         fd::{AsRawFd, BorrowedFd, FromRawFd, IntoRawFd as _, OwnedFd, RawFd},
         unix::net::UnixStream,
@@ -107,7 +107,10 @@ impl WaylandContext {
 
         let (shm_file_desc, wl_shm_path) = open_shm()?;
 
-        const BUFFER_SIZE: usize = 1024;
+        const BUFFER_WIDTH: usize = 2520;
+        const BUFFER_HEIGHT: usize = 1680;
+        const COLOR_SIZE: usize = mem::size_of::<u32>();
+        const BUFFER_SIZE: usize = BUFFER_WIDTH * BUFFER_HEIGHT * COLOR_SIZE;
 
         rustix::fs::ftruncate(&shm_file_desc, BUFFER_SIZE as u64)?;
 
@@ -135,6 +138,27 @@ impl WaylandContext {
             &mut sock,
             &mut buf,
         )?;
+
+        let sync_object_id = id_provider.next_id();
+
+        interface::send_request(
+            WlDisplaySyncRequest {
+                object_id: id_map.get_id(ObjectId::WL_DISPLAY).unwrap(),
+                callback: sync_object_id,
+            },
+            &mut sock,
+            &mut buf,
+        )?;
+
+        assert_eq!(
+            WlCallbackDoneEvent::recv(&mut sock, &mut buf)?.object_id,
+            sync_object_id
+        );
+
+        assert_eq!(
+            WlDisplayDeleteIdEvent::recv(&mut sock, &mut buf)?.removed_id,
+            sync_object_id
+        );
 
         rustix::shm::unlink(wl_shm_path)?;
 
