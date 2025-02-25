@@ -6,7 +6,10 @@ pub mod shm;
 pub mod shm_pool;
 pub mod surface;
 
-use crate::object::{ObjectIdMap, ObjectIdProvider};
+use crate::{
+    object::{ObjectIdMap, ObjectIdProvider},
+    wire::MessageHeader,
+};
 
 use super::{
     object::ObjectId,
@@ -78,11 +81,20 @@ pub trait Event<'s>: Copy {
     fn from_message(message: Message<'s>) -> Option<Self>;
 
     /// Receives read message from the stream
-    fn recv(stream: &mut dyn Read, buf: &'s mut MessageBuffer) -> Result<Self, io::Error> {
+    fn recv(stream: &mut dyn Read, buf: &'s mut MessageBuffer) -> Result<Self, RecvEventError> {
         wire::read_message_into(stream, buf)?;
-        // TODO: handle error
-        Ok(Self::from_message(buf.get_message()).unwrap())
+        let message = buf.get_message();
+
+        Self::from_message(message).ok_or_else(|| RecvEventError::Parse(message.header()))
     }
+}
+
+#[derive(Debug, Error)]
+pub enum RecvEventError {
+    #[error(transparent)]
+    Io(#[from] io::Error),
+    #[error("failed to parse message with header {0:?}")]
+    Parse(MessageHeader),
 }
 
 pub fn send_request(
@@ -186,5 +198,7 @@ pub enum WaylandSyncNowError {
     #[error(transparent)]
     SendFailed(#[from] MessageBuildError),
     #[error(transparent)]
-    RecvFailed(#[from] io::Error),
+    RecvFailed(#[from] RecvEventError),
+    #[error(transparent)]
+    Io(#[from] io::Error),
 }

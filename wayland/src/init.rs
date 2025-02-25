@@ -1,10 +1,7 @@
 use super::c_api::{ExternalWaylandContext, ExternalWaylandError, initialize_wayland};
 use crate::{
     interface::{
-        self, Event as _, NewId, RecvAnyEventError, WlCallbackDoneEvent, WlDisplayDeleteIdEvent,
-        WlDisplaySyncRequest, WlRegistryBindRequest, WlShmCreatePoolRequest, WlShmFormat,
-        WlShmPoolCreateBufferRequest, WlSurfaceAttachRequest, WlSurfaceCommitRequest,
-        WlSurfaceDamageRequest,
+        self, Event as _, NewId, RecvAnyEventError, RecvEventError, WlCallbackDoneEvent, WlDisplayDeleteIdEvent, WlDisplaySyncRequest, WlRegistryBindRequest, WlShmCreatePoolRequest, WlShmFormat, WlShmPoolCreateBufferRequest, WlSurfaceAttachRequest, WlSurfaceCommitRequest, WlSurfaceDamageRequest
     },
     object::{ObjectId, ObjectIdProvider},
     wire::{MessageBuffer, MessageBuildError},
@@ -319,7 +316,9 @@ pub enum WaylandInitError {
     #[error(transparent)]
     RustixIo(#[from] rustix::io::Errno),
     #[error(transparent)]
-    MessageRecv(#[from] RecvAnyEventError),
+    MessageRecvAny(#[from] RecvAnyEventError),
+    #[error(transparent)]
+    MessageRecv(#[from] RecvEventError),
 }
 
 /// # Safety
