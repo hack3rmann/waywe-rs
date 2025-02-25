@@ -356,7 +356,6 @@ pub(crate) unsafe fn initialize_wayland(
 
     tracing::info!("wl_display_roundtrip()");
 
-    // TODO(hack3rmann): handle errors
     match unsafe { wl_display_roundtrip(display.as_ptr()) } {
         -1 => return Err(ExternalWaylandError::WlDisplayRoundtripFailed),
         count => tracing::info!("wl_display_roundtrip() has handled {count} events"),
