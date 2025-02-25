@@ -15,6 +15,7 @@ impl ObjectId {
     pub const WP_VIEWPORTER: ObjectId = ObjectId::new(5);
     pub const ZWLR_LAYER_SHELL_V1: ObjectId = ObjectId::new(6);
     pub const WL_SHM_POOL: ObjectId = ObjectId::new(7);
+    pub const WL_SURFACE: ObjectId = ObjectId::new(8);
 
     /// Makes new id from `u32`
     ///

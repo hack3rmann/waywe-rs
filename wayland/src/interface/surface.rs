@@ -139,13 +139,13 @@ pub mod request {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
     pub struct Attach {
         /// id of the surface that is being operated on
-        object_id: ObjectId,
+        pub object_id: ObjectId,
         /// buffer of surface contents
-        buffer: ObjectId,
+        pub buffer: ObjectId,
         /// surface-local x coordinate
-        x: i32,
+        pub x: i32,
         /// surface-local y coordinate
-        y: i32,
+        pub y: i32,
     }
 
     impl Request for Attach {
@@ -169,15 +169,15 @@ pub mod request {
     #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub struct Damage {
         /// id of the surface that is being operated on
-        object_id: ObjectId,
+        pub object_id: ObjectId,
         /// surface-local x coordinate
-        x: i32,
+        pub x: i32,
         /// surface-local y coordinate
-        y: i32,
+        pub y: i32,
         /// width of damage rectangle
-        width: i32,
+        pub width: i32,
         /// height of damage rectangle
-        height: i32,
+        pub height: i32,
     }
 
     impl Request for Damage {
@@ -234,9 +234,9 @@ pub mod request {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash)]
     pub struct Frame {
         /// id of the surface that is being operated on
-        object_id: ObjectId,
+        pub object_id: ObjectId,
         /// callback object for the frame request
-        callback: ObjectId,
+        pub callback: ObjectId,
     }
 
     impl Request for Frame {
@@ -282,9 +282,9 @@ pub mod request {
     #[derive(Debug, Clone, Copy, Default, Hash, PartialEq, PartialOrd, Eq, Ord)]
     pub struct SetOpaqueRegion {
         /// id of the surface that is beign operated on
-        object_id: ObjectId,
+        pub object_id: ObjectId,
         /// opaque region of the surface
-        region: ObjectId,
+        pub region: ObjectId,
     }
 
     impl Request for SetOpaqueRegion {
@@ -327,9 +327,9 @@ pub mod request {
     #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash, Default)]
     pub struct SetInputRegion {
         /// id of the surface that is being operated on
-        object_id: ObjectId,
+        pub object_id: ObjectId,
         /// input region of the surface
-        region: ObjectId,
+        pub region: ObjectId,
     }
 
     impl Request for SetInputRegion {
@@ -370,7 +370,7 @@ pub mod request {
     #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Hash, Default, Eq, Ord)]
     pub struct Commit {
         /// id of the surface that is being operated on
-        object_id: ObjectId,
+        pub object_id: ObjectId,
     }
 
     impl Request for Commit {
@@ -400,8 +400,8 @@ pub mod event {
     /// Note that a surface may be overlapping with zero or more outputs.
     #[derive(Debug, Clone, Copy, Default, Hash, PartialEq, PartialOrd, Ord, Eq)]
     pub struct Enter {
-        object_id: ObjectId,
-        output: ObjectId,
+        pub object_id: ObjectId,
+        pub output: ObjectId,
     }
 
     impl<'s> Event<'s> for Enter {
@@ -431,8 +431,8 @@ pub mod event {
 
     #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
     pub struct Leave {
-        object_id: ObjectId,
-        output: ObjectId,
+        pub object_id: ObjectId,
+        pub output: ObjectId,
     }
 
     impl<'s> Event<'s> for Leave {

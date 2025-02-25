@@ -3,11 +3,13 @@ use crate::{
     interface::{
         self, Event as _, NewId, RecvAnyEventError, WlCallbackDoneEvent, WlDisplayDeleteIdEvent,
         WlDisplaySyncRequest, WlRegistryBindRequest, WlShmCreatePoolRequest, WlShmFormat,
-        WlShmPoolCreateBufferRequest,
+        WlShmPoolCreateBufferRequest, WlSurfaceAttachRequest, WlSurfaceCommitRequest,
+        WlSurfaceDamageRequest,
     },
     object::{ObjectId, ObjectIdProvider},
     wire::{MessageBuffer, MessageBuildError},
 };
+use core::slice;
 use rustix::{
     fs::Mode,
     mm::{MapFlags, ProtFlags},
@@ -115,7 +117,7 @@ impl WaylandContext {
 
         rustix::fs::ftruncate(&shm_file_desc, BUFFER_SIZE as u64)?;
 
-        let _shm_ptr = unsafe {
+        let shm_ptr = unsafe {
             rustix::mm::mmap(
                 ptr::null_mut(),
                 BUFFER_SIZE,
@@ -125,6 +127,13 @@ impl WaylandContext {
                 0,
             )?
         };
+
+        assert!(!shm_ptr.is_null());
+
+        unsafe { shm_ptr.write_bytes(0, BUFFER_SIZE) };
+
+        let _shm =
+            unsafe { slice::from_raw_parts_mut(shm_ptr.cast::<u32>(), BUFFER_SIZE / COLOR_SIZE) };
 
         let wl_shm_pool_id = id_provider.next_id();
         id_map.map(ObjectId::WL_SHM_POOL, wl_shm_pool_id);
@@ -199,6 +208,79 @@ impl WaylandContext {
             WlDisplayDeleteIdEvent::recv(&mut sock, &mut buf)?.removed_id,
             sync_object_id
         );
+
+        interface::send_request(
+            WlSurfaceAttachRequest {
+                object_id: id_map.get_id(ObjectId::WL_SURFACE).unwrap(),
+                buffer: wl_buffer_id,
+                x: 0,
+                y: 0,
+            },
+            &sock,
+            &mut buf,
+        )?;
+
+        let sync_object_id = id_provider.next_id();
+
+        interface::send_request(
+            WlDisplaySyncRequest {
+                object_id: id_map.get_id(ObjectId::WL_DISPLAY).unwrap(),
+                callback: sync_object_id,
+            },
+            &mut sock,
+            &mut buf,
+        )?;
+
+        assert_eq!(
+            WlCallbackDoneEvent::recv(&mut sock, &mut buf)?.object_id,
+            sync_object_id
+        );
+
+        assert_eq!(
+            WlDisplayDeleteIdEvent::recv(&mut sock, &mut buf)?.removed_id,
+            sync_object_id
+        );
+
+        interface::send_request(
+            WlSurfaceDamageRequest {
+                object_id: id_map.get_id(ObjectId::WL_SURFACE).unwrap(),
+                x: 0,
+                y: 0,
+                width: BUFFER_WIDTH as i32,
+                height: BUFFER_HEIGHT as i32,
+            },
+            &sock,
+            &mut buf,
+        )?;
+
+        let sync_object_id = id_provider.next_id();
+
+        interface::send_request(
+            WlDisplaySyncRequest {
+                object_id: id_map.get_id(ObjectId::WL_DISPLAY).unwrap(),
+                callback: sync_object_id,
+            },
+            &mut sock,
+            &mut buf,
+        )?;
+
+        assert_eq!(
+            WlCallbackDoneEvent::recv(&mut sock, &mut buf)?.object_id,
+            sync_object_id
+        );
+
+        assert_eq!(
+            WlDisplayDeleteIdEvent::recv(&mut sock, &mut buf)?.removed_id,
+            sync_object_id
+        );
+
+        interface::send_request(
+            WlSurfaceCommitRequest {
+                object_id: id_map.get_id(ObjectId::WL_SURFACE).unwrap(),
+            },
+            &mut sock,
+            &mut buf,
+        )?;
 
         Ok(Self {
             sock: sock.as_raw_fd(),

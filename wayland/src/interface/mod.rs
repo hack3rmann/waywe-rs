@@ -34,6 +34,16 @@ pub use {
     },
     shm::{request::CreatePool as WlShmCreatePoolRequest, wl_enum::Format as WlShmFormat},
     shm_pool::request::CreateBuffer as WlShmPoolCreateBufferRequest,
+    surface::{
+        event::{Enter as WlSurfaceEnterEvent, Leave as WlSurfaceLeaveEvent},
+        request::{
+            Attach as WlSurfaceAttachRequest, Commit as WlSurfaceCommitRequest,
+            Damage as WlSurfaceDamageRequest, Destroy as WlSurfaceDestroyRequest,
+            Frame as WlSurfaceFrameRequest, SetInputRegion as WlSurfaceSetInputRegionRequest,
+            SetOpaqueRegion as SetOpaqueRegionRequest,
+        },
+        wl_enum::Error as WlSurfaceError,
+    },
 };
 
 /// An [`ObjectId`] bundled with an interface name and a version

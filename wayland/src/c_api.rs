@@ -289,6 +289,11 @@ pub(crate) unsafe fn initialize_wayland(
         ObjectId::new(unsafe { wl_proxy_get_id(compositor.as_ptr()) }),
     );
 
+    mapped_names.map(
+        ObjectId::WL_SURFACE,
+        ObjectId::new(unsafe { wl_proxy_get_id(surface.as_ptr()) }),
+    );
+
     Ok((
         ExternalWaylandContext {
             display,
