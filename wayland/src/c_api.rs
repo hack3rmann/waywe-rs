@@ -325,6 +325,7 @@ pub struct ExternalWaylandContext {
     pub(crate) surface: NonNull<wl_surface>,
 }
 
+// FIXME(hack3rmann): destroy external wayland objects before panicking
 pub(crate) unsafe fn initialize_wayland(
     wayland_socket_fd: RawFd,
 ) -> Result<(ExternalWaylandContext, ExternalObjectInformation), ExternalWaylandError> {
