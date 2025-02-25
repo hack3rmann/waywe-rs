@@ -398,8 +398,7 @@ pub(crate) unsafe fn initialize_wayland(
     let globals = REGISTY_DATA.with(|data| {
         let data = unsafe { data.get().as_mut().unwrap() };
 
-        // Safety: we have invalidate registry data to it is
-        // safe to own it
+        // Safety: we have made registry data invalid so it is safe to own it
         data.is_valid = false;
         unsafe { data.globals.assume_init_read() }
     });
