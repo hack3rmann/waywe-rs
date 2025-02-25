@@ -10,3 +10,4 @@ rustix = { version = "0.38.44", features = ["fs", "net", "process", "mm", "shm"]
 thiserror = "2.0.11"
 tracing.workspace = true
 fxhash = "0.2.1"
+bitflags = "2.8.0"
