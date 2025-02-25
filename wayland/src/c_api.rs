@@ -9,7 +9,7 @@ use std::{
     cell::UnsafeCell,
     collections::HashMap,
     ffi::{CStr, c_char, c_int, c_void},
-    mem::offset_of,
+    mem::{MaybeUninit, offset_of},
     os::fd::RawFd,
     process,
     ptr::{self, NonNull},
@@ -46,17 +46,19 @@ pub struct WlRegistryDataItem {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug)]
 pub struct WlRegistryData {
+    pub is_valid: bool,
     pub wl_compositor: *mut wl_compositor,
-    pub globals: HashMap<String, WlRegistryDataItem>,
+    pub globals: MaybeUninit<HashMap<String, WlRegistryDataItem>>,
 }
 
 impl Default for WlRegistryData {
     fn default() -> Self {
         Self {
+            is_valid: true,
             wl_compositor: ptr::null_mut(),
-            globals: HashMap::new(),
+            globals: MaybeUninit::new(HashMap::new()),
         }
     }
 }
@@ -96,6 +98,20 @@ pub unsafe extern "C" fn registry_handle_global(
     interface: *const c_char,
     version: u32,
 ) {
+    let mut global_data = NonNull::new(data.cast::<WlRegistryData>()).unwrap_or_else(|| {
+        tracing::error!("invalid null data pointer in registry callback");
+        process::abort();
+    });
+
+    // Safety: as long as wayland-client calls this handler in-sync
+    // all accesses to `WlGlobalData` are mutually excluded.
+    let global_data = unsafe { global_data.as_mut() };
+
+    // Safety: used by an argument below
+    if !global_data.is_valid {
+        return;
+    }
+
     if interface.is_null() {
         tracing::error!("invalid null interface c-string");
         process::abort();
@@ -113,15 +129,6 @@ pub unsafe extern "C" fn registry_handle_global(
         })
         .to_owned();
 
-    let mut global_data = NonNull::new(data.cast::<WlRegistryData>()).unwrap_or_else(|| {
-        tracing::error!("invalid null data pointer in registry callback");
-        process::abort();
-    });
-
-    // Safety: as long as wayland-client calls this handler in-sync
-    // all accesses to `WlGlobalData` are mutually excluded.
-    let global_data = unsafe { global_data.as_mut() };
-
     if interface == "wl_compositor" {
         global_data.wl_compositor = unsafe {
             wl_registry_bind(registry, name, &raw const wl_compositor_interface, version)
@@ -136,7 +143,8 @@ pub unsafe extern "C" fn registry_handle_global(
         version,
     };
 
-    global_data.globals.insert(interface, header);
+    // Safety: `globals` initialized because global_data is valid due to the check above
+    unsafe { global_data.globals.assume_init_mut() }.insert(interface, header);
 }
 
 pub unsafe extern "C" fn registry_handle_global_remove(
@@ -190,6 +198,10 @@ pub static WL_REGISTRY_LISTENER: wl_registry_listener = wl_registry_listener {
     global: registry_handle_global,
     global_remove: registry_handle_global_remove,
 };
+
+thread_local! {
+    static REGISTY_DATA: UnsafeCell<WlRegistryData> = UnsafeCell::new(WlRegistryData::default());
+}
 
 #[link(name = "wayland-client")]
 unsafe extern "C" {
@@ -324,18 +336,23 @@ pub(crate) unsafe fn initialize_wayland(
     let registry = NonNull::new(unsafe { wl_display_get_registry(display.as_ptr()) })
         .ok_or(ExternalWaylandError::WlRegistryIsNull)?;
 
-    // TODO(hack3rmann): extend WlRegistryData lifetime to ExternalWaylandContext's one
-    let registry_data = UnsafeCell::<WlRegistryData>::default();
-
     tracing::info!("wl_registry_add_listener()");
 
-    unsafe {
-        wl_registry_add_listener(
-            registry.as_ptr(),
-            &raw const WL_REGISTRY_LISTENER,
-            registry_data.get().cast(),
-        );
-    }
+    REGISTY_DATA.with(|data| {
+        if -1
+            == unsafe {
+                wl_registry_add_listener(
+                    registry.as_ptr(),
+                    &raw const WL_REGISTRY_LISTENER,
+                    data.get().cast(),
+                )
+            }
+        {
+            return Err(ExternalWaylandError::WlRegistryAddListenerFailed);
+        }
+
+        Ok(())
+    })?;
 
     tracing::info!("wl_display_roundtrip()");
 
@@ -345,10 +362,12 @@ pub(crate) unsafe fn initialize_wayland(
         count => tracing::info!("wl_display_roundtrip() has handled {count} events"),
     }
 
-    let registry_data = registry_data.into_inner();
+    let compositor = REGISTY_DATA.with(|data| {
+        let data = unsafe { data.get().as_ref().unwrap() };
 
-    let compositor = NonNull::new(registry_data.wl_compositor)
-        .ok_or(ExternalWaylandError::WlCompositorIsNull)?;
+        NonNull::new(data.wl_compositor)
+            .ok_or(ExternalWaylandError::WlCompositorIsNull)
+    })?;
 
     tracing::info!("wl_compositor_create_surface()");
 
@@ -377,6 +396,16 @@ pub(crate) unsafe fn initialize_wayland(
         ObjectId::new(unsafe { wl_proxy_get_id(surface.as_ptr()) }),
     );
 
+
+    let globals = REGISTY_DATA.with(|data| {
+        let data = unsafe { data.get().as_mut().unwrap() };
+
+        // Safety: we have invalidate registry data to it is
+        // safe to own it
+        data.is_valid = false;
+        unsafe { data.globals.assume_init_read() }
+    });
+
     Ok((
         ExternalWaylandContext {
             display,
@@ -385,7 +414,7 @@ pub(crate) unsafe fn initialize_wayland(
             surface,
         },
         ExternalObjectInformation {
-            globals: registry_data.globals,
+            globals,
             mapped_names,
         },
     ))
@@ -431,6 +460,8 @@ pub enum ExternalWaylandError {
     WlSurfaceIsNull,
     #[error("external wayland error: wl_display_roundtrip failed")]
     WlDisplayRoundtripFailed,
+    #[error("external wayland error: wl_registry_add_listener failed")]
+    WlRegistryAddListenerFailed,
 }
 
 #[derive(Clone, Debug, PartialEq, Default)]
