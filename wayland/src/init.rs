@@ -2,7 +2,8 @@ use super::c_api::{ExternalWaylandContext, ExternalWaylandError, initialize_wayl
 use crate::{
     interface::{
         self, Event as _, NewId, RecvAnyEventError, WlCallbackDoneEvent, WlDisplayDeleteIdEvent,
-        WlDisplaySyncRequest, WlRegistryBindRequest, WlShmCreatePoolRequest,
+        WlDisplaySyncRequest, WlRegistryBindRequest, WlShmCreatePoolRequest, WlShmFormat,
+        WlShmPoolCreateBufferRequest,
     },
     object::{ObjectId, ObjectIdProvider},
     wire::{MessageBuffer, MessageBuildError},
@@ -161,6 +162,43 @@ impl WaylandContext {
         );
 
         rustix::shm::unlink(wl_shm_path)?;
+
+        let wl_buffer_id = id_provider.next_id();
+
+        interface::send_request(
+            WlShmPoolCreateBufferRequest {
+                object_id: wl_shm_pool_id,
+                id: wl_buffer_id,
+                offset: 0,
+                width: BUFFER_WIDTH as i32,
+                height: BUFFER_HEIGHT as i32,
+                stride: (BUFFER_WIDTH * COLOR_SIZE) as i32,
+                format: WlShmFormat::Xrgb8888,
+            },
+            &sock,
+            &mut buf,
+        )?;
+
+        let sync_object_id = id_provider.next_id();
+
+        interface::send_request(
+            WlDisplaySyncRequest {
+                object_id: id_map.get_id(ObjectId::WL_DISPLAY).unwrap(),
+                callback: sync_object_id,
+            },
+            &mut sock,
+            &mut buf,
+        )?;
+
+        assert_eq!(
+            WlCallbackDoneEvent::recv(&mut sock, &mut buf)?.object_id,
+            sync_object_id
+        );
+
+        assert_eq!(
+            WlDisplayDeleteIdEvent::recv(&mut sock, &mut buf)?.removed_id,
+            sync_object_id
+        );
 
         Ok(Self {
             sock: sock.as_raw_fd(),

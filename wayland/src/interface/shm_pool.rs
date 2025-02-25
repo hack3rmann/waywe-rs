@@ -29,10 +29,17 @@ pub mod request {
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct CreateBuffer {
         pub object_id: ObjectId,
+        /// Buffer to create
         pub id: ObjectId,
+        /// Buffer byte offset within the pool
+        pub offset: i32,
+        /// Buffer width, in pixels
         pub width: i32,
+        /// Buffer height, in pixels
         pub height: i32,
+        /// Number of bytes from the beginning of one row to the beginning of the next row
         pub stride: i32,
+        /// Buffer pixel format
         pub format: WlShmFormat,
     }
 
@@ -48,6 +55,7 @@ pub mod request {
             Message::builder(buf)
                 .header(Self::header_desc(self))
                 .uint(self.id.into())
+                .int(self.offset)
                 .int(self.width)
                 .int(self.height)
                 .int(self.stride)

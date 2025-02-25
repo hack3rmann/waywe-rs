@@ -33,6 +33,7 @@ pub use {
         request::Bind as WlRegistryBindRequest,
     },
     shm::{request::CreatePool as WlShmCreatePoolRequest, wl_enum::Format as WlShmFormat},
+    shm_pool::request::CreateBuffer as WlShmPoolCreateBufferRequest,
 };
 
 /// An [`ObjectId`] bundled with an interface name and a version
