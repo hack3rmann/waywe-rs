@@ -325,6 +325,7 @@ pub struct ExternalWaylandContext {
     pub(crate) surface: NonNull<wl_surface>,
 }
 
+// FIXME(hack3rmann): destroy external wayland objects before panicking
 pub(crate) unsafe fn initialize_wayland(
     wayland_socket_fd: RawFd,
 ) -> Result<(ExternalWaylandContext, ExternalObjectInformation), ExternalWaylandError> {
@@ -339,24 +340,23 @@ pub(crate) unsafe fn initialize_wayland(
     tracing::info!("wl_registry_add_listener()");
 
     REGISTY_DATA.with(|data| {
-        if -1
-            == unsafe {
-                wl_registry_add_listener(
-                    registry.as_ptr(),
-                    &raw const WL_REGISTRY_LISTENER,
-                    data.get().cast(),
-                )
-            }
-        {
-            return Err(ExternalWaylandError::WlRegistryAddListenerFailed);
-        }
+        let result = unsafe {
+            wl_registry_add_listener(
+                registry.as_ptr(),
+                &raw const WL_REGISTRY_LISTENER,
+                data.get().cast(),
+            )
+        };
 
-        Ok(())
+        if result == -1 {
+            Err(ExternalWaylandError::WlRegistryAddListenerFailed)
+        } else {
+            Ok(())
+        }
     })?;
 
     tracing::info!("wl_display_roundtrip()");
 
-    // TODO(hack3rmann): handle errors
     match unsafe { wl_display_roundtrip(display.as_ptr()) } {
         -1 => return Err(ExternalWaylandError::WlDisplayRoundtripFailed),
         count => tracing::info!("wl_display_roundtrip() has handled {count} events"),
@@ -365,8 +365,7 @@ pub(crate) unsafe fn initialize_wayland(
     let compositor = REGISTY_DATA.with(|data| {
         let data = unsafe { data.get().as_ref().unwrap() };
 
-        NonNull::new(data.wl_compositor)
-            .ok_or(ExternalWaylandError::WlCompositorIsNull)
+        NonNull::new(data.wl_compositor).ok_or(ExternalWaylandError::WlCompositorIsNull)
     })?;
 
     tracing::info!("wl_compositor_create_surface()");
@@ -396,12 +395,10 @@ pub(crate) unsafe fn initialize_wayland(
         ObjectId::new(unsafe { wl_proxy_get_id(surface.as_ptr()) }),
     );
 
-
     let globals = REGISTY_DATA.with(|data| {
         let data = unsafe { data.get().as_mut().unwrap() };
 
-        // Safety: we have invalidate registry data to it is
-        // safe to own it
+        // Safety: we have made registry data invalid so it is safe to own it
         data.is_valid = false;
         unsafe { data.globals.assume_init_read() }
     });
