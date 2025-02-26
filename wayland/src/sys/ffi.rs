@@ -535,14 +535,20 @@ unsafe extern "C" {
 
     /// Prepare a request to be sent to the compositor
     ///
-    /// This function is similar to `wl_proxy_marshal_array_constructor()`, except
-    /// it doesn't create proxies for new-id arguments.
-    ///
     /// # Parameters
     ///
     /// - `proxy` - The proxy object
     /// - `opcode` - Opcode of the request to be sent
     /// - `args` - Extra arguments for the given request
+    /// - `interface` - The interface to use for the new proxy
+    ///
+    /// This function translates a request given an opcode, an interface and
+    /// a wl_argument array to the wire format and writes it to the connection buffer.
+    ///
+    /// For new-id arguments, this function will allocate a new [`wl_proxy`] and send
+    /// the ID to the server. The new [`wl_proxy`] will be returned on success or NULL
+    /// on error with errno set accordingly. The newly created proxy will inherit
+    /// their version from their parent.
     ///
     /// # Note
     ///
@@ -550,8 +556,13 @@ unsafe extern "C" {
     ///
     /// # See also
     ///
-    /// wl_proxy_marshal()
-    pub fn wl_proxy_marshal_array(proxy: *mut wl_proxy, opcode: u32, args: *mut wl_argument);
+    /// `wl_proxy_marshal()`
+    pub fn wl_proxy_marshal_array_constructor(
+        proxy: *mut wl_proxy,
+        opcode: u32,
+        args: *mut wl_argument,
+        interface: *const wl_interface,
+    ) -> *mut wl_proxy;
 
     /// Destroy a proxy object.
     ///
@@ -570,7 +581,9 @@ unsafe extern "C" {
     ///
     /// `proxy` must not be a proxy wrapper.
     ///
-    /// Note: This function will abort in response to egregious errors, and will do
+    /// # Note
+    ///
+    /// This function will abort in response to egregious errors, and will do
     /// so with the display lock held. This means SIGABRT handlers must not perform
     /// any actions that would attempt to take that lock, or a deadlock would occur.
     pub fn wl_proxy_add_listener(

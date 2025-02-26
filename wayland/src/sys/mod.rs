@@ -1,9 +1,16 @@
 pub mod wire;
 pub mod ffi;
+pub mod display;
+pub mod registry;
+pub mod proxy;
 
 use ffi::{wl_proxy, wl_proxy_destroy};
 use core::fmt;
 use std::ptr::NonNull;
+
+pub trait FromProxy: Sized {
+    fn from_proxy() -> Self;
+}
 
 pub struct WlObject {
     pub(crate) proxy: NonNull<wl_proxy>,
