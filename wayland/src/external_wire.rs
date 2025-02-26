@@ -1,7 +1,7 @@
 use crate::ffi::wl_argument;
 use std::{
-    ffi::{CStr, c_void},
-    os::fd::RawFd,
+    ffi::{c_void, CStr},
+    os::fd::{AsRawFd, BorrowedFd},
     ptr,
 };
 
@@ -61,8 +61,9 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
         self
     }
 
-    pub fn file_desc(self, value: RawFd) -> Self {
-        self.buf.push(wl_argument { h: value });
+    /// Writes file descriptor to the message
+    pub fn file_desc(self, value: BorrowedFd<'s>) -> Self {
+        self.buf.push(wl_argument { h: value.as_raw_fd() });
         self
     }
 
