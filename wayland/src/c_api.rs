@@ -16,7 +16,7 @@ use std::{
 };
 use thiserror::Error;
 
-pub use super::ffi::{
+pub use super::sys::ffi::{
     WL_COMPOSITOR_CREATE_SURFACE, WL_DISPLAY_GET_REGISTRY, WL_REGISTRY_BIND, wl_compositor,
     wl_compositor_interface, wl_display, wl_display_connect_to_fd, wl_display_disconnect,
     wl_display_roundtrip, wl_interface, wl_message, wl_proxy, wl_proxy_add_listener,

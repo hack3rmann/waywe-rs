@@ -1,6 +1,6 @@
-use crate::ffi::wl_argument;
+use super::{WlObject, ffi::wl_argument};
 use std::{
-    ffi::{c_void, CStr},
+    ffi::CStr,
     os::fd::{AsRawFd, BorrowedFd},
     ptr,
 };
@@ -87,7 +87,9 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
 
     /// Writes file descriptor to the message
     pub fn file_desc(self, value: BorrowedFd<'s>) -> Self {
-        self.buf.push(wl_argument { h: value.as_raw_fd() });
+        self.buf.push(wl_argument {
+            h: value.as_raw_fd(),
+        });
         self
     }
 
@@ -102,11 +104,15 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
         self
     }
 
-    // TODO(hack3rmann): determine api for objects
-    pub fn object(self, _value: c_void) -> Self {
-        todo!()
+    /// Writes [`WlObject`] to the message
+    pub fn object(self, value: &'s mut WlObject) -> Self {
+        self.buf.push(wl_argument {
+            o: value.raw_proxy_ptr().as_ptr().cast(),
+        });
+        self
     }
 
+    /// Writes empty object to the message
     pub fn null_object(self) -> Self {
         self.buf.push(wl_argument { o: ptr::null_mut() });
         self

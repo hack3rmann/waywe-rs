@@ -314,7 +314,7 @@ pub struct wl_interface {
     pub version: c_int,
     pub method_count: c_int,
     pub methods: *const wl_message,
-    pub eval_count: c_int,
+    pub event_count: c_int,
     pub events: *const wl_message,
 }
 
