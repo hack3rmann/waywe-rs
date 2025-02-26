@@ -1046,6 +1046,7 @@ dependencies = [
 name = "wayland"
 version = "0.0.1"
 dependencies = [
+ "bitflags 2.8.0",
  "bytemuck",
  "fxhash",
  "raw-window-handle",
