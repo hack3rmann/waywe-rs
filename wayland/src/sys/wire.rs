@@ -19,6 +19,7 @@ impl OpCode {
 /// # Safety
 ///
 /// TODO(hack3rmann): write safety docs
+/// TODO(ArnoDarkrose): add trait impl for `SmallVec`
 pub unsafe trait MessageBuffer {
     fn clear(&mut self);
     fn push(&mut self, argument: wl_argument);

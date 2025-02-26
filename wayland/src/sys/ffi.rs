@@ -459,6 +459,37 @@ unsafe extern "C" {
         data: *mut c_void,
     ) -> c_int;
 
+    /// Set a proxy's listener (with dispatcher)
+    ///
+    /// # Parameters
+    ///
+    /// - `proxy` - The proxy object
+    /// - `dispatcher` - The dispatcher to be used for this proxy
+    /// - `implementation` - The dispatcher-specific listener implementation
+    /// - `data` - User data to be associated with the proxy
+    ///
+    /// # Returns
+    ///
+    /// `0` on success or `-1` on failure
+    ///
+    /// Set proxy's listener to use `dispatcher` as its dispatcher and
+    /// `data` as its dispatcher-specific implementation and its user
+    /// data to data. If a listener has already been set, this function fails
+    /// and nothing is changed.
+    ///
+    /// The exact details of dispatcher_data depend on the dispatcher used. This
+    /// function is intended to be used by language bindings, not user code.
+    ///
+    /// # Safety
+    ///
+    /// `proxy` must not be a proxy wrapper.
+    pub fn wl_proxy_add_dispatcher(
+        proxy: *mut wl_proxy,
+        dispatcher: wl_dispatcher_func_t,
+        implementation: *const c_void,
+        data: *mut c_void,
+    ) -> c_int;
+
     /// Get the id of a proxy object.
     pub fn wl_proxy_get_id(proxy: *mut wl_proxy) -> u32;
 }
