@@ -5,54 +5,50 @@
 pub mod request {
     use crate::{
         interface::Request,
-        object::ObjectId,
-        wire::{Message, MessageBuffer, MessageBuildError, MessageHeaderDesc},
+        sys::{
+            proxy::{WlCompositor, WlRegion},
+            wire::{Message, MessageBuffer, OpCode},
+        },
     };
 
     /// Ask the compositor to create a new surface.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
-    pub struct CreateSurface {
-        pub object_id: ObjectId,
-        /// The new surface
-        pub new_id: ObjectId,
-    }
+    pub struct CreateSurface;
 
-    impl Request for CreateSurface {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 0,
-            }
-        }
+    impl<'b> Request<'b> for CreateSurface {
+        type ParentProxy = WlCompositor;
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
+        const CODE: OpCode = 0;
+
+        fn build_message(
+            self,
+            parent: &'b Self::ParentProxy,
+            buf: &'b mut impl MessageBuffer,
+        ) -> Message<'b> {
             Message::builder(buf)
-                .header(Self::header_desc(self))
-                .uint(self.new_id.into())
+                .header(parent, Self::CODE)
+                .new_id()
                 .build()
         }
     }
 
     /// Ask the compositor to create a new region.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
-    pub struct CreateRegion {
-        pub object_id: ObjectId,
-        /// The new region
-        pub new_id: ObjectId,
-    }
+    pub struct CreateRegion;
 
-    impl Request for CreateRegion {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 1,
-            }
-        }
+    impl<'b> Request<'b> for CreateRegion {
+        type ParentProxy = WlRegion;
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
+        const CODE: OpCode = 1;
+
+        fn build_message(
+            self,
+            parent: &'b Self::ParentProxy,
+            buf: &'b mut impl MessageBuffer,
+        ) -> Message<'b> {
             Message::builder(buf)
-                .header(Self::header_desc(self))
-                .uint(self.new_id.into())
+                .header(parent, Self::CODE)
+                .new_id()
                 .build()
         }
     }

@@ -1,11 +1,11 @@
-use super::ffi::{wl_display, wl_display_connect_to_fd};
+use super::{ffi::{wl_display, wl_display_connect_to_fd}, proxy::{AsProxy, WlProxyBorrow}};
 use std::{
     os::fd::{IntoRawFd, OwnedFd},
     ptr::NonNull,
 };
 
 pub struct WlDisplay {
-    pub ptr: NonNull<wl_display>,
+    pub raw: NonNull<wl_display>,
 }
 
 impl WlDisplay {
@@ -15,6 +15,12 @@ impl WlDisplay {
             NonNull::new(unsafe { wl_display_connect_to_fd(wayland_file_desc.into_raw_fd()) })
                 .expect("failed to connect wl_display");
 
-        Self { ptr: display }
+        Self { raw: display }
+    }
+}
+
+impl AsProxy for WlDisplay {
+    fn as_proxy(&self) -> WlProxyBorrow<'_> {
+        unsafe { WlProxyBorrow::from_raw(self.raw.cast()) }
     }
 }

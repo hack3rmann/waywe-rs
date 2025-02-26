@@ -3,11 +3,12 @@
 
 use crate::{
     interface::{Event, Request},
-    object::ObjectId,
-    wire::{Message, MessageBuffer, MessageBuildError, MessageHeaderDesc},
+    sys::wire::{Message, MessageBuffer},
 };
 
 pub mod request {
+    use crate::sys::{display::WlDisplay, proxy::WlRegistry, wire::OpCode};
+
     use super::*;
 
     /// The sync request asks the server to emit the 'done' event
@@ -22,24 +23,21 @@ pub mod request {
     ///
     /// The callback_data passed in the callback is undefined and should be ignored.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
-    pub struct Sync {
-        pub object_id: ObjectId,
-        /// Callback object for the sync request
-        pub callback: ObjectId,
-    }
+    pub struct Sync;
 
-    impl Request for Sync {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 0,
-            }
-        }
+    impl<'b> Request<'b> for Sync {
+        type ParentProxy = WlDisplay;
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
+        const CODE: OpCode = 0;
+
+        fn build_message(
+            self,
+            parent: &'b Self::ParentProxy,
+            buf: &'b mut impl MessageBuffer,
+        ) -> Message<'b> {
             Message::builder(buf)
-                .header(Self::header_desc(self))
-                .uint(self.callback.into())
+                .header(parent, Self::CODE)
+                .new_id()
                 .build()
         }
     }
@@ -54,24 +52,21 @@ pub mod request {
     /// Therefore, clients should invoke get_registry as infrequently as
     /// possible to avoid wasting memory.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
-    pub struct GetRegistry {
-        pub object_id: ObjectId,
-        /// Global registry object
-        pub registry: ObjectId,
-    }
+    pub struct GetRegistry;
 
-    impl Request for GetRegistry {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 1,
-            }
-        }
+    impl<'b> Request<'b> for GetRegistry {
+        type ParentProxy = WlRegistry;
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
+        const CODE: OpCode = 1;
+
+        fn build_message(
+            self,
+            parent: &'b Self::ParentProxy,
+            buf: &'b mut impl MessageBuffer,
+        ) -> Message<'b> {
             Message::builder(buf)
-                .header(Self::header_desc(self))
-                .uint(self.registry.into())
+                .header(parent, Self::CODE)
+                .new_id()
                 .build()
         }
     }
@@ -79,6 +74,8 @@ pub mod request {
 
 pub mod event {
     use super::*;
+    use crate::sys::{proxy::WlDynProxyQuery, wire::OpCode};
+    use std::ffi::CStr;
 
     /// The error event is sent out when a fatal (non-recoverable)
     /// error has occurred.  The object_id argument is the object
@@ -87,41 +84,34 @@ pub mod event {
     /// by the object interface.  As such, each interface defines its
     /// own set of error codes.  The message is a brief description
     /// of the error, for (debugging) convenience.
-    #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct Error<'s> {
-        pub object_id: ObjectId,
         /// Object where the error occurred
-        pub object: ObjectId,
+        pub object: WlDynProxyQuery,
         /// Error code
         pub code: u32,
         /// Error description
-        pub message: &'s str,
+        pub message: &'s CStr,
     }
 
     impl<'s> Event<'s> for Error<'s> {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 0,
-            }
-        }
+        const CODE: OpCode = 0;
 
         fn from_message(message: Message<'s>) -> Option<Self> {
-            let header = message.header();
-
-            if header.opcode != 0 {
+            // FIXME(hack3rmann): check the interface of the message sender
+            if message.opcode != Self::CODE {
                 return None;
             }
 
             let mut reader = message.reader();
 
-            let object = reader.read_u32()?;
-            let code = reader.read_u32()?;
-            let message = reader.read_str()?;
+            // Safety: event provided by libwayland matches our interface
+            // and opcode therefore it must have the arguments below
+            let object = unsafe { reader.read::<WlDynProxyQuery>()? };
+            let code = unsafe { reader.read::<u32>()? };
+            let message = unsafe { reader.read::<&CStr>()? };
 
             Some(Self {
-                object_id: ObjectId::try_from(header.object_id).ok()?,
-                object: ObjectId::new(object),
+                object,
                 code,
                 message,
             })
@@ -134,34 +124,18 @@ pub mod event {
     /// seen the delete request. When the client receives this event,
     /// it will know that it can safely reuse the object ID.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
-    pub struct DeleteId {
-        pub object_id: ObjectId,
-        /// Deleted object id
-        pub removed_id: ObjectId,
-    }
+    // NOTE: empty, because `wl_argument` does not have id field
+    pub struct DeleteId;
 
     impl<'s> Event<'s> for DeleteId {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 1,
-            }
-        }
+        const CODE: OpCode = 1;
 
         fn from_message(message: Message<'s>) -> Option<Self> {
-            let header = message.header();
-
-            if header.opcode != 1 {
+            if message.opcode != Self::CODE {
                 return None;
+            } else {
+                Some(Self)
             }
-
-            let mut reader = message.reader();
-            let id = reader.read_u32().unwrap();
-
-            Some(Self {
-                object_id: ObjectId::try_from(header.object_id).ok()?,
-                removed_id: ObjectId::new(id),
-            })
         }
     }
 }

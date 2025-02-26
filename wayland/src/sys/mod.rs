@@ -1,7 +1,6 @@
 pub mod wire;
 pub mod ffi;
 pub mod display;
-pub mod registry;
 pub mod proxy;
 
 use ffi::{wl_proxy, wl_proxy_destroy};

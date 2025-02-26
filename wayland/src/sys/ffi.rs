@@ -410,13 +410,21 @@ impl wl_list {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub union wl_argument {
+    /// int
     pub i: i32,
+    /// uint
     pub u: u32,
+    /// fixed
     pub f: wl_fixed_t,
+    /// string
     pub s: *const c_char,
+    /// object
     pub o: *const wl_object,
+    /// new_id
     pub n: u32,
+    /// array
     pub a: *const wl_array,
+    /// fd
     pub h: RawFd,
 }
 

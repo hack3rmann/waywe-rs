@@ -43,12 +43,18 @@
 
 use crate::{
     object::ObjectId,
-    wire::{Message, MessageBuffer, MessageBuildError, MessageHeaderDesc},
+    sys::wire::{Message, MessageBuffer},
 };
 
 pub mod request {
     use super::*;
-    use crate::interface::Request;
+    use crate::{
+        interface::Request,
+        sys::{
+            proxy::{WlBuffer, WlSurface},
+            wire::OpCode,
+        },
+    };
 
     /// Deletes the surface and invalidates its object ID.
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -136,30 +142,29 @@ pub mod request {
     /// maximise compatibility should not destroy pending buffers and should
     /// ensure that they explicitly remove content from surfaces, even after
     /// destroying buffers.
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-    pub struct Attach {
-        /// id of the surface that is being operated on
-        pub object_id: ObjectId,
+    #[derive(Clone, Copy, Default)]
+    pub struct Attach<'s> {
         /// buffer of surface contents
-        pub buffer: ObjectId,
+        pub buffer: Option<&'s WlBuffer>,
         /// surface-local x coordinate
         pub x: i32,
         /// surface-local y coordinate
         pub y: i32,
     }
 
-    impl Request for Attach {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 1,
-            }
-        }
+    impl<'b> Request<'b> for Attach<'b> {
+        type ParentProxy = WlSurface;
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
+        const CODE: OpCode = 1;
+
+        fn build_message(
+            self,
+            parent: &'b Self::ParentProxy,
+            buf: &'b mut impl MessageBuffer,
+        ) -> Message<'b> {
             Message::builder(buf)
-                .header(Self::header_desc(self))
-                .uint(self.buffer.into())
+                .header(parent, Self::CODE)
+                .maybe_object(self.buffer)
                 .int(self.x)
                 .int(self.x)
                 .build()
@@ -168,8 +173,6 @@ pub mod request {
 
     #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub struct Damage {
-        /// id of the surface that is being operated on
-        pub object_id: ObjectId,
         /// surface-local x coordinate
         pub x: i32,
         /// surface-local y coordinate
@@ -180,17 +183,18 @@ pub mod request {
         pub height: i32,
     }
 
-    impl Request for Damage {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 2,
-            }
-        }
+    impl<'b> Request<'b> for Damage {
+        type ParentProxy = WlSurface;
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
+        const CODE: OpCode = 2;
+
+        fn build_message(
+            self,
+            parent: &'b Self::ParentProxy,
+            buf: &'b mut impl MessageBuffer,
+        ) -> Message<'b> {
             Message::builder(buf)
-                .header(Self::header_desc(self))
+                .header(parent, Self::CODE)
                 .int(self.x)
                 .int(self.y)
                 .int(self.width)
@@ -232,25 +236,21 @@ pub mod request {
     /// The callback_data passed in the callback is the current time, in
     /// milliseconds, with an undefined base.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash)]
-    pub struct Frame {
-        /// id of the surface that is being operated on
-        pub object_id: ObjectId,
-        /// callback object for the frame request
-        pub callback: ObjectId,
-    }
+    pub struct Frame;
 
-    impl Request for Frame {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 3,
-            }
-        }
+    impl<'b> Request<'b> for Frame {
+        type ParentProxy = WlSurface;
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
+        const CODE: OpCode = 3;
+
+        fn build_message(
+            self,
+            parent: &'b Self::ParentProxy,
+            buf: &'b mut impl MessageBuffer,
+        ) -> Message<'b> {
             Message::builder(buf)
-                .header(Self::header_desc(self))
-                .uint(self.callback.into())
+                .header(parent, Self::CODE)
+                .new_id()
                 .build()
         }
     }
@@ -391,41 +391,31 @@ pub mod request {
 
 pub mod event {
     use super::*;
-    use crate::interface::Event;
+    use crate::{interface::Event, sys::{proxy::{WlOutput, WlProxyQuery}, wire::OpCode}};
 
     /// This is emitted whenever a surface's creation, movement, or resizing
     /// results in some part of it being within the scanout region of an
     /// output.
     ///
     /// Note that a surface may be overlapping with zero or more outputs.
-    #[derive(Debug, Clone, Copy, Default, Hash, PartialEq, PartialOrd, Ord, Eq)]
+    #[derive(Debug, Clone, Copy, PartialEq)]
     pub struct Enter {
-        pub object_id: ObjectId,
-        pub output: ObjectId,
+        /// Output entered by the surface
+        pub output: WlProxyQuery<WlOutput>,
     }
 
     impl<'s> Event<'s> for Enter {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 0,
-            }
-        }
+        const CODE: OpCode = 0;
 
         fn from_message(message: Message<'s>) -> Option<Self> {
-            let header = message.header();
-
-            if header.opcode != 0 {
+            if message.opcode != Self::CODE {
                 return None;
             }
 
             let mut reader = message.reader();
-            let output = reader.read_u32()?;
+            let output = unsafe { reader.read::<WlProxyQuery<WlOutput>>()? };
 
-            Some(Self {
-                object_id: ObjectId::try_from(header.object_id).ok()?,
-                output: ObjectId::new(output),
-            })
+            Some(Self { output })
         }
     }
 
@@ -442,6 +432,7 @@ pub mod event {
                 opcode: 1,
             }
         }
+
         fn from_message(message: Message<'s>) -> Option<Self> {
             let header = message.header();
 
