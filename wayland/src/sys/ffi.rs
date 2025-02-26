@@ -7,6 +7,8 @@ use std::{
     ptr,
 };
 
+use libc::{free, malloc, realloc};
+
 pub type wl_display = c_void;
 pub type wl_registry = c_void;
 pub type wl_surface = c_void;
@@ -88,10 +90,13 @@ pub struct wl_message {
 #[repr(C)]
 pub struct wl_array {
     pub size: usize,
-    // NOTE(ArnoDarkrose): same as 'capacity'
     pub alloc: usize,
     pub data: *mut c_void,
 }
+
+#[derive(Debug, thiserror::Error)]
+#[error("wl_array copy failed")]
+pub struct CopyError;
 
 impl wl_array {
     pub const fn new() -> Self {
@@ -111,8 +116,8 @@ impl wl_array {
 
     /// # Safety
     ///
-    /// `this` must be allocated by calls to malloc or related functions.
-    /// It has to be valid or equal to null
+    /// - `this` must point to a valid object of [`wl_array`]
+    /// - `this.data` must be null or valid and allocated by calls to malloc or related functions.
     pub unsafe fn release(this: *mut Self) {
         // Safety
         // See safety for the function
@@ -122,8 +127,9 @@ impl wl_array {
     }
 
     /// # Safety
+    ///
     /// - `this` must point to a valid, allocated object
-    /// - if `this.data` is not null it must be allocated by malloc or a similar function
+    /// - if `this.data` is not null, it must be allocated by malloc or a similar function
     pub unsafe fn add(this: *mut Self, size: usize) -> *mut c_void {
         // Safety
         // `this` is valid (see the function safety)
@@ -156,7 +162,7 @@ impl wl_array {
         }
 
         // Safety
-        // this.data points to an allocated object (see above)
+        // `this.data` points to an allocated object (see above)
         let res = unsafe { (*this).data.byte_add((*this).size) };
         unsafe { (*this).size += size };
 
@@ -164,11 +170,12 @@ impl wl_array {
     }
 
     /// # Safety
+    ///
     /// - `this` and `source` must point to valid objects
     /// - this.data and source.data must point to allocated, aligned objects
-    ///     and its memory areas must not overlap
+    ///   and its memory areas must not overlap
     /// - source.data must be valid for read for source.size bytes
-    pub unsafe fn copy(this: *mut Self, source: *mut Self) -> bool {
+    pub unsafe fn copy(this: *mut Self, source: *mut Self) -> Result<(), CopyError> {
         let array_size = unsafe { (*this).size };
         let source_size = unsafe { (*this).size };
 
@@ -176,7 +183,7 @@ impl wl_array {
             let add_res = unsafe { wl_array::add(this, source_size - array_size) };
 
             if add_res.is_null() {
-                return false;
+                return Err(CopyError);
             }
         } else {
             unsafe { (*this).size = source_size };
@@ -189,7 +196,7 @@ impl wl_array {
             ptr::copy_nonoverlapping((*this).data, (*source).data, source_size);
         }
 
-        true
+        Ok(())
     }
 }
 
@@ -346,6 +353,7 @@ impl wl_list {
     }
 
     /// # Safety
+    ///
     /// - `this` must point to a valid value of [`wl_list`]
     /// - `other` must point to a valid value of [`wl_list`]
     /// - `this` must have a valid `next` value
@@ -464,6 +472,7 @@ unsafe extern "C" {
     pub static wl_surface_interface: wl_interface;
 
     /// Connect to Wayland display on an already open fd.
+    ///
     ///
     /// The [`wl_display`] takes ownership of the fd and will close
     /// it when the display is destroyed. The fd will also be closed in case of failure.
@@ -633,10 +642,4 @@ unsafe extern "C" {
 
     /// Get the id of a proxy object.
     pub fn wl_proxy_get_id(proxy: *mut wl_proxy) -> u32;
-}
-
-unsafe extern "C" {
-    fn malloc(size: usize) -> *mut c_void;
-    fn free(ptr: *mut c_void) -> c_void;
-    fn realloc(ptr: *mut c_void, size: usize) -> *mut c_void;
 }

@@ -12,3 +12,4 @@ tracing.workspace = true
 fxhash = "0.2.1"
 bitflags = "2.8.0"
 static_assertions = "1.1.0"
+libc = "0.2.170"
