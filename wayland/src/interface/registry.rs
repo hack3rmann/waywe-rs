@@ -20,45 +20,47 @@
 //! the object.
 
 use crate::{
-    interface::{Event, NewId, Request},
+    interface::{Event, Request},
     object::ObjectId,
-    wire::{Message, MessageBuffer, MessageBuildError, MessageHeaderDesc},
+    sys::wire::{Message, MessageBuffer},
 };
 
 pub mod request {
+    use crate::sys::{Interface, proxy::WlRegistry, wire::OpCode};
+
     use super::*;
 
     /// Binds a new, client-created object to the server using the
     /// specified name as the identifier.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
-    pub struct Bind<'s> {
-        pub object_id: ObjectId,
-        /// Unique numeric name of the object
-        pub name: ObjectId,
+    pub struct Bind {
         /// Bounded object
-        pub new_id: NewId<'s>,
+        pub interface: Interface,
     }
 
-    impl Request for Bind<'_> {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 0,
-            }
-        }
+    impl<'b> Request<'b> for Bind {
+        type ParentProxy = WlRegistry;
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
+        const CODE: OpCode = 0;
+
+        fn build_message(
+            self,
+            parent: &'b Self::ParentProxy,
+            buf: &'b mut impl MessageBuffer,
+        ) -> Message<'b> {
             Message::builder(buf)
-                .header(Self::header_desc(self))
-                .uint(self.name.into())
-                .new_id(self.new_id)
+                .header(parent, Self::CODE)
+                .interface(self.interface)
                 .build()
         }
     }
 }
 
 pub mod event {
+    use crate::sys::wire::OpCode;
+
     use super::*;
+    use std::ffi::CStr;
 
     /// Notify the client of global objects.
     ///
@@ -67,39 +69,30 @@ pub mod event {
     /// given version of the given interface.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct Global<'s> {
-        pub object_id: ObjectId,
         /// Numeric name of the global object
         pub name: ObjectId,
         /// Interface implemented by the object
-        pub interface: &'s str,
+        pub interface: &'s CStr,
         /// Interface version
         pub version: u32,
     }
 
     impl<'s> Event<'s> for Global<'s> {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 0,
-            }
-        }
+        const CODE: OpCode = 0;
 
         fn from_message(message: Message<'s>) -> Option<Self> {
-            let header = message.header();
-
-            if header.opcode != 0 {
+            if message.opcode != Self::CODE {
                 return None;
             }
 
             let mut reader = message.reader();
 
-            let name = reader.read_u32()?;
-            let interface = reader.read_str()?;
-            let version = reader.read_u32()?;
+            let name = ObjectId::try_from(unsafe { reader.read::<u32>()? }).ok()?;
+            let interface = unsafe { reader.read::<&CStr>()? };
+            let version = unsafe { reader.read::<u32>()? };
 
             Some(Self {
-                object_id: ObjectId::try_from(header.object_id).ok()?,
-                name: ObjectId::new(name),
+                name,
                 interface,
                 version,
             })
@@ -118,33 +111,22 @@ pub mod event {
     /// the global going away and a client sending a request to it.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct GlobalRemove {
-        pub object_id: ObjectId,
         /// Numeric name of the global object
         pub name: ObjectId,
     }
 
     impl<'s> Event<'s> for GlobalRemove {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 1,
-            }
-        }
+        const CODE: OpCode = 1;
 
         fn from_message(message: Message<'s>) -> Option<Self> {
-            let header = message.header();
-
-            if header.opcode != 1 {
+            if message.opcode != Self::CODE {
                 return None;
             }
 
             let mut reader = message.reader();
-            let name = reader.read_u32().unwrap();
+            let name = ObjectId::try_from(unsafe { reader.read::<u32>()? }).ok()?;
 
-            Some(Self {
-                object_id: ObjectId::try_from(header.object_id).ok()?,
-                name: ObjectId::new(name),
-            })
+            Some(Self { name })
         }
     }
 }

@@ -8,12 +8,11 @@ pub mod surface;
 pub mod zwlr_layer_shell_v1;
 pub mod zwlr_layer_surface_v1;
 
+use super::object::ObjectId;
 use crate::sys::{
     proxy::AsProxy,
     wire::{Message, MessageBuffer, OpCode},
 };
-
-use super::object::ObjectId;
 
 pub use {
     callback::event::Done as WlCallbackDoneEvent,

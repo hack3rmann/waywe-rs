@@ -1,11 +1,13 @@
-pub mod wire;
-pub mod ffi;
 pub mod display;
+pub mod ffi;
 pub mod proxy;
+pub mod wire;
 
-use ffi::{wl_proxy, wl_proxy_destroy};
 use core::fmt;
-use std::ptr::NonNull;
+use ffi::{wl_proxy, wl_proxy_destroy};
+use std::{ffi::CStr, ptr::NonNull};
+
+use crate::object::ObjectId;
 
 pub trait FromProxy: Sized {
     fn from_proxy() -> Self;
@@ -30,27 +32,35 @@ impl Drop for WlObject {
 
 impl fmt::Debug for WlObject {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "WlObject(\"{}\")", self.interface.name())
+        write!(
+            f,
+            "WlObject(\"{}\")",
+            self.interface.interface_name().to_str().unwrap()
+        )
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
 pub enum ObjectType {
     #[default]
-    Display,
+    Display = 1,
 }
 
 impl ObjectType {
-    pub const fn name(self) -> &'static str {
+    pub const fn integer_name(self) -> ObjectId {
+        ObjectId::new(self as u32)
+    }
+
+    pub const fn interface_name(self) -> &'static CStr {
         match self {
-            Self::Display => "wl_display",
+            Self::Display => c"wl_display",
         }
     }
 }
 
 impl fmt::Display for ObjectType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.name())
+        f.write_str(self.interface_name().to_str().unwrap())
     }
 }
 
@@ -71,8 +81,8 @@ impl Interface {
         version: 1,
     };
 
-    pub const fn name(self) -> &'static str {
-        self.object_type.name()
+    pub const fn interface_name(self) -> &'static CStr {
+        self.object_type.interface_name()
     }
 }
 

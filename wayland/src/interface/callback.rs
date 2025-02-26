@@ -7,41 +7,28 @@
 pub mod event {
     use crate::{
         interface::Event,
-        object::ObjectId,
-        wire::{Message, MessageHeaderDesc},
+        sys::wire::{Message, OpCode},
     };
 
     /// Notify the client when the related request is done.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct Done {
-        /// id of the callback object
-        pub object_id: ObjectId,
         /// Request-specific data for the callback
         pub data: u32,
     }
 
     impl<'s> Event<'s> for Done {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 0,
-            }
-        }
+        const CODE: OpCode = 0;
 
         fn from_message(message: Message<'s>) -> Option<Self> {
-            let header = message.header();
-
-            if header.opcode != 0 {
+            if message.opcode != Self::CODE {
                 return None;
             }
 
             let mut reader = message.reader();
-            let data = reader.read_u32()?;
+            let data = unsafe { reader.read::<u32>()? };
 
-            Some(Self {
-                data,
-                object_id: ObjectId::try_from(header.object_id).ok()?,
-            })
+            Some(Self { data })
         }
     }
 }

@@ -1,4 +1,5 @@
 use super::{
+    Interface,
     ffi::{wl_argument, wl_fixed_t, wl_object, wl_proxy},
     proxy::{AsProxy, WlDynProxyQuery, WlProxyBorrow, WlProxyQuery},
 };
@@ -153,6 +154,13 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
     pub fn new_id(self) -> Self {
         self.buf.push(wl_argument { n: 0 });
         self
+    }
+
+    pub fn interface(self, value: Interface) -> Self {
+        self.uint(value.object_type.integer_name().into())
+            .str(value.object_type.interface_name())
+            .uint(value.version)
+            .new_id()
     }
 
     pub fn build(self) -> Message<'s> {
