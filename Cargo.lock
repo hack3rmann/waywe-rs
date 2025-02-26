@@ -1051,6 +1051,7 @@ dependencies = [
  "fxhash",
  "raw-window-handle",
  "rustix",
+ "static_assertions",
  "thiserror 2.0.11",
  "tracing",
 ]

@@ -72,6 +72,13 @@ impl From<wl_fixed_t> for i32 {
 }
 
 #[repr(C)]
+pub struct wl_object {
+    pub interface: *const wl_interface,
+    pub implementation: *const c_void,
+    pub id: u32,
+}
+
+#[repr(C)]
 pub struct wl_message {
     pub name: *const c_char,
     pub signature: *const c_char,
@@ -281,19 +288,25 @@ impl wl_list {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub union wl_argument {
     pub i: i32,
     pub u: u32,
     pub f: wl_fixed_t,
     pub s: *const c_char,
-    pub o: *const c_void,
+    pub o: *const wl_object,
     pub n: u32,
     pub a: *const wl_array,
     pub h: RawFd,
 }
 
-pub type wl_dispatcher_func_t =
-    unsafe extern "C" fn(*const c_void, *mut c_void, u32, *const wl_message, *mut wl_argument);
+pub type wl_dispatcher_func_t = unsafe extern "C" fn(
+    *const c_void,
+    *mut c_void,
+    u32,
+    *const wl_message,
+    *mut wl_argument,
+) -> c_int;
 
 #[repr(C)]
 pub struct wl_interface {
@@ -399,6 +412,26 @@ unsafe extern "C" {
         flags: u32,
         ...
     ) -> *mut wl_proxy;
+
+    /// Prepare a request to be sent to the compositor
+    ///
+    /// This function is similar to `wl_proxy_marshal_array_constructor()`, except
+    /// it doesn't create proxies for new-id arguments.
+    ///
+    /// # Parameters
+    ///
+    /// - `proxy` - The proxy object
+    /// - `opcode` - Opcode of the request to be sent
+    /// - `args` - Extra arguments for the given request
+    ///
+    /// # Note
+    ///
+    /// This is intended to be used by language bindings and not in non-generated code.
+    ///
+    /// # See also
+    ///
+    /// wl_proxy_marshal()
+    pub fn wl_proxy_marshal_array(proxy: *mut wl_proxy, opcode: u32, args: *mut wl_argument);
 
     /// Destroy a proxy object.
     ///

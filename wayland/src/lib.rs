@@ -4,3 +4,4 @@ pub mod interface;
 pub mod object;
 pub mod wire;
 pub mod ffi;
+pub mod external_wire;
