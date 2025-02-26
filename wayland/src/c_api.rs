@@ -16,22 +16,13 @@ use std::{
 };
 use thiserror::Error;
 
-pub type wl_display = c_void;
-pub type wl_registry = c_void;
-pub type wl_surface = c_void;
-pub type wl_message = c_void;
-pub type wl_compositor = c_void;
-pub type wl_proxy = c_void;
-
-#[repr(C)]
-pub struct wl_interface {
-    pub name: *const c_char,
-    pub version: c_int,
-    pub method_count: c_int,
-    pub methods: *const wl_message,
-    pub eval_count: c_int,
-    pub events: *const wl_message,
-}
+pub use super::ffi::{
+    WL_COMPOSITOR_CREATE_SURFACE, WL_DISPLAY_GET_REGISTRY, WL_REGISTRY_BIND, wl_compositor,
+    wl_compositor_interface, wl_display, wl_display_connect_to_fd, wl_display_disconnect,
+    wl_display_roundtrip, wl_interface, wl_message, wl_proxy, wl_proxy_add_listener,
+    wl_proxy_destroy, wl_proxy_get_id, wl_proxy_get_version, wl_proxy_marshal_flags, wl_registry,
+    wl_registry_interface, wl_surface, wl_surface_interface,
+};
 
 #[repr(C)]
 pub struct wl_registry_listener {
@@ -62,10 +53,6 @@ impl Default for WlRegistryData {
         }
     }
 }
-
-pub const WL_REGISTRY_BIND: u32 = 0;
-pub const WL_DISPLAY_GET_REGISTRY: u32 = 1;
-pub const WL_COMPOSITOR_CREATE_SURFACE: u32 = 0;
 
 pub unsafe extern "C" fn wl_display_get_registry(display: *mut wl_display) -> *mut wl_registry {
     let version = unsafe { wl_proxy_get_version(display.cast()) };
@@ -201,120 +188,6 @@ pub static WL_REGISTRY_LISTENER: wl_registry_listener = wl_registry_listener {
 
 thread_local! {
     static REGISTY_DATA: UnsafeCell<WlRegistryData> = UnsafeCell::new(WlRegistryData::default());
-}
-
-#[link(name = "wayland-client")]
-unsafe extern "C" {
-    static wl_registry_interface: wl_interface;
-    static wl_compositor_interface: wl_interface;
-    static wl_surface_interface: wl_interface;
-
-    /// Connect to Wayland display on an already open fd.
-    ///
-    /// The [`wl_display`] takes ownership of the fd and will close
-    /// it when the display is destroyed. The fd will also be closed in case of failure.
-    pub fn wl_display_connect_to_fd(fd: RawFd) -> *mut wl_display;
-
-    /// Close a connection to a Wayland display.
-    ///
-    /// Close the connection to display. The [`wl_proxy`] and `wl_event_queue`
-    /// objects need to be manually destroyed by the caller before disconnecting.
-    pub fn wl_display_disconnect(display: *mut wl_display);
-
-    /// Block until all pending request are processed by the server.
-    ///
-    /// This function blocks until the server has processed all currently
-    /// issued requests by sending a request to the display server
-    /// and waiting for a reply before returning.
-    ///
-    /// This function uses `wl_display_dispatch_queue()` internally. It is not
-    /// allowed to call this function while the thread is being prepared for
-    /// reading events, and doing so will cause a dead lock.
-    ///
-    /// # Note
-    ///
-    /// This function may dispatch other events being received on the default queue.
-    pub fn wl_display_roundtrip(display: *mut wl_display) -> c_int;
-
-    /// Get the protocol object version of a proxy object.
-    ///
-    /// Gets the protocol object version of a proxy object, or `0`
-    /// if the proxy was created with unversioned API.
-    ///
-    /// A returned value of `0` means that no version information is available,
-    /// so the caller must make safe assumptions about the object's real version.
-    ///
-    /// [`wl_display`]'s version will always return `0`.
-    pub fn wl_proxy_get_version(proxy: *mut wl_proxy) -> u32;
-
-    /// Prepare a request to be sent to the compositor.
-    ///
-    /// # Params
-    ///
-    /// - `proxy` - The proxy object
-    /// - `opcode` - Opcode of the request to be sent
-    /// - `interface` - The interface to use for the new proxy
-    /// - `version` - The protocol object version of the new proxy
-    /// - `flags` - Flags that modify marshalling behaviour
-    /// - `...` - Extra arguments for the given request
-    ///
-    /// # Return value
-    ///
-    /// A new [`wl_proxy`] for the `new_id` argument or [`ptr::null_mut`] on error
-    ///
-    /// Translates the request given by `opcode` and the extra arguments into the
-    /// wire format and write it to the connection buffer.
-    ///
-    /// For new-id arguments, this function will allocate a new [`wl_proxy`] and send
-    /// the ID to the server. The new [`wl_proxy`] will be returned on success or NULL
-    /// on error with errno set accordingly. The newly created proxy will have
-    /// the version specified.
-    ///
-    /// The flag `WL_MARSHAL_FLAG_DESTROY` may be passed to ensure the proxy is
-    /// destroyed atomically with the marshalling in order to prevent races that
-    /// can occur if the display lock is dropped between the marshal and destroy
-    /// operations.
-    ///
-    /// # Note
-    ///
-    /// This should not normally be used by non-generated code.
-    pub fn wl_proxy_marshal_flags(
-        proxy: *mut wl_proxy,
-        opcode: u32,
-        interface: *const wl_interface,
-        version: u32,
-        flags: u32,
-        ...
-    ) -> *mut wl_proxy;
-
-    /// Destroy a proxy object.
-    ///
-    /// # Safety
-    ///
-    /// `proxy` must not be a proxy wrapper.
-    ///
-    /// # Note
-    ///
-    /// This function will abort in response to egregious errors, and will do so
-    /// with the display lock held. This means SIGABRT handlers must not perform
-    /// any actions that would attempt to take that lock, or a deadlock would occur.
-    pub fn wl_proxy_destroy(proxy: *mut wl_proxy);
-
-    /// Set a proxy's listener.
-    ///
-    /// `proxy` must not be a proxy wrapper.
-    ///
-    /// Note: This function will abort in response to egregious errors, and will do
-    /// so with the display lock held. This means SIGABRT handlers must not perform
-    /// any actions that would attempt to take that lock, or a deadlock would occur.
-    pub fn wl_proxy_add_listener(
-        proxy: *mut wl_proxy,
-        implementation: *mut extern "C" fn(),
-        data: *mut c_void,
-    ) -> c_int;
-
-    /// Get the id of a proxy object.
-    pub fn wl_proxy_get_id(proxy: *mut wl_proxy) -> u32;
 }
 
 #[derive(Clone, Debug, PartialEq, Copy, Eq, PartialOrd, Ord, Hash)]
