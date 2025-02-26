@@ -26,8 +26,31 @@ pub unsafe trait MessageBuffer {
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
+    fn as_slice(&self) -> &[wl_argument];
 }
 static_assertions::assert_obj_safe!(MessageBuffer);
+
+unsafe impl MessageBuffer for Vec<wl_argument> {
+    fn clear(&mut self) {
+        Vec::clear(self);
+    }
+
+    fn push(&mut self, argument: wl_argument) {
+        Vec::push(self, argument)
+    }
+
+    fn len(&self) -> usize {
+        Vec::len(self)
+    }
+
+    fn is_empty(&self) -> bool {
+        Vec::is_empty(self)
+    }
+
+    fn as_slice(&self) -> &[wl_argument] {
+        self
+    }
+}
 
 pub struct MessageBuilder<'s, Buffer: MessageBuffer> {
     pub(crate) opcode: OpCode,
@@ -35,6 +58,7 @@ pub struct MessageBuilder<'s, Buffer: MessageBuffer> {
 }
 
 impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
+    /// Creates new [`MessageBuffer`] from given message buffer
     pub fn new(buf: &'s mut Buffer) -> Self {
         buf.clear();
         Self {
@@ -81,5 +105,10 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
     // TODO(hack3rmann): determine api for objects
     pub fn object(self, _value: c_void) -> Self {
         todo!()
+    }
+
+    pub fn null_object(self) -> Self {
+        self.buf.push(wl_argument { o: ptr::null_mut() });
+        self
     }
 }
