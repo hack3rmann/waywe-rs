@@ -109,19 +109,87 @@ impl wl_array {
         unsafe { this.write(Self::new()) }
     }
 
-    // TODO(ArnoDarkrose):
+    /// # Safety
+    ///
+    /// `this` must be allocated by calls to malloc or related functions.
+    /// It has to be valid or equal to null
     pub unsafe fn release(this: *mut Self) {
-        todo!()
+        // Safety
+        // See safety for the function
+        unsafe {
+            free((*this).data);
+        }
     }
 
-    // TODO(ArnoDarkrose):
+    /// # Safety
+    /// - `this` must point to a valid, allocated object
+    /// - if `this.data` is not null it must be allocated by malloc or a similar function
     pub unsafe fn add(this: *mut Self, size: usize) -> *mut c_void {
-        todo!()
+        // Safety
+        // `this` is valid (see the function safety)
+        let upper_bound = unsafe { (*this).size + size };
+        let array_alloc = unsafe { (*this).alloc };
+        let new_data;
+
+        let mut alloc = if array_alloc > 0 { array_alloc } else { 16 };
+
+        while alloc < upper_bound {
+            alloc *= 2;
+        }
+
+        if array_alloc < alloc {
+            new_data = if array_alloc > 0 {
+                unsafe { realloc((*this).data, alloc) }
+            } else {
+                unsafe { malloc(alloc) }
+            };
+
+            if new_data.is_null() {
+                return ptr::null_mut();
+            }
+
+            // Safety
+            // `this` is valid (see the function safety) and new_data
+            // is valid, as it was successfully allocated above
+            unsafe { (*this).data = new_data };
+            unsafe { (*this).alloc = alloc };
+        }
+
+        // Safety
+        // this.data points to an allocated object (see above)
+        let res = unsafe { (*this).data.byte_add((*this).size) };
+        unsafe { (*this).size += size };
+
+        res
     }
 
-    // TODO(ArnoDarkrose): maybe return bool idk
-    pub unsafe fn copy(this: *mut Self, source: *mut Self) -> c_int {
-        todo!()
+    /// # Safety
+    /// - `this` and `source` must point to valid objects
+    /// - this.data and source.data must point to allocated, aligned objects
+    ///     and its memory areas must not overlap
+    /// - source.data must be valid for read for source.size bytes
+    pub unsafe fn copy(this: *mut Self, source: *mut Self) -> bool {
+        let array_size = unsafe { (*this).size };
+        let source_size = unsafe { (*this).size };
+
+        if array_size < source_size {
+            let add_res = unsafe { wl_array::add(this, source_size - array_size) };
+
+            if add_res.is_null() {
+                return false;
+            }
+        } else {
+            unsafe { (*this).size = source_size };
+        }
+
+        // Safety
+        // this.data and source.data are valid, properly aligned and don't overlap (see the function safety)
+        // Code above ensures that this.data is valid for write for source.size bytes
+        unsafe {
+            ptr::copy_nonoverlapping((*this).data, (*source).data, source_size);
+        }
+
+        true
     }
 }
 
@@ -277,13 +345,65 @@ impl wl_list {
         }
     }
 
-    // TODO(ArnoDarkrose): missing safety, missing docs
-    pub unsafe fn insert_list(_this: *mut Self, other: *mut Self) {
+    /// # Safety
+    /// - `this` must point to a valid value of [`wl_list`]
+    /// - `other` must point to a valid value of [`wl_list`]
+    /// - `this` must have a valid `next` value
+    /// - `other` must have a valid `next` value
+    /// - `other` must have a valid `prev` value
+    pub unsafe fn insert_list(this: *mut Self, other: *mut Self) {
         if unsafe { Self::empty(other) } {
             return;
         }
 
-        todo!()
+        unsafe {
+            other
+                .wrapping_byte_add(offset_of!(wl_list, next))
+                .cast::<*mut Self>()
+                .read()
+                .wrapping_byte_add(offset_of!(wl_list, prev))
+                .cast::<*mut Self>()
+                .write(this);
+        }
+
+        unsafe {
+            other
+                .wrapping_byte_add(offset_of!(wl_list, prev))
+                .cast::<*mut Self>()
+                .read()
+                .wrapping_byte_add(offset_of!(wl_list, next))
+                .cast::<*mut Self>()
+                .write(
+                    this.wrapping_byte_add(offset_of!(wl_list, next))
+                        .cast::<*mut Self>()
+                        .read(),
+                );
+        }
+
+        unsafe {
+            this.wrapping_byte_add(offset_of!(wl_list, next))
+                .cast::<*mut Self>()
+                .read()
+                .wrapping_byte_add(offset_of!(wl_list, prev))
+                .cast::<*mut Self>()
+                .write(
+                    other
+                        .wrapping_byte_add(offset_of!(wl_list, prev))
+                        .cast::<*mut Self>()
+                        .read(),
+                );
+        }
+
+        unsafe {
+            this.wrapping_byte_add(offset_of!(wl_list, next))
+                .cast::<*mut Self>()
+                .write(
+                    other
+                        .wrapping_byte_add(offset_of!(wl_list, next))
+                        .cast::<*mut Self>()
+                        .read(),
+                );
+        }
     }
 }
 
@@ -492,4 +612,10 @@ unsafe extern "C" {
 
     /// Get the id of a proxy object.
     pub fn wl_proxy_get_id(proxy: *mut wl_proxy) -> u32;
+}
+
+unsafe extern "C" {
+    fn malloc(size: usize) -> *mut c_void;
+    fn free(ptr: *mut c_void) -> c_void;
+    fn realloc(ptr: *mut c_void, size: usize) -> *mut c_void;
 }
