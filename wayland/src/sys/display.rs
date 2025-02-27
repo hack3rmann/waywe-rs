@@ -4,6 +4,7 @@ use std::{
     ptr::NonNull,
 };
 
+/// The handle to libwayland backend
 pub struct WlDisplay {
     pub raw: NonNull<wl_display>,
 }

@@ -1,19 +1,22 @@
 #![allow(non_camel_case_types)]
 
+use libc::{free, malloc, realloc};
 use std::{
     ffi::{c_char, c_int, c_void},
     mem::offset_of,
     os::fd::RawFd,
     ptr,
 };
-
-use libc::{free, malloc, realloc};
+use thiserror::Error;
 
 pub type wl_display = c_void;
 pub type wl_registry = c_void;
 pub type wl_surface = c_void;
 pub type wl_compositor = c_void;
 pub type wl_proxy = c_void;
+
+/// Represents fixed point number from libwayland backend
+pub type WlFixed = wl_fixed_t;
 
 #[repr(transparent)]
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
@@ -94,7 +97,7 @@ pub struct wl_array {
     pub data: *mut c_void,
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error)]
 #[error("wl_array copy failed")]
 pub struct CopyError;
 

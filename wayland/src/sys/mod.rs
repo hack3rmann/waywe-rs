@@ -3,42 +3,9 @@ pub mod ffi;
 pub mod proxy;
 pub mod wire;
 
-use core::fmt;
-use ffi::{wl_proxy, wl_proxy_destroy};
-use std::{ffi::CStr, ptr::NonNull};
-
 use crate::object::ObjectId;
-
-pub trait FromProxy: Sized {
-    fn from_proxy() -> Self;
-}
-
-pub struct WlObject {
-    pub(crate) proxy: NonNull<wl_proxy>,
-    pub(crate) interface: &'static Interface,
-}
-
-impl WlObject {
-    pub const fn raw_proxy_ptr(&self) -> NonNull<wl_proxy> {
-        self.proxy
-    }
-}
-
-impl Drop for WlObject {
-    fn drop(&mut self) {
-        unsafe { wl_proxy_destroy(self.proxy.as_ptr()) };
-    }
-}
-
-impl fmt::Debug for WlObject {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "WlObject(\"{}\")",
-            self.interface.interface_name().to_str().unwrap()
-        )
-    }
-}
+use core::fmt;
+use std::ffi::CStr;
 
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
 pub enum ObjectType {
@@ -64,6 +31,7 @@ impl fmt::Display for ObjectType {
     }
 }
 
+/// Stores some information about some global object
 #[derive(Clone, Debug, PartialEq, Copy, Eq, PartialOrd, Ord, Hash)]
 pub struct Interface {
     pub object_type: ObjectType,
@@ -81,6 +49,7 @@ impl Interface {
         version: 1,
     };
 
+    /// Returns the string name of the interface
     pub const fn interface_name(self) -> &'static CStr {
         self.object_type.interface_name()
     }

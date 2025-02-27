@@ -9,12 +9,15 @@ use std::{
     ptr,
 };
 
+/// The code of the performing operation on the interface
 pub type OpCode = u16;
 
 /// # Safety
 ///
-/// TODO(hack3rmann): write safety docs
-/// TODO(ArnoDarkrose): add trait impl for `SmallVec`
+/// - the implementor ensures all calls are valid (see safety on each call)
+/// - the implementor ensures the caller of these functions can not destinguish
+///   the behavior of them from the [`Vec`] ones
+// TODO(ArnoDarkrose): add trait impl for `SmallVec`
 pub unsafe trait MessageBuffer {
     fn clear(&mut self);
     fn push(&mut self, argument: wl_argument);
@@ -48,25 +51,32 @@ unsafe impl MessageBuffer for Vec<wl_argument> {
     }
 }
 
+/// Represents the message on the libwayland backend
 #[derive(Clone, Copy)]
 pub struct Message<'s> {
+    /// The parent object of the message
     pub parent: WlProxyBorrow<'s>,
+    /// The opcode for the request/event
     pub opcode: OpCode,
+    /// Additional arguments for the request/event
     pub arguments: &'s [wl_argument],
 }
 
 impl<'s> Message<'s> {
+    /// Returns the builder for the message
     pub fn builder<Buffer: MessageBuffer>(
         buf: &'s mut Buffer,
     ) -> MessageBuilderHeaderless<'s, Buffer> {
         MessageBuilderHeaderless::new(buf)
     }
 
+    /// Returns the reader for this message
     pub fn reader(&self) -> MessageReader<'s> {
         MessageReader::new(self.arguments)
     }
 }
 
+/// Builder of the message header
 pub struct MessageBuilderHeaderless<'s, Buffer: MessageBuffer> {
     pub(crate) buf: &'s mut Buffer,
 }
@@ -84,6 +94,7 @@ impl<'s, Buffer: MessageBuffer> MessageBuilderHeaderless<'s, Buffer> {
     }
 }
 
+/// Builder of the message body
 pub struct MessageBuilder<'s, Buffer: MessageBuffer> {
     pub(crate) buf: &'s mut Buffer,
     pub(crate) parent: WlProxyBorrow<'s>,
@@ -91,6 +102,7 @@ pub struct MessageBuilder<'s, Buffer: MessageBuffer> {
 }
 
 impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
+    /// Creates the builder
     pub fn new_header(buf: &'s mut Buffer, parent: &'s impl AsProxy, opcode: OpCode) -> Self {
         Self {
             buf,
@@ -151,11 +163,13 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
         self
     }
 
+    /// Passes `new_id` argument to the message
     pub fn new_id(self) -> Self {
         self.buf.push(wl_argument { n: 0 });
         self
     }
 
+    /// Passes interface information to the message
     pub fn interface(self, value: Interface) -> Self {
         self.uint(value.object_type.integer_name().into())
             .str(value.object_type.interface_name())
@@ -163,6 +177,7 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
             .new_id()
     }
 
+    /// Builds the message
     pub fn build(self) -> Message<'s> {
         Message {
             parent: self.parent,
@@ -172,6 +187,7 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
     }
 }
 
+/// Provides a coversion function from [`wl_argument`]
 pub trait FromWlArgument<'s>: Sized {
     unsafe fn from_argument(value: wl_argument) -> Self;
 }
@@ -226,16 +242,26 @@ impl<'s> FromWlArgument<'s> for &'s CStr {
     }
 }
 
+/// Represents a message reader capable of converting [`wl_argument`]s to values
 #[derive(Clone, Copy)]
 pub struct MessageReader<'s> {
+    /// The rest of message's arguments
     pub arguments: &'s [wl_argument],
 }
 
 impl<'s> MessageReader<'s> {
+    /// Constructs new [`MessageReader`]
     pub const fn new(arguments: &'s [wl_argument]) -> Self {
         Self { arguments }
     }
 
+    /// Reads a values from the next arguments of the message
+    ///
+    /// # Safety
+    ///
+    /// The argument read from the message at this point should have
+    /// the same type as the argument that was written to the message
+    /// as this point before
     pub unsafe fn read<A: FromWlArgument<'s>>(&mut self) -> Option<A> {
         let first_arg = self.arguments.first().copied()?;
         self.arguments = &self.arguments[1..];
