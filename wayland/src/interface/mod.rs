@@ -8,7 +8,6 @@ pub mod surface;
 pub mod zwlr_layer_shell_v1;
 pub mod zwlr_layer_surface_v1;
 
-use super::object::ObjectId;
 use crate::{
     c_api::wl_proxy,
     sys::{
