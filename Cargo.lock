@@ -1052,6 +1052,7 @@ dependencies = [
  "libc",
  "raw-window-handle",
  "rustix",
+ "smallvec",
  "static_assertions",
  "thiserror 2.0.11",
  "tracing",
