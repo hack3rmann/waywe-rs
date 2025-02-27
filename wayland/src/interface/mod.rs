@@ -48,15 +48,6 @@ pub use {
     },
 };
 
-/// An [`ObjectId`] bundled with an interface name and a version
-#[deprecated]
-#[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
-pub struct NewId<'s> {
-    pub id: ObjectId,
-    pub interface: &'s str,
-    pub version: u32,
-}
-
 /// Represents requests on Wayland's interfaces
 pub trait Request<'b>: Sized {
     /// The opcode for the request
