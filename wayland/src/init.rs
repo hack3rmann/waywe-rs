@@ -1,69 +1,15 @@
-use super::c_api::{ExternalWaylandContext, ExternalWaylandError, initialize_wayland};
-use crate::wire::MessageBuildError;
 use rustix::net::SocketAddrAny;
 use std::{
     env,
     ffi::OsString,
     io,
     os::{
-        fd::{BorrowedFd, FromRawFd, IntoRawFd as _, OwnedFd, RawFd},
+        fd::{FromRawFd, OwnedFd},
         unix::net::UnixStream,
     },
     path::PathBuf,
 };
 use thiserror::Error;
-
-#[derive(Debug, PartialEq)]
-pub struct WaylandContext {
-    pub(crate) sock: RawFd,
-    pub(crate) external_context: ExternalWaylandContext,
-}
-
-impl WaylandContext {
-    /// # Safety
-    ///
-    /// Wayland socket's file desc should not be owned anywhere else in this program.
-    pub unsafe fn new() -> Result<Self, WaylandInitError> {
-        let sock = unsafe { connect_wayland_socket()?.into_raw_fd() };
-        let (external_context, _object_info) = unsafe { initialize_wayland(sock)? };
-
-        Ok(Self {
-            sock: sock.into_raw_fd(),
-            external_context,
-        })
-    }
-
-    pub fn wayland_sock(&self) -> BorrowedFd<'_> {
-        // Safety:
-        // - external wayland-client uses socket no more
-        // - lifetime of this borrow is attached to the `WaylandContext`
-        unsafe { BorrowedFd::borrow_raw(self.sock) }
-    }
-
-    pub fn external_context(&self) -> ExternalWaylandContext {
-        self.external_context
-    }
-}
-
-impl Drop for WaylandContext {
-    fn drop(&mut self) {
-        unsafe { self.external_context.close_connection() };
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum WaylandInitError {
-    #[error(transparent)]
-    GetSocketPath(#[from] GetSocketPathError),
-    #[error(transparent)]
-    ExternalError(#[from] ExternalWaylandError),
-    #[error(transparent)]
-    MessageBuildError(#[from] MessageBuildError),
-    #[error(transparent)]
-    Io(#[from] io::Error),
-    #[error(transparent)]
-    RustixIo(#[from] rustix::io::Errno),
-}
 
 /// # Safety
 ///

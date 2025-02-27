@@ -8,14 +8,11 @@ pub mod surface;
 pub mod zwlr_layer_shell_v1;
 pub mod zwlr_layer_surface_v1;
 
-use crate::{
-    c_api::wl_proxy,
-    sys::{
-        InterfaceObjectType,
-        ffi::wl_proxy_marshal_array_constructor,
-        proxy::WlProxy,
-        wire::{Message, MessageBuffer, OpCode},
-    },
+use crate::sys::{
+    InterfaceObjectType,
+    ffi::{wl_proxy, wl_proxy_marshal_array_constructor},
+    proxy::WlProxy,
+    wire::{Message, MessageBuffer, OpCode},
 };
 use std::ptr;
 
