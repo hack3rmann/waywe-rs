@@ -1,15 +1,14 @@
 use super::{
     Interface,
     ffi::{wl_argument, wl_fixed_t, wl_object, wl_proxy},
-    proxy::{AsProxy, WlDynProxyQuery, WlProxyBorrow, WlProxyQuery},
+    proxy::{WlProxy, WlProxyQuery},
 };
+use smallvec::SmallVec;
 use std::{
     ffi::CStr,
     os::fd::{AsRawFd, BorrowedFd, FromRawFd as _, OwnedFd},
     ptr,
 };
-
-use smallvec::SmallVec;
 
 /// The code of the performing operation on the interface
 pub type OpCode = u16;
@@ -78,7 +77,7 @@ unsafe impl<const N: usize> MessageBuffer for SmallVec<[wl_argument; N]> {
 #[derive(Clone, Copy)]
 pub struct Message<'s> {
     /// The parent object of the message
-    pub parent: WlProxyBorrow<'s>,
+    pub parent: &'s WlProxy,
     /// The opcode for the request/event
     pub opcode: OpCode,
     /// Additional arguments for the request/event
@@ -112,7 +111,7 @@ impl<'s, Buffer: MessageBuffer> MessageBuilderHeaderless<'s, Buffer> {
     }
 
     /// Sets parent object and opcode for the message
-    pub fn header(self, parent: &'s impl AsProxy, opcode: OpCode) -> MessageBuilder<'s, Buffer> {
+    pub fn header(self, parent: &'s WlProxy, opcode: OpCode) -> MessageBuilder<'s, Buffer> {
         MessageBuilder::new_header(self.buf, parent, opcode)
     }
 }
@@ -120,16 +119,16 @@ impl<'s, Buffer: MessageBuffer> MessageBuilderHeaderless<'s, Buffer> {
 /// Builder of the message body
 pub struct MessageBuilder<'s, Buffer: MessageBuffer> {
     pub(crate) buf: &'s mut Buffer,
-    pub(crate) parent: WlProxyBorrow<'s>,
+    pub(crate) parent: &'s WlProxy,
     pub(crate) opcode: OpCode,
 }
 
 impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
     /// Creates the builder
-    pub fn new_header(buf: &'s mut Buffer, parent: &'s impl AsProxy, opcode: OpCode) -> Self {
+    pub fn new_header(buf: &'s mut Buffer, parent: &'s WlProxy, opcode: OpCode) -> Self {
         Self {
             buf,
-            parent: parent.as_proxy(),
+            parent,
             opcode,
         }
     }
@@ -165,10 +164,10 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
         self
     }
 
-    pub fn maybe_object(self, value: Option<&'s impl AsProxy>) -> Self {
+    pub fn maybe_object(self, value: Option<&'s WlProxy>) -> Self {
         self.buf.push(wl_argument {
             o: value
-                .map(|proxy| proxy.as_proxy().as_raw().as_ptr())
+                .map(|proxy| proxy.as_raw().as_ptr())
                 .unwrap_or(ptr::null_mut())
                 .cast::<wl_object>(),
         });
@@ -176,7 +175,7 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
     }
 
     /// Writes [`WlObject`] to the message
-    pub fn object(self, value: &'s mut impl AsProxy) -> Self {
+    pub fn object(self, value: &'s WlProxy) -> Self {
         self.maybe_object(Some(value))
     }
 
@@ -241,19 +240,11 @@ impl FromWlArgument<'_> for OwnedFd {
     }
 }
 
-impl<T: AsProxy> FromWlArgument<'_> for WlProxyQuery<T> {
+impl FromWlArgument<'_> for WlProxyQuery {
     unsafe fn from_argument(value: wl_argument) -> Self {
         let proxy_ptr = unsafe { value.o }.cast::<wl_proxy>();
         // Safety: proxy object provided by the libwayland should be valid or point to null
         unsafe { WlProxyQuery::from_raw(proxy_ptr) }
-    }
-}
-
-impl FromWlArgument<'_> for WlDynProxyQuery {
-    unsafe fn from_argument(value: wl_argument) -> Self {
-        let proxy_ptr = unsafe { value.o }.cast::<wl_proxy>();
-        // Safety: proxy object provided by the libwayland should be valid or point to null
-        unsafe { WlDynProxyQuery::from_raw(proxy_ptr) }
     }
 }
 

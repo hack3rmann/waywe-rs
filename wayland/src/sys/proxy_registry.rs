@@ -1,4 +1,4 @@
-use super::proxy::{AsProxy, WlProxy, WlProxyBorrow};
+use super::proxy::WlProxy;
 use crate::object::ObjectId;
 use std::collections::HashMap;
 
@@ -10,15 +10,18 @@ pub struct ProxyRegistry {
 
 impl ProxyRegistry {
     pub fn new() -> Self {
-        Self { map: HashMap::new() }
+        Self {
+            map: HashMap::new(),
+        }
     }
 
     pub fn insert(&mut self, object: WlProxy) {
-        self.map.insert(object.id(), object)
+        self.map
+            .insert(object.id(), object)
             .expect("map should not contain any object with this id");
     }
 
-    pub fn get(&self, id: ObjectId) -> Option<WlProxyBorrow<'_>> {
-        self.map.get(&id).map(AsProxy::as_proxy)
+    pub fn get_proxy(&self, id: ObjectId) -> Option<&WlProxy> {
+        self.map.get(&id)
     }
 }
