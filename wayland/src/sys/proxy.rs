@@ -111,11 +111,6 @@ impl fmt::Debug for WlProxyQuery {
             .finish_non_exhaustive()
     }
 }
-impl<T> PartialEq for WlProxyQuery<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.raw == other.raw
-    }
-}
 
 #[derive(Clone, PartialEq, Copy)]
 pub struct WlDynProxyQuery {
@@ -134,38 +129,4 @@ impl fmt::Debug for WlDynProxyQuery {
         f.debug_struct(std::any::type_name::<Self>())
             .finish_non_exhaustive()
     }
-}
-
-macro_rules! define_proxies {
-    ( $( $Proxy:ident ),* $(,)? ) => {
-        $(
-            pub struct $Proxy {
-                pub(crate) proxy: WlProxy,
-            }
-
-            impl AsProxy for $Proxy {
-                fn as_proxy(&self) -> WlProxyBorrow<'_> {
-                    self.proxy.as_proxy()
-                }
-            }
-
-            impl From<WlProxy> for $Proxy {
-                fn from(proxy: WlProxy) -> Self {
-                    Self { proxy }
-                }
-            }
-
-            impl fmt::Debug for $Proxy {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    f.debug_struct(std::any::type_name::<Self>())
-                        .finish_non_exhaustive()
-                }
-            }
-        )*
-    };
-}
-
-define_proxies! {
-    WlRegistry, WlCompositor, WlRegion, WlSurface, WlOutput,
-    WlShm, WlShmPool, ZwlrLayerShellV1, ZwlrLayerSurfaceV1, WlBuffer
 }

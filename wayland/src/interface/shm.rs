@@ -15,7 +15,7 @@ use std::os::fd::BorrowedFd;
 pub mod request {
     use super::*;
     use crate::sys::InterfaceObjectType;
-    use crate::sys::proxy::WlShm;
+    use crate::sys::proxy::WlProxy;
 
     /// Create a new wl_shm_pool object.
     ///
@@ -31,15 +31,13 @@ pub mod request {
     }
 
     impl<'b> Request<'b> for CreatePool<'b> {
-        type ParentProxy = WlShm;
-
         const CODE: OpCode = 0;
         const OUTGOING_INTERFACE: Option<InterfaceObjectType> =
             Some(InterfaceObjectType::WlShmPool);
 
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl crate::sys::wire::MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf)
@@ -59,13 +57,11 @@ pub mod request {
     pub struct Release;
 
     impl<'b> Request<'b> for Release {
-        type ParentProxy = WlShm;
-
         const CODE: OpCode = 1;
 
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl crate::sys::wire::MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf).header(parent, Self::CODE).build()

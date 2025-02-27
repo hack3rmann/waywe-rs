@@ -10,7 +10,7 @@ use crate::interface::Request;
 use crate::sys::wire::{Message, MessageBuffer, OpCode};
 
 pub mod request {
-    use crate::{interface::WlShmFormat, sys::proxy::WlShmPool};
+    use crate::{interface::WlShmFormat, sys::proxy::WlProxy};
 
     use super::*;
 
@@ -40,13 +40,11 @@ pub mod request {
     }
 
     impl<'b> Request<'b> for CreateBuffer {
-        type ParentProxy = WlShmPool;
-
         const CODE: OpCode = 0;
 
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf)
@@ -69,13 +67,11 @@ pub mod request {
     pub struct Destroy;
 
     impl<'b> Request<'b> for Destroy {
-        type ParentProxy = WlShmPool;
-
         const CODE: OpCode = 1;
 
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf).header(parent, Self::CODE).build()
@@ -98,13 +94,11 @@ pub mod request {
     }
 
     impl<'b> Request<'b> for Resize {
-        type ParentProxy = WlShmPool;
-
         const CODE: OpCode = 2;
 
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf)

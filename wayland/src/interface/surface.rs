@@ -49,11 +49,7 @@ pub mod request {
     use super::*;
     use crate::{
         interface::Request,
-        sys::{
-            InterfaceObjectType,
-            proxy::{WlBuffer, WlRegion, WlSurface},
-            wire::OpCode,
-        },
+        sys::{InterfaceObjectType, proxy::WlProxy, wire::OpCode},
     };
 
     /// Deletes the surface and invalidates its object ID.
@@ -61,13 +57,11 @@ pub mod request {
     pub struct Destroy;
 
     impl<'b> Request<'b> for Destroy {
-        type ParentProxy = WlSurface;
-
         const CODE: OpCode = 0;
 
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf).header(parent, Self::CODE).build()
@@ -273,17 +267,15 @@ pub mod request {
     #[derive(Debug, Clone, Copy, Default)]
     pub struct SetOpaqueRegion<'a> {
         /// opaque region of the surface
-        pub region: Option<&'a WlRegion>,
+        pub region: Option<&'a WlProxy>,
     }
 
     impl<'b> Request<'b> for SetOpaqueRegion<'b> {
-        type ParentProxy = WlSurface;
-
         const CODE: OpCode = 4;
 
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf)
@@ -318,17 +310,15 @@ pub mod request {
     #[derive(Debug, Clone, Copy, Default)]
     pub struct SetInputRegion<'a> {
         /// input region of the surface
-        pub region: Option<&'a WlRegion>,
+        pub region: Option<&'a WlProxy>,
     }
 
     impl<'b> Request<'b> for SetInputRegion<'b> {
-        type ParentProxy = WlSurface;
-
         const CODE: OpCode = 5;
 
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf)
@@ -361,13 +351,11 @@ pub mod request {
     pub struct Commit;
 
     impl<'b> Request<'b> for Commit {
-        type ParentProxy = WlSurface;
-
         const CODE: OpCode = 6;
 
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf).header(parent, Self::CODE).build()
@@ -379,10 +367,7 @@ pub mod event {
     use super::*;
     use crate::{
         interface::Event,
-        sys::{
-            proxy::{WlOutput, WlProxyQuery},
-            wire::OpCode,
-        },
+        sys::{proxy::WlProxyQuery, wire::OpCode},
     };
 
     /// This is emitted whenever a surface's creation, movement, or resizing
@@ -423,7 +408,7 @@ pub mod event {
     #[derive(Debug, Clone, Copy)]
     pub struct Leave {
         /// output left by the surface
-        pub output: WlProxyQuery<WlOutput>,
+        pub output: WlProxyQuery,
     }
 
     impl<'s> Event<'s> for Leave {
@@ -435,7 +420,7 @@ pub mod event {
             }
 
             let mut reader = message.reader();
-            let output = unsafe { reader.read::<WlProxyQuery<WlOutput>>()? };
+            let output = unsafe { reader.read::<WlProxyQuery>()? };
 
             Some(Self { output })
         }

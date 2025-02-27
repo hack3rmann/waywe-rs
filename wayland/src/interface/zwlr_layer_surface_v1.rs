@@ -1,7 +1,8 @@
 use crate::sys::wire::{Message, MessageBuffer, OpCode};
 
 pub mod request {
-    use crate::{interface::Request, sys::proxy::ZwlrLayerSurfaceV1};
+    use crate::interface::Request;
+    use crate::sys::proxy::WlProxy;
 
     use super::wl_enum::{Anchor, KeyboardInteractivity};
     use super::*;
@@ -23,13 +24,11 @@ pub mod request {
     }
 
     impl<'b> Request<'b> for SetSize {
-        type ParentProxy = ZwlrLayerSurfaceV1;
-
         const CODE: OpCode = 0;
 
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf)
@@ -53,13 +52,11 @@ pub mod request {
     }
 
     impl<'b> Request<'b> for SetAnchor {
-        type ParentProxy = ZwlrLayerSurfaceV1;
-
         const CODE: OpCode = 1;
 
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf)
@@ -107,12 +104,10 @@ pub mod request {
     }
 
     impl<'b> Request<'b> for SetExclusiveZone {
-        type ParentProxy = ZwlrLayerSurfaceV1;
-
         const CODE: OpCode = 2;
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf)
@@ -138,13 +133,11 @@ pub mod request {
     }
 
     impl<'b> Request<'b> for SetMargine {
-        type ParentProxy = ZwlrLayerSurfaceV1;
-
         const CODE: OpCode = 3;
 
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf)
@@ -175,13 +168,11 @@ pub mod request {
     }
 
     impl<'b> Request<'b> for SetKeyboardInteractivity {
-        type ParentProxy = ZwlrLayerSurfaceV1;
-
         const CODE: OpCode = 4;
 
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf)

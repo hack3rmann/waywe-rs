@@ -6,14 +6,13 @@
 //! many desktop shell components, and a broad number of other applications
 //! that interact with the desktop.
 
-use crate::sys::proxy::{WlSurface, ZwlrLayerShellV1};
 use crate::sys::wire::{Message, MessageBuffer, OpCode};
 
 pub mod request {
     use std::ffi::CStr;
 
     use crate::interface::Request;
-    use crate::sys::proxy::WlOutput;
+    use crate::sys::proxy::WlProxy;
 
     use super::wl_enum::Layer;
     use super::*;
@@ -42,15 +41,13 @@ pub mod request {
     /// surface.
     #[derive(Debug, Clone, Copy)]
     pub struct GetLayerSurface<'a> {
-        pub surface: &'a WlSurface,
-        pub output: Option<&'a WlOutput>,
+        pub surface: &'a WlProxy,
+        pub output: Option<&'a WlProxy>,
         pub layer: Layer,
         pub namespace: &'a CStr,
     }
 
     impl<'b> Request<'b> for GetLayerSurface<'b> {
-        type ParentProxy = ZwlrLayerShellV1;
-
         // FIXME(hack3rmann): add static for zwlr_layer_surface
         const OUTGOING_INTERFACE: Option<InterfaceObjectType> = None;
 
@@ -58,7 +55,7 @@ pub mod request {
 
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf)
@@ -79,13 +76,11 @@ pub mod request {
     pub struct Destroy;
 
     impl<'b> Request<'b> for Destroy {
-        type ParentProxy = ZwlrLayerShellV1;
-
         const CODE: OpCode = 1;
 
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf).header(parent, Self::CODE).build()
