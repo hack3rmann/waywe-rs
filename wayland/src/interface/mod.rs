@@ -68,6 +68,9 @@ pub trait Request<'b>: Sized {
     /// Builds the message on the top of given message buffer
     fn build_message(self, parent: &'b WlProxy, buf: &'b mut impl MessageBuffer) -> Message<'b>;
 
+    /// # Safety
+    ///
+    /// - `parent` proxy should match the parent interface
     unsafe fn send_raw(
         self,
         parent: &'b WlProxy,

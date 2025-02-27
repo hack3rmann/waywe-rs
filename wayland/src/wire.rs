@@ -1,4 +1,4 @@
-use super::{interface::NewId, object::ObjectId};
+use super::object::ObjectId;
 use bytemuck::{Pod, Zeroable};
 use rustix::net::SendFlags;
 use std::{
@@ -441,13 +441,6 @@ impl<'b> MessageBuilder<'b> {
         dst_slice[..value.len()].clone_from_slice(value.as_bytes());
 
         self
-    }
-
-    /// Writes [`NewId`] to the message
-    pub fn new_id(self, value: NewId) -> Self {
-        self.str(value.interface)
-            .uint(value.version)
-            .uint(value.id.into())
     }
 }
 

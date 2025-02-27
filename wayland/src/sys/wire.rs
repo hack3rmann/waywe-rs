@@ -211,6 +211,10 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
 
 /// Provides a coversion function from [`wl_argument`]
 pub trait FromWlArgument<'s>: Sized {
+    /// # Safety
+    ///
+    /// The value extracted from `wl_argument` shoud be the same
+    /// as the value written to this union
     unsafe fn from_argument(value: wl_argument) -> Self;
 }
 
