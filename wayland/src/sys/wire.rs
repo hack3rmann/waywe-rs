@@ -9,6 +9,8 @@ use std::{
     ptr,
 };
 
+use smallvec::SmallVec;
+
 /// The code of the performing operation on the interface
 pub type OpCode = u16;
 
@@ -17,7 +19,6 @@ pub type OpCode = u16;
 /// - the implementor ensures all calls are valid (see safety on each call)
 /// - the implementor ensures the caller of these functions can not destinguish
 ///   the behavior of them from the [`Vec`] ones
-// TODO(ArnoDarkrose): add trait impl for `SmallVec`
 pub unsafe trait MessageBuffer {
     fn clear(&mut self);
     fn push(&mut self, argument: wl_argument);
@@ -44,6 +45,28 @@ unsafe impl MessageBuffer for Vec<wl_argument> {
 
     fn is_empty(&self) -> bool {
         Vec::is_empty(self)
+    }
+
+    fn as_slice(&self) -> &[wl_argument] {
+        self
+    }
+}
+
+unsafe impl<const N: usize> MessageBuffer for SmallVec<[wl_argument; N]> {
+    fn clear(&mut self) {
+        SmallVec::clear(self)
+    }
+
+    fn push(&mut self, argument: wl_argument) {
+        SmallVec::push(self, argument)
+    }
+
+    fn len(&self) -> usize {
+        SmallVec::len(self)
+    }
+
+    fn is_empty(&self) -> bool {
+        SmallVec::is_empty(self)
     }
 
     fn as_slice(&self) -> &[wl_argument] {
