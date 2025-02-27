@@ -104,62 +104,23 @@ impl fmt::Debug for WlDynProxyQuery {
     }
 }
 
-pub struct WlRegistry {
-    pub(crate) proxy: WlProxy,
+macro_rules! define_proxies {
+    ( $( $Proxy:ident ),* $(,)? ) => {
+        $(
+            pub struct $Proxy {
+                pub(crate) proxy: WlProxy,
+            }
+
+            impl AsProxy for $Proxy {
+                fn as_proxy(&self) -> WlProxyBorrow<'_> {
+                    self.proxy.as_proxy()
+                }
+            }
+        )*
+    };
 }
 
-impl AsProxy for WlRegistry {
-    fn as_proxy(&self) -> WlProxyBorrow<'_> {
-        self.proxy.as_proxy()
-    }
-}
-
-pub struct WlCompositor {
-    pub(crate) proxy: WlProxy,
-}
-
-impl AsProxy for WlCompositor {
-    fn as_proxy(&self) -> WlProxyBorrow<'_> {
-        self.proxy.as_proxy()
-    }
-}
-
-pub struct WlRegion {
-    pub(crate) proxy: WlProxy,
-}
-
-impl AsProxy for WlRegion {
-    fn as_proxy(&self) -> WlProxyBorrow<'_> {
-        self.proxy.as_proxy()
-    }
-}
-
-pub struct WlBuffer {
-    pub(crate) proxy: WlProxy,
-}
-
-impl AsProxy for WlBuffer {
-    fn as_proxy(&self) -> WlProxyBorrow<'_> {
-        self.proxy.as_proxy()
-    }
-}
-
-pub struct WlSurface {
-    pub(crate) proxy: WlProxy,
-}
-
-impl AsProxy for WlSurface {
-    fn as_proxy(&self) -> WlProxyBorrow<'_> {
-        self.proxy.as_proxy()
-    }
-}
-
-pub struct WlOutput {
-    pub(crate) proxy: WlProxy,
-}
-
-impl AsProxy for WlOutput {
-    fn as_proxy(&self) -> WlProxyBorrow<'_> {
-        self.proxy.as_proxy()
-    }
+define_proxies! {
+    WlRegistry, WlCompositor, WlRegion, WlSurface, WlOutput,
+    WlShm, WlShmPool, ZwlrLayerShellV1, ZwlrLayerSurfaceV1,
 }

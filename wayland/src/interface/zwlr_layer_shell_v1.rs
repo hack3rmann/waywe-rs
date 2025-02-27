@@ -15,27 +15,27 @@ pub mod request {
 
     use super::wl_enum::Layer;
 
-    ///Create a layer surface for an existing surface. This assigns the role of
-    ///layer_surface, or raises a protocol error if another role is already
-    ///assigned.
+    /// Create a layer surface for an existing surface. This assigns the role of
+    /// layer_surface, or raises a protocol error if another role is already
+    /// assigned.
     ///
-    ///Creating a layer surface from a wl_surface which has a buffer attached
-    ///or committed is a client error, and any attempts by a client to attach
-    ///or manipulate a buffer prior to the first layer_surface.configure call
-    ///must also be treated as errors.
+    /// Creating a layer surface from a wl_surface which has a buffer attached
+    /// or committed is a client error, and any attempts by a client to attach
+    /// or manipulate a buffer prior to the first layer_surface.configure call
+    /// must also be treated as errors.
     ///
-    ///After creating a layer_surface object and setting it up, the client
-    ///must perform an initial commit without any buffer attached.
-    ///The compositor will reply with a layer_surface.configure event.
-    ///The client must acknowledge it and is then allowed to attach a buffer
-    ///to map the surface.
+    /// After creating a layer_surface object and setting it up, the client
+    /// must perform an initial commit without any buffer attached.
+    /// The compositor will reply with a layer_surface.configure event.
+    /// The client must acknowledge it and is then allowed to attach a buffer
+    /// to map the surface.
     ///
-    ///You may pass NULL for output to allow the compositor to decide which
-    ///output to use. Generally this will be the one that the user most
-    ///recently interacted with.
+    /// You may pass NULL for output to allow the compositor to decide which
+    /// output to use. Generally this will be the one that the user most
+    /// recently interacted with.
     ///
-    ///Clients can specify a namespace that defines the purpose of the layer
-    ///surface.
+    /// Clients can specify a namespace that defines the purpose of the layer
+    /// surface.
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
     pub struct GetLayerSurface<'a> {
         pub object_id: ObjectId,
