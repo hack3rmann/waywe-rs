@@ -1,11 +1,10 @@
+use crate::sys::wire::{Message, MessageBuffer, OpCode};
+
 pub mod request {
-    use crate::{
-        interface::Request,
-        object::ObjectId,
-        wire::{Message, MessageBuffer, MessageBuildError, MessageHeaderDesc},
-    };
+    use crate::{interface::Request, sys::proxy::ZwlrLayerSurfaceV1};
 
     use super::wl_enum::{Anchor, KeyboardInteractivity};
+    use super::*;
 
     ///Sets the size of the surface in surface-local coordinates. The
     ///compositor will display the surface centered with respect to its
@@ -19,22 +18,22 @@ pub mod request {
     ///Size is double-buffered, see wl_surface.commit.
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
     pub struct SetSize {
-        pub object_id: ObjectId,
         pub width: u32,
         pub height: u32,
     }
 
-    impl Request for SetSize {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 0,
-            }
-        }
+    impl<'b> Request<'b> for SetSize {
+        type ParentProxy = ZwlrLayerSurfaceV1;
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
+        const CODE: OpCode = 0;
+
+        fn build_message(
+            self,
+            parent: &'b Self::ParentProxy,
+            buf: &'b mut impl MessageBuffer,
+        ) -> Message<'b> {
             Message::builder(buf)
-                .header(self.header_desc())
+                .header(parent, Self::CODE)
                 .uint(self.width)
                 .uint(self.height)
                 .build()
@@ -50,21 +49,21 @@ pub mod request {
     ///Anchor is double-buffered, see wl_surface.commit.
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
     pub struct SetAnchor {
-        pub object_id: ObjectId,
         pub anchor: Anchor,
     }
 
-    impl Request for SetAnchor {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 1,
-            }
-        }
+    impl<'b> Request<'b> for SetAnchor {
+        type ParentProxy = ZwlrLayerSurfaceV1;
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
+        const CODE: OpCode = 1;
+
+        fn build_message(
+            self,
+            parent: &'b Self::ParentProxy,
+            buf: &'b mut impl MessageBuffer,
+        ) -> Message<'b> {
             Message::builder(buf)
-                .header(self.header_desc())
+                .header(parent, Self::CODE)
                 .uint(self.anchor.bits())
                 .build()
         }
@@ -104,21 +103,20 @@ pub mod request {
     ///Exclusive zone is double-buffered, see wl_surface.commit.
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
     pub struct SetExclusiveZone {
-        pub object_id: ObjectId,
         pub zone: i32,
     }
 
-    impl Request for SetExclusiveZone {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 2,
-            }
-        }
+    impl<'b> Request<'b> for SetExclusiveZone {
+        type ParentProxy = ZwlrLayerSurfaceV1;
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
+        const CODE: OpCode = 2;
+        fn build_message(
+            self,
+            parent: &'b Self::ParentProxy,
+            buf: &'b mut impl MessageBuffer,
+        ) -> Message<'b> {
             Message::builder(buf)
-                .header(self.header_desc())
+                .header(parent, Self::CODE)
                 .int(self.zone)
                 .build()
         }
@@ -133,24 +131,24 @@ pub mod request {
     ///Margin is double-buffered, see wl_surface.commit.
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
     pub struct SetMargine {
-        pub object_id: ObjectId,
         pub top: i32,
         pub right: i32,
         pub bottom: i32,
         pub left: i32,
     }
 
-    impl Request for SetMargine {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 3,
-            }
-        }
+    impl<'b> Request<'b> for SetMargine {
+        type ParentProxy = ZwlrLayerSurfaceV1;
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
+        const CODE: OpCode = 3;
+
+        fn build_message(
+            self,
+            parent: &'b Self::ParentProxy,
+            buf: &'b mut impl MessageBuffer,
+        ) -> Message<'b> {
             Message::builder(buf)
-                .header(self.header_desc())
+                .header(parent, Self::CODE)
                 .int(self.top)
                 .int(self.right)
                 .int(self.bottom)
@@ -173,52 +171,22 @@ pub mod request {
     ///Keyboard interactivity is double-buffered, see wl_surface.commit.
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
     pub struct SetKeyboardInteractivity {
-        object_id: ObjectId,
         keyboard_interactivity: KeyboardInteractivity,
     }
 
-    impl Request for SetKeyboardInteractivity {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 4,
-            }
-        }
+    impl<'b> Request<'b> for SetKeyboardInteractivity {
+        type ParentProxy = ZwlrLayerSurfaceV1;
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
+        const CODE: OpCode = 4;
+
+        fn build_message(
+            self,
+            parent: &'b Self::ParentProxy,
+            buf: &'b mut impl MessageBuffer,
+        ) -> Message<'b> {
             Message::builder(buf)
-                .header(self.header_desc())
+                .header(parent, Self::CODE)
                 .uint(self.keyboard_interactivity.into())
-                .build()
-        }
-    }
-
-    ///This assigns an xdg_popup's parent to this layer_surface.  This popup
-    ///should have been created via xdg_surface::get_popup with the parent set
-    ///to NULL, and this request must be invoked before committing the popup's
-    ///initial state.
-    ///
-    ///See the documentation of xdg_popup for more details about what an
-    ///xdg_popup is and how it is used.
-    #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-    pub struct GetPopup {
-        object_id: ObjectId,
-        /// popup object of xdg_popup interface
-        popup: ObjectId,
-    }
-
-    impl Request for GetPopup {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 5,
-            }
-        }
-
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
-            Message::builder(buf)
-                .header(self.header_desc())
-                .uint(self.popup.into())
                 .build()
         }
     }

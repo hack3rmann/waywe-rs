@@ -8,49 +8,108 @@
 //! that can be used for buffers.
 
 use crate::interface::Request;
-use crate::object::ObjectId;
-use crate::wire::{Message, MessageBuffer, MessageBuildError, MessageHeaderDesc};
-use std::os::fd::RawFd;
+use crate::sys::wire::Message;
+use crate::sys::wire::OpCode;
+use std::os::fd::BorrowedFd;
 
 pub mod request {
     use super::*;
+    use crate::sys::InterfaceObjectType;
+    use crate::sys::proxy::WlShm;
 
     /// Create a new wl_shm_pool object.
     ///
     /// The pool can be used to create shared memory based buffer
     /// objects.  The server will mmap size bytes of the passed file
     /// descriptor, to use as backing memory for the pool.
-    #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
-    pub struct CreatePool {
-        pub object_id: ObjectId,
-        /// Pool to create
-        pub id: ObjectId,
+    #[derive(Clone, Debug, Copy)]
+    pub struct CreatePool<'s> {
         /// File descriptor for the pool
-        pub fd: RawFd,
+        pub fd: BorrowedFd<'s>,
         /// Pool size, in bytes
         pub size: i32,
     }
 
-    impl Request for CreatePool {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 0,
-            }
-        }
+    impl<'b> Request<'b> for CreatePool<'b> {
+        type ParentProxy = WlShm;
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
+        const CODE: OpCode = 0;
+        const OUTGOING_INTERFACE: Option<InterfaceObjectType> =
+            Some(InterfaceObjectType::WlShmPool);
+
+        fn build_message(
+            self,
+            parent: &'b Self::ParentProxy,
+            buf: &'b mut impl crate::sys::wire::MessageBuffer,
+        ) -> Message<'b> {
             Message::builder(buf)
-                .header(Self::header_desc(self))
-                .uint(self.id.into())
+                .header(parent, 0)
+                .new_id()
                 .file_desc(self.fd)
                 .int(self.size)
                 .build()
         }
     }
+
+    ///Using this request a client can tell the server that it is not going to
+    ///use the shm object anymore.
+    ///
+    ///Objects created via this interface remain unaffected.
+    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub struct Release;
+
+    impl<'b> Request<'b> for Release {
+        type ParentProxy = WlShm;
+
+        const CODE: OpCode = 1;
+
+        fn build_message(
+            self,
+            parent: &'b Self::ParentProxy,
+            buf: &'b mut impl crate::sys::wire::MessageBuffer,
+        ) -> Message<'b> {
+            Message::builder(buf).header(parent, Self::CODE).build()
+        }
+    }
+}
+
+pub mod event {
+    use crate::interface::Event;
+
+    use super::*;
+
+    ///Informs the client about a valid pixel format that
+    ///can be used for buffers. Known formats include
+    ///argb8888 and xrgb8888.
+    #[derive(Debug, Clone, Copy, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
+    pub struct Format {
+        pub format: wl_enum::Format,
+    }
+
+    impl<'s> Event<'s> for Format {
+        const CODE: OpCode = 0;
+
+        fn from_message(message: Message<'s>) -> Option<Self> {
+            if message.opcode != Self::CODE {
+                return None;
+            }
+
+            let mut reader = message.reader();
+
+            // Safety
+            //
+            // the value read from the message was written to it as a Format enum
+            // so it is safe to transmute it
+            let format: wl_enum::Format =
+                unsafe { wl_enum::Format::from_raw_unchecked(reader.read::<u32>()?) };
+
+            Some(Self { format })
+        }
+    }
 }
 
 pub mod wl_enum {
+    #[repr(u32)]
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub enum Format {
         /// 32-bit ARGB format, [31:0] A:R:G:B 8:8:8:8 little endian
@@ -293,6 +352,19 @@ pub mod wl_enum {
     impl From<Format> for u32 {
         fn from(value: Format) -> Self {
             value as u32
+        }
+    }
+
+    impl Format {
+        /// # Safety
+        ///
+        /// `raw` must contain a valid value for a Format variant
+        pub unsafe fn from_raw_unchecked(raw: u32) -> Self {
+            // Safety
+            //
+            // - `raw` is the valid `u32` value
+            // - see the function safety for resulting Format value validity
+            unsafe { std::mem::transmute(raw) }
         }
     }
 }

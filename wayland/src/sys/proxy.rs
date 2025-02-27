@@ -177,6 +177,6 @@ macro_rules! define_proxies {
 }
 
 define_proxies! {
-    WlRegistry, WlCompositor, WlRegion, WlBuffer, WlSurface, WlOutput,
-    WlShm, WlShmPool, ZwlrLayerShellV1, ZwlrLayerSurfaceV1,
+    WlRegistry, WlCompositor, WlRegion, WlSurface, WlOutput,
+    WlShm, WlShmPool, ZwlrLayerShellV1, ZwlrLayerSurfaceV1, WlBuffer
 }

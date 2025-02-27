@@ -41,40 +41,36 @@
 //! a cursor (cursor is a different role than sub-surface, and role
 //! switching is not allowed).
 
-use crate::{
-    object::ObjectId,
-    sys::wire::{Message, MessageBuffer},
-};
+// TODO(ArnoDarkrose): implement the rest of the requests and events for wl_surface
+
+use crate::sys::wire::{Message, MessageBuffer};
 
 pub mod request {
     use super::*;
     use crate::{
         interface::Request,
         sys::{
-            proxy::{WlBuffer, WlSurface},
-            wire::OpCode, InterfaceObjectType,
+            InterfaceObjectType,
+            proxy::{WlBuffer, WlRegion, WlSurface},
+            wire::OpCode,
         },
     };
 
     /// Deletes the surface and invalidates its object ID.
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-    pub struct Destroy {
-        /// id of wl_surface that is being operated on
-        pub object_id: ObjectId,
-    }
+    pub struct Destroy;
 
-    impl Request for Destroy {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 0,
-            }
-        }
+    impl<'b> Request<'b> for Destroy {
+        type ParentProxy = WlSurface;
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
-            Message::builder(buf)
-                .header(Self::header_desc(self))
-                .build()
+        const CODE: OpCode = 0;
+
+        fn build_message(
+            self,
+            parent: &'b Self::ParentProxy,
+            buf: &'b mut impl MessageBuffer,
+        ) -> Message<'b> {
+            Message::builder(buf).header(parent, Self::CODE).build()
         }
     }
 
@@ -142,7 +138,7 @@ pub mod request {
     /// maximise compatibility should not destroy pending buffers and should
     /// ensure that they explicitly remove content from surfaces, even after
     /// destroying buffers.
-    #[derive(Clone, Copy, Default)]
+    #[derive(Clone, Copy, Default, Debug)]
     pub struct Attach<'s> {
         /// buffer of surface contents
         pub buffer: Option<&'s WlBuffer>,
@@ -280,25 +276,25 @@ pub mod request {
     /// opaque region has copy semantics, and the wl_region object can be
     /// destroyed immediately. A NULL wl_region causes the pending opaque
     /// region to be set to empty.
-    #[derive(Debug, Clone, Copy, Default, Hash, PartialEq, PartialOrd, Eq, Ord)]
-    pub struct SetOpaqueRegion {
-        /// id of the surface that is beign operated on
-        pub object_id: ObjectId,
+    #[derive(Debug, Clone, Copy, Default)]
+    pub struct SetOpaqueRegion<'a> {
         /// opaque region of the surface
-        pub region: ObjectId,
+        pub region: Option<&'a WlRegion>,
     }
 
-    impl Request for SetOpaqueRegion {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 4,
-            }
-        }
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
+    impl<'b> Request<'b> for SetOpaqueRegion<'b> {
+        type ParentProxy = WlSurface;
+
+        const CODE: OpCode = 4;
+
+        fn build_message(
+            self,
+            parent: &'b Self::ParentProxy,
+            buf: &'b mut impl MessageBuffer,
+        ) -> Message<'b> {
             Message::builder(buf)
-                .header(Self::header_desc(self))
-                .uint(self.region.into())
+                .header(parent, Self::CODE)
+                .maybe_object(self.region)
                 .build()
         }
     }
@@ -325,26 +321,25 @@ pub mod request {
     /// has copy semantics, and the wl_region object can be destroyed
     /// immediately. A NULL wl_region causes the input region to be set
     /// to infinite.
-    #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash, Default)]
-    pub struct SetInputRegion {
-        /// id of the surface that is being operated on
-        pub object_id: ObjectId,
+    #[derive(Debug, Clone, Copy, Default)]
+    pub struct SetInputRegion<'a> {
         /// input region of the surface
-        pub region: ObjectId,
+        pub region: Option<&'a WlRegion>,
     }
 
-    impl Request for SetInputRegion {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 5,
-            }
-        }
+    impl<'b> Request<'b> for SetInputRegion<'b> {
+        type ParentProxy = WlSurface;
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
+        const CODE: OpCode = 5;
+
+        fn build_message(
+            self,
+            parent: &'b Self::ParentProxy,
+            buf: &'b mut impl MessageBuffer,
+        ) -> Message<'b> {
             Message::builder(buf)
-                .header(Self::header_desc(self))
-                .uint(self.region.into())
+                .header(parent, Self::CODE)
+                .maybe_object(self.region)
                 .build()
         }
     }
@@ -369,30 +364,32 @@ pub mod request {
     ///
     /// Other interfaces may add further double-buffered surface state.
     #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Hash, Default, Eq, Ord)]
-    pub struct Commit {
-        /// id of the surface that is being operated on
-        pub object_id: ObjectId,
-    }
+    pub struct Commit;
 
-    impl Request for Commit {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 6,
-            }
-        }
+    impl<'b> Request<'b> for Commit {
+        type ParentProxy = WlSurface;
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
-            Message::builder(buf)
-                .header(Self::header_desc(self))
-                .build()
+        const CODE: OpCode = 6;
+
+        fn build_message(
+            self,
+            parent: &'b Self::ParentProxy,
+            buf: &'b mut impl MessageBuffer,
+        ) -> Message<'b> {
+            Message::builder(buf).header(parent, Self::CODE).build()
         }
     }
 }
 
 pub mod event {
     use super::*;
-    use crate::{interface::Event, sys::{proxy::{WlOutput, WlProxyQuery}, wire::OpCode}};
+    use crate::{
+        interface::Event,
+        sys::{
+            proxy::{WlOutput, WlProxyQuery},
+            wire::OpCode,
+        },
+    };
 
     /// This is emitted whenever a surface's creation, movement, or resizing
     /// results in some part of it being within the scanout region of an
@@ -420,34 +417,33 @@ pub mod event {
         }
     }
 
-    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+    ///This is emitted whenever a surface's creation, movement, or resizing
+    ///results in it no longer having any part of it within the scanout region
+    ///of an output.
+    ///
+    ///Clients should not use the number of outputs the surface is on for frame
+    ///throttling purposes. The surface might be hidden even if no leave event
+    ///has been sent, and the compositor might expect new surface content
+    ///updates even if no enter event has been sent. The frame event should be
+    ///used instead.
+    #[derive(Debug, Clone, Copy)]
     pub struct Leave {
-        pub object_id: ObjectId,
-        pub output: ObjectId,
+        /// output left by the surface
+        pub output: WlProxyQuery<WlOutput>,
     }
 
     impl<'s> Event<'s> for Leave {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 1,
-            }
-        }
+        const CODE: OpCode = 1;
 
         fn from_message(message: Message<'s>) -> Option<Self> {
-            let header = message.header();
-
-            if header.opcode != 1 {
+            if message.opcode != Self::CODE {
                 return None;
             }
 
             let mut reader = message.reader();
-            let output = reader.read_u32()?;
+            let output = unsafe { reader.read::<WlProxyQuery<WlOutput>>()? };
 
-            Some(Self {
-                object_id: ObjectId::try_from(header.object_id).ok()?,
-                output: ObjectId::new(output),
-            })
+            Some(Self { output })
         }
     }
 }

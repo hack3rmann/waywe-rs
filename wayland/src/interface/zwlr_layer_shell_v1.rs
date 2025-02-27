@@ -6,14 +6,18 @@
 //! many desktop shell components, and a broad number of other applications
 //! that interact with the desktop.
 
+use crate::sys::proxy::{WlSurface, ZwlrLayerShellV1};
+use crate::sys::wire::{Message, MessageBuffer, OpCode};
+
 pub mod request {
-    use crate::{
-        interface::{NewId, Request},
-        object::ObjectId,
-        wire::{Message, MessageBuffer, MessageBuildError, MessageHeaderDesc},
-    };
+    use std::ffi::CStr;
+
+    use crate::interface::Request;
+    use crate::sys::proxy::WlOutput;
 
     use super::wl_enum::Layer;
+    use super::*;
+    use crate::sys::InterfaceObjectType;
 
     /// Create a layer surface for an existing surface. This assigns the role of
     /// layer_surface, or raises a protocol error if another role is already
@@ -36,31 +40,32 @@ pub mod request {
     ///
     /// Clients can specify a namespace that defines the purpose of the layer
     /// surface.
-    #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+    #[derive(Debug, Clone, Copy)]
     pub struct GetLayerSurface<'a> {
-        pub object_id: ObjectId,
-        /// id of the zwlr_layer_surface_v1
-        pub id: NewId<'a>,
-        pub surface: ObjectId,
-        pub output: Option<ObjectId>,
+        pub surface: &'a WlSurface,
+        pub output: Option<&'a WlOutput>,
         pub layer: Layer,
-        pub namespace: &'a str,
+        pub namespace: &'a CStr,
     }
 
-    impl Request for GetLayerSurface<'_> {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 0,
-            }
-        }
+    impl<'b> Request<'b> for GetLayerSurface<'b> {
+        type ParentProxy = ZwlrLayerShellV1;
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
+        // FIXME(hack3rmann): add static for zwlr_layer_surface
+        const OUTGOING_INTERFACE: Option<InterfaceObjectType> = None;
+
+        const CODE: OpCode = 0;
+
+        fn build_message(
+            self,
+            parent: &'b Self::ParentProxy,
+            buf: &'b mut impl MessageBuffer,
+        ) -> Message<'b> {
             Message::builder(buf)
-                .header(self.header_desc())
-                .new_id(self.id)
-                .uint(self.surface.into())
-                .uint(self.output.unwrap_or(ObjectId::new(0)).into())
+                .header(parent, Self::CODE)
+                .new_id()
+                .object(self.surface)
+                .maybe_object(self.output)
                 .uint(self.layer.into())
                 .str(self.namespace)
                 .build()
@@ -71,20 +76,19 @@ pub mod request {
     ///object any more. Objects that have been created through this instance
     ///are not affected.
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-    pub struct Destroy {
-        pub object_id: ObjectId,
-    }
+    pub struct Destroy;
 
-    impl Request for Destroy {
-        fn header_desc(self) -> MessageHeaderDesc {
-            MessageHeaderDesc {
-                object_id: self.object_id,
-                opcode: 1,
-            }
-        }
+    impl<'b> Request<'b> for Destroy {
+        type ParentProxy = ZwlrLayerShellV1;
 
-        fn build_message(self, buf: &mut MessageBuffer) -> Result<Message<'_>, MessageBuildError> {
-            Message::builder(buf).header(self.header_desc()).build()
+        const CODE: OpCode = 1;
+
+        fn build_message(
+            self,
+            parent: &'b Self::ParentProxy,
+            buf: &'b mut impl MessageBuffer,
+        ) -> Message<'b> {
+            Message::builder(buf).header(parent, Self::CODE).build()
         }
     }
 }

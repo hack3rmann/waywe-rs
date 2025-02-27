@@ -125,7 +125,9 @@ pub mod event {
     /// seen the delete request. When the client receives this event,
     /// it will know that it can safely reuse the object ID.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
-    pub struct DeleteId;
+    pub struct DeleteId {
+        id: u32,
+    }
 
     impl<'s> Event<'s> for DeleteId {
         const CODE: OpCode = 1;
@@ -133,9 +135,13 @@ pub mod event {
         fn from_message(message: Message<'s>) -> Option<Self> {
             if message.opcode != Self::CODE {
                 return None;
-            } else {
-                Some(Self)
             }
+
+            let mut reader = message.reader();
+
+            let id = unsafe { reader.read::<u32>()? };
+
+            Some(Self { id })
         }
     }
 }

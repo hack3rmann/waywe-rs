@@ -17,6 +17,7 @@ pub enum InterfaceObjectType {
     Region,
     Callback,
     Registry,
+    WlShmPool,
 }
 
 impl InterfaceObjectType {
@@ -27,12 +28,14 @@ impl InterfaceObjectType {
     pub const fn backend_interface(self) -> &'static wl_interface {
         use crate::sys::ffi;
 
+        // FIXME(hack3rmann): add statics for zwlr_layer_shell_v1 and zwlr_layer_surface_v1
         match self {
             Self::Display => unsafe { &ffi::wl_display_interface },
             Self::Surface => unsafe { &ffi::wl_surface_interface },
             Self::Region => unsafe { &ffi::wl_region_interface },
             Self::Callback => unsafe { &ffi::wl_callback_interface },
             Self::Registry => unsafe { &ffi::wl_registry_interface },
+            Self::WlShmPool => unsafe { &ffi::wl_shm_pool_interface },
         }
     }
 
@@ -43,6 +46,7 @@ impl InterfaceObjectType {
             Self::Region => c"wl_region",
             Self::Callback => c"wl_callback",
             Self::Registry => c"wl_registry",
+            Self::WlShmPool => c"wl_shm_pool",
         }
     }
 }

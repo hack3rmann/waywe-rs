@@ -476,6 +476,7 @@ unsafe extern "C" {
     pub static wl_surface_interface: wl_interface;
     pub static wl_callback_interface: wl_interface;
     pub static wl_region_interface: wl_interface;
+    pub static wl_shm_pool_interface: wl_interface;
 
     /// Connect to Wayland display on an already open fd.
     ///

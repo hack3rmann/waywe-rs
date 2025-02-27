@@ -87,7 +87,7 @@ pub trait Request<'b>: Sized {
             wl_proxy_marshal_array_constructor(
                 parent.as_proxy().as_raw().as_ptr(),
                 message.opcode.into(),
-                message.arguments.as_mut_ptr(),
+                message.arguments.as_ptr().cast_mut(),
                 interface,
             )
         }
