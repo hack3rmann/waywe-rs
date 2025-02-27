@@ -27,7 +27,7 @@ use crate::{
 
 pub mod request {
     use super::*;
-    use crate::sys::{Interface, proxy::WlRegistry, wire::OpCode};
+    use crate::sys::{proxy::WlProxy, wire::OpCode, Interface};
 
     /// Binds a new, client-created object to the server using the
     /// specified name as the identifier.
@@ -38,14 +38,12 @@ pub mod request {
     }
 
     impl<'b> Request<'b> for Bind {
-        type ParentProxy = WlRegistry;
-
         const CODE: OpCode = 0;
         // FIXME(hack3rmann): create some kind of dynamic `InterfaceObjectType`
 
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf)

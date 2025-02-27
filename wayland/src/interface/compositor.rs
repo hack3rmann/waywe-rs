@@ -7,7 +7,7 @@ pub mod request {
         interface::Request,
         sys::{
             InterfaceObjectType,
-            proxy::{WlCompositor, WlRegion},
+            proxy::WlProxy,
             wire::{Message, MessageBuffer, OpCode},
         },
     };
@@ -17,14 +17,12 @@ pub mod request {
     pub struct CreateSurface;
 
     impl<'b> Request<'b> for CreateSurface {
-        type ParentProxy = WlCompositor;
-
         const CODE: OpCode = 0;
         const OUTGOING_INTERFACE: Option<InterfaceObjectType> = Some(InterfaceObjectType::Surface);
 
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf)
@@ -39,14 +37,12 @@ pub mod request {
     pub struct CreateRegion;
 
     impl<'b> Request<'b> for CreateRegion {
-        type ParentProxy = WlRegion;
-
         const CODE: OpCode = 1;
         const OUTGOING_INTERFACE: Option<InterfaceObjectType> = Some(InterfaceObjectType::Region);
 
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf)

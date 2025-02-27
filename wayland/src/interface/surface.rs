@@ -141,7 +141,7 @@ pub mod request {
     #[derive(Clone, Copy, Default, Debug)]
     pub struct Attach<'s> {
         /// buffer of surface contents
-        pub buffer: Option<&'s WlBuffer>,
+        pub buffer: Option<&'s WlProxy>,
         /// surface-local x coordinate
         pub x: i32,
         /// surface-local y coordinate
@@ -149,13 +149,11 @@ pub mod request {
     }
 
     impl<'b> Request<'b> for Attach<'b> {
-        type ParentProxy = WlSurface;
-
         const CODE: OpCode = 1;
 
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf)
@@ -180,13 +178,11 @@ pub mod request {
     }
 
     impl<'b> Request<'b> for Damage {
-        type ParentProxy = WlSurface;
-
         const CODE: OpCode = 2;
 
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf)
@@ -235,14 +231,12 @@ pub mod request {
     pub struct Frame;
 
     impl<'b> Request<'b> for Frame {
-        type ParentProxy = WlSurface;
-
         const CODE: OpCode = 3;
         const OUTGOING_INTERFACE: Option<InterfaceObjectType> = Some(InterfaceObjectType::Callback);
 
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf)
@@ -399,7 +393,7 @@ pub mod event {
     #[derive(Debug, Clone, Copy, PartialEq)]
     pub struct Enter {
         /// Output entered by the surface
-        pub output: WlProxyQuery<WlOutput>,
+        pub output: WlProxyQuery,
     }
 
     impl<'s> Event<'s> for Enter {
@@ -411,7 +405,7 @@ pub mod event {
             }
 
             let mut reader = message.reader();
-            let output = unsafe { reader.read::<WlProxyQuery<WlOutput>>()? };
+            let output = unsafe { reader.read::<WlProxyQuery>()? };
 
             Some(Self { output })
         }

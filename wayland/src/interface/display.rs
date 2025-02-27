@@ -8,7 +8,7 @@ use crate::{
 
 pub mod request {
     use super::*;
-    use crate::sys::{InterfaceObjectType, display::WlDisplay, wire::OpCode};
+    use crate::sys::{InterfaceObjectType, proxy::WlProxy, wire::OpCode};
 
     /// The sync request asks the server to emit the 'done' event
     /// on the returned wl_callback object.  Since requests are
@@ -25,14 +25,12 @@ pub mod request {
     pub struct Sync;
 
     impl<'b> Request<'b> for Sync {
-        type ParentProxy = WlDisplay;
-
         const CODE: OpCode = 0;
         const OUTGOING_INTERFACE: Option<InterfaceObjectType> = Some(InterfaceObjectType::Callback);
 
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf)
@@ -55,14 +53,12 @@ pub mod request {
     pub struct GetRegistry;
 
     impl<'b> Request<'b> for GetRegistry {
-        type ParentProxy = WlDisplay;
-
         const CODE: OpCode = 1;
         const OUTGOING_INTERFACE: Option<InterfaceObjectType> = Some(InterfaceObjectType::Registry);
 
         fn build_message(
             self,
-            parent: &'b Self::ParentProxy,
+            parent: &'b WlProxy,
             buf: &'b mut impl MessageBuffer,
         ) -> Message<'b> {
             Message::builder(buf)
@@ -75,7 +71,7 @@ pub mod request {
 
 pub mod event {
     use super::*;
-    use crate::sys::{proxy::WlDynProxyQuery, wire::OpCode};
+    use crate::sys::{proxy::WlProxyQuery, wire::OpCode};
     use std::ffi::CStr;
 
     /// The error event is sent out when a fatal (non-recoverable)
@@ -87,7 +83,7 @@ pub mod event {
     /// of the error, for (debugging) convenience.
     pub struct Error<'s> {
         /// Object where the error occurred
-        pub object: WlDynProxyQuery,
+        pub object: WlProxyQuery,
         /// Error code
         pub code: u32,
         /// Error description
@@ -107,7 +103,7 @@ pub mod event {
 
             // Safety: event provided by libwayland matches our interface
             // and opcode therefore it must have the arguments below
-            let object = unsafe { reader.read::<WlDynProxyQuery>()? };
+            let object = unsafe { reader.read::<WlProxyQuery>()? };
             let code = unsafe { reader.read::<u32>()? };
             let message = unsafe { reader.read::<&CStr>()? };
 

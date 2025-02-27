@@ -14,7 +14,7 @@ use crate::{
     sys::{
         InterfaceObjectType,
         ffi::wl_proxy_marshal_array_constructor,
-        proxy::AsProxy,
+        proxy::WlProxy,
         wire::{Message, MessageBuffer, OpCode},
     },
 };
@@ -59,23 +59,18 @@ pub struct NewId<'s> {
 
 /// Represents requests on Wayland's interfaces
 pub trait Request<'b>: Sized {
-    /// The parent object for the request
-    type ParentProxy: AsProxy;
-
     /// The opcode for the request
     const CODE: OpCode;
+
+    /// The type of an interface object of which will be created by libwayland
     const OUTGOING_INTERFACE: Option<InterfaceObjectType> = None;
 
     /// Builds the message on the top of given message buffer
-    fn build_message(
-        self,
-        parent: &'b Self::ParentProxy,
-        buf: &'b mut impl MessageBuffer,
-    ) -> Message<'b>;
+    fn build_message(self, parent: &'b WlProxy, buf: &'b mut impl MessageBuffer) -> Message<'b>;
 
     unsafe fn send_raw(
         self,
-        parent: &'b Self::ParentProxy,
+        parent: &'b WlProxy,
         buf: &'b mut impl MessageBuffer,
     ) -> *mut wl_proxy {
         let message = self.build_message(parent, buf);
@@ -85,7 +80,7 @@ pub trait Request<'b>: Sized {
 
         unsafe {
             wl_proxy_marshal_array_constructor(
-                parent.as_proxy().as_raw().as_ptr(),
+                parent.as_raw().as_ptr(),
                 message.opcode.into(),
                 message.arguments.as_ptr().cast_mut(),
                 interface,
