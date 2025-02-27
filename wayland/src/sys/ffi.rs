@@ -648,4 +648,7 @@ unsafe extern "C" {
 
     /// Get the id of a proxy object.
     pub fn wl_proxy_get_id(proxy: *mut wl_proxy) -> u32;
+
+    /// Get the interface name (class) of a proxy object
+    pub fn wl_proxy_get_class(proxy: *mut wl_proxy) -> *const c_char;
 }

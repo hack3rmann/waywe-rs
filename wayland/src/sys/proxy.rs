@@ -1,20 +1,66 @@
-use super::ffi::{wl_proxy, wl_proxy_destroy};
+use super::ffi::{wl_proxy, wl_proxy_destroy, wl_proxy_get_class, wl_proxy_get_id};
+use crate::object::ObjectId;
 use core::fmt;
-use std::{marker::PhantomData, mem::ManuallyDrop, ptr::NonNull};
+use std::{
+    ffi::CStr,
+    marker::PhantomData,
+    mem::ManuallyDrop,
+    ptr::NonNull,
+    sync::atomic::{
+        AtomicUsize,
+        Ordering::{Acquire, Release},
+    },
+};
 
 /// Represents a proxy object created on the libwayland backend
-#[derive(PartialEq, Eq)]
 pub struct WlProxy {
     pub(crate) raw: NonNull<wl_proxy>,
+    pub(crate) interface_name_length: AtomicUsize,
 }
 
 impl WlProxy {
     pub const unsafe fn from_raw(raw: NonNull<wl_proxy>) -> Self {
-        Self { raw }
+        Self {
+            raw,
+            interface_name_length: AtomicUsize::new(0),
+        }
     }
 
     pub fn into_raw(self) -> NonNull<wl_proxy> {
         ManuallyDrop::new(self).raw
+    }
+
+    pub fn id(&self) -> ObjectId {
+        // Safety: calling this on a valid object is safe
+        let raw = unsafe { wl_proxy_get_id(self.raw.as_ptr()) };
+
+        // Safety: any valid object in libwayland has nonzero id
+        // `WlProxy`'s safety guarantees `self` is a valid object
+        unsafe { ObjectId::try_from(raw).unwrap_unchecked() }
+    }
+
+    pub fn interface_name(&self) -> &str {
+        // Safety: calling this on a valid object is safe
+        let ptr = unsafe { wl_proxy_get_class(self.raw.as_ptr()) };
+
+        let len = self.interface_name_length.load(Acquire);
+
+        let string_bytes = if len == 0 {
+            // Safety: interface name obtained from libwayland is a valid c-string
+            let c_str = unsafe { CStr::from_ptr(ptr) };
+
+            self.interface_name_length
+                .store(c_str.count_bytes(), Release);
+
+            c_str.to_bytes()
+        } else {
+            // Safety: there exactly `len` bytes in the string (excluding nul-terminator)
+            unsafe { std::slice::from_raw_parts(ptr.cast::<u8>(), len) }
+        };
+
+        // Safety: interface name obtained from libwayland contains
+        // only valid ASCII characters
+        unsafe { std::str::from_utf8_unchecked(string_bytes) }
     }
 }
 
@@ -23,6 +69,14 @@ impl Drop for WlProxy {
         unsafe { wl_proxy_destroy(self.raw.as_ptr()) }
     }
 }
+
+impl PartialEq for WlProxy {
+    fn eq(&self, other: &Self) -> bool {
+        self.raw == other.raw
+    }
+}
+
+impl Eq for WlProxy {}
 
 impl fmt::Debug for WlProxy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

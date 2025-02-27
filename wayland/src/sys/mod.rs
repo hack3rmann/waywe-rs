@@ -2,6 +2,7 @@ pub mod display;
 pub mod ffi;
 pub mod proxy;
 pub mod wire;
+pub mod proxy_registry;
 
 use ffi::wl_interface;
 

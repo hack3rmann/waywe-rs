@@ -1,10 +1,9 @@
 use std::num::NonZeroU32;
-
 use fxhash::FxHashMap;
 use thiserror::Error;
 
 /// Ids and names for Wayland objects
-#[derive(Clone, Debug, PartialEq, Eq, Copy, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Copy, PartialOrd, Ord)]
 pub struct ObjectId(pub NonZeroU32);
 
 impl ObjectId {
@@ -30,6 +29,12 @@ impl ObjectId {
 impl Default for ObjectId {
     fn default() -> Self {
         Self::new(1)
+    }
+}
+
+impl std::hash::Hash for ObjectId {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write_u32(u32::from(*self));
     }
 }
 
