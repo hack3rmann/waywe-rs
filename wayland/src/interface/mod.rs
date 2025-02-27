@@ -43,6 +43,7 @@ pub use {
 };
 
 /// An [`ObjectId`] bundled with an interface name and a version
+#[deprecated]
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
 pub struct NewId<'s> {
     pub id: ObjectId,
@@ -52,8 +53,10 @@ pub struct NewId<'s> {
 
 /// Represents requests on Wayland's interfaces
 pub trait Request<'b>: Sized {
+    /// The parent object for the request
     type ParentProxy: AsProxy;
 
+    /// The opcode for the request
     const CODE: OpCode;
 
     /// Builds the message on the top of given message buffer
@@ -66,6 +69,7 @@ pub trait Request<'b>: Sized {
 
 /// Represents events on Wayland's interfaces
 pub trait Event<'s>: Sized {
+    /// The opcode for the event
     const CODE: OpCode;
 
     /// Tries to read the given message as an event of implementor type
