@@ -6,6 +6,7 @@ pub mod request {
     use crate::{
         interface::Request,
         sys::{
+            InterfaceObjectType,
             proxy::{WlCompositor, WlRegion},
             wire::{Message, MessageBuffer, OpCode},
         },
@@ -19,6 +20,7 @@ pub mod request {
         type ParentProxy = WlCompositor;
 
         const CODE: OpCode = 0;
+        const OUTGOING_INTERFACE: Option<InterfaceObjectType> = Some(InterfaceObjectType::Surface);
 
         fn build_message(
             self,
@@ -40,6 +42,7 @@ pub mod request {
         type ParentProxy = WlRegion;
 
         const CODE: OpCode = 1;
+        const OUTGOING_INTERFACE: Option<InterfaceObjectType> = Some(InterfaceObjectType::Region);
 
         fn build_message(
             self,

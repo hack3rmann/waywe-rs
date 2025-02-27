@@ -7,9 +7,8 @@ use crate::{
 };
 
 pub mod request {
-    use crate::sys::{display::WlDisplay, proxy::WlRegistry, wire::OpCode};
-
     use super::*;
+    use crate::sys::{InterfaceObjectType, display::WlDisplay, wire::OpCode};
 
     /// The sync request asks the server to emit the 'done' event
     /// on the returned wl_callback object.  Since requests are
@@ -29,6 +28,7 @@ pub mod request {
         type ParentProxy = WlDisplay;
 
         const CODE: OpCode = 0;
+        const OUTGOING_INTERFACE: Option<InterfaceObjectType> = Some(InterfaceObjectType::Callback);
 
         fn build_message(
             self,
@@ -55,9 +55,10 @@ pub mod request {
     pub struct GetRegistry;
 
     impl<'b> Request<'b> for GetRegistry {
-        type ParentProxy = WlRegistry;
+        type ParentProxy = WlDisplay;
 
         const CODE: OpCode = 1;
+        const OUTGOING_INTERFACE: Option<InterfaceObjectType> = Some(InterfaceObjectType::Registry);
 
         fn build_message(
             self,
@@ -124,7 +125,6 @@ pub mod event {
     /// seen the delete request. When the client receives this event,
     /// it will know that it can safely reuse the object ID.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
-    // NOTE: empty, because `wl_argument` does not have id field
     pub struct DeleteId;
 
     impl<'s> Event<'s> for DeleteId {

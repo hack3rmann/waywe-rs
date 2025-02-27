@@ -52,7 +52,7 @@ pub mod request {
         interface::Request,
         sys::{
             proxy::{WlBuffer, WlSurface},
-            wire::OpCode,
+            wire::OpCode, InterfaceObjectType,
         },
     };
 
@@ -242,6 +242,7 @@ pub mod request {
         type ParentProxy = WlSurface;
 
         const CODE: OpCode = 3;
+        const OUTGOING_INTERFACE: Option<InterfaceObjectType> = Some(InterfaceObjectType::Callback);
 
         fn build_message(
             self,

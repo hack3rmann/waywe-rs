@@ -9,10 +9,16 @@ pub mod zwlr_layer_shell_v1;
 pub mod zwlr_layer_surface_v1;
 
 use super::object::ObjectId;
-use crate::sys::{
-    proxy::AsProxy,
-    wire::{Message, MessageBuffer, OpCode},
+use crate::{
+    c_api::wl_proxy,
+    sys::{
+        InterfaceObjectType,
+        ffi::wl_proxy_marshal_array_constructor,
+        proxy::AsProxy,
+        wire::{Message, MessageBuffer, OpCode},
+    },
 };
+use std::ptr;
 
 pub use {
     callback::event::Done as WlCallbackDoneEvent,
@@ -58,6 +64,7 @@ pub trait Request<'b>: Sized {
 
     /// The opcode for the request
     const CODE: OpCode;
+    const OUTGOING_INTERFACE: Option<InterfaceObjectType> = None;
 
     /// Builds the message on the top of given message buffer
     fn build_message(
@@ -65,6 +72,26 @@ pub trait Request<'b>: Sized {
         parent: &'b Self::ParentProxy,
         buf: &'b mut impl MessageBuffer,
     ) -> Message<'b>;
+
+    unsafe fn send_raw(
+        self,
+        parent: &'b Self::ParentProxy,
+        buf: &'b mut impl MessageBuffer,
+    ) -> *mut wl_proxy {
+        let message = self.build_message(parent, buf);
+        let interface = Self::OUTGOING_INTERFACE
+            .map(|i| &raw const *i.backend_interface())
+            .unwrap_or(ptr::null());
+
+        unsafe {
+            wl_proxy_marshal_array_constructor(
+                parent.as_proxy().as_raw().as_ptr(),
+                message.opcode.into(),
+                message.arguments.as_mut_ptr(),
+                interface,
+            )
+        }
+    }
 }
 
 /// Represents events on Wayland's interfaces

@@ -1,4 +1,9 @@
-use super::{ffi::{wl_display, wl_display_connect_to_fd}, proxy::{AsProxy, WlProxyBorrow}};
+use super::{
+    ffi::{wl_display, wl_display_connect_to_fd},
+    proxy::{AsProxy, WlProxy, WlProxyBorrow, WlRegistry},
+    wire::MessageBuffer,
+};
+use crate::interface::{Request as _, WlDisplayGetRegistryRequest};
 use std::{
     os::fd::{IntoRawFd, OwnedFd},
     ptr::NonNull,
@@ -17,6 +22,11 @@ impl WlDisplay {
                 .expect("failed to connect wl_display");
 
         Self { raw: display }
+    }
+
+    pub fn get_registry<'s>(&'s self, buf: &'s mut impl MessageBuffer) -> WlRegistry {
+        let raw = NonNull::new(unsafe { WlDisplayGetRegistryRequest.send_raw(self, buf) }).unwrap();
+        WlRegistry::from(unsafe { WlProxy::from_raw(raw) })
     }
 }
 

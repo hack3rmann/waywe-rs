@@ -16,7 +16,7 @@ pub type OpCode = u16;
 
 /// # Safety
 ///
-/// - the implementor ensures all calls are valid (see safety on each call)
+/// - the implementor ensures all calls are valid
 /// - the implementor ensures the caller of these functions can not destinguish
 ///   the behavior of them from the [`Vec`] ones
 pub unsafe trait MessageBuffer {
