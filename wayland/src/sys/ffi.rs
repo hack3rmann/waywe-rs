@@ -652,4 +652,10 @@ unsafe extern "C" {
 
     /// Get the interface name (class) of a proxy object
     pub fn wl_proxy_get_class(proxy: *mut wl_proxy) -> *const c_char;
+
+    /// Get user data associated woth a proxy
+    pub fn wl_proxy_get_user_data(proxy: *mut wl_proxy) -> *mut c_void;
+
+    /// Set the user data associated with a proxy
+    pub fn wl_proxy_set_user_data(proxy: *mut wl_proxy, data: *mut c_void);
 }
