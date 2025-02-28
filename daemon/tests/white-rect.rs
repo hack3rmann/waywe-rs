@@ -1,20 +1,16 @@
 use std::mem;
-
-use wayland::init::WaylandContext;
 use wgpu::util::DeviceExt as _;
 
 #[tokio::test]
 async fn t1() -> Result<(), Box<dyn std::error::Error>> {
-    let wayland = unsafe { WaylandContext::new()? };
-
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
         backends: wgpu::Backends::VULKAN,
         flags: wgpu::InstanceFlags::DEBUG | wgpu::InstanceFlags::VALIDATION,
         ..Default::default()
     });
 
-    let raw_window_handle = unsafe { wayland.external_context().raw_window_handle() };
-    let raw_display_handle = unsafe { wayland.external_context().raw_display_handle() };
+    let raw_window_handle = todo!();
+    let raw_display_handle = todo!();
 
     let surface = unsafe {
         instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
