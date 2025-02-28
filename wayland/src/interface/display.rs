@@ -8,7 +8,7 @@ use crate::{
 
 pub mod request {
     use super::*;
-    use crate::sys::{InterfaceObjectType, proxy::WlProxy, wire::OpCode};
+    use crate::sys::{InterfaceObjectType, wire::OpCode};
 
     /// The sync request asks the server to emit the 'done' event
     /// on the returned wl_callback object.  Since requests are
@@ -28,15 +28,8 @@ pub mod request {
         const CODE: OpCode = 0;
         const OUTGOING_INTERFACE: Option<InterfaceObjectType> = Some(InterfaceObjectType::Callback);
 
-        fn build_message(
-            self,
-            parent: &'b WlProxy,
-            buf: &'b mut impl MessageBuffer,
-        ) -> Message<'b> {
-            Message::builder(buf)
-                .header(parent, Self::CODE)
-                .new_id()
-                .build()
+        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+            Message::builder(buf).opcode(Self::CODE).new_id().build()
         }
     }
 
@@ -56,15 +49,8 @@ pub mod request {
         const CODE: OpCode = 1;
         const OUTGOING_INTERFACE: Option<InterfaceObjectType> = Some(InterfaceObjectType::Registry);
 
-        fn build_message(
-            self,
-            parent: &'b WlProxy,
-            buf: &'b mut impl MessageBuffer,
-        ) -> Message<'b> {
-            Message::builder(buf)
-                .header(parent, Self::CODE)
-                .new_id()
-                .build()
+        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+            Message::builder(buf).opcode(Self::CODE).new_id().build()
         }
     }
 }

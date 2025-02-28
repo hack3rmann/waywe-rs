@@ -59,12 +59,8 @@ pub mod request {
     impl<'b> Request<'b> for Destroy {
         const CODE: OpCode = 0;
 
-        fn build_message(
-            self,
-            parent: &'b WlProxy,
-            buf: &'b mut impl MessageBuffer,
-        ) -> Message<'b> {
-            Message::builder(buf).header(parent, Self::CODE).build()
+        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+            Message::builder(buf).opcode(Self::CODE).build()
         }
     }
 
@@ -145,13 +141,9 @@ pub mod request {
     impl<'b> Request<'b> for Attach<'b> {
         const CODE: OpCode = 1;
 
-        fn build_message(
-            self,
-            parent: &'b WlProxy,
-            buf: &'b mut impl MessageBuffer,
-        ) -> Message<'b> {
+        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
             Message::builder(buf)
-                .header(parent, Self::CODE)
+                .opcode(Self::CODE)
                 .maybe_object(self.buffer)
                 .int(self.x)
                 .int(self.x)
@@ -174,13 +166,9 @@ pub mod request {
     impl<'b> Request<'b> for Damage {
         const CODE: OpCode = 2;
 
-        fn build_message(
-            self,
-            parent: &'b WlProxy,
-            buf: &'b mut impl MessageBuffer,
-        ) -> Message<'b> {
+        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
             Message::builder(buf)
-                .header(parent, Self::CODE)
+                .opcode(Self::CODE)
                 .int(self.x)
                 .int(self.y)
                 .int(self.width)
@@ -228,15 +216,8 @@ pub mod request {
         const CODE: OpCode = 3;
         const OUTGOING_INTERFACE: Option<InterfaceObjectType> = Some(InterfaceObjectType::Callback);
 
-        fn build_message(
-            self,
-            parent: &'b WlProxy,
-            buf: &'b mut impl MessageBuffer,
-        ) -> Message<'b> {
-            Message::builder(buf)
-                .header(parent, Self::CODE)
-                .new_id()
-                .build()
+        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+            Message::builder(buf).opcode(Self::CODE).new_id().build()
         }
     }
 
@@ -273,13 +254,9 @@ pub mod request {
     impl<'b> Request<'b> for SetOpaqueRegion<'b> {
         const CODE: OpCode = 4;
 
-        fn build_message(
-            self,
-            parent: &'b WlProxy,
-            buf: &'b mut impl MessageBuffer,
-        ) -> Message<'b> {
+        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
             Message::builder(buf)
-                .header(parent, Self::CODE)
+                .opcode(Self::CODE)
                 .maybe_object(self.region)
                 .build()
         }
@@ -316,13 +293,9 @@ pub mod request {
     impl<'b> Request<'b> for SetInputRegion<'b> {
         const CODE: OpCode = 5;
 
-        fn build_message(
-            self,
-            parent: &'b WlProxy,
-            buf: &'b mut impl MessageBuffer,
-        ) -> Message<'b> {
+        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
             Message::builder(buf)
-                .header(parent, Self::CODE)
+                .opcode(Self::CODE)
                 .maybe_object(self.region)
                 .build()
         }
@@ -353,12 +326,8 @@ pub mod request {
     impl<'b> Request<'b> for Commit {
         const CODE: OpCode = 6;
 
-        fn build_message(
-            self,
-            parent: &'b WlProxy,
-            buf: &'b mut impl MessageBuffer,
-        ) -> Message<'b> {
-            Message::builder(buf).header(parent, Self::CODE).build()
+        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+            Message::builder(buf).opcode(Self::CODE).build()
         }
     }
 }

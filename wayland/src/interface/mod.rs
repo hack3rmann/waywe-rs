@@ -53,7 +53,7 @@ pub trait Request<'b>: Sized {
     const OUTGOING_INTERFACE: Option<InterfaceObjectType> = None;
 
     /// Builds the message on the top of given message buffer
-    fn build_message(self, parent: &'b WlProxy, buf: &'b mut impl MessageBuffer) -> Message<'b>;
+    fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b>;
 
     /// # Safety
     ///
@@ -63,7 +63,7 @@ pub trait Request<'b>: Sized {
         parent: &'b WlProxy,
         buf: &'b mut impl MessageBuffer,
     ) -> *mut wl_proxy {
-        let message = self.build_message(parent, buf);
+        let message = self.build_message(buf);
         let interface = Self::OUTGOING_INTERFACE
             .map(|i| &raw const *i.backend_interface())
             .unwrap_or(ptr::null());

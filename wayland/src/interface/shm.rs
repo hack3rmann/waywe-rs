@@ -15,7 +15,7 @@ use std::os::fd::BorrowedFd;
 pub mod request {
     use super::*;
     use crate::sys::InterfaceObjectType;
-    use crate::sys::proxy::WlProxy;
+    use crate::sys::wire::MessageBuffer;
 
     /// Create a new wl_shm_pool object.
     ///
@@ -35,13 +35,9 @@ pub mod request {
         const OUTGOING_INTERFACE: Option<InterfaceObjectType> =
             Some(InterfaceObjectType::WlShmPool);
 
-        fn build_message(
-            self,
-            parent: &'b WlProxy,
-            buf: &'b mut impl crate::sys::wire::MessageBuffer,
-        ) -> Message<'b> {
+        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
             Message::builder(buf)
-                .header(parent, 0)
+                .opcode(Self::CODE)
                 .new_id()
                 .file_desc(self.fd)
                 .int(self.size)
@@ -49,22 +45,18 @@ pub mod request {
         }
     }
 
-    ///Using this request a client can tell the server that it is not going to
-    ///use the shm object anymore.
-    ///
-    ///Objects created via this interface remain unaffected.
+    /// Using this request a client can tell the server that it is not going to
+    /// use the shm object anymore.
+    /// 
+    /// Objects created via this interface remain unaffected.
     #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub struct Release;
 
     impl<'b> Request<'b> for Release {
         const CODE: OpCode = 1;
 
-        fn build_message(
-            self,
-            parent: &'b WlProxy,
-            buf: &'b mut impl crate::sys::wire::MessageBuffer,
-        ) -> Message<'b> {
-            Message::builder(buf).header(parent, Self::CODE).build()
+        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+            Message::builder(buf).opcode(Self::CODE).build()
         }
     }
 }

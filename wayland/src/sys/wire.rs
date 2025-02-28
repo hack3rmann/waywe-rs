@@ -29,7 +29,7 @@ pub unsafe trait MessageBuffer {
 }
 static_assertions::assert_obj_safe!(MessageBuffer);
 
-unsafe impl MessageBuffer for Vec<wl_argument> {
+unsafe impl MessageBuffer for VecMessageBuffer {
     fn clear(&mut self) {
         Vec::clear(self);
     }
@@ -51,7 +51,7 @@ unsafe impl MessageBuffer for Vec<wl_argument> {
     }
 }
 
-unsafe impl<const N: usize> MessageBuffer for SmallVec<[wl_argument; N]> {
+unsafe impl<const N: usize> MessageBuffer for SmallVecMessageBuffer<N> {
     fn clear(&mut self) {
         SmallVec::clear(self)
     }
@@ -73,11 +73,12 @@ unsafe impl<const N: usize> MessageBuffer for SmallVec<[wl_argument; N]> {
     }
 }
 
+pub type VecMessageBuffer = Vec<wl_argument>;
+pub type SmallVecMessageBuffer<const N: usize> = SmallVec<[wl_argument; N]>;
+
 /// Represents the message on the libwayland backend
 #[derive(Clone, Copy)]
 pub struct Message<'s> {
-    /// The parent object of the message
-    pub parent: &'s WlProxy,
     /// The opcode for the request/event
     pub opcode: OpCode,
     /// Additional arguments for the request/event
@@ -111,26 +112,21 @@ impl<'s, Buffer: MessageBuffer> MessageBuilderHeaderless<'s, Buffer> {
     }
 
     /// Sets parent object and opcode for the message
-    pub fn header(self, parent: &'s WlProxy, opcode: OpCode) -> MessageBuilder<'s, Buffer> {
-        MessageBuilder::new_header(self.buf, parent, opcode)
+    pub fn opcode(self, opcode: OpCode) -> MessageBuilder<'s, Buffer> {
+        MessageBuilder::new_header(self.buf, opcode)
     }
 }
 
 /// Builder of the message body
 pub struct MessageBuilder<'s, Buffer: MessageBuffer> {
     pub(crate) buf: &'s mut Buffer,
-    pub(crate) parent: &'s WlProxy,
     pub(crate) opcode: OpCode,
 }
 
 impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
     /// Creates the builder
-    pub fn new_header(buf: &'s mut Buffer, parent: &'s WlProxy, opcode: OpCode) -> Self {
-        Self {
-            buf,
-            parent,
-            opcode,
-        }
+    pub fn new_header(buf: &'s mut Buffer, opcode: OpCode) -> Self {
+        Self { buf, opcode }
     }
 
     /// Writes 32-bit unsigned integer to the message
@@ -202,7 +198,6 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
     /// Builds the message
     pub fn build(self) -> Message<'s> {
         Message {
-            parent: self.parent,
             opcode: self.opcode,
             arguments: self.buf.as_slice(),
         }

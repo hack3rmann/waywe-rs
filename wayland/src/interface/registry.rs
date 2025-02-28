@@ -27,7 +27,7 @@ use crate::{
 
 pub mod request {
     use super::*;
-    use crate::sys::{proxy::WlProxy, wire::OpCode, Interface};
+    use crate::sys::{Interface, wire::OpCode};
 
     /// Binds a new, client-created object to the server using the
     /// specified name as the identifier.
@@ -41,13 +41,9 @@ pub mod request {
         const CODE: OpCode = 0;
         // FIXME(hack3rmann): create some kind of dynamic `InterfaceObjectType`
 
-        fn build_message(
-            self,
-            parent: &'b WlProxy,
-            buf: &'b mut impl MessageBuffer,
-        ) -> Message<'b> {
+        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
             Message::builder(buf)
-                .header(parent, Self::CODE)
+                .opcode(Self::CODE)
                 .interface(self.interface)
                 .build()
         }

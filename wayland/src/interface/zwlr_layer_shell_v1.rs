@@ -6,17 +6,13 @@
 //! many desktop shell components, and a broad number of other applications
 //! that interact with the desktop.
 
-use crate::sys::wire::{Message, MessageBuffer, OpCode};
-
 pub mod request {
-    use std::ffi::CStr;
-
-    use crate::interface::Request;
-    use crate::sys::proxy::WlProxy;
-
     use super::wl_enum::Layer;
-    use super::*;
+    use crate::interface::Request;
     use crate::sys::InterfaceObjectType;
+    use crate::sys::proxy::WlProxy;
+    use crate::sys::wire::{Message, MessageBuffer, OpCode};
+    use std::ffi::CStr;
 
     /// Create a layer surface for an existing surface. This assigns the role of
     /// layer_surface, or raises a protocol error if another role is already
@@ -53,13 +49,9 @@ pub mod request {
 
         const CODE: OpCode = 0;
 
-        fn build_message(
-            self,
-            parent: &'b WlProxy,
-            buf: &'b mut impl MessageBuffer,
-        ) -> Message<'b> {
+        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
             Message::builder(buf)
-                .header(parent, Self::CODE)
+                .opcode(Self::CODE)
                 .new_id()
                 .object(self.surface)
                 .maybe_object(self.output)
@@ -69,33 +61,28 @@ pub mod request {
         }
     }
 
-    ///This request indicates that the client will not use the layer_shell
-    ///object any more. Objects that have been created through this instance
-    ///are not affected.
+    /// This request indicates that the client will not use the layer_shell
+    /// object any more. Objects that have been created through this instance
+    /// are not affected.
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
     pub struct Destroy;
 
     impl<'b> Request<'b> for Destroy {
         const CODE: OpCode = 1;
 
-        fn build_message(
-            self,
-            parent: &'b WlProxy,
-            buf: &'b mut impl MessageBuffer,
-        ) -> Message<'b> {
-            Message::builder(buf).header(parent, Self::CODE).build()
+        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+            Message::builder(buf).opcode(Self::CODE).build()
         }
     }
 }
 
 pub mod wl_enum {
-
-    ///These values indicate which layers a surface can be rendered in. They
-    ///are ordered by z depth, bottom-most first. Traditional shell surfaces
-    ///will typically be rendered between the bottom and top layers.
-    ///Fullscreen shell surfaces are typically rendered at the top layer.
-    ///Multiple surfaces can share a single layer, and ordering within a
-    ///single layer is undefined.
+    /// These values indicate which layers a surface can be rendered in. They
+    /// are ordered by z depth, bottom-most first. Traditional shell surfaces
+    /// will typically be rendered between the bottom and top layers.
+    /// Fullscreen shell surfaces are typically rendered at the top layer.
+    /// Multiple surfaces can share a single layer, and ordering within a
+    /// single layer is undefined.
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
     pub enum Layer {
         Background = 0,
@@ -118,12 +105,7 @@ pub mod wl_enum {
 
     impl From<Layer> for u32 {
         fn from(value: Layer) -> Self {
-            match value {
-                Layer::Background => 0,
-                Layer::Bottom => 1,
-                Layer::Top => 2,
-                Layer::Overlay => 3,
-            }
+            value as u32
         }
     }
 }

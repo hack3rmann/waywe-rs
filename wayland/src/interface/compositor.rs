@@ -7,7 +7,6 @@ pub mod request {
         interface::Request,
         sys::{
             InterfaceObjectType,
-            proxy::WlProxy,
             wire::{Message, MessageBuffer, OpCode},
         },
     };
@@ -20,15 +19,8 @@ pub mod request {
         const CODE: OpCode = 0;
         const OUTGOING_INTERFACE: Option<InterfaceObjectType> = Some(InterfaceObjectType::Surface);
 
-        fn build_message(
-            self,
-            parent: &'b WlProxy,
-            buf: &'b mut impl MessageBuffer,
-        ) -> Message<'b> {
-            Message::builder(buf)
-                .header(parent, Self::CODE)
-                .new_id()
-                .build()
+        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+            Message::builder(buf).opcode(Self::CODE).new_id().build()
         }
     }
 
@@ -40,15 +32,8 @@ pub mod request {
         const CODE: OpCode = 1;
         const OUTGOING_INTERFACE: Option<InterfaceObjectType> = Some(InterfaceObjectType::Region);
 
-        fn build_message(
-            self,
-            parent: &'b WlProxy,
-            buf: &'b mut impl MessageBuffer,
-        ) -> Message<'b> {
-            Message::builder(buf)
-                .header(parent, Self::CODE)
-                .new_id()
-                .build()
+        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+            Message::builder(buf).opcode(Self::CODE).new_id().build()
         }
     }
 }

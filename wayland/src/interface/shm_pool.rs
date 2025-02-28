@@ -10,9 +10,8 @@ use crate::interface::Request;
 use crate::sys::wire::{Message, MessageBuffer, OpCode};
 
 pub mod request {
-    use crate::{interface::WlShmFormat, sys::proxy::WlProxy};
-
     use super::*;
+    use crate::interface::WlShmFormat;
 
     /// Create a wl_buffer object from the pool.
     ///
@@ -42,13 +41,9 @@ pub mod request {
     impl<'b> Request<'b> for CreateBuffer {
         const CODE: OpCode = 0;
 
-        fn build_message(
-            self,
-            parent: &'b WlProxy,
-            buf: &'b mut impl MessageBuffer,
-        ) -> Message<'b> {
+        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
             Message::builder(buf)
-                .header(parent, Self::CODE)
+                .opcode(Self::CODE)
                 .new_id()
                 .int(self.offset)
                 .int(self.width)
@@ -59,34 +54,31 @@ pub mod request {
         }
     }
 
-    ///Destroy the shared memory pool.
-    ///The mmapped memory will be released when all
-    ///buffers that have been created from this pool
-    ///are gone.
+    /// Destroy the shared memory pool.
+    /// The mmapped memory will be released when all
+    /// buffers that have been created from this pool
+    /// are gone.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct Destroy;
 
     impl<'b> Request<'b> for Destroy {
         const CODE: OpCode = 1;
 
-        fn build_message(
-            self,
-            parent: &'b WlProxy,
-            buf: &'b mut impl MessageBuffer,
-        ) -> Message<'b> {
-            Message::builder(buf).header(parent, Self::CODE).build()
+        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+            Message::builder(buf).opcode(Self::CODE).build()
         }
     }
 
-    ///This request will cause the server to remap the backing memory
-    ///for the pool from the file descriptor passed when the pool was
-    ///created, but using the new size.  This request can only be
-    ///used to make the pool bigger.
-    ///This request only changes the amount of bytes that are mmapped
-    ///by the server and does not touch the file corresponding to the
-    ///file descriptor passed at creation time. It is the client's
-    ///responsibility to ensure that the file is at least as big as
-    ///the new pool size.
+    /// This request will cause the server to remap the backing memory
+    /// for the pool from the file descriptor passed when the pool was
+    /// created, but using the new size.  This request can only be
+    /// used to make the pool bigger.
+    ///
+    /// This request only changes the amount of bytes that are mmapped
+    /// by the server and does not touch the file corresponding to the
+    /// file descriptor passed at creation time. It is the client's
+    /// responsibility to ensure that the file is at least as big as
+    /// the new pool size.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct Resize {
         /// new size of the pool, in bytes
@@ -96,13 +88,9 @@ pub mod request {
     impl<'b> Request<'b> for Resize {
         const CODE: OpCode = 2;
 
-        fn build_message(
-            self,
-            parent: &'b WlProxy,
-            buf: &'b mut impl MessageBuffer,
-        ) -> Message<'b> {
+        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
             Message::builder(buf)
-                .header(parent, Self::CODE)
+                .opcode(Self::CODE)
                 .int(self.size)
                 .build()
         }
