@@ -33,7 +33,8 @@ impl ProxyRegistry {
     }
 
     pub fn insert(&mut self, object: WlProxy, ty: WlObjectType) {
-        self.proxies
+        _ = self
+            .proxies
             .insert(
                 object.id(),
                 RegistryEntry {
@@ -41,10 +42,14 @@ impl ProxyRegistry {
                     proxy: object,
                 },
             )
-            .expect("map should not contain any object with this id");
+            .is_none_or(|_| panic!("map should not contain any object with this id"));
     }
 
     pub fn get_proxy(&self, id: ObjectId) -> Option<&WlProxy> {
         self.proxies.get(&id).map(|e| &e.proxy)
+    }
+
+    pub fn get_type(&self, id: ObjectId) -> Option<WlObjectType> {
+        self.proxies.get(&id).map(|e| e.object_type)
     }
 }
