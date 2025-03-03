@@ -491,6 +491,45 @@ unsafe extern "C" {
     /// objects need to be manually destroyed by the caller before disconnecting.
     pub fn wl_display_disconnect(display: *mut wl_display);
 
+    /// Process incoming events
+    /// Dispatch events on the default event queue.
+    ///
+    /// # Parameters
+    ///
+    /// - `display` - The display context object
+    ///
+    /// # Returns
+    ///
+    /// The number of dispatched events on success or -1 on failure
+    ///
+    /// If the default event queue is empty, this function blocks until there are events
+    /// to be read from the display fd. Events are read and queued on the appropriate event
+    /// queues. Finally, events on the default event queue are dispatched. On failure `-1` is
+    /// returned and errno set appropriately.
+    ///
+    /// In a multi threaded environment, do not manually wait using `poll()` (or equivalent)
+    /// before calling this function, as doing so might cause a dead lock. If external
+    /// reliance on `poll()` (or equivalent) is required, see `wl_display_prepare_read_queue()`
+    /// of how to do so.
+    ///
+    /// This function is thread safe as long as it dispatches the right queue on the right
+    /// thread. It is also compatible with the multi thread event reading preparation API
+    /// (see wl_display_prepare_read_queue()), and uses the equivalent functionality
+    /// internally. It is not allowed to call this function while the thread is being
+    /// prepared for reading events, and doing so will cause a dead lock.
+    ///
+    /// # Note
+    ///
+    /// It is not possible to check if there are events on the queue or not.
+    /// For dispatching default queue events without blocking, see `wl_display_dispatch_pending()`.
+    ///
+    /// # See also
+    ///
+    /// - `wl_display_dispatch_pending()`
+    /// - `wl_display_dispatch_queue()`
+    /// - `wl_display_read_events()`
+    pub fn wl_display_dispatch(display: *mut wl_display) -> c_int;
+
     /// Block until all pending request are processed by the server.
     ///
     /// This function blocks until the server has processed all currently
