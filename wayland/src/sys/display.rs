@@ -19,35 +19,42 @@ use core::fmt;
 use std::{
     collections::HashMap,
     ffi::{CStr, c_int, c_void},
-    mem::{ManuallyDrop, MaybeUninit},
+    mem::{self, ManuallyDrop, MaybeUninit, offset_of},
+    ops::{Deref, DerefMut},
     os::fd::{IntoRawFd, OwnedFd},
     pin::Pin,
     ptr::{self, NonNull},
     slice,
 };
 
-type ActualDispatcher = fn(Message<'_>, Pin<&mut WlAny>, Pin<&mut ProxyRegistry>);
+type ActualDispatcher = fn(Message<'_>, &mut WlAny, Pin<&mut ProxyRegistry>);
 
 pub trait Dispatch: ObjectDowncastChecked {
-    fn dispatch(self: Pin<&mut Self>, message: Message<'_>, proxies: Pin<&mut ProxyRegistry>);
+    fn dispatch(&mut self, message: Message<'_>, proxies: Pin<&mut ProxyRegistry>);
 
     fn dispatch_raw(
         message: Message<'_>,
-        object: Pin<&mut WlAny>,
+        object: &mut WlAny,
         mut proxies: Pin<&mut ProxyRegistry>,
     ) {
         let Some(this) = Self::downcast_mut(proxies.as_mut(), object) else {
             return;
         };
 
-        let this = unsafe { this.map_unchecked_mut(WlObject::data_mut) };
-        this.dispatch(message, proxies);
+        this.data_mut().dispatch(message, proxies);
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct WlAny {
     id: ObjectId,
+    drop: unsafe fn(*mut c_void),
+}
+
+impl Drop for WlAny {
+    fn drop(&mut self) {
+        unsafe { (self.drop)((&raw mut *self).cast()) }
+    }
 }
 
 #[repr(C)]
@@ -74,9 +81,12 @@ impl<T: ObjectType> WlObject<T> {
     }
 
     pub const fn new(id: ObjectId, body: T) -> Self {
-        let mut this = Self::uninit();
-        this.init(id, body);
-        this
+        let drop = |this: *mut c_void| unsafe { this.cast::<T>().drop_in_place() };
+
+        Self {
+            head: Some(WlAny { id, drop }),
+            body: MaybeUninit::new(body),
+        }
     }
 
     pub const fn uninit() -> Self {
@@ -84,13 +94,6 @@ impl<T: ObjectType> WlObject<T> {
             head: None,
             body: MaybeUninit::uninit(),
         }
-    }
-
-    pub const fn init(&mut self, id: ObjectId, body: T) {
-        assert!(self.head.is_none());
-
-        self.head = Some(WlAny { id });
-        self.body = MaybeUninit::new(body);
     }
 
     pub const fn data(&self) -> &T {
@@ -104,20 +107,32 @@ impl<T: ObjectType> WlObject<T> {
     }
 }
 
+impl<T: ObjectType> Deref for WlObject<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.data()
+    }
+}
+
+impl<T: ObjectType> DerefMut for WlObject<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.data_mut()
+    }
+}
+
 impl<T: ObjectType + fmt::Debug> fmt::Debug for WlObject<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.head {
-            Some(..) => {
-                f.debug_struct(std::any::type_name::<WlObject<T>>())
-                    .field("head", &self.head)
-                    .field("body", self.data())
-                    .finish()
-            }
-            None => {
-                f.debug_tuple(std::any::type_name::<WlObject<T>>())
-                    .field(&Option::<c_void>::None)
-                    .finish()
-            }
+            Some(..) => f
+                .debug_struct(std::any::type_name::<WlObject<T>>())
+                .field("head", &self.head)
+                .field("body", self.data())
+                .finish(),
+            None => f
+                .debug_tuple(std::any::type_name::<WlObject<T>>())
+                .field(&Option::<c_void>::None)
+                .finish(),
         }
     }
 }
@@ -133,36 +148,32 @@ impl<T: ObjectType> Drop for WlObject<T> {
 unsafe impl<T: ObjectType> ObjectDowncastChecked for T {
     fn downcast<'r, 'o: 'r>(
         proxies: Pin<&'r ProxyRegistry>,
-        object: Pin<&'o WlAny>,
-    ) -> Option<Pin<&'o WlObject<Self>>> {
+        object: &'o WlAny,
+    ) -> Option<&'o WlObject<Self>> {
         if proxies.get_type(object.id)? != T::TYPE {
             None
         } else {
             Some(unsafe {
-                Pin::new_unchecked(
-                    (&raw const *object)
-                        .cast::<WlObject<Self>>()
-                        .as_ref()
-                        .unwrap(),
-                )
+                (&raw const *object)
+                    .cast::<WlObject<Self>>()
+                    .as_ref()
+                    .unwrap()
             })
         }
     }
 
     fn downcast_mut<'r, 'o: 'r>(
         proxies: Pin<&'r mut ProxyRegistry>,
-        object: Pin<&'o mut WlAny>,
-    ) -> Option<Pin<&'o mut WlObject<Self>>> {
+        object: &'o mut WlAny,
+    ) -> Option<&'o mut WlObject<Self>> {
         if proxies.get_type(object.id)? != T::TYPE {
             None
         } else {
             Some(unsafe {
-                Pin::new_unchecked(
-                    (&raw mut *object.get_unchecked_mut())
-                        .cast::<WlObject<Self>>()
-                        .as_mut()
-                        .unwrap(),
-                )
+                (&raw mut *object)
+                    .cast::<WlObject<Self>>()
+                    .as_mut()
+                    .unwrap()
             })
         }
     }
@@ -175,13 +186,13 @@ pub trait ObjectType {
 pub unsafe trait ObjectDowncastChecked: ObjectType + Sized {
     fn downcast<'r, 'o: 'r>(
         proxies: Pin<&'r ProxyRegistry>,
-        object: Pin<&'o WlAny>,
-    ) -> Option<Pin<&'o WlObject<Self>>>;
+        object: &'o WlAny,
+    ) -> Option<&'o WlObject<Self>>;
 
     fn downcast_mut<'r, 'o: 'r>(
         proxies: Pin<&'r mut ProxyRegistry>,
-        object: Pin<&'o mut WlAny>,
-    ) -> Option<Pin<&'o mut WlObject<Self>>>;
+        object: &'o mut WlAny,
+    ) -> Option<&'o mut WlObject<Self>>;
 }
 
 #[derive(Clone, Debug, PartialEq, Default)]
@@ -195,10 +206,10 @@ impl ObjectType for WlRegistry {
 
 fn actual_registry_dispatcher(
     message: Message<'_>,
-    object: Pin<&mut WlAny>,
+    object: &mut WlAny,
     proxies: Pin<&mut ProxyRegistry>,
 ) {
-    let mut registry = WlRegistry::downcast_mut(proxies, object).unwrap();
+    let registry = WlRegistry::downcast_mut(proxies, object).unwrap();
     let event = WlRegistryGlobalEvent::from_message(message).unwrap();
 
     registry
@@ -207,43 +218,78 @@ fn actual_registry_dispatcher(
         .insert(event.name, event.interface.to_str().unwrap().to_owned());
 }
 
-#[derive(Clone, Copy)]
-pub struct ProxyUserData {
-    pub dispatcher: Option<ActualDispatcher>,
-    pub object: Option<NonNull<WlAny>>,
+#[repr(C)]
+pub struct ProxyUserData<T: ObjectType> {
+    pub dispatcher: ActualDispatcher,
     pub registry: NonNull<ProxyRegistry>,
+    pub object_size: usize,
+    pub object: WlObject<T>,
 }
 
-impl ProxyUserData {
-    pub fn new(proxies: Pin<&mut ProxyRegistry>) -> Self {
-        Self {
-            dispatcher: None,
-            object: None,
-            registry: NonNull::from(unsafe { proxies.get_unchecked_mut() }),
+impl<T: ObjectType> ProxyUserData<T> {
+    pub fn upcast_mut(&mut self) -> &mut DynProxyUserData {
+        unsafe {
+            mem::transmute::<(usize, &mut Self), &mut DynProxyUserData>((self.object_size, self))
         }
     }
 
-    pub unsafe fn from_raw<'s>(ptr: *mut Self) -> Pin<&'s mut Self> {
-        unsafe { Pin::new_unchecked(ptr.as_mut().unwrap_unchecked()) }
+    pub fn upcast_box(self: Box<Self>) -> Box<DynProxyUserData> {
+        unsafe {
+            mem::transmute::<(usize, Box<Self>), Box<DynProxyUserData>>((self.object_size, self))
+        }
+    }
+}
+
+#[repr(C)]
+pub struct DynProxyUserData {
+    pub dispatcher: ActualDispatcher,
+    pub registry: NonNull<ProxyRegistry>,
+    pub object_size: usize,
+    // HACK(hack3rmann): splitting object into `WlAny` and `[u8]` may cause allocation
+    // optimizations issues
+    pub object: WlAny,
+    pub data: [u8],
+}
+
+impl DynProxyUserData {
+    pub unsafe fn downcast_mut<T: ObjectType>(&mut self) -> &mut ProxyUserData<T> {
+        assert_eq!(
+            mem::size_of::<WlAny>() + mem::size_of_val(&self.data),
+            mem::size_of::<WlObject<T>>()
+        );
+
+        let (_size, ptr) =
+            unsafe { mem::transmute::<*mut Self, (usize, *mut ProxyUserData<T>)>(&raw mut *self) };
+
+        unsafe { ptr.as_mut().unwrap_unchecked() }
     }
 
-    pub fn set_object<T: ObjectType>(&mut self, object: Pin<&mut WlObject<T>>) {
-        _ = self.object.replace(NonNull::from(
-            unsafe { object.get_unchecked_mut() }.upcast_mut().unwrap(),
-        ));
-    }
-
-    pub fn set_dispatcher(&mut self, dispatcher: ActualDispatcher) {
-        _ = self.dispatcher.replace(dispatcher);
-    }
-
-    pub unsafe fn get_object<'a>(&mut self) -> Option<Pin<&'a mut WlAny>> {
-        self.object
-            .map(|mut o| unsafe { Pin::new_unchecked(o.as_mut()) })
-    }
-
-    pub unsafe fn get_registry<'r>(&mut self) -> Pin<&'r mut ProxyRegistry> {
+    pub unsafe fn get_registry(&mut self) -> Pin<&mut ProxyRegistry> {
         unsafe { Pin::new_unchecked(self.registry.as_mut()) }
+    }
+
+    pub unsafe fn from_raw_mut<'s>(ptr: *mut c_void) -> &'s mut Self {
+        let object_size = unsafe {
+            ptr.wrapping_byte_add(offset_of!(Self, object_size))
+                .cast::<usize>()
+                .read()
+        };
+
+        let this = unsafe { mem::transmute::<(usize, *mut c_void), *mut Self>((object_size, ptr)) };
+
+        unsafe { this.as_mut().unwrap_unchecked() }
+    }
+
+    pub unsafe fn from_raw_owned(ptr: *mut c_void) -> Box<Self> {
+        let object_size = unsafe {
+            ptr.wrapping_byte_add(offset_of!(Self, object_size))
+                .cast::<usize>()
+                .read()
+        };
+
+        let this = unsafe { mem::transmute::<(usize, *mut c_void), *mut Self>((object_size, ptr)) };
+
+        unsafe { Box::from_raw(this) }
     }
 }
 
@@ -260,9 +306,9 @@ unsafe extern "C" fn raw_registry_dispatcher(
         return 0;
     }
 
-    let mut proxy_data = unsafe { ProxyUserData::from_raw(data.cast()) };
-    let object = unsafe { proxy_data.get_object() }.unwrap();
-    let dispatch = proxy_data.dispatcher.unwrap();
+    let proxy_data = unsafe { DynProxyUserData::from_raw_mut(data.cast()) };
+    let object = &mut proxy_data.object;
+    let dispatch = proxy_data.dispatcher;
 
     let signature = unsafe { CStr::from_ptr((*message).signature) };
     let n_arguments = signature.count_bytes();
@@ -273,7 +319,9 @@ unsafe extern "C" fn raw_registry_dispatcher(
         arguments,
     };
 
-    let registry = unsafe { proxy_data.get_registry() };
+    let registry = unsafe { Pin::new_unchecked(proxy_data.registry.as_mut()) };
+
+    dbg!("dispatch");
 
     dispatch(message, object, registry);
 
@@ -306,32 +354,37 @@ impl WlDisplay {
         &self,
         buf: &mut impl MessageBuffer,
         mut proxies: Pin<&mut ProxyRegistry>,
-        mut user_data: Pin<&mut ProxyUserData>,
-        mut out_object: Pin<&mut WlObject<WlRegistry>>,
-    ) {
-        let raw_proxy = NonNull::new(unsafe { WlDisplayGetRegistryRequest.send_raw(&self.proxy, buf) })
-            .unwrap();
+    ) -> ObjectId {
+        let raw_proxy =
+            NonNull::new(unsafe { WlDisplayGetRegistryRequest.send_raw(&self.proxy, buf) })
+                .unwrap();
 
         let proxy = unsafe { WlProxy::from_raw(raw_proxy) };
         let proxy_id = proxy.id();
 
         proxies.insert(proxy, WlObjectType::Registry);
 
-        out_object.init(proxy_id, WlRegistry::default());
+        let object = WlObject::new(proxy_id, WlRegistry::default());
 
-        user_data.set_dispatcher(actual_registry_dispatcher);
-        user_data.set_object(out_object.as_mut());
+        let user_data = Box::new(ProxyUserData {
+            dispatcher: actual_registry_dispatcher,
+            registry: NonNull::new(&raw mut *proxies).unwrap(),
+            object_size: mem::size_of_val(&object) - mem::size_of::<WlAny>(),
+            object,
+        });
 
         let add_dispatcher_result = unsafe {
             wl_proxy_add_dispatcher(
                 raw_proxy.as_ptr(),
                 raw_registry_dispatcher,
                 ptr::null(),
-                (&raw mut *user_data.get_unchecked_mut()).cast(),
+                Box::into_raw(user_data).cast(),
             )
         };
 
         assert_ne!(add_dispatcher_result, -1);
+
+        proxy_id
     }
 }
 
@@ -347,31 +400,23 @@ mod tests {
     use super::*;
     use crate::{
         init::connect_wayland_socket,
-        sys::{ffi::wl_display_roundtrip, wire::SmallVecMessageBuffer},
+        sys::{ffi::wl_display_dispatch, wire::SmallVecMessageBuffer},
     };
     use std::pin::pin;
 
     #[test]
     fn get_registry() {
         let wayland_sock = unsafe { connect_wayland_socket().unwrap() };
+
         let display = WlDisplay::connect_to_fd(wayland_sock);
+
         let mut buf = SmallVecMessageBuffer::<8>::new();
-
         let mut proxies = pin!(ProxyRegistry::new());
-        let mut user_data = pin!(ProxyUserData::new(proxies.as_mut()));
-        let mut registry = pin!(WlObject::uninit());
 
-        display.create_registry(&mut buf, proxies.as_mut(), user_data.as_mut(), registry.as_mut());
+        let registry_id = display.create_registry(&mut buf, proxies.as_mut());
 
-        // FIXME(hack3rmann): invalid use of the safe api
-        // display should own `user_data` after `create_registry` call
-        // ```rust,no_run
-        // user_data.set_object(pin!(WlObject::<WlRegistry>::uninit()));
-        // ```
-        // compiles and, therefore, invalidates rust's safety rules
+        unsafe { wl_display_dispatch(display.as_raw_display_ptr().as_ptr()) };
 
-        unsafe { wl_display_roundtrip(display.as_raw_display_ptr().as_ptr()) };
-
-        dbg!(registry.as_mut());
+        dbg!(proxies.get_object::<WlRegistry>(registry_id).unwrap());
     }
 }
