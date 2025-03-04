@@ -1,13 +1,8 @@
-use super::{
-    display::DynProxyUserData,
-    ffi::{
-        wl_proxy, wl_proxy_destroy, wl_proxy_get_class, wl_proxy_get_id, wl_proxy_get_user_data,
-    },
-};
+use super::ffi::{wl_proxy, wl_proxy_destroy, wl_proxy_get_class, wl_proxy_get_id};
 use crate::object::ObjectId;
 use core::fmt;
 use std::{
-    ffi::{c_void, CStr},
+    ffi::CStr,
     mem::ManuallyDrop,
     ptr::NonNull,
     sync::atomic::{
@@ -74,21 +69,10 @@ impl WlProxy {
         // only valid ASCII characters
         unsafe { std::str::from_utf8_unchecked(string_bytes) }
     }
-
-    pub fn get_user_data_raw(&self) -> *mut c_void {
-        // Safety: calling this on a valid object is safe
-        unsafe { wl_proxy_get_user_data(self.raw.as_ptr()) }
-    }
 }
 
 impl Drop for WlProxy {
     fn drop(&mut self) {
-        let dyn_data_raw = self.get_user_data_raw();
-
-        if !dyn_data_raw.is_null() {
-            drop(unsafe { DynProxyUserData::from_raw_owned(dyn_data_raw) });
-        }
-
         unsafe { wl_proxy_destroy(self.raw.as_ptr()) }
     }
 }
