@@ -6,15 +6,6 @@ use thiserror::Error;
 pub struct ObjectId(pub NonZeroU32);
 
 impl ObjectId {
-    pub const WL_DISPLAY: ObjectId = ObjectId::new(1);
-    pub const WL_REGISTRY: ObjectId = ObjectId::new(2);
-    pub const WL_COMPOSITOR: ObjectId = ObjectId::new(3);
-    pub const WL_SHM: ObjectId = ObjectId::new(4);
-    pub const WP_VIEWPORTER: ObjectId = ObjectId::new(5);
-    pub const ZWLR_LAYER_SHELL_V1: ObjectId = ObjectId::new(6);
-    pub const WL_SHM_POOL: ObjectId = ObjectId::new(7);
-    pub const WL_SURFACE: ObjectId = ObjectId::new(8);
-
     /// Makes new id from `u32`
     ///
     /// # Panic
