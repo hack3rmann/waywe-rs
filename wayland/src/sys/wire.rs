@@ -1,6 +1,6 @@
 use super::{
     Interface,
-    ffi::{wl_argument, wl_fixed_t, wl_object, wl_proxy},
+    ffi::{WlArgument, wl_fixed_t, wl_object, wl_proxy},
     proxy::{WlProxy, WlProxyQuery},
 };
 use smallvec::SmallVec;
@@ -20,12 +20,12 @@ pub type OpCode = u16;
 ///   the behavior of them from the [`Vec`] ones
 pub unsafe trait MessageBuffer {
     fn clear(&mut self);
-    fn push(&mut self, argument: wl_argument);
+    fn push(&mut self, argument: WlArgument);
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
-    fn as_slice(&self) -> &[wl_argument];
+    fn as_slice(&self) -> &[WlArgument];
 }
 static_assertions::assert_obj_safe!(MessageBuffer);
 
@@ -34,7 +34,7 @@ unsafe impl MessageBuffer for VecMessageBuffer {
         Vec::clear(self);
     }
 
-    fn push(&mut self, argument: wl_argument) {
+    fn push(&mut self, argument: WlArgument) {
         Vec::push(self, argument)
     }
 
@@ -46,7 +46,7 @@ unsafe impl MessageBuffer for VecMessageBuffer {
         Vec::is_empty(self)
     }
 
-    fn as_slice(&self) -> &[wl_argument] {
+    fn as_slice(&self) -> &[WlArgument] {
         self
     }
 }
@@ -56,7 +56,7 @@ unsafe impl<const N: usize> MessageBuffer for SmallVecMessageBuffer<N> {
         SmallVec::clear(self)
     }
 
-    fn push(&mut self, argument: wl_argument) {
+    fn push(&mut self, argument: WlArgument) {
         SmallVec::push(self, argument)
     }
 
@@ -68,13 +68,13 @@ unsafe impl<const N: usize> MessageBuffer for SmallVecMessageBuffer<N> {
         SmallVec::is_empty(self)
     }
 
-    fn as_slice(&self) -> &[wl_argument] {
+    fn as_slice(&self) -> &[WlArgument] {
         self
     }
 }
 
-pub type VecMessageBuffer = Vec<wl_argument>;
-pub type SmallVecMessageBuffer<const N: usize> = SmallVec<[wl_argument; N]>;
+pub type VecMessageBuffer = Vec<WlArgument>;
+pub type SmallVecMessageBuffer<const N: usize> = SmallVec<[WlArgument; N]>;
 
 /// Represents the message on the libwayland backend
 #[derive(Clone, Copy)]
@@ -82,7 +82,7 @@ pub struct Message<'s> {
     /// The opcode for the request/event
     pub opcode: OpCode,
     /// Additional arguments for the request/event
-    pub arguments: &'s [wl_argument],
+    pub arguments: &'s [WlArgument],
 }
 
 impl<'s> Message<'s> {
@@ -131,42 +131,40 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
 
     /// Writes 32-bit unsigned integer to the message
     pub fn uint(self, value: u32) -> Self {
-        self.buf.push(wl_argument { u: value });
+        self.buf.push(WlArgument::uint(value));
         self
     }
 
     /// Writes 32-bit signed integer to the message
     pub fn int(self, value: i32) -> Self {
-        self.buf.push(wl_argument { i: value });
+        self.buf.push(WlArgument::int(value));
         self
     }
 
     /// Writes file descriptor to the message
     pub fn file_desc(self, value: BorrowedFd<'s>) -> Self {
-        self.buf.push(wl_argument {
-            h: value.as_raw_fd(),
-        });
+        self.buf.push(WlArgument::raw_fd(value.as_raw_fd()));
         self
     }
 
     /// Writes [`str`] to the message
     pub fn str<'str: 's>(self, value: &'str CStr) -> Self {
         if value.is_empty() {
-            self.buf.push(wl_argument { s: ptr::null() });
+            self.buf.push(WlArgument::c_str(ptr::null()));
         } else {
-            self.buf.push(wl_argument { s: value.as_ptr() });
+            self.buf.push(WlArgument::c_str(value.as_ptr()));
         }
 
         self
     }
 
     pub fn maybe_object(self, value: Option<&'s WlProxy>) -> Self {
-        self.buf.push(wl_argument {
-            o: value
+        self.buf.push(WlArgument::object(
+            value
                 .map(|proxy| proxy.as_raw().as_ptr())
                 .unwrap_or(ptr::null_mut())
                 .cast::<wl_object>(),
-        });
+        ));
         self
     }
 
@@ -177,13 +175,13 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
 
     /// Writes empty object to the message
     pub fn null_object(self) -> Self {
-        self.buf.push(wl_argument { o: ptr::null_mut() });
+        self.buf.push(WlArgument::object(ptr::null_mut()));
         self
     }
 
     /// Passes `new_id` argument to the message
     pub fn new_id(self) -> Self {
-        self.buf.push(wl_argument { n: 0 });
+        self.buf.push(WlArgument::new_id());
         self
     }
 
@@ -204,35 +202,35 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
     }
 }
 
-/// Provides a coversion function from [`wl_argument`]
+/// Provides a coversion function from [`WlArgument`]
 pub trait FromWlArgument<'s>: Sized {
     /// # Safety
     ///
-    /// The value extracted from `wl_argument` shoud be the same
+    /// The value extracted from `WlArgument` shoud be the same
     /// as the value written to this union
-    unsafe fn from_argument(value: wl_argument) -> Self;
+    unsafe fn from_argument(value: WlArgument) -> Self;
 }
 
 impl FromWlArgument<'_> for i32 {
-    unsafe fn from_argument(value: wl_argument) -> Self {
+    unsafe fn from_argument(value: WlArgument) -> Self {
         unsafe { value.i }
     }
 }
 
 impl FromWlArgument<'_> for u32 {
-    unsafe fn from_argument(value: wl_argument) -> Self {
+    unsafe fn from_argument(value: WlArgument) -> Self {
         unsafe { value.u }
     }
 }
 
 impl FromWlArgument<'_> for wl_fixed_t {
-    unsafe fn from_argument(value: wl_argument) -> Self {
+    unsafe fn from_argument(value: WlArgument) -> Self {
         unsafe { value.f }
     }
 }
 
 impl FromWlArgument<'_> for OwnedFd {
-    unsafe fn from_argument(value: wl_argument) -> Self {
+    unsafe fn from_argument(value: WlArgument) -> Self {
         let raw_fd = unsafe { value.h };
         // Safety: file descriptor provided by the libwayland must be owned by us
         unsafe { OwnedFd::from_raw_fd(raw_fd) }
@@ -240,7 +238,7 @@ impl FromWlArgument<'_> for OwnedFd {
 }
 
 impl FromWlArgument<'_> for WlProxyQuery {
-    unsafe fn from_argument(value: wl_argument) -> Self {
+    unsafe fn from_argument(value: WlArgument) -> Self {
         let proxy_ptr = unsafe { value.o }.cast::<wl_proxy>();
         // Safety: proxy object provided by the libwayland should be valid or point to null
         unsafe { WlProxyQuery::from_raw(proxy_ptr) }
@@ -248,23 +246,23 @@ impl FromWlArgument<'_> for WlProxyQuery {
 }
 
 impl<'s> FromWlArgument<'s> for &'s CStr {
-    unsafe fn from_argument(value: wl_argument) -> Self {
+    unsafe fn from_argument(value: WlArgument) -> Self {
         let ptr = unsafe { value.s };
         // Safety: string provided by the libwayland must be valid
         unsafe { CStr::from_ptr(ptr) }
     }
 }
 
-/// Represents a message reader capable of converting [`wl_argument`]s to values
+/// Represents a message reader capable of converting [`WlArgument`]s to values
 #[derive(Clone, Copy)]
 pub struct MessageReader<'s> {
     /// The rest of message's arguments
-    pub arguments: &'s [wl_argument],
+    pub arguments: &'s [WlArgument],
 }
 
 impl<'s> MessageReader<'s> {
     /// Constructs new [`MessageReader`]
-    pub const fn new(arguments: &'s [wl_argument]) -> Self {
+    pub const fn new(arguments: &'s [WlArgument]) -> Self {
         Self { arguments }
     }
 

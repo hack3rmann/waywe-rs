@@ -420,7 +420,7 @@ impl wl_list {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub union wl_argument {
+pub union WlArgument {
     /// int
     pub i: i32,
     /// uint
@@ -438,6 +438,42 @@ pub union wl_argument {
     /// fd
     pub h: RawFd,
 }
+
+impl WlArgument {
+    pub const fn int(value: i32) -> Self {
+        Self { i: value }
+    }
+
+    pub const fn uint(value: u32) -> Self {
+        Self { u: value }
+    }
+
+    pub const fn fixed(value: WlFixed) -> Self {
+        Self { f: value }
+    }
+
+    pub const fn c_str(value: *const c_char) -> Self {
+        Self { s: value }
+    }
+
+    pub const fn object(value: *const wl_object) -> Self {
+        Self { o: value }
+    }
+
+    pub const fn new_id() -> Self {
+        Self { n: 0 }
+    }
+
+    pub const fn array(value: *const wl_array) -> Self {
+        Self { a: value }
+    }
+
+    pub const fn raw_fd(value: RawFd) -> Self {
+        Self { h: value }
+    }
+}
+
+pub type wl_argument = WlArgument;
 
 pub type wl_dispatcher_func_t = unsafe extern "C" fn(
     *const c_void,
