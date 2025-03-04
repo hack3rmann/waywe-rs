@@ -1,13 +1,13 @@
 pub mod display;
 pub mod ffi;
+pub mod object;
 pub mod proxy;
+pub mod object_storage;
 pub mod wire;
-pub mod proxy_registry;
-
-use ffi::wl_interface;
 
 use crate::object::ObjectId;
 use core::fmt;
+use ffi::wl_interface;
 use std::ffi::CStr;
 
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]

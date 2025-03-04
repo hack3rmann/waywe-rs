@@ -73,6 +73,7 @@ impl WlProxy {
 
 impl Drop for WlProxy {
     fn drop(&mut self) {
+        // FIXME(hack3rmann): causes SIGSEGV for some reason
         unsafe { wl_proxy_destroy(self.raw.as_ptr()) }
     }
 }

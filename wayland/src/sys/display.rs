@@ -1,30 +1,43 @@
-use super::{
-    ffi::{
-        wl_argument, wl_display, wl_display_connect_to_fd, wl_display_disconnect, wl_message,
-        wl_proxy_add_dispatcher,
-    },
-    proxy::WlProxy,
-    wire::MessageBuffer,
-};
-use crate::interface::{Request, WlDisplayGetRegistryRequest};
-use std::{
-    ffi::{CStr, c_int, c_void},
-    mem::ManuallyDrop,
-    os::fd::{IntoRawFd, OwnedFd},
-    ptr::{self, NonNull},
+use crate::{
+    interface::{Event, Request, WlDisplayGetRegistryRequest, WlRegistryGlobalEvent},
+    object::ObjectId,
+    sys::ffi::wl_display_roundtrip,
 };
 
-unsafe extern "C" fn registry_dispatcher(
-    _data: *const c_void,
-    _proxy: *mut c_void,
-    _opcode: u32,
-    message: *const wl_message,
-    _arguments: *mut wl_argument,
-) -> c_int {
-    let name = unsafe { CStr::from_ptr((*message).name) };
-    let signature = unsafe { CStr::from_ptr((*message).signature) };
-    dbg!(name, signature);
-    42
+use super::{
+    ffi::{wl_display, wl_display_connect_to_fd, wl_display_disconnect},
+    object::{Dispatch, WlObject, WlObjectHandle},
+    object_storage::WlObjectStorage,
+    proxy::WlProxy,
+    wire::{Message, MessageBuffer},
+};
+use std::{collections::HashMap, ffi::CString, mem::ManuallyDrop, os::fd::IntoRawFd, ptr::NonNull};
+
+#[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
+pub struct WlRegistryGlobalInfo {
+    pub name: ObjectId,
+    pub version: u32,
+}
+
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct WlRegistry {
+    pub interfaces: HashMap<CString, WlRegistryGlobalInfo>,
+}
+
+impl Dispatch for WlRegistry {
+    fn dispatch(&mut self, message: Message<'_>) {
+        let Some(event) = WlRegistryGlobalEvent::from_message(message) else {
+            return;
+        };
+
+        self.interfaces.insert(
+            event.interface.to_owned(),
+            WlRegistryGlobalInfo {
+                name: event.name,
+                version: event.version,
+            },
+        );
+    }
 }
 
 /// A handle to libwayland backend
@@ -33,7 +46,7 @@ pub struct WlDisplay {
 }
 
 impl WlDisplay {
-    pub fn connect_to_fd(wayland_file_desc: OwnedFd) -> Self {
+    pub fn connect_to_fd(wayland_file_desc: impl IntoRawFd) -> Self {
         // FIXME(hack3rmann): deal with errors
         let display =
             NonNull::new(unsafe { wl_display_connect_to_fd(wayland_file_desc.into_raw_fd()) })
@@ -49,20 +62,28 @@ impl WlDisplay {
         self.proxy.as_raw().cast()
     }
 
-    pub fn create_registry(&self, buf: &mut impl MessageBuffer) -> WlProxy {
-        let raw = NonNull::new(unsafe { WlDisplayGetRegistryRequest.send_raw(&self.proxy, buf) })
-            .unwrap();
+    pub fn create_registry(
+        &self,
+        buf: &mut impl MessageBuffer,
+        storage: &mut WlObjectStorage,
+    ) -> WlObjectHandle<WlRegistry> {
+        let raw_proxy = unsafe { WlDisplayGetRegistryRequest.send_raw(&self.proxy, buf) };
+        let proxy = unsafe { WlProxy::from_raw(NonNull::new(raw_proxy).unwrap()) };
+        let proxy_id = proxy.id();
 
-        unsafe {
-            wl_proxy_add_dispatcher(
-                raw.as_ptr(),
-                registry_dispatcher,
-                ptr::null(),
-                ptr::null_mut(),
-            )
-        };
+        storage.insert(WlObject::new(proxy, WlRegistry::default()));
 
-        unsafe { WlProxy::from_raw(raw) }
+        WlObjectHandle::new(proxy_id)
+    }
+
+    pub fn dispatch_all(&self, _storage: &mut WlObjectStorage) {
+        // NOTE(hack3rmann): by requireing `&mut WlObjectStorage` we safely
+        // capture all objects mutably therefore no object is borrowed outside
+        // the dispatcher
+
+        assert_ne!(-1, unsafe {
+            wl_display_roundtrip(self.as_raw_display_ptr().as_ptr())
+        });
     }
 }
 
@@ -75,21 +96,22 @@ impl Drop for WlDisplay {
 
 #[cfg(test)]
 mod tests {
+    use crate::{init::connect_wayland_socket, sys::wire::SmallVecMessageBuffer};
+
     use super::*;
-    use crate::{
-        init::connect_wayland_socket,
-        sys::{ffi::wl_display_roundtrip, wire::SmallVecMessageBuffer},
-    };
 
     #[test]
     fn get_registry() {
         let wayland_sock = unsafe { connect_wayland_socket().unwrap() };
-        let display = WlDisplay::connect_to_fd(wayland_sock);
+
         let mut buf = SmallVecMessageBuffer::<8>::new();
-        let registry = display.create_registry(&mut buf);
+        let mut storage = WlObjectStorage::default();
 
-        unsafe { wl_display_roundtrip(display.as_raw_display_ptr().as_ptr()) };
+        let display = WlDisplay::connect_to_fd(wayland_sock);
+        let registry = display.create_registry(&mut buf, &mut storage);
 
-        assert_eq!(registry.interface_name(), "wl_registry");
+        display.dispatch_all(&mut storage);
+
+        dbg!(storage.object(registry));
     }
 }
