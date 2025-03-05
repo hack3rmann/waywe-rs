@@ -1,6 +1,6 @@
 use super::{
     ffi::{wl_display, wl_display_connect_to_fd, wl_display_disconnect},
-    object::{WlObject, registry::WlRegistry},
+    object::{registry::WlRegistry, WlObject, WlObjectHandle},
     object_storage::WlObjectStorage,
     proxy::WlProxy,
     wire::MessageBuffer,
@@ -13,7 +13,6 @@ use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, RawDisplayHandle, WaylandDisplayHandle,
 };
 use std::{
-    collections::HashMap,
     marker::PhantomData,
     mem::ManuallyDrop,
     os::fd::{IntoRawFd, OwnedFd},
@@ -53,20 +52,22 @@ impl WlDisplay {
         self.proxy.as_raw().cast()
     }
 
-    pub fn create_registry(&self, buf: &mut impl MessageBuffer) -> WlObject<WlRegistry<'_>> {
+    pub fn create_storage(&self) -> WlObjectStorage<'_> {
+        unsafe { WlObjectStorage::new() }
+    }
+
+    pub fn create_registry(
+        &self,
+        buf: &mut impl MessageBuffer,
+        storage: &mut WlObjectStorage<'_>,
+    ) -> WlObjectHandle<WlRegistry> {
         // Safety: parent interface matcher request's one
         let raw_proxy = unsafe { WlDisplayGetRegistryRequest.send_raw(&self.proxy, buf) };
 
         // Safety: resulting proxy is a valid object provided by libwayland
         let proxy = unsafe { WlProxy::from_raw(NonNull::new(raw_proxy).unwrap()) };
 
-        WlObject::new(
-            proxy,
-            WlRegistry {
-                interfaces: HashMap::default(),
-                storage: unsafe { WlObjectStorage::new() },
-            },
-        )
+        storage.insert(WlObject::new(proxy, WlRegistry::default()))
     }
 
     pub fn sync_all(&self) {

@@ -1,9 +1,9 @@
+pub mod buffer;
 pub mod compositor;
 pub mod registry;
-pub mod surface;
-pub mod shm_pool;
-pub mod buffer;
 pub mod shm;
+pub mod shm_pool;
+pub mod surface;
 
 use super::{
     ffi::{wl_argument, wl_message, wl_proxy_add_dispatcher, wl_proxy_get_user_data},
@@ -317,7 +317,7 @@ mod tests {
     use super::compositor::WlCompositor;
     use crate::{
         init::connect_wayland_socket,
-        sys::{display::WlDisplay, wire::SmallVecMessageBuffer},
+        sys::{display::WlDisplay, object::registry::WlRegistry, wire::SmallVecMessageBuffer},
     };
 
     unsafe fn connect_display() -> WlDisplay {
@@ -331,11 +331,17 @@ mod tests {
 
         // Safety: called once on the start of the program
         let display = unsafe { connect_display() };
-        let registry = display.create_registry(&mut buf);
+        let mut storage = display.create_storage();
+        let registry = display.create_registry(&mut buf, &mut storage);
 
         display.sync_all();
 
-        assert!(registry.interfaces.contains_key(c"wl_compositor"));
+        assert!(
+            storage
+                .object(registry)
+                .interfaces
+                .contains_key(c"wl_compositor")
+        );
     }
 
     #[test]
@@ -344,16 +350,29 @@ mod tests {
 
         // Safety: called once on the start of the program
         let display = unsafe { connect_display() };
-        let mut registry = display.create_registry(&mut buf);
+        let mut storage = display.create_storage();
+        let registry = display.create_registry(&mut buf, &mut storage);
 
         display.sync_all();
 
-        let compositor = registry.bind_default::<WlCompositor>(&mut buf).unwrap();
-        let surface = WlCompositor::create_surface(&mut buf, &mut registry.storage, compositor);
+        let compositor = WlRegistry::bind_default(&mut buf, &mut storage, registry).unwrap();
+        let surface = WlCompositor::create_surface(&mut buf, &mut storage, compositor);
 
         assert_eq!(
-            registry.storage.object(surface).proxy().interface_name(),
+            storage.object(surface).proxy().interface_name(),
             "wl_surface",
         );
+    }
+
+    #[test]
+    fn white_rect() {
+        let mut buf = SmallVecMessageBuffer::<8>::new();
+
+        // Safety: called once on the start of the program
+        let display = unsafe { connect_display() };
+        let mut storage = display.create_storage();
+        let _registry = display.create_registry(&mut buf, &mut storage);
+
+        display.sync_all();
     }
 }

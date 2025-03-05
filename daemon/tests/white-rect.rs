@@ -2,7 +2,11 @@ use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use std::mem;
 use wayland::{
     init::connect_wayland_socket,
-    sys::{display::WlDisplay, object::compositor::WlCompositor, wire::SmallVecMessageBuffer},
+    sys::{
+        display::WlDisplay,
+        object::{compositor::WlCompositor, registry::WlRegistry},
+        wire::SmallVecMessageBuffer,
+    },
 };
 use wgpu::util::DeviceExt as _;
 
@@ -12,12 +16,14 @@ async fn t1() {
     let mut buf = SmallVecMessageBuffer::<8>::new();
 
     let display = WlDisplay::connect_to_fd(wayland_sock);
-    let mut registry = display.create_registry(&mut buf);
+    let mut storage = display.create_storage();
+    let registry = display.create_registry(&mut buf, &mut storage);
 
     display.sync_all();
 
-    let compositor = registry.bind_default::<WlCompositor>(&mut buf).unwrap();
-    let surface = WlCompositor::create_surface(&mut buf, &mut registry.storage, compositor);
+    let compositor =
+        WlRegistry::bind_default::<WlCompositor>(&mut buf, &mut storage, registry).unwrap();
+    let surface = WlCompositor::create_surface(&mut buf, &mut storage, compositor);
 
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
         backends: wgpu::Backends::VULKAN,
@@ -26,12 +32,7 @@ async fn t1() {
     });
 
     let raw_display_handle = display.display_handle().unwrap().as_raw();
-    let raw_window_handle = registry
-        .storage
-        .object(surface)
-        .window_handle()
-        .unwrap()
-        .as_raw();
+    let raw_window_handle = storage.object(surface).window_handle().unwrap().as_raw();
 
     let surface = unsafe {
         instance

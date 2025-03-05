@@ -7,11 +7,10 @@ use crate::{
     object::ObjectId,
     sys::{
         object_storage::WlObjectStorage,
-        proxy::WlProxy,
         wire::{Message, MessageBuffer},
     },
 };
-use std::{collections::HashMap, ffi::CString, ptr::NonNull};
+use std::{collections::HashMap, ffi::CString};
 
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
 pub struct WlRegistryGlobalInfo {
@@ -19,33 +18,42 @@ pub struct WlRegistryGlobalInfo {
     pub version: u32,
 }
 
-#[derive(Debug)]
-pub struct WlRegistry<'d> {
+#[derive(Debug, Default)]
+pub struct WlRegistry {
     // TODO(hack3rmann): make it faster
     pub interfaces: HashMap<CString, WlRegistryGlobalInfo>,
-    pub storage: WlObjectStorage<'d>,
 }
 
-impl WlObject<WlRegistry<'_>> {
-    pub fn bind<T>(&mut self, buf: &mut impl MessageBuffer, object: T) -> Option<WlObjectHandle<T>>
+impl WlRegistry {
+    pub fn bind<T>(
+        buf: &mut impl MessageBuffer,
+        storage: &mut WlObjectStorage,
+        registry: WlObjectHandle<WlRegistry>,
+        object: T,
+    ) -> Option<WlObjectHandle<T>>
     where
         T: HasInterface + Dispatch + 'static,
     {
-        let raw_proxy = unsafe { WlRegistryBindRequest::<T>::new().send_raw(&self.proxy, buf) };
-        let proxy = unsafe { WlProxy::from_raw(NonNull::new(raw_proxy)?) };
+        let proxy = unsafe {
+            WlRegistryBindRequest::<T>::new().send(storage.get_object(registry)?.proxy(), buf)?
+        };
 
-        Some(self.storage.insert(WlObject::new(proxy, object)))
+        Some(storage.insert(WlObject::new(proxy, object)))
     }
 
-    pub fn bind_default<T>(&mut self, buf: &mut impl MessageBuffer) -> Option<WlObjectHandle<T>>
+    pub fn bind_default<T>(
+        buf: &mut impl MessageBuffer,
+        storage: &mut WlObjectStorage,
+        registry: WlObjectHandle<WlRegistry>,
+    ) -> Option<WlObjectHandle<T>>
     where
         T: HasInterface + Dispatch + Default + 'static,
     {
-        self.bind(buf, T::default())
+        Self::bind(buf, storage, registry, T::default())
     }
 }
 
-impl Dispatch for WlRegistry<'_> {
+impl Dispatch for WlRegistry {
     // TODO(hack3rmann): handle all events
     fn dispatch(&mut self, message: Message<'_>) {
         let Some(event) = WlRegistryGlobalEvent::from_message(message) else {
