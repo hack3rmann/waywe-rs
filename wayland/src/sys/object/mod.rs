@@ -1,6 +1,9 @@
 pub mod compositor;
 pub mod registry;
 pub mod surface;
+pub mod shm_pool;
+pub mod buffer;
+pub mod shm;
 
 use super::{
     ffi::{wl_argument, wl_message, wl_proxy_add_dispatcher, wl_proxy_get_user_data},
@@ -330,7 +333,7 @@ mod tests {
         let display = unsafe { connect_display() };
         let registry = display.create_registry(&mut buf);
 
-        display.dispatch_all();
+        display.sync_all();
 
         assert!(registry.interfaces.contains_key(c"wl_compositor"));
     }
@@ -343,7 +346,7 @@ mod tests {
         let display = unsafe { connect_display() };
         let mut registry = display.create_registry(&mut buf);
 
-        display.dispatch_all();
+        display.sync_all();
 
         let compositor = registry.bind_default::<WlCompositor>(&mut buf).unwrap();
         let surface = WlCompositor::create_surface(&mut buf, &mut registry.storage, compositor);

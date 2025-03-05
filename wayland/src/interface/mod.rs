@@ -14,7 +14,7 @@ use crate::sys::{
     proxy::WlProxy,
     wire::{Message, MessageBuffer, OpCode},
 };
-use std::ptr;
+use std::ptr::{self, NonNull};
 
 pub use {
     callback::event::Done as WlCallbackDoneEvent,
@@ -76,6 +76,28 @@ pub trait Request<'b>: Sized {
                 interface,
             )
         }
+    }
+
+    /// # Safety
+    ///
+    /// - `parent` proxy should match the parent interface
+    /// - resulting `WlProxy` object should be owned
+    unsafe fn send(self, parent: &'b WlProxy, buf: &'b mut impl MessageBuffer) -> Option<WlProxy> {
+        let message = self.build_message(buf);
+        let interface = Self::OUTGOING_INTERFACE
+            .map(|i| &raw const *i.backend_interface())
+            .unwrap_or(ptr::null());
+
+        let raw_proxy = unsafe {
+            wl_proxy_marshal_array_constructor(
+                parent.as_raw().as_ptr(),
+                message.opcode.into(),
+                message.arguments.as_ptr().cast_mut(),
+                interface,
+            )
+        };
+
+        Some(unsafe { WlProxy::from_raw(NonNull::new(raw_proxy)?) })
     }
 }
 

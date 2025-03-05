@@ -14,7 +14,7 @@ async fn t1() {
     let display = WlDisplay::connect_to_fd(wayland_sock);
     let mut registry = display.create_registry(&mut buf);
 
-    display.dispatch_all();
+    display.sync_all();
 
     let compositor = registry.bind_default::<WlCompositor>(&mut buf).unwrap();
     let surface = WlCompositor::create_surface(&mut buf, &mut registry.storage, compositor);

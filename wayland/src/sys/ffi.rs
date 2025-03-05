@@ -518,7 +518,6 @@ unsafe extern "C" {
 
     /// Connect to Wayland display on an already open fd.
     ///
-    ///
     /// The [`wl_display`] takes ownership of the fd and will close
     /// it when the display is destroyed. The fd will also be closed in case of failure.
     pub fn wl_display_connect_to_fd(fd: RawFd) -> *mut wl_display;

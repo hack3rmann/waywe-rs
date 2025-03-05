@@ -69,7 +69,7 @@ impl WlDisplay {
         )
     }
 
-    pub fn dispatch_all(&self) {
+    pub fn sync_all(&self) {
         // Safety: `self.as_raw_display_ptr()` is a valid display object
         assert_ne!(-1, unsafe {
             wl_display_roundtrip(self.as_raw_display_ptr().as_ptr())

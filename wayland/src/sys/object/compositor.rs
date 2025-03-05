@@ -4,11 +4,9 @@ use crate::{
     sys::{
         Interface, InterfaceObjectType,
         object_storage::WlObjectStorage,
-        proxy::WlProxy,
         wire::{Message, MessageBuffer},
     },
 };
-use std::ptr::NonNull;
 
 #[derive(Default)]
 pub struct WlCompositor;
@@ -20,9 +18,11 @@ impl WlCompositor {
         compositor_handle: WlObjectHandle<Self>,
     ) -> WlObjectHandle<WlSurface> {
         let compositor = storage.object(compositor_handle);
-        let raw_proxy = unsafe { WlCompositorCreateSurface.send_raw(&compositor.proxy, buf) };
-
-        let proxy = unsafe { WlProxy::from_raw(NonNull::new(raw_proxy).unwrap()) };
+        let proxy = unsafe {
+            WlCompositorCreateSurface
+                .send(&compositor.proxy, buf)
+                .unwrap()
+        };
 
         storage.insert(WlObject::new(proxy, WlSurface))
     }

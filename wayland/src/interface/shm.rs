@@ -101,9 +101,9 @@ pub mod wl_enum {
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub enum Format {
         /// 32-bit ARGB format, [31:0] A:R:G:B 8:8:8:8 little endian
+        #[default]
         Argb8888 = 0,
         /// 32-bit RGB format, [31:0] x:R:G:B 8:8:8:8 little endian
-        #[default]
         Xrgb8888 = 1,
         /// 8-bit color index format, [7:0] C
         C8 = 0x20203843,
