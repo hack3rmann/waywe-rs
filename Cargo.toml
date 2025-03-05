@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["daemon"]
+members = ["daemon", "extractor"]
 
 [workspace.package]
 version = "0.0.1"
