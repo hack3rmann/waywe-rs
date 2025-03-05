@@ -1,6 +1,6 @@
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use safe_transmute::to_bytes::transmute_one_to_bytes_mut;
 
@@ -97,18 +97,38 @@ impl<'a, T: Read> PackageReader<'a, T> {
     }
 
     pub fn store_files(&mut self, output_dir: &Path) -> Result<(), PackageExtractError> {
+        let mut path = PathBuf::new();
+
         for file in self.meta.files.iter() {
             let mut buf = vec![0; file.size as usize];
             self.fd.read_exact(&mut buf)?;
 
-            let path = output_dir.join(&file.name);
+            path.clear();
+            path.push(output_dir);
+            path.push(&file.name);
 
             fs::create_dir_all(path.parent().ok_or(PackageExtractError::Parse)?)?;
 
-            let mut out = File::create(path)?;
+            let mut out = File::create(&path)?;
             out.write_all(&buf)?;
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "requires scene.pkg file to be present in the crate directory"]
+    fn test_pkg_extract() {
+        let mut fd = File::open("scene.pkg").unwrap();
+        let mut reader = PackageReader::new(&mut fd).unwrap();
+
+        let mut path = PathBuf::new();
+        path.push("assets");
+        reader.store_files(&path).unwrap();
     }
 }

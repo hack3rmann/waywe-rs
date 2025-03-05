@@ -1,0 +1,6 @@
+[package]
+name = "dxt"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
