@@ -1,6 +1,6 @@
 use super::{
     ffi::{wl_display, wl_display_connect_to_fd, wl_display_disconnect},
-    object::{registry::WlRegistry, WlObject, WlObjectHandle},
+    object::{WlObject, WlObjectHandle, registry::WlRegistry},
     object_storage::WlObjectStorage,
     proxy::WlProxy,
     wire::MessageBuffer,
@@ -13,20 +13,11 @@ use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, RawDisplayHandle, WaylandDisplayHandle,
 };
 use std::{
-    marker::PhantomData,
+    any, fmt,
     mem::ManuallyDrop,
     os::fd::{IntoRawFd, OwnedFd},
     ptr::NonNull,
 };
-
-#[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
-pub struct WlDisplayBound<'d>(pub PhantomData<&'d WlDisplay>);
-
-impl WlDisplayBound<'_> {
-    pub const fn new() -> Self {
-        Self(PhantomData)
-    }
-}
 
 /// A handle to libwayland backend
 pub struct WlDisplay {
@@ -82,6 +73,14 @@ impl Drop for WlDisplay {
     fn drop(&mut self) {
         // Safety: `self.as_raw_display_ptr()` is a valid display object
         unsafe { wl_display_disconnect(self.as_raw_display_ptr().as_ptr()) };
+    }
+}
+
+impl fmt::Debug for WlDisplay {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct(any::type_name::<Self>())
+            .field("proxy", &*self.proxy)
+            .finish()
     }
 }
 

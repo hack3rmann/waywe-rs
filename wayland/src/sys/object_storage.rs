@@ -1,9 +1,9 @@
 use super::{
-    display::WlDisplayBound,
+    display::WlDisplay,
     object::{Dispatch, WlDynObject, WlObject, WlObjectHandle},
 };
 use crate::object::ObjectId;
-use std::collections::HashMap;
+use std::{collections::HashMap, marker::PhantomData};
 
 #[derive(Debug)]
 pub struct WlObjectStorageEntry {
@@ -14,7 +14,13 @@ pub struct WlObjectStorageEntry {
 pub struct WlObjectStorage<'d> {
     // NOTE(hack3rmann): this is a fast map as long as `ObjectId` hashes to itself
     pub objects: HashMap<ObjectId, WlObjectStorageEntry>,
-    pub _d: WlDisplayBound<'d>,
+    pub _display: PhantomData<&'d WlDisplay>,
+}
+
+// Safety: empty drop implementation ensures that `WlObjectStorage` uses
+// `_display` reference
+impl Drop for WlObjectStorage<'_> {
+    fn drop(&mut self) {}
 }
 
 impl WlObjectStorage<'_> {
@@ -24,7 +30,7 @@ impl WlObjectStorage<'_> {
     pub unsafe fn new() -> Self {
         Self {
             objects: HashMap::new(),
-            _d: WlDisplayBound::new(),
+            _display: PhantomData,
         }
     }
 
