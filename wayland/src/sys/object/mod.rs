@@ -1,14 +1,15 @@
-use crate::object::ObjectId;
+pub mod registry;
 
 use super::{
     ffi::{wl_argument, wl_message, wl_proxy_add_dispatcher, wl_proxy_get_user_data},
     proxy::WlProxy,
     wire::Message,
 };
+use crate::object::ObjectId;
 use std::{
     any::{self, TypeId},
     ffi::{CStr, c_int, c_void},
-    fmt,
+    fmt, hash,
     marker::PhantomData,
     mem::{self, MaybeUninit, offset_of},
     ops::{Deref, DerefMut},
@@ -18,6 +19,7 @@ use std::{
 pub trait Dispatch {
     fn dispatch(&mut self, message: Message<'_>);
 }
+static_assertions::assert_obj_safe!(Dispatch);
 
 pub type WlDispatchFn<T> = fn(&mut T, Message<'_>);
 
@@ -33,17 +35,29 @@ unsafe extern "C" fn dispatch_raw<T>(
     message: *const wl_message,
     arguments: *mut wl_argument,
 ) -> c_int {
+    // Safety: `proxy` is valid object provided by libwayland
     let data = unsafe { wl_proxy_get_user_data(proxy.cast()) };
 
+    // # Safety
+    //
+    // - `data` points to a valid box-allocated instance of `WlDispatchData`
+    // - `data` only being used in dispatcher, libwayland provides exclusive access to the data
     let Some(data) = (unsafe { data.cast::<WlDispatchData<T>>().as_mut() }) else {
-        return 1;
+        return -1;
     };
 
     let Ok(opcode) = u16::try_from(opcode) else {
-        return 1;
+        return -1;
     };
 
+    // # Safety
+    //
+    // - `message` points to a valid instance of `wl_message` (provided by libwayland)
+    // - `message->signature` is a valid C-String (provided by libwayland)
     let signature = unsafe { CStr::from_ptr((*message).signature) };
+
+    // Safety: libwayland provides all arguments according to the signature of
+    // the event therefore there is exactly `signature.count_bytes()` arguments
     let arguments = unsafe { slice::from_raw_parts(arguments, signature.count_bytes()) };
 
     let message = Message { opcode, arguments };
@@ -65,6 +79,18 @@ impl<T> WlObjectHandle<T> {
             id,
             _p: PhantomData,
         }
+    }
+}
+
+impl<T> Default for WlObjectHandle<T> {
+    fn default() -> Self {
+        Self::new(ObjectId::default())
+    }
+}
+
+impl<T> hash::Hash for WlObjectHandle<T> {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        hash::Hash::hash(&self.id, state);
     }
 }
 
@@ -92,6 +118,7 @@ impl<T> PartialEq for WlObjectHandle<T> {
 
 impl<T> Eq for WlObjectHandle<T> {}
 
+#[derive(Clone, Debug, PartialEq, Copy)]
 pub struct TypeInfo {
     pub id: TypeId,
     pub drop: unsafe fn(*mut ()),
@@ -116,11 +143,19 @@ pub struct WlDynObject {
 
 impl WlDynObject {
     pub fn downcast_ref<T: 'static>(&self) -> Option<&WlObject<T>> {
+        // # Safety
+        //
+        // - `WlDynObject` and `WlObject<T>` have the same header - `WlProxy`
+        // - both structs are `repr(C)`
         (self.type_info.id == TypeId::of::<T>())
             .then_some(unsafe { mem::transmute::<&WlDynObject, &WlObject<T>>(self) })
     }
 
     pub fn downcast_mut<T: 'static>(&mut self) -> Option<&mut WlObject<T>> {
+        // # Safety
+        //
+        // - `WlDynObject` and `WlObject<T>` have the same header - `WlProxy`
+        // - both structs are `repr(C)`
         (self.type_info.id == TypeId::of::<T>())
             .then_some(unsafe { mem::transmute::<&mut WlDynObject, &mut WlObject<T>>(self) })
     }
@@ -128,10 +163,17 @@ impl WlDynObject {
 
 impl Drop for WlDynObject {
     fn drop(&mut self) {
+        // Safety: `self.proxy` is a valid object produced by libwayland
         let user_data = unsafe { wl_proxy_get_user_data(self.proxy.as_raw().as_ptr()) };
+
         let data_ptr = user_data
             .wrapping_byte_add(offset_of!(WlDispatchData<()>, data))
             .cast::<()>();
+
+        // # Safety
+        //
+        // - `data_ptr` points to valid `T` location
+        // - `drop` called once
         unsafe { (self.type_info.drop)(data_ptr) }
     }
 }
@@ -147,7 +189,7 @@ impl fmt::Debug for WlDynObject {
 #[repr(C)]
 pub struct WlObject<T> {
     pub(crate) proxy: WlProxy,
-    pub(crate) _p: PhantomData<Box<T>>,
+    pub(crate) _p: PhantomData<T>,
 }
 
 impl<T: Dispatch + 'static> WlObject<T> {
@@ -157,16 +199,24 @@ impl<T: Dispatch + 'static> WlObject<T> {
             data,
         });
 
+        let dispatch_data_ptr = Box::into_raw(dispatch_data);
+
+        // Safety: `proxy` is a valid object provided by libwayland
         let result = unsafe {
             wl_proxy_add_dispatcher(
                 proxy.as_raw().as_ptr(),
                 dispatch_raw::<T>,
                 ptr::null(),
-                Box::into_raw(dispatch_data).cast(),
+                dispatch_data_ptr.cast(),
             )
         };
 
-        assert_ne!(result, -1, "`wl_proxy_add_dispatcher` failed");
+        if -1 != result {
+            // Safety: `WlObject` have not constructed yet
+            // therefore we should take care of the `Box` ourselves
+            drop(unsafe { Box::from_raw(dispatch_data_ptr) });
+            panic!("`wl_proxy_add_dispatcher` failed");
+        }
 
         Self {
             proxy,
@@ -184,6 +234,7 @@ impl<T: Dispatch + 'static> WlObject<T> {
         let mut this = MaybeUninit::new(self);
 
         WlDynObject {
+            // Safety: here we moving out of `WlObject` without calling the destructor
             proxy: unsafe {
                 this.as_mut_ptr()
                     .wrapping_byte_add(offset_of!(Self, proxy))
@@ -197,7 +248,13 @@ impl<T: Dispatch + 'static> WlObject<T> {
 
 impl<T> Drop for WlObject<T> {
     fn drop(&mut self) {
+        // Safety: `self.proxy` is valid object provided by libwayland
         let user_data = unsafe { wl_proxy_get_user_data(self.proxy.as_raw().as_ptr()) };
+
+        // # Safety
+        //
+        // - `user_data` points to a valid instance of `WlDispatchData<T>`
+        // - drop called once on a valid instance
         unsafe { drop(Box::from_raw(user_data.cast::<WlDispatchData<T>>())) };
     }
 }
@@ -206,8 +263,10 @@ impl<T> Deref for WlObject<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
+        // Safety: `self.proxy` is valid object provided by libwayland
         let user_data = unsafe { wl_proxy_get_user_data(self.proxy.as_raw().as_ptr()) };
 
+        // Safety: `user_data` points to a valid instance of `WlDispatchData<T>`
         unsafe {
             &user_data
                 .cast::<WlDispatchData<T>>()
@@ -220,8 +279,10 @@ impl<T> Deref for WlObject<T> {
 
 impl<T> DerefMut for WlObject<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
+        // Safety: `self.proxy` is valid object provided by libwayland
         let user_data = unsafe { wl_proxy_get_user_data(self.proxy.as_raw().as_ptr()) };
 
+        // Safety: `user_data` points to a valid instance of `WlDispatchData<T>`
         unsafe {
             &mut user_data
                 .cast::<WlDispatchData<T>>()

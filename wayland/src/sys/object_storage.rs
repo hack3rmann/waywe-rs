@@ -7,21 +7,25 @@ pub struct WlObjectStorageEntry {
     pub object: WlDynObject,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct WlObjectStorage {
     // NOTE(hack3rmann): this is a fast map as long as `ObjectId` hashes to itself
     objects: HashMap<ObjectId, WlObjectStorageEntry>,
 }
 
 impl WlObjectStorage {
-    pub fn new() -> Self {
+    /// # Safety
+    ///
+    /// `WlObjectStorage` should be dropped before `WlDisplay`
+    pub unsafe fn new() -> Self {
         Self {
             objects: HashMap::new(),
         }
     }
 
     pub fn insert<T: Dispatch + 'static>(&mut self, object: WlObject<T>) {
-        let _ = self.objects
+        let _ = self
+            .objects
             .insert(
                 object.proxy().id(),
                 WlObjectStorageEntry {
@@ -41,10 +45,7 @@ impl WlObjectStorage {
             .and_then(|o| o.downcast_ref())
     }
 
-    pub fn object<T: Dispatch + 'static>(
-        &self,
-        handle: WlObjectHandle<T>,
-    ) -> &WlObject<T> {
+    pub fn object<T: Dispatch + 'static>(&self, handle: WlObjectHandle<T>) -> &WlObject<T> {
         self.get_object(handle).unwrap()
     }
 }
