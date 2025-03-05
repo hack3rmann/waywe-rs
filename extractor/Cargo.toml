@@ -4,4 +4,5 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-safe-transmute = "0.11.3"
+safe-transmute.workspace = true
+thiserror.workspace = true
