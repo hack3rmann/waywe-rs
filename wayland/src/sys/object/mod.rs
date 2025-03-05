@@ -211,7 +211,7 @@ impl<T: Dispatch + 'static> WlObject<T> {
             )
         };
 
-        if -1 != result {
+        if -1 == result {
             // Safety: `WlObject` have not constructed yet
             // therefore we should take care of the `Box` ourselves
             drop(unsafe { Box::from_raw(dispatch_data_ptr) });
