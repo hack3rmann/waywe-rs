@@ -1,6 +1,6 @@
 use super::{
     ffi::{wl_display, wl_display_connect_to_fd, wl_display_disconnect},
-    object::{WlObject, WlObjectHandle, registry::WlRegistry},
+    object::{WlObject, registry::WlRegistry},
     object_storage::WlObjectStorage,
     proxy::WlProxy,
     wire::MessageBuffer,
@@ -9,12 +9,20 @@ use crate::{
     interface::{Request, WlDisplayGetRegistryRequest},
     sys::ffi::wl_display_roundtrip,
 };
-use std::{mem::ManuallyDrop, os::fd::{IntoRawFd, OwnedFd}, ptr::NonNull};
+use raw_window_handle::{
+    DisplayHandle, HandleError, HasDisplayHandle, RawDisplayHandle, WaylandDisplayHandle,
+};
+use std::{
+    collections::HashMap,
+    marker::PhantomData,
+    mem::ManuallyDrop,
+    os::fd::{IntoRawFd, OwnedFd},
+    ptr::NonNull,
+};
 
 /// A handle to libwayland backend
 pub struct WlDisplay {
-    pub proxy: ManuallyDrop<WlProxy>,
-    pub storage: ManuallyDrop<WlObjectStorage>,
+    proxy: ManuallyDrop<WlProxy>,
 }
 
 impl WlDisplay {
@@ -29,29 +37,30 @@ impl WlDisplay {
 
         // Safety: `storage` is dropped before `wl_display` disconnects
         // see `Drop` impl for `WlDisplay`
-        Self {
-            proxy,
-            storage: ManuallyDrop::new(unsafe { WlObjectStorage::new() }),
-        }
+        Self { proxy }
     }
 
     pub fn as_raw_display_ptr(&self) -> NonNull<wl_display> {
         self.proxy.as_raw().cast()
     }
 
-    pub fn create_registry(&mut self, buf: &mut impl MessageBuffer) -> WlObjectHandle<WlRegistry> {
+    pub fn create_registry(&self, buf: &mut impl MessageBuffer) -> WlObject<WlRegistry<'_>> {
         // Safety: parent interface matcher request's one
         let raw_proxy = unsafe { WlDisplayGetRegistryRequest.send_raw(&self.proxy, buf) };
 
         // Safety: resulting proxy is a valid object provided by libwayland
         let proxy = unsafe { WlProxy::from_raw(NonNull::new(raw_proxy).unwrap()) };
 
-        let proxy_id = proxy.id();
-
-        self.storage
-            .insert(WlObject::new(proxy, WlRegistry::default()));
-
-        WlObjectHandle::new(proxy_id)
+        WlObject::new(
+            proxy,
+            WlRegistry {
+                interfaces: HashMap::default(),
+                storage: WlObjectStorage {
+                    objects: HashMap::new(),
+                    _p: PhantomData,
+                },
+            },
+        )
     }
 
     pub fn dispatch_all(&self) {
@@ -60,23 +69,22 @@ impl WlDisplay {
             wl_display_roundtrip(self.as_raw_display_ptr().as_ptr())
         });
     }
-
-    pub fn storage(&self) -> &WlObjectStorage {
-        &self.storage
-    }
-
-    pub fn storage_mut(&mut self) -> &mut WlObjectStorage {
-        &mut self.storage
-    }
 }
 
 impl Drop for WlDisplay {
     fn drop(&mut self) {
-        // Safety: ensure the storage is dropped before display disconnects
-        unsafe { ManuallyDrop::drop(&mut self.storage) };
-
         // Safety: `self.as_raw_display_ptr()` is a valid display object
         unsafe { wl_display_disconnect(self.as_raw_display_ptr().as_ptr()) };
+    }
+}
+
+impl HasDisplayHandle for WlDisplay {
+    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
+        Ok(unsafe {
+            DisplayHandle::borrow_raw(RawDisplayHandle::Wayland(WaylandDisplayHandle::new(
+                self.as_raw_display_ptr(),
+            )))
+        })
     }
 }
 
@@ -92,17 +100,11 @@ mod tests {
 
         let mut buf = SmallVecMessageBuffer::<8>::new();
 
-        let mut display = WlDisplay::connect_to_fd(wayland_sock);
+        let display = WlDisplay::connect_to_fd(wayland_sock);
         let registry = display.create_registry(&mut buf);
 
         display.dispatch_all();
 
-        assert!(
-            display
-                .storage()
-                .object(registry)
-                .interfaces
-                .contains_key(c"wl_compositor")
-        );
+        assert!(registry.interfaces.contains_key(c"wl_compositor"));
     }
 }

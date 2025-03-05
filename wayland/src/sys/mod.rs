@@ -18,7 +18,8 @@ pub enum InterfaceObjectType {
     Region,
     Callback,
     Registry,
-    WlShmPool,
+    ShmPool,
+    Compositor,
 }
 
 impl InterfaceObjectType {
@@ -36,7 +37,8 @@ impl InterfaceObjectType {
             Self::Region => unsafe { &ffi::wl_region_interface },
             Self::Callback => unsafe { &ffi::wl_callback_interface },
             Self::Registry => unsafe { &ffi::wl_registry_interface },
-            Self::WlShmPool => unsafe { &ffi::wl_shm_pool_interface },
+            Self::ShmPool => unsafe { &ffi::wl_shm_pool_interface },
+            Self::Compositor => unsafe { &ffi::wl_compositor_interface },
         }
     }
 
@@ -47,7 +49,8 @@ impl InterfaceObjectType {
             Self::Region => c"wl_region",
             Self::Callback => c"wl_callback",
             Self::Registry => c"wl_registry",
-            Self::WlShmPool => c"wl_shm_pool",
+            Self::ShmPool => c"wl_shm_pool",
+            Self::Compositor => c"wl_compositor",
         }
     }
 }

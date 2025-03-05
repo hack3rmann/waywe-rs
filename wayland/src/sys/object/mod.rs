@@ -1,4 +1,5 @@
 pub mod registry;
+pub mod compositor;
 
 use super::{
     ffi::{wl_argument, wl_message, wl_proxy_add_dispatcher, wl_proxy_get_user_data},

@@ -27,24 +27,40 @@ use crate::{
 
 pub mod request {
     use super::*;
-    use crate::sys::{Interface, wire::OpCode};
+    use crate::sys::{wire::OpCode, Interface, InterfaceObjectType};
+    use std::marker::PhantomData;
+
+    pub trait HasInterface {
+        const INTERFACE: Interface;
+    }
 
     /// Binds a new, client-created object to the server using the
     /// specified name as the identifier.
-    #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
-    pub struct Bind {
-        /// Bounded object
-        pub interface: Interface,
+    #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub struct Bind<T: HasInterface> {
+        _p: PhantomData<T>,
     }
 
-    impl<'b> Request<'b> for Bind {
+    impl<T: HasInterface> Bind<T> {
+        pub const fn new() -> Self {
+            Self { _p: PhantomData }
+        }
+    }
+
+    impl<T: HasInterface> Default for Bind<T> {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    impl<'b, T: HasInterface> Request<'b> for Bind<T> {
         const CODE: OpCode = 0;
-        // FIXME(hack3rmann): create some kind of dynamic `InterfaceObjectType`
+        const OUTGOING_INTERFACE: Option<InterfaceObjectType> = Some(T::INTERFACE.object_type);
 
         fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
             Message::builder(buf)
                 .opcode(Self::CODE)
-                .interface(self.interface)
+                .interface(T::INTERFACE)
                 .build()
         }
     }

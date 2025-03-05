@@ -33,7 +33,7 @@ pub mod request {
     impl<'b> Request<'b> for CreatePool<'b> {
         const CODE: OpCode = 0;
         const OUTGOING_INTERFACE: Option<InterfaceObjectType> =
-            Some(InterfaceObjectType::WlShmPool);
+            Some(InterfaceObjectType::ShmPool);
 
         fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
             Message::builder(buf)
