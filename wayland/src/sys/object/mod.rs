@@ -7,13 +7,7 @@ use super::{
 };
 use crate::object::ObjectId;
 use std::{
-    any::{self, TypeId},
-    ffi::{CStr, c_int, c_void},
-    fmt, hash,
-    marker::PhantomData,
-    mem::{self, MaybeUninit, offset_of},
-    ops::{Deref, DerefMut},
-    ptr, slice,
+    any::{self, TypeId}, ffi::{c_int, c_void, CStr}, fmt, hash, marker::PhantomData, mem::{self, offset_of, MaybeUninit}, ops::{Deref, DerefMut}, process, ptr, slice
 };
 
 pub trait Dispatch {
@@ -35,37 +29,41 @@ unsafe extern "C" fn dispatch_raw<T>(
     message: *const wl_message,
     arguments: *mut wl_argument,
 ) -> c_int {
-    // Safety: `proxy` is valid object provided by libwayland
-    let data = unsafe { wl_proxy_get_user_data(proxy.cast()) };
+    std::panic::catch_unwind(|| {
+        // Safety: `proxy` is valid object provided by libwayland
+        let data = unsafe { wl_proxy_get_user_data(proxy.cast()) };
 
-    // # Safety
-    //
-    // - `data` points to a valid box-allocated instance of `WlDispatchData`
-    // - `data` only being used in dispatcher, libwayland provides exclusive access to the data
-    let Some(data) = (unsafe { data.cast::<WlDispatchData<T>>().as_mut() }) else {
-        return -1;
-    };
+        // # Safety
+        //
+        // - `data` points to a valid box-allocated instance of `WlDispatchData`
+        // - `data` only being used in dispatcher, libwayland provides exclusive access to the data
+        let Some(data) = (unsafe { data.cast::<WlDispatchData<T>>().as_mut() }) else {
+            return -1;
+        };
 
-    let Ok(opcode) = u16::try_from(opcode) else {
-        return -1;
-    };
+        let Ok(opcode) = u16::try_from(opcode) else {
+            return -1;
+        };
 
-    // # Safety
-    //
-    // - `message` points to a valid instance of `wl_message` (provided by libwayland)
-    // - `message->signature` is a valid C-String (provided by libwayland)
-    let signature = unsafe { CStr::from_ptr((*message).signature) };
+        // # Safety
+        //
+        // - `message` points to a valid instance of `wl_message` (provided by libwayland)
+        // - `message->signature` is a valid C-String (provided by libwayland)
+        let signature = unsafe { CStr::from_ptr((*message).signature) };
 
-    // Safety: libwayland provides all arguments according to the signature of
-    // the event therefore there is exactly `signature.count_bytes()` arguments
-    let arguments = unsafe { slice::from_raw_parts(arguments, signature.count_bytes()) };
+        // Safety: libwayland provides all arguments according to the signature of
+        // the event therefore there is exactly `signature.count_bytes()` arguments
+        let arguments = unsafe { slice::from_raw_parts(arguments, signature.count_bytes()) };
 
-    let message = Message { opcode, arguments };
+        let message = Message { opcode, arguments };
 
-    // FIXME(hack3rmann): catch unwind here
-    (data.dispatch)(&mut data.data, message);
+        (data.dispatch)(&mut data.data, message);
 
-    0
+        0
+    }).unwrap_or_else(|_| {
+        tracing::error!("panic in wl_dispatcher_func_t");
+        process::abort();
+    })
 }
 
 pub struct WlObjectHandle<T> {
