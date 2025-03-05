@@ -1,5 +1,6 @@
-pub mod registry;
 pub mod compositor;
+pub mod registry;
+pub mod surface;
 
 use super::{
     ffi::{wl_argument, wl_message, wl_proxy_add_dispatcher, wl_proxy_get_user_data},
@@ -8,7 +9,13 @@ use super::{
 };
 use crate::object::ObjectId;
 use std::{
-    any::{self, TypeId}, ffi::{c_int, c_void, CStr}, fmt, hash, marker::PhantomData, mem::{self, offset_of, MaybeUninit}, ops::{Deref, DerefMut}, process, ptr, slice
+    any::{self, TypeId},
+    ffi::{CStr, c_int, c_void},
+    fmt, hash,
+    marker::PhantomData,
+    mem::{self, MaybeUninit, offset_of},
+    ops::{Deref, DerefMut},
+    process, ptr, slice,
 };
 
 pub trait Dispatch {
@@ -61,7 +68,8 @@ unsafe extern "C" fn dispatch_raw<T>(
         (data.dispatch)(&mut data.data, message);
 
         0
-    }).unwrap_or_else(|_| {
+    })
+    .unwrap_or_else(|_| {
         tracing::error!("panic in wl_dispatcher_func_t");
         process::abort();
     })
@@ -298,5 +306,51 @@ impl<T: fmt::Debug> fmt::Debug for WlObject<T> {
             .field("proxy", &self.proxy)
             .field("data", self.deref())
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compositor::WlCompositor;
+    use crate::{
+        init::connect_wayland_socket,
+        sys::{display::WlDisplay, wire::SmallVecMessageBuffer},
+    };
+
+    unsafe fn connect_display() -> WlDisplay {
+        let wayland_sock = unsafe { connect_wayland_socket().unwrap() };
+        WlDisplay::connect_to_fd(wayland_sock)
+    }
+
+    #[test]
+    fn get_registry() {
+        let mut buf = SmallVecMessageBuffer::<8>::new();
+
+        // Safety: called once on the start of the program
+        let display = unsafe { connect_display() };
+        let registry = display.create_registry(&mut buf);
+
+        display.dispatch_all();
+
+        assert!(registry.interfaces.contains_key(c"wl_compositor"));
+    }
+
+    #[test]
+    fn create_surface() {
+        let mut buf = SmallVecMessageBuffer::<8>::new();
+
+        // Safety: called once on the start of the program
+        let display = unsafe { connect_display() };
+        let mut registry = display.create_registry(&mut buf);
+
+        display.dispatch_all();
+
+        let compositor = registry.bind_default::<WlCompositor>(&mut buf).unwrap();
+        let surface = WlCompositor::create_surface(&mut buf, &mut registry.storage, compositor);
+
+        assert_eq!(
+            registry.storage.object(surface).proxy().interface_name(),
+            "wl_surface",
+        );
     }
 }

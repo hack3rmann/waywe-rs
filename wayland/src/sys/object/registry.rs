@@ -34,12 +34,7 @@ impl WlObject<WlRegistry<'_>> {
         let raw_proxy = unsafe { WlRegistryBindRequest::<T>::new().send_raw(&self.proxy, buf) };
         let proxy = unsafe { WlProxy::from_raw(NonNull::new(raw_proxy)?) };
 
-        let proxy_id = proxy.id();
-
-        let object = WlObject::new(proxy, object);
-        self.storage.insert(object);
-
-        Some(WlObjectHandle::new(proxy_id))
+        Some(self.storage.insert(WlObject::new(proxy, object)))
     }
 
     pub fn bind_default<T>(&mut self, buf: &mut impl MessageBuffer) -> Option<WlObjectHandle<T>>
@@ -64,28 +59,5 @@ impl Dispatch for WlRegistry<'_> {
                 version: event.version,
             },
         );
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::{
-        init::connect_wayland_socket,
-        sys::{display::WlDisplay, object::compositor::WlCompositor, wire::SmallVecMessageBuffer},
-    };
-
-    #[test]
-    fn get_registry() {
-        // Safety: called once on the start of the program
-        let wayland_sock = unsafe { connect_wayland_socket().unwrap() };
-
-        let mut buf = SmallVecMessageBuffer::<8>::new();
-
-        let display = WlDisplay::connect_to_fd(wayland_sock);
-        let mut registry = display.create_registry(&mut buf);
-
-        display.dispatch_all();
-
-        let _compositor = registry.bind_default::<WlCompositor>(&mut buf).unwrap();
     }
 }

@@ -1,8 +1,8 @@
 pub mod display;
 pub mod ffi;
 pub mod object;
-pub mod proxy;
 pub mod object_storage;
+pub mod proxy;
 pub mod wire;
 
 use crate::object::ObjectId;
@@ -14,12 +14,14 @@ use std::ffi::CStr;
 pub enum InterfaceObjectType {
     #[default]
     Display = 1,
-    Surface,
-    Region,
+    Registry = 2,
+    Compositor = 3,
+    ShmPool = 4,
+    Shm = 5,
+    Buffer = 6,
+    Surface = 13,
+    Region = 19,
     Callback,
-    Registry,
-    ShmPool,
-    Compositor,
 }
 
 impl InterfaceObjectType {
@@ -39,6 +41,8 @@ impl InterfaceObjectType {
             Self::Registry => unsafe { &ffi::wl_registry_interface },
             Self::ShmPool => unsafe { &ffi::wl_shm_pool_interface },
             Self::Compositor => unsafe { &ffi::wl_compositor_interface },
+            Self::Shm => unsafe { &ffi::wl_shm_interface },
+            Self::Buffer => unsafe { &ffi::wl_buffer_interface },
         }
     }
 
@@ -51,6 +55,8 @@ impl InterfaceObjectType {
             Self::Registry => c"wl_registry",
             Self::ShmPool => c"wl_shm_pool",
             Self::Compositor => c"wl_compositor",
+            Self::Shm => c"wl_shm",
+            Self::Buffer => c"wl_buffer",
         }
     }
 }

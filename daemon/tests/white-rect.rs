@@ -1,22 +1,45 @@
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use std::mem;
+use wayland::{
+    init::connect_wayland_socket,
+    sys::{display::WlDisplay, object::compositor::WlCompositor, wire::SmallVecMessageBuffer},
+};
 use wgpu::util::DeviceExt as _;
 
 #[tokio::test]
-async fn t1() -> Result<(), Box<dyn std::error::Error>> {
+async fn t1() {
+    let wayland_sock = unsafe { connect_wayland_socket().unwrap() };
+    let mut buf = SmallVecMessageBuffer::<8>::new();
+
+    let display = WlDisplay::connect_to_fd(wayland_sock);
+    let mut registry = display.create_registry(&mut buf);
+
+    display.dispatch_all();
+
+    let compositor = registry.bind_default::<WlCompositor>(&mut buf).unwrap();
+    let surface = WlCompositor::create_surface(&mut buf, &mut registry.storage, compositor);
+
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
         backends: wgpu::Backends::VULKAN,
         flags: wgpu::InstanceFlags::DEBUG | wgpu::InstanceFlags::VALIDATION,
         ..Default::default()
     });
 
-    let raw_window_handle = todo!();
-    let raw_display_handle = todo!();
+    let raw_display_handle = display.display_handle().unwrap().as_raw();
+    let raw_window_handle = registry
+        .storage
+        .object(surface)
+        .window_handle()
+        .unwrap()
+        .as_raw();
 
     let surface = unsafe {
-        instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
-            raw_display_handle,
-            raw_window_handle,
-        })?
+        instance
+            .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
+                raw_display_handle,
+                raw_window_handle,
+            })
+            .unwrap()
     };
 
     let adapter = instance
@@ -38,7 +61,8 @@ async fn t1() -> Result<(), Box<dyn std::error::Error>> {
             },
             None,
         )
-        .await?;
+        .await
+        .unwrap();
 
     const WIDTH: u32 = 1000;
     const HEIGHT: u32 = WIDTH;
@@ -133,7 +157,7 @@ async fn t1() -> Result<(), Box<dyn std::error::Error>> {
         cache: None,
     });
 
-    let surface_texture = surface.get_current_texture()?;
+    let surface_texture = surface.get_current_texture().unwrap();
     let surface_view = surface_texture.texture.create_view(&Default::default());
 
     let mut encoder = device.create_command_encoder(&Default::default());

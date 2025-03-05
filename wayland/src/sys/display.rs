@@ -20,6 +20,15 @@ use std::{
     ptr::NonNull,
 };
 
+#[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
+pub struct WlDisplayBound<'d>(pub PhantomData<&'d WlDisplay>);
+
+impl WlDisplayBound<'_> {
+    pub const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
 /// A handle to libwayland backend
 pub struct WlDisplay {
     proxy: ManuallyDrop<WlProxy>,
@@ -55,10 +64,7 @@ impl WlDisplay {
             proxy,
             WlRegistry {
                 interfaces: HashMap::default(),
-                storage: WlObjectStorage {
-                    objects: HashMap::new(),
-                    _p: PhantomData,
-                },
+                storage: unsafe { WlObjectStorage::new() },
             },
         )
     }
@@ -85,26 +91,5 @@ impl HasDisplayHandle for WlDisplay {
                 self.as_raw_display_ptr(),
             )))
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{init::connect_wayland_socket, sys::wire::SmallVecMessageBuffer};
-
-    #[test]
-    fn get_registry() {
-        // Safety: called once on the start of the program
-        let wayland_sock = unsafe { connect_wayland_socket().unwrap() };
-
-        let mut buf = SmallVecMessageBuffer::<8>::new();
-
-        let display = WlDisplay::connect_to_fd(wayland_sock);
-        let registry = display.create_registry(&mut buf);
-
-        display.dispatch_all();
-
-        assert!(registry.interfaces.contains_key(c"wl_compositor"));
     }
 }
