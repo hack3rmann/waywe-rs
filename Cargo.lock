@@ -91,6 +91,7 @@ name = "dxt"
 version = "0.0.1"
 dependencies = [
  "safe-transmute",
+ "transmute-extra",
 ]
 
 [[package]]
@@ -345,6 +346,10 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "transmute-extra"
+version = "0.0.1"
 
 [[package]]
 name = "unicode-ident"

@@ -1,0 +1,6 @@
+[package]
+name = "transmute-extra"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

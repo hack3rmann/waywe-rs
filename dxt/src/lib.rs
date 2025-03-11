@@ -1,25 +1,27 @@
 use safe_transmute::{guard::SingleManyGuard, transmute_many, transmute_one_to_bytes};
 
+// The format of the dxt image
 pub enum DxtFormat {
     Dxt1,
     Dxt3,
     Dxt5,
 }
 
+/// Decompresses dxt image given its width, height and bytes
+///
+/// # Return value
+///
+/// Returns pixels of the decompressed picture in the format of `ABGR`
 pub fn decompress_image(width: usize, height: usize, data: &[u32], format: DxtFormat) -> Vec<u32> {
     let block_size = match format {
         DxtFormat::Dxt1 => 2,
         DxtFormat::Dxt3 | DxtFormat::Dxt5 => 4,
     };
 
+    // The picture is divided into 4x4 blocks
     let num_blocks_width = (width + 3) / 4;
     let num_blocks_height = (height + 3) / 4;
     let expected_data_size = num_blocks_height * num_blocks_width * block_size;
-
-    println!(
-        "data_len: {}, expected_size:{expected_data_size}",
-        data.len()
-    );
 
     assert!(
         data.len() >= expected_data_size,
@@ -38,9 +40,9 @@ pub fn decompress_image(width: usize, height: usize, data: &[u32], format: DxtFo
             let y = block_y * 4;
 
             match format {
-                DxtFormat::Dxt1 => decompress_dxt_1_block(data, &mut res, x, y, width, height),
-                DxtFormat::Dxt3 => decompress_dxt_3_block(data, &mut res, x, y, width, height),
-                DxtFormat::Dxt5 => decompress_dxt_5_block(data, &mut res, x, y, width, height),
+                DxtFormat::Dxt1 => decompress_dxt1_block(data, &mut res, x, y, width, height),
+                DxtFormat::Dxt3 => decompress_dxt3_block(data, &mut res, x, y, width, height),
+                DxtFormat::Dxt5 => decompress_dxt5_block(data, &mut res, x, y, width, height),
             }
 
             block_idx += 1;
@@ -50,12 +52,10 @@ pub fn decompress_image(width: usize, height: usize, data: &[u32], format: DxtFo
     res
 }
 
+/// Extracts color palette encoded in u32
 #[rustfmt::skip]
-fn get_color_palette(data: u32, format: DxtFormat) -> [u32; 4] {
-    // TODO(ArnoDarkrose): handle error
-
-    let colors = transmute_many::<u16, SingleManyGuard>(transmute_one_to_bytes(&data))
-        .expect("failed to transmute u32 to u16 slice");
+fn get_color_palette<'a>(data: u32, format: DxtFormat) -> [u32; 4] {
+    let colors = transmute_many::<u16, SingleManyGuard>(transmute_one_to_bytes(&data)).expect("u32 can be safely transmuted to the slice of two u16");
 
     let color0 = colors[0] as u32;
     let color1 = colors[1] as u32;
@@ -69,7 +69,6 @@ fn get_color_palette(data: u32, format: DxtFormat) -> [u32; 4] {
     let g1 = ((color1 >> 5) & 63) * 255 / 63;
     let b1 = (color1 & 31) * 255 / 31;
 
-    // NOTE(ArnoDarkrose): maybe make this from_be_bytes
     let mut palette: [u32; 4] = [
         u32::from_le_bytes([r0 as u8, g0 as u8, b0 as u8, 255]),
         u32::from_le_bytes([r1 as u8, g1 as u8, b1 as u8, 255]),
@@ -106,9 +105,16 @@ fn get_color_palette(data: u32, format: DxtFormat) -> [u32; 4] {
     palette
 }
 
-fn decompress_dxt_1_block(
+/// Decompresses one block of the dxt1 image
+///
+/// # Format of the block:
+///
+/// - 2 bytes: color0 (in RGB565)
+/// - 2 bytes: color1 (in RGB565)
+/// - 4 bytes: color indices (2 bits per pixel)
+fn decompress_dxt1_block(
     data: &[u32],
-    pixels: &mut [u32],
+    out_pixels: &mut [u32],
     x: usize,
     y: usize,
     width: usize,
@@ -124,15 +130,24 @@ fn decompress_dxt_1_block(
                 let color_idx = (byte_view[i] >> (j * 2)) & 3;
                 let color = palette[color_idx as usize];
 
-                pixels[(y + i) * width + x + j] = color;
+                out_pixels[(y + i) * width + x + j] = color;
             }
         }
     }
 }
 
-fn decompress_dxt_3_block(
+/// Decompresses one block of the dxt3 image
+///
+/// # Format of the block:
+///
+/// - 8 bytes: alpha values (4 bits per pixel)
+/// - 8 bytes: color data (as in dxt1):
+///   - 2 bytes: color0 (in RGB565)
+///   - 2 bytes: color1 (in RGB565)
+///   - 4 bytes: color indices (2 bits per pixel)
+fn decompress_dxt3_block(
     data: &[u32],
-    pixels: &mut [u32],
+    out_pixels: &mut [u32],
     x: usize,
     y: usize,
     width: usize,
@@ -168,15 +183,26 @@ fn decompress_dxt_3_block(
                 color &= u32::MAX << 8;
                 color |= alpha as u32;
 
-                pixels[(y + i) * width + x + j] = color;
+                out_pixels[(y + i) * width + x + j] = color;
             }
         }
     }
 }
 
-fn decompress_dxt_5_block(
+/// Decompresses one block of the dxt5 image
+///
+/// # Format of the block:
+///
+/// - 1 byte: alpha0
+/// - 1 byte: alpha1
+/// - 6 bytes: alpha indices (3 bits per pixel)
+/// - 8 bytes: color data (as in dxt1):
+///   - 2 bytes: color0 (in RGB565)
+///   - 2 bytes: color1 (in RGB565)
+///   - 4 bytes: color indices (2 bits per pixel)
+fn decompress_dxt5_block(
     data: &[u32],
-    pixels: &mut [u32],
+    out_pixels: &mut [u32],
     x: usize,
     y: usize,
     width: usize,
@@ -231,7 +257,7 @@ fn decompress_dxt_5_block(
                 color &= u32::MAX >> 8;
                 color |= (alpha as u32) << 24;
 
-                pixels[(y + i) * width + x + j] = color;
+                out_pixels[(y + i) * width + x + j] = color;
             }
 
             cur_byte >>= 3;
@@ -240,36 +266,12 @@ fn decompress_dxt_5_block(
     }
 }
 
-pub fn transmute_vec(mut src: Vec<u8>) -> Option<Vec<u32>> {
-    if src.len() % 4 != 0 || src.capacity() % 4 != 0 {
-        return None;
-    }
-
-    let ptr = src.as_ptr();
-
-    if !(ptr.cast::<u32>().is_aligned()) {
-        // TODO(ArnoDarkrose): handle error
-        Some(
-            src.chunks(4)
-                .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
-                .collect(),
-        )
-    } else {
-        // TODO(ArnoDarkrose): safety
-        unsafe {
-            let capacity = src.capacity();
-            let len = src.len();
-            let ptr = src.as_mut_ptr();
-            std::mem::forget(src);
-            Some(Vec::from_raw_parts(ptr.cast(), len / 4, capacity / 4))
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io::Read;
+
+    use transmute_extra::transmute_vec;
 
     #[test]
     fn test_decopmpress_dxt5() {
