@@ -9,7 +9,7 @@ use thiserror::Error;
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Description<'s> {
     #[serde(rename = "$attr:summary")]
-    pub summary: Cow<'s, str>,
+    pub summary: Option<Cow<'s, str>>,
     #[serde(rename = "$value")]
     pub body: Option<Cow<'s, str>>,
 }
@@ -49,7 +49,7 @@ pub struct Arg<'s> {
     #[serde(rename = "$attr:type")]
     pub ty: ArgType,
     #[serde(rename = "$attr:summary")]
-    pub summary: Cow<'s, str>,
+    pub summary: Option<Cow<'s, str>>,
     #[serde(rename = "$attr:interface")]
     pub interface: Option<Cow<'s, str>>,
     #[serde(rename = "$attr:allow_null", default)]
@@ -235,27 +235,27 @@ mod tests {
                         name: "wl_display".into(),
                         version: 1,
                         description: Some(Description {
-                            summary: "wl_display desc".into(),
+                            summary: Some("wl_display desc".into()),
                             body: Some("interface of wl_display".into()),
                         }),
                         entries: smallvec![InterfaceEntry::Request(Message {
                             name: "get_registry".into(),
                             description: Some(Description {
-                                summary: "get registry".into(),
+                                summary: Some("get registry".into()),
                                 body: Some("a request to get registry".into()),
                             }),
                             arg: smallvec![
                                 Arg {
                                     name: "arg1".into(),
                                     ty: ArgType::Uint,
-                                    summary: "first argument".into(),
+                                    summary: Some("first argument".into()),
                                     interface: Some("wl_registry".into()),
                                     allow_null: false,
                                 },
                                 Arg {
                                     name: "arg2".into(),
                                     ty: ArgType::Uint,
-                                    summary: "second argument".into(),
+                                    summary: Some("second argument".into()),
                                     interface: Some("wl_registry".into()),
                                     allow_null: false,
                                 }
@@ -266,19 +266,19 @@ mod tests {
                         name: "wl_display".into(),
                         version: 1,
                         description: Some(Description {
-                            summary: "wl_display desc".into(),
+                            summary: Some("wl_display desc".into()),
                             body: Some("interface of wl_display".into()),
                         }),
                         entries: smallvec![InterfaceEntry::Request(Message {
                             name: "get_registry".into(),
                             description: Some(Description {
-                                summary: "get registry".into(),
+                                summary: Some("get registry".into()),
                                 body: Some("a request to get registry".into()),
                             }),
                             arg: smallvec![Arg {
                                 name: "arg1".into(),
                                 ty: ArgType::Uint,
-                                summary: "first argument".into(),
+                                summary: Some("first argument".into()),
                                 interface: Some("wl_registry".into()),
                                 allow_null: false,
                             }],

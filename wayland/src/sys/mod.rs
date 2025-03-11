@@ -5,9 +5,14 @@ pub mod object_storage;
 pub mod proxy;
 pub mod wire;
 
+pub mod protocols {
+    wayland_scanner::include_wl_interfaces!("wayland-protocols/wayland.xml");
+}
+
 use crate::object::ObjectId;
 use core::fmt;
 use ffi::wl_interface;
+use wayland_sys::Interface as FfiInterface;
 use std::ffi::CStr;
 
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
@@ -29,35 +34,38 @@ impl InterfaceObjectType {
         ObjectId::new(self as u32)
     }
 
-    pub const fn backend_interface(self) -> &'static wl_interface {
-        use crate::sys::ffi;
-
+    pub const fn backend_ffi_interface(self) -> &'static FfiInterface<'static> {
         // FIXME(hack3rmann): add statics for zwlr_layer_shell_v1 and zwlr_layer_surface_v1
         match self {
-            Self::Display => unsafe { &ffi::wl_display_interface },
-            Self::Surface => unsafe { &ffi::wl_surface_interface },
-            Self::Region => unsafe { &ffi::wl_region_interface },
-            Self::Callback => unsafe { &ffi::wl_callback_interface },
-            Self::Registry => unsafe { &ffi::wl_registry_interface },
-            Self::ShmPool => unsafe { &ffi::wl_shm_pool_interface },
-            Self::Compositor => unsafe { &ffi::wl_compositor_interface },
-            Self::Shm => unsafe { &ffi::wl_shm_interface },
-            Self::Buffer => unsafe { &ffi::wl_buffer_interface },
+            Self::Display => &protocols::wl_display::INTERFACE,
+            Self::Surface => &protocols::wl_surface::INTERFACE,
+            Self::Region => &protocols::wl_region::INTERFACE,
+            Self::Callback => &protocols::wl_callback::INTERFACE,
+            Self::Registry => &protocols::wl_registry::INTERFACE,
+            Self::ShmPool => &protocols::wl_shm_pool::INTERFACE,
+            Self::Compositor => &protocols::wl_compositor::INTERFACE,
+            Self::Shm => &protocols::wl_shm::INTERFACE,
+            Self::Buffer => &protocols::wl_buffer::INTERFACE,
+        }
+    }
+
+    pub const fn backend_interface(self) -> &'static wl_interface {
+        // FIXME(hack3rmann): add statics for zwlr_layer_shell_v1 and zwlr_layer_surface_v1
+        match self {
+            Self::Display => &protocols::wl_display::WL_INTERFACE,
+            Self::Surface => &protocols::wl_surface::WL_INTERFACE,
+            Self::Region => &protocols::wl_region::WL_INTERFACE,
+            Self::Callback => &protocols::wl_callback::WL_INTERFACE,
+            Self::Registry => &protocols::wl_registry::WL_INTERFACE,
+            Self::ShmPool => &protocols::wl_shm_pool::WL_INTERFACE,
+            Self::Compositor => &protocols::wl_compositor::WL_INTERFACE,
+            Self::Shm => &protocols::wl_shm::WL_INTERFACE,
+            Self::Buffer => &protocols::wl_buffer::WL_INTERFACE,
         }
     }
 
     pub const fn interface_name(self) -> &'static CStr {
-        match self {
-            Self::Display => c"wl_display",
-            Self::Surface => c"wl_surface",
-            Self::Region => c"wl_region",
-            Self::Callback => c"wl_callback",
-            Self::Registry => c"wl_registry",
-            Self::ShmPool => c"wl_shm_pool",
-            Self::Compositor => c"wl_compositor",
-            Self::Shm => c"wl_shm",
-            Self::Buffer => c"wl_buffer",
-        }
+        self.backend_ffi_interface().name
     }
 }
 
