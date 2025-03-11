@@ -7,11 +7,6 @@ use std::{borrow::Cow, fmt, str::FromStr};
 use thiserror::Error;
 
 #[derive(Deserialize, Serialize, Debug)]
-#[serde(rename = "copyright")]
-pub struct Copyright<'s>(pub Cow<'s, str>);
-
-#[derive(Deserialize, Serialize, Debug)]
-#[serde(rename = "description")]
 pub struct Description<'s> {
     #[serde(rename = "$attr:summary")]
     pub summary: Cow<'s, str>,
@@ -20,7 +15,7 @@ pub struct Description<'s> {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
-#[serde(rename = "type", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum ArgType {
     Int,
     Uint,
@@ -33,7 +28,6 @@ pub enum ArgType {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(rename = "arg")]
 pub struct Arg<'s> {
     #[serde(rename = "$attr:name")]
     pub name: Cow<'s, str>,
@@ -48,7 +42,6 @@ pub struct Arg<'s> {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(rename = "request")]
 pub struct Request<'s> {
     #[serde(rename = "$attr:name")]
     pub name: Cow<'s, str>,
@@ -63,7 +56,6 @@ impl Request<'_> {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(rename = "event")]
 pub struct Event<'s> {
     #[serde(rename = "$attr:name")]
     pub name: Cow<'s, str>,
@@ -142,7 +134,6 @@ impl FromStr for MaybeHexU32 {
 pub struct InvalidMaybeHexU32(pub String);
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(rename = "entry")]
 pub struct EnumEntry<'s> {
     #[serde(rename = "$attr:name")]
     pub name: Cow<'s, str>,
@@ -153,7 +144,6 @@ pub struct EnumEntry<'s> {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(rename = "enum")]
 pub struct Enum<'s> {
     #[serde(rename = "$attr:name")]
     pub name: Cow<'s, str>,
@@ -168,17 +158,17 @@ impl Enum<'_> {
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "lowercase")]
 pub enum InterfaceEntry<'s> {
-    #[serde(borrow, rename = "request")]
+    #[serde(borrow)]
     Request(Request<'s>),
-    #[serde(borrow, rename = "event")]
+    #[serde(borrow)]
     Event(Event<'s>),
-    #[serde(borrow, rename = "enum")]
+    #[serde(borrow)]
     Enum(Enum<'s>),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(rename = "interface")]
 pub struct Interface<'s> {
     #[serde(rename = "$attr:name")]
     pub name: Cow<'s, str>,
@@ -200,7 +190,7 @@ pub struct Protocol<'s> {
     #[serde(rename = "$attr:name")]
     pub name: Cow<'s, str>,
     #[serde(borrow)]
-    pub copyright: Copyright<'s>,
+    pub copyright: Cow<'s, str>,
     pub interface: Vec<Interface<'s>>,
 }
 
@@ -222,7 +212,7 @@ mod tests {
         let proto = ProtocolFile {
             protocol: Protocol {
                 name: Cow::from("wayland"),
-                copyright: Copyright(Cow::from("some copyright string")),
+                copyright: Cow::from("some copyright string"),
                 interface: vec![
                     Interface {
                         name: "wl_display".into(),
