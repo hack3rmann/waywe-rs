@@ -500,7 +500,7 @@ pub struct Interface<'s> {
     pub events: &'s [InterfaceMessage<'s>],
 }
 
-pub struct InterfaceSemiFfi<'s> {
+pub struct InterfaceWlMessages<'s> {
     pub methods: &'s [wl_message],
     pub events: &'s [wl_message],
 }

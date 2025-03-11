@@ -1,7 +1,6 @@
 use crate::xml::{Interface, InterfaceEntry, Message, ProtocolFile};
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use smallvec::SmallVec;
 use std::{ffi::CString, fs, path::PathBuf};
 use syn::{Ident, LitCStr, LitInt, LitStr, parse2};
 
@@ -23,10 +22,8 @@ pub fn include_wl_interfaces(token_stream: TokenStream) -> TokenStream {
 pub fn interface_to_module(interface: &Interface) -> TokenStream {
     let module = Ident::new(&interface.name, Span::call_site());
 
-    let interface_name_string = interface.name.to_uppercase();
-    let interface_name_cstring = CString::new(interface_name_string.as_bytes())
+    let interface_name_cstring = CString::new(interface.name.as_bytes())
         .expect("interface name expected to be a valid c-string");
-    let interface_name = Ident::new(&interface_name_string, Span::call_site());
     let interface_name_cstr_lit = LitCStr::new(&interface_name_cstring, Span::call_site());
 
     let interface_version = interface.version.to_string();
@@ -50,9 +47,29 @@ pub fn interface_to_module(interface: &Interface) -> TokenStream {
         })
         .map(message_to_struct);
 
+    let requests_wl_messages = interface
+        .entries
+        .iter()
+        .filter_map(|entry| match entry {
+            InterfaceEntry::Request(message) => Some(message),
+            _ => None,
+        })
+        .enumerate()
+        .map(|(i, request)| message_to_wl_message(request, i, MessageType::Request));
+
+    let events_wl_messages = interface
+        .entries
+        .iter()
+        .filter_map(|entry| match entry {
+            InterfaceEntry::Event(message) => Some(message),
+            _ => None,
+        })
+        .enumerate()
+        .map(|(i, event)| message_to_wl_message(event, i, MessageType::Event));
+
     quote! {
         pub mod #module {
-            pub const #interface_name: ::wayland_sys::Interface<'static>
+            pub const INTERFACE: ::wayland_sys::Interface<'static>
                 = ::wayland_sys::Interface {
                     name: #interface_name_cstr_lit,
                     version: #interface_version_int_lit,
@@ -63,41 +80,105 @@ pub fn interface_to_module(interface: &Interface) -> TokenStream {
                         #( #events ),*
                     ],
                 };
+
+            pub const WL_MESSAGES: ::wayland_sys::InterfaceWlMessages<'static>
+                = ::wayland_sys::InterfaceWlMessages {
+                    methods: &[
+                        #( #requests_wl_messages ),*
+                    ],
+                    events: &[
+                        #( #events_wl_messages ),*
+                    ],
+                };
+
+            pub const WL_INTERFACE: ::wayland_sys::wl_interface
+                = ::wayland_sys::wl_interface {
+                    name: INTERFACE.name.as_ptr(),
+                    version: INTERFACE.version as i32,
+                    method_count: WL_MESSAGES.methods.len() as i32,
+                    methods: WL_MESSAGES.methods.as_ptr(),
+                    event_count: WL_MESSAGES.events.len() as i32,
+                    events: WL_MESSAGES.events.as_ptr(),
+                };
         }
     }
 }
 
-pub fn message_to_struct(request: &Message) -> TokenStream {
-    let request_name_c_str =
-        CString::new(request.name.as_ref()).expect("expecting a valid c-string");
-    let request_name_field_literal = LitCStr::new(&request_name_c_str, Span::call_site());
+#[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
+pub enum MessageType {
+    #[default]
+    Request,
+    Event,
+}
 
-    let request_signature = request.signature();
-    let request_signature_literal = LitCStr::new(&request_signature, Span::call_site());
+impl MessageType {
+    pub const fn str(self) -> &'static str {
+        match self {
+            Self::Request => "methods",
+            Self::Event => "events",
+        }
+    }
+}
 
-    let outgoing_interfaces_strings = request
-        .arg
-        .iter()
-        .filter_map(|arg| arg.interface.as_deref())
-        .map(str::to_ascii_uppercase)
-        .collect::<SmallVec<[_; 2]>>();
+pub fn message_to_wl_message(message: &Message, index: usize, ty: MessageType) -> TokenStream {
+    let index_string = index.to_string();
+    let index_lit = LitInt::new(&index_string, Span::call_site());
 
-    let outgoing_interfaces_modules = request
+    let outgoing_interfaces_modules = message
         .arg
         .iter()
         .filter_map(|arg| arg.interface.as_deref())
         .map(|name| Ident::new(name, Span::call_site()));
 
-    let outgoing_interfaces = outgoing_interfaces_strings
+    let slice_name = Ident::new(ty.str(), Span::call_site());
+
+    quote! {
+        ::wayland_sys::wl_message {
+            name: INTERFACE. #slice_name [ #index_lit ].name.as_ptr(),
+            signature: INTERFACE. #slice_name [ #index_lit ].signature.as_ptr(),
+            types: {
+                const REF: &[&::wayland_sys::wl_interface] = &[
+                    #(
+                        &super:: #outgoing_interfaces_modules ::WL_INTERFACE
+                    ),*
+                ];
+
+                if !REF.is_empty() {
+                    // Safety: transmuting `*const &` to `*const *const`
+                    unsafe {
+                        ::std::mem::transmute::<
+                            *const &::wayland_sys::wl_interface,
+                            *const *const ::wayland_sys::wl_interface,
+                        >(REF.as_ptr())
+                    }
+                } else {
+                    ::core::ptr::null()
+                }
+            },
+        }
+    }
+}
+
+pub fn message_to_struct(message: &Message) -> TokenStream {
+    let request_name_c_str =
+        CString::new(message.name.as_ref()).expect("expecting a valid c-string");
+    let request_name_field_literal = LitCStr::new(&request_name_c_str, Span::call_site());
+
+    let request_signature = message.signature();
+    let request_signature_literal = LitCStr::new(&request_signature, Span::call_site());
+
+    let outgoing_interfaces_modules = message
+        .arg
         .iter()
-        .map(|s| Ident::new(s, Span::call_site()));
+        .filter_map(|arg| arg.interface.as_deref())
+        .map(|name| Ident::new(name, Span::call_site()));
 
     quote! {
         ::wayland_sys::InterfaceMessage {
             name: #request_name_field_literal,
             signature: #request_signature_literal,
             outgoing_interfaces: &[
-                #( & super :: #outgoing_interfaces_modules :: #outgoing_interfaces ),*
+                #( &super:: #outgoing_interfaces_modules ::INTERFACE ),*
             ],
         }
     }
