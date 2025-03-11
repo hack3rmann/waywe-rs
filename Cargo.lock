@@ -1167,6 +1167,7 @@ dependencies = [
  "static_assertions",
  "thiserror 2.0.11",
  "tracing",
+ "wayland-scanner",
 ]
 
 [[package]]
