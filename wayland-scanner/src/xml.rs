@@ -3,7 +3,7 @@ use serde::{
     de::{Unexpected, Visitor},
 };
 use smallvec::SmallVec;
-use std::{borrow::Cow, fmt, str::FromStr};
+use std::{borrow::Cow, ffi::CString, fmt, str::FromStr};
 use thiserror::Error;
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -27,6 +27,21 @@ pub enum ArgType {
     Array,
 }
 
+impl ArgType {
+    pub const fn byte(self) -> u8 {
+        match self {
+            Self::Int => b'i',
+            Self::Uint => b'u',
+            Self::NewId => b'n',
+            Self::Object => b'o',
+            Self::String => b's',
+            Self::Fd => b'h',
+            Self::Fixed => b'f',
+            Self::Array => b'a',
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Arg<'s> {
     #[serde(rename = "$attr:name")]
@@ -42,31 +57,33 @@ pub struct Arg<'s> {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Request<'s> {
+pub struct Message<'s> {
     #[serde(rename = "$attr:name")]
     pub name: Cow<'s, str>,
     #[serde(borrow)]
     pub description: Option<Description<'s>>,
     #[serde(default)]
-    pub arg: SmallVec<[Arg<'s>; Request::MAX_N_ARGS]>,
+    pub arg: SmallVec<[Arg<'s>; Message::MAX_N_ARGS]>,
 }
 
-impl Request<'_> {
+impl Message<'_> {
     pub const MAX_N_ARGS: usize = 8;
-}
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Event<'s> {
-    #[serde(rename = "$attr:name")]
-    pub name: Cow<'s, str>,
-    #[serde(borrow)]
-    pub description: Option<Description<'s>>,
-    #[serde(default)]
-    pub arg: SmallVec<[Arg<'s>; Event::MAX_N_ARGS]>,
-}
+    pub fn signature(&self) -> CString {
+        let bytes = self
+            .arg
+            .iter()
+            .map(|arg| arg.ty.byte())
+            // Required by the safety arg below
+            .chain([0])
+            .collect::<Vec<_>>();
 
-impl Event<'_> {
-    pub const MAX_N_ARGS: usize = 8;
+        // # Safety
+        //
+        // - all arguments have non-zero byte representation
+        // - the last zero has pushed by us (see above)
+        unsafe { CString::from_vec_with_nul_unchecked(bytes) }
+    }
 }
 
 #[derive(Debug, PartialEq, Default, Clone, Copy, Eq, PartialOrd, Ord, Hash)]
@@ -161,9 +178,9 @@ impl Enum<'_> {
 #[serde(rename_all = "lowercase")]
 pub enum InterfaceEntry<'s> {
     #[serde(borrow)]
-    Request(Request<'s>),
+    Request(Message<'s>),
     #[serde(borrow)]
-    Event(Event<'s>),
+    Event(Message<'s>),
     #[serde(borrow)]
     Enum(Enum<'s>),
 }
@@ -221,7 +238,7 @@ mod tests {
                             summary: "wl_display desc".into(),
                             body: Some("interface of wl_display".into()),
                         }),
-                        entries: smallvec![InterfaceEntry::Request(Request {
+                        entries: smallvec![InterfaceEntry::Request(Message {
                             name: "get_registry".into(),
                             description: Some(Description {
                                 summary: "get registry".into(),
@@ -252,7 +269,7 @@ mod tests {
                             summary: "wl_display desc".into(),
                             body: Some("interface of wl_display".into()),
                         }),
-                        entries: smallvec![InterfaceEntry::Request(Request {
+                        entries: smallvec![InterfaceEntry::Request(Message {
                             name: "get_registry".into(),
                             description: Some(Description {
                                 summary: "get registry".into(),

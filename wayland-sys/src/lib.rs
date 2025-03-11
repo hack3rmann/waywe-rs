@@ -2,7 +2,7 @@
 
 use libc::{free, malloc, realloc};
 use std::{
-    ffi::{c_char, c_int, c_void},
+    ffi::{c_char, c_int, c_void, CStr},
     mem::offset_of,
     os::fd::RawFd,
     ptr,
@@ -87,7 +87,7 @@ pub struct wl_object {
 pub struct wl_message {
     pub name: *const c_char,
     pub signature: *const c_char,
-    pub types: *mut *const wl_interface,
+    pub types: *const *const wl_interface,
 }
 
 #[repr(C)]
@@ -491,6 +491,24 @@ pub struct wl_interface {
     pub methods: *const wl_message,
     pub event_count: c_int,
     pub events: *const wl_message,
+}
+
+pub struct Interface<'s> {
+    pub name: &'s CStr,
+    pub version: u32,
+    pub methods: &'s [InterfaceMessage<'s>],
+    pub events: &'s [InterfaceMessage<'s>],
+}
+
+pub struct InterfaceSemiFfi<'s> {
+    pub methods: &'s [wl_message],
+    pub events: &'s [wl_message],
+}
+
+pub struct InterfaceMessage<'s> {
+    pub name: &'s CStr,
+    pub signature: &'s CStr,
+    pub outgoing_interfaces: &'s [&'s Interface<'s>],
 }
 
 #[repr(C)]
