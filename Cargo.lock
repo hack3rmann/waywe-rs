@@ -1160,7 +1160,6 @@ dependencies = [
  "bitflags 2.8.0",
  "bytemuck",
  "glam",
- "libc",
  "raw-window-handle",
  "rustix",
  "smallvec",
@@ -1168,6 +1167,7 @@ dependencies = [
  "thiserror 2.0.11",
  "tracing",
  "wayland-scanner",
+ "wayland-sys",
 ]
 
 [[package]]
@@ -1181,6 +1181,14 @@ dependencies = [
  "syn",
  "thiserror 2.0.11",
  "xml_serde",
+]
+
+[[package]]
+name = "wayland-sys"
+version = "0.0.1"
+dependencies = [
+ "libc",
+ "thiserror 2.0.11",
 ]
 
 [[package]]
