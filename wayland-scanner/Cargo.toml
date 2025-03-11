@@ -1,0 +1,16 @@
+[package]
+name = "wayland-scanner"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+proc-macro2 = "1.0.94"
+quote = "1.0.39"
+serde = { version = "1.0.219", features = ["derive"] }
+smallvec = { version = "1.14.0", features = ["union", "serde", "const_generics", "const_new"] }
+syn = "2.0.99"
+xml_serde = "1.4.1"
+thiserror.workspace = true
+
+[lib]
+proc-macro = true

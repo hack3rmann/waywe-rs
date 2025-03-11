@@ -1,11 +1,13 @@
 [workspace]
 resolver = "3"
-members = ["daemon", "wayland"]
+members = ["daemon", "wayland-scanner", "wayland"]
 
 [workspace.package]
 version = "0.0.1"
 edition = "2024"
 
 [workspace.dependencies]
-wayland = {path = "wayland"}
+wayland = { path = "wayland" }
+waylnad-scanner = { path = "wayland-scanner" }
 tracing = "0.1.41"
+thiserror = "2.0.11"
