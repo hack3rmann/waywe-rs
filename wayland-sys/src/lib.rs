@@ -2,7 +2,7 @@
 
 use libc::{free, malloc, realloc};
 use std::{
-    ffi::{c_char, c_int, c_void, CStr},
+    ffi::{CStr, c_char, c_int, c_void},
     mem::offset_of,
     os::fd::RawFd,
     ptr,
@@ -508,7 +508,10 @@ pub struct InterfaceWlMessages<'s> {
 pub struct InterfaceMessage<'s> {
     pub name: &'s CStr,
     pub signature: &'s CStr,
-    pub outgoing_interfaces: &'s [&'s Interface<'s>],
+    // FIXME(hack3rmann):
+    // - add enum OutgoingInterface { This, Other(&Interface), None }
+    // - defeat self-referential constants
+    pub outgoing_interfaces: &'s [Option<&'s Interface<'s>>],
 }
 
 #[repr(C)]
@@ -533,6 +536,8 @@ unsafe extern "C" {
     pub static wl_shm_pool_interface: wl_interface;
     pub static wl_shm_interface: wl_interface;
     pub static wl_buffer_interface: wl_interface;
+    pub static wl_data_device_interface: wl_interface;
+    pub static wl_data_offer_interface: wl_interface;
 
     /// Connect to Wayland display on an already open fd.
     ///
@@ -752,4 +757,39 @@ unsafe extern "C" {
 
     /// Set the user data associated with a proxy
     pub fn wl_proxy_set_user_data(proxy: *mut wl_proxy, data: *mut c_void);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn correct_signature_and_types() {
+        let interface = unsafe { &wl_data_device_interface };
+
+        let enter_event = unsafe { interface.events.add(1).read() };
+        let signature = unsafe { CStr::from_ptr(enter_event.signature) };
+
+        assert_eq!(signature, c"uoff?o");
+        assert!(!enter_event.types.is_null());
+
+        let n_args = signature
+            .to_bytes()
+            .iter()
+            .filter(|&&byte| byte != b'?')
+            .count();
+
+        let types = unsafe { std::slice::from_raw_parts(enter_event.types, n_args) };
+
+        assert_eq!(
+            types,
+            &[
+                ptr::null(),
+                &raw const wl_surface_interface,
+                ptr::null(),
+                ptr::null(),
+                &raw const wl_data_offer_interface,
+            ]
+        );
+    }
 }

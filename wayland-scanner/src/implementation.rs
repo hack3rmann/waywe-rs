@@ -124,11 +124,19 @@ pub fn message_to_wl_message(message: &Message, index: usize, ty: MessageType) -
     let index_string = index.to_string();
     let index_lit = LitInt::new(&index_string, Span::call_site());
 
-    let outgoing_interfaces_modules = message
+    let outgoing_interfaces = message
         .arg
         .iter()
-        .filter_map(|arg| arg.interface.as_deref())
-        .map(|name| Ident::new(name, Span::call_site()));
+        .map(|arg| arg.interface.as_deref())
+        .map(|name| name.map(|name| Ident::new(name, Span::call_site())))
+        .map(|module| match module {
+            Some(module) => quote! {
+                ::core::option::Option::Some(
+                    &super:: #module ::WL_INTERFACE
+                )
+            },
+            None => quote! { ::core::option::Option::None },
+        });
 
     let slice_name = Ident::new(ty.str(), Span::call_site());
 
@@ -137,17 +145,16 @@ pub fn message_to_wl_message(message: &Message, index: usize, ty: MessageType) -
             name: INTERFACE. #slice_name [ #index_lit ].name.as_ptr(),
             signature: INTERFACE. #slice_name [ #index_lit ].signature.as_ptr(),
             types: {
-                const REF: &[&::wayland_sys::wl_interface] = &[
-                    #(
-                        &super:: #outgoing_interfaces_modules ::WL_INTERFACE
-                    ),*
+                const REF: &[Option<&::wayland_sys::wl_interface>] = &[
+                    #( #outgoing_interfaces ),*
                 ];
 
                 if !REF.is_empty() {
-                    // Safety: transmuting `*const &` to `*const *const`
+                    // Safety: transmuting `*const Option<&T>` to `*const *const T`
+                    // Note transmutes to `ptr::null()`
                     unsafe {
                         ::std::mem::transmute::<
-                            *const &::wayland_sys::wl_interface,
+                            *const Option<&::wayland_sys::wl_interface>,
                             *const *const ::wayland_sys::wl_interface,
                         >(REF.as_ptr())
                     }
@@ -167,18 +174,28 @@ pub fn message_to_struct(message: &Message) -> TokenStream {
     let request_signature = message.signature();
     let request_signature_literal = LitCStr::new(&request_signature, Span::call_site());
 
-    let outgoing_interfaces_modules = message
+    let outgoing_interfaces = message
         .arg
         .iter()
-        .filter_map(|arg| arg.interface.as_deref())
-        .map(|name| Ident::new(name, Span::call_site()));
+        .map(|arg| arg.interface.as_deref())
+        .map(|name| name.map(|name| Ident::new(name, Span::call_site())))
+        .map(|module| match module {
+            Some(module) => quote! {
+                ::core::option::Option::Some(
+                    &super:: #module ::INTERFACE
+                )
+            },
+            None => quote! {
+                ::core::option::Option::None
+            },
+        });
 
     quote! {
         ::wayland_sys::InterfaceMessage {
             name: #request_name_field_literal,
             signature: #request_signature_literal,
             outgoing_interfaces: &[
-                #( &super:: #outgoing_interfaces_modules ::INTERFACE ),*
+                #( #outgoing_interfaces ),*
             ],
         }
     }

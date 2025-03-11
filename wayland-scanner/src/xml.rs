@@ -70,10 +70,18 @@ impl Message<'_> {
     pub const MAX_N_ARGS: usize = 8;
 
     pub fn signature(&self) -> CString {
+        use smallvec::smallvec;
+
         let bytes = self
             .arg
             .iter()
-            .map(|arg| arg.ty.byte())
+            .flat_map(|arg| -> SmallVec<[_; 2]> {
+                if arg.allow_null {
+                    smallvec![b'?', arg.ty.byte()]
+                } else {
+                    smallvec![arg.ty.byte()]
+                }
+            })
             // Required by the safety arg below
             .chain([0])
             .collect::<Vec<_>>();
@@ -158,6 +166,7 @@ pub struct EnumEntry<'s> {
     pub value: MaybeHexU32,
     #[serde(rename = "$attr:summary")]
     pub summary: Option<Cow<'s, str>>,
+    pub description: Option<Description<'s>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -166,6 +175,7 @@ pub struct Enum<'s> {
     pub name: Cow<'s, str>,
     #[serde(borrow)]
     pub description: Option<Description<'s>>,
+    #[serde(default)]
     pub entry: SmallVec<[EnumEntry<'s>; Enum::MAX_N_ENTRIES]>,
 }
 

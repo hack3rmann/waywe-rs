@@ -6,14 +6,23 @@ pub mod proxy;
 pub mod wire;
 
 pub mod protocols {
-    wayland_scanner::include_wl_interfaces!("wayland-protocols/wayland.xml");
+    use wayland_scanner::include_wl_interfaces;
+
+    include_wl_interfaces!("wayland-protocols/wayland.xml");
+
+    // TODO(hack3rmann): uncomment
+    //
+    // include_wl_interfaces!("wayland-protocols/stable/xdg-shell/xdg-shell.xml");
+    // include_wl_interfaces!(
+    //     "wayland-protocols/wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml"
+    // );
 }
 
 use crate::object::ObjectId;
 use core::fmt;
 use ffi::wl_interface;
-use wayland_sys::Interface as FfiInterface;
 use std::ffi::CStr;
+use wayland_sys::Interface as FfiInterface;
 
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
 pub enum InterfaceObjectType {
