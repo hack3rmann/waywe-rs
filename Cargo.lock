@@ -1160,6 +1160,7 @@ dependencies = [
  "bitflags 2.8.0",
  "bytemuck",
  "glam",
+ "paste",
  "raw-window-handle",
  "rustix",
  "smallvec",

@@ -538,6 +538,10 @@ unsafe extern "C" {
     pub static wl_buffer_interface: wl_interface;
     pub static wl_data_device_interface: wl_interface;
     pub static wl_data_offer_interface: wl_interface;
+    pub static wl_shell_surface_interface: wl_interface;
+    pub static wl_shell_interface: wl_interface;
+    pub static wl_data_device_manager_interface: wl_interface;
+    pub static wl_data_source_interface: wl_interface;
 
     /// Connect to Wayland display on an already open fd.
     ///

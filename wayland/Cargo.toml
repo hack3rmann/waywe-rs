@@ -15,3 +15,4 @@ smallvec = { version = "1.14.0", features = ["const_generics", "union"] }
 glam = "0.30.0"
 wayland-scanner = { path = "../wayland-scanner" }
 wayland-sys.workspace = true
+paste = "1.0.15"
