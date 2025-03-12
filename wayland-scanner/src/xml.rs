@@ -3,7 +3,7 @@ use serde::{
     de::{Unexpected, Visitor},
 };
 use smallvec::SmallVec;
-use std::{borrow::Cow, ffi::CString, fmt, str::FromStr};
+use std::{borrow::Cow, ffi::CString, fmt, num::NonZeroU32, str::FromStr};
 use thiserror::Error;
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -60,6 +60,8 @@ pub struct Arg<'s> {
 pub struct Message<'s> {
     #[serde(rename = "$attr:name")]
     pub name: Cow<'s, str>,
+    #[serde(rename = "$attr:since")]
+    pub since: Option<NonZeroU32>,
     #[serde(borrow)]
     pub description: Option<Description<'s>>,
     #[serde(default)]
@@ -72,17 +74,23 @@ impl Message<'_> {
     pub fn signature(&self) -> CString {
         use smallvec::smallvec;
 
-        let bytes = self
-            .arg
+        let since_version = self
+            .since
             .iter()
-            .flat_map(|arg| -> SmallVec<[_; 2]> {
-                if arg.allow_null {
-                    smallvec![b'?', arg.ty.byte()]
-                } else {
-                    smallvec![arg.ty.byte()]
-                }
-            })
-            // Required by the safety arg below
+            .map(|version| u8::try_from(version.get()).unwrap())
+            .map(|version| version + b'0');
+
+        let arguments = self.arg.iter().flat_map(|arg| -> SmallVec<[_; 2]> {
+            if arg.allow_null {
+                smallvec![b'?', arg.ty.byte()]
+            } else {
+                smallvec![arg.ty.byte()]
+            }
+        });
+
+        let bytes = since_version
+            .chain(arguments)
+            // Safety: required by the argument below
             .chain([0])
             .collect::<Vec<_>>();
 
@@ -249,6 +257,7 @@ mod tests {
                             body: Some("interface of wl_display".into()),
                         }),
                         entries: smallvec![InterfaceEntry::Request(Message {
+                            since: None,
                             name: "get_registry".into(),
                             description: Some(Description {
                                 summary: Some("get registry".into()),
@@ -280,6 +289,7 @@ mod tests {
                             body: Some("interface of wl_display".into()),
                         }),
                         entries: smallvec![InterfaceEntry::Request(Message {
+                            since: None,
                             name: "get_registry".into(),
                             description: Some(Description {
                                 summary: Some("get registry".into()),
