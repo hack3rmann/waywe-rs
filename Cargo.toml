@@ -1,7 +1,15 @@
 [workspace]
 resolver = "3"
-members = ["daemon"]
+members = ["daemon", "wayland-scanner", "wayland", "wayland-sys"]
 
 [workspace.package]
 version = "0.0.1"
-edition = "2021"
+edition = "2024"
+
+[workspace.dependencies]
+wayland = { path = "wayland" }
+waylnad-scanner = { path = "wayland-scanner" }
+wayland-sys = { path = "wayland-sys" }
+tracing = "0.1.41"
+thiserror = "2.0.11"
+static_assertions = "1.1.0"
