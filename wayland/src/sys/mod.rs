@@ -116,15 +116,7 @@ impl Default for Interface {
 #[cfg(test)]
 mod tests {
     use std::{ffi::CStr, slice};
-    use wayland_sys::{wl_interface, wl_message};
-
-    fn get_n_arguments_from_signature(signature: &CStr) -> usize {
-        signature
-            .to_bytes()
-            .iter()
-            .filter(|&&byte| byte != b'?' && !byte.is_ascii_digit())
-            .count()
-    }
+    use wayland_sys::{count_arguments_from_message_signature, wl_interface, wl_message};
 
     fn check_wl_messages_arrays_are_the_same(
         lhs_ptr: *const wl_message,
@@ -171,7 +163,7 @@ mod tests {
 
         let signature = left_signature;
 
-        let n_args = get_n_arguments_from_signature(signature);
+        let n_args = count_arguments_from_message_signature(signature);
 
         if lhs.types.is_null() && rhs.types.is_null() {
             return;

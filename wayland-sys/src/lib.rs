@@ -529,6 +529,14 @@ pub struct InterfaceMessage<'s> {
 }
 static_assertions::assert_impl_all!(InterfaceMessage<'static>: Sync);
 
+pub fn count_arguments_from_message_signature(signature: &CStr) -> usize {
+    signature
+        .to_bytes()
+        .iter()
+        .filter(|&&byte| byte != b'?' && !byte.is_ascii_digit())
+        .count()
+}
+
 pub const WL_REGISTRY_BIND: u32 = 0;
 pub const WL_DISPLAY_GET_REGISTRY: u32 = 1;
 pub const WL_COMPOSITOR_CREATE_SURFACE: u32 = 0;
@@ -793,11 +801,7 @@ mod tests {
         assert_eq!(signature, c"uoff?o");
         assert!(!enter_event.types.is_null());
 
-        let n_args = signature
-            .to_bytes()
-            .iter()
-            .filter(|&&byte| byte != b'?')
-            .count();
+        let n_args = count_arguments_from_message_signature(signature);
 
         let types = unsafe { std::slice::from_raw_parts(enter_event.types, n_args) };
 
