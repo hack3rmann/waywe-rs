@@ -270,5 +270,14 @@ mod tests {
         wl_data_device_manager,
         wl_shell,
         wl_shell_surface,
+        wl_surface,
+        wl_seat,
+        wl_pointer,
+        wl_keyboard,
+        wl_touch,
+        wl_output,
+        wl_region,
+        wl_subcompositor,
+        wl_subsurface,
     );
 }
