@@ -98,7 +98,7 @@ pub fn interface_to_module(interface: &Interface) -> TokenStream {
             InterfaceEntry::Request(message) => Some(message),
             _ => None,
         })
-        .map(message_to_struct);
+        .map(|message| message_to_struct(interface, message));
 
     let events = interface
         .entries
@@ -107,7 +107,7 @@ pub fn interface_to_module(interface: &Interface) -> TokenStream {
             InterfaceEntry::Event(message) => Some(message),
             _ => None,
         })
-        .map(message_to_struct);
+        .map(|message| message_to_struct(interface, message));
 
     let requests_wl_messages = interface
         .entries
@@ -131,7 +131,7 @@ pub fn interface_to_module(interface: &Interface) -> TokenStream {
 
     quote! {
         pub mod #module {
-            pub static INTERFACE: ::wayland_sys::Interface<'static>
+            pub const INTERFACE: ::wayland_sys::Interface<'static>
                 = ::wayland_sys::Interface {
                     name: #interface_name_cstr_lit,
                     version: #interface_version_int_lit,
@@ -182,7 +182,30 @@ impl MessageType {
     }
 }
 
-pub fn message_to_wl_message(message: &Message, index: usize, ty: MessageType) -> TokenStream {
+pub fn maybe_name_to_outgoing_interface(parent: &Interface, name: Option<&str>) -> TokenStream {
+    match name {
+        Some(name) => {
+            let module = Ident::new(name, Span::call_site());
+
+            if name == parent.name {
+                quote! { ::wayland_sys::OutgoingInterface::This }
+            } else {
+                quote! {
+                    ::wayland_sys::OutgoingInterface::Other(
+                        &super:: #module ::INTERFACE
+                    )
+                }
+            }
+        }
+        None => quote! { ::wayland_sys::OutgoingInterface::None },
+    }
+}
+
+pub fn message_to_wl_message(
+    message: &Message,
+    index: usize,
+    ty: MessageType,
+) -> TokenStream {
     let index_string = index.to_string();
     let index_lit = LitInt::new(&index_string, Span::call_site());
 
@@ -197,7 +220,9 @@ pub fn message_to_wl_message(message: &Message, index: usize, ty: MessageType) -
                     &super:: #module ::WL_INTERFACE
                 )
             },
-            None => quote! { ::core::option::Option::None },
+            None => quote! {
+                ::core::option::Option::None
+            },
         });
 
     let slice_name = Ident::new(ty.str(), Span::call_site());
@@ -228,7 +253,7 @@ pub fn message_to_wl_message(message: &Message, index: usize, ty: MessageType) -
     }
 }
 
-pub fn message_to_struct(message: &Message) -> TokenStream {
+pub fn message_to_struct(parent: &Interface, message: &Message) -> TokenStream {
     let request_name_c_str =
         CString::new(message.name.as_ref()).expect("expecting a valid c-string");
     let request_name_field_literal = LitCStr::new(&request_name_c_str, Span::call_site());
@@ -240,17 +265,7 @@ pub fn message_to_struct(message: &Message) -> TokenStream {
         .arg
         .iter()
         .map(|arg| arg.interface.as_deref())
-        .map(|name| name.map(|name| Ident::new(name, Span::call_site())))
-        .map(|module| match module {
-            Some(module) => quote! {
-                ::core::option::Option::Some(
-                    &super:: #module ::INTERFACE
-                )
-            },
-            None => quote! {
-                ::core::option::Option::None
-            },
-        });
+        .map(|name| maybe_name_to_outgoing_interface(parent, name));
 
     quote! {
         ::wayland_sys::InterfaceMessage {

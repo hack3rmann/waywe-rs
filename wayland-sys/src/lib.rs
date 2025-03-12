@@ -486,6 +486,7 @@ pub type wl_dispatcher_func_t = unsafe extern "C" fn(
 ) -> c_int;
 
 #[repr(C)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct wl_interface {
     pub name: *const c_char,
     pub version: c_int,
@@ -497,6 +498,7 @@ pub struct wl_interface {
 
 unsafe impl Sync for wl_interface {}
 
+#[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
 pub struct Interface<'s> {
     pub name: &'s CStr,
     pub version: u32,
@@ -504,24 +506,28 @@ pub struct Interface<'s> {
     pub events: &'s [InterfaceMessage<'s>],
 }
 
+#[derive(Clone, Default, Copy)]
 pub struct InterfaceWlMessages<'s> {
     pub methods: &'s [wl_message],
     pub events: &'s [wl_message],
 }
 static_assertions::assert_impl_all!(InterfaceWlMessages<'static>: Sync);
 
+#[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
+pub enum OutgoingInterface<'s> {
+    This,
+    Other(&'s Interface<'s>),
+    #[default]
+    None,
+}
+
+#[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
 pub struct InterfaceMessage<'s> {
     pub name: &'s CStr,
     pub signature: &'s CStr,
-    pub outgoing_interfaces: &'s [Option<&'s Interface<'s>>],
+    pub outgoing_interfaces: &'s [OutgoingInterface<'s>],
 }
 static_assertions::assert_impl_all!(InterfaceMessage<'static>: Sync);
-
-#[repr(C)]
-pub struct wl_registry_listener {
-    pub global: unsafe extern "C" fn(*mut c_void, *mut wl_registry, u32, *const c_char, u32),
-    pub global_remove: unsafe extern "C" fn(*mut c_void, *mut wl_registry, u32),
-}
 
 pub const WL_REGISTRY_BIND: u32 = 0;
 pub const WL_DISPLAY_GET_REGISTRY: u32 = 1;
