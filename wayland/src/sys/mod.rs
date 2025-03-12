@@ -10,12 +10,11 @@ pub mod protocols {
 
     include_wl_interfaces!("wayland-protocols/wayland.xml");
 
-    // TODO(hack3rmann): uncomment
-    //
     include_wl_interfaces!("wayland-protocols/stable/xdg-shell/xdg-shell.xml");
-    // include_wl_interfaces!(
-    //     "wayland-protocols/wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml"
-    // );
+
+    include_wl_interfaces!(
+        "wayland-protocols/wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml"
+    );
 }
 
 use crate::object::ObjectId;
