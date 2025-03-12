@@ -17,11 +17,12 @@ pub mod protocols {
     );
 }
 
-use crate::object::ObjectId;
 use core::fmt;
 use ffi::wl_interface;
 use std::ffi::CStr;
 use wayland_sys::Interface as FfiInterface;
+
+use crate::object::ObjectId;
 
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
 pub enum ObjectType {
@@ -42,10 +43,6 @@ pub enum ObjectType {
 }
 
 impl ObjectType {
-    pub const fn integer_name(self) -> ObjectId {
-        ObjectId::new(self as u32)
-    }
-
     pub fn from_interface_name(name: &str) -> Option<Self> {
         static MAP: phf::Map<&'static str, ObjectType> = phf::phf_map! {
             "wl_display" => ObjectType::Display,
@@ -105,33 +102,28 @@ impl fmt::Display for ObjectType {
     }
 }
 
+pub trait HasObjectType {
+    const OBJECT_TYPE: ObjectType;
+}
+
 /// Stores some information about some global object
 #[derive(Clone, Debug, PartialEq, Copy, Eq, PartialOrd, Ord, Hash)]
-pub struct Interface {
-    pub object_type: ObjectType,
-    pub version: u32,
+pub struct InterfaceMessageArgument {
+    pub(crate) object_type: ObjectType,
+    pub(crate) name: ObjectId,
 }
 
-impl Interface {
-    /// Interface for the `wl_display`
-    ///
-    /// # Note
-    ///
-    /// `wl_display` always has `version` set to `1`
-    pub const DISPLAY: Self = Self {
-        object_type: ObjectType::Display,
-        version: 1,
-    };
-
-    /// Returns the string name of the interface
-    pub const fn interface_name(self) -> &'static CStr {
-        self.object_type.interface_name()
+impl InterfaceMessageArgument {
+    pub const fn interface(self) -> &'static CStr {
+        self.object_type.backend_ffi_interface().name
     }
-}
 
-impl Default for Interface {
-    fn default() -> Self {
-        Self::DISPLAY
+    pub const fn version(self) -> u32 {
+        self.object_type.backend_ffi_interface().version
+    }
+
+    pub const fn name(self) -> ObjectId {
+        self.name
     }
 }
 

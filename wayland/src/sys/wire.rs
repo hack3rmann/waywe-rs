@@ -1,5 +1,5 @@
 use super::{
-    Interface,
+    InterfaceMessageArgument,
     ffi::{WlArgument, wl_fixed_t, wl_object, wl_proxy},
     proxy::{WlProxy, WlProxyQuery},
 };
@@ -186,10 +186,10 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
     }
 
     /// Passes interface information to the message
-    pub fn interface(self, value: Interface) -> Self {
-        self.uint(value.object_type.integer_name().into())
-            .str(value.object_type.interface_name())
-            .uint(value.version)
+    pub fn interface(self, value: InterfaceMessageArgument) -> Self {
+        self.uint(value.name().into())
+            .str(value.interface())
+            .uint(value.version())
             .new_id()
     }
 

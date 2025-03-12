@@ -4,6 +4,7 @@ pub mod registry;
 pub mod shm;
 pub mod shm_pool;
 pub mod surface;
+pub mod zwlr_layer_shell_v1;
 
 use super::{
     ffi::{wl_argument, wl_message, wl_proxy_add_dispatcher, wl_proxy_get_user_data},
@@ -22,7 +23,7 @@ use std::{
 };
 
 pub trait Dispatch {
-    fn dispatch(&mut self, message: Message<'_>);
+    fn dispatch(&mut self, _message: Message<'_>) {}
 }
 static_assertions::assert_obj_safe!(Dispatch);
 

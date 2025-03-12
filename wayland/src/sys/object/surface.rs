@@ -1,11 +1,7 @@
 use super::{Dispatch, WlObject, WlObjectHandle, buffer::WlBuffer};
 use crate::{
-    interface::{
-        registry::request::HasInterface, Request, WlSurfaceAttachRequest, WlSurfaceDamageRequest, WlSurfaceDestroyRequest
-    },
-    sys::{
-        object_storage::WlObjectStorage, wire::{Message, MessageBuffer}, Interface, ObjectType
-    },
+    interface::{Request, WlSurfaceAttachRequest, WlSurfaceDamageRequest, WlSurfaceDestroyRequest},
+    sys::{HasObjectType, ObjectType, object_storage::WlObjectStorage, wire::MessageBuffer},
 };
 use glam::{IVec2, UVec2};
 use raw_window_handle::{
@@ -58,16 +54,11 @@ impl WlSurface {
     }
 }
 
-impl HasInterface for WlSurface {
-    const INTERFACE: Interface = Interface {
-        object_type: ObjectType::Surface,
-        version: 6,
-    };
+impl HasObjectType for WlSurface {
+    const OBJECT_TYPE: ObjectType = ObjectType::Surface;
 }
 
-impl Dispatch for WlSurface {
-    fn dispatch(&mut self, _message: Message<'_>) {}
-}
+impl Dispatch for WlSurface {}
 
 impl HasWindowHandle for WlObject<WlSurface> {
     fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {

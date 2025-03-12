@@ -1,11 +1,7 @@
 use super::{Dispatch, WlObject, WlObjectHandle, shm_pool::WlShmPool};
 use crate::{
-    interface::{Request, WlShmCreatePoolRequest, registry::request::HasInterface},
-    sys::{
-        Interface, ObjectType,
-        object_storage::WlObjectStorage,
-        wire::{Message, MessageBuffer},
-    },
+    interface::{Request, WlShmCreatePoolRequest},
+    sys::{HasObjectType, ObjectType, object_storage::WlObjectStorage, wire::MessageBuffer},
 };
 use std::os::fd::BorrowedFd;
 
@@ -33,13 +29,8 @@ impl WlShm {
     }
 }
 
-impl HasInterface for WlShm {
-    const INTERFACE: Interface = Interface {
-        object_type: ObjectType::Shm,
-        version: 2,
-    };
+impl HasObjectType for WlShm {
+    const OBJECT_TYPE: ObjectType = ObjectType::Shm;
 }
 
-impl Dispatch for WlShm {
-    fn dispatch(&mut self, _: Message<'_>) {}
-}
+impl Dispatch for WlShm {}

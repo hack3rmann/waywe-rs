@@ -27,49 +27,45 @@ use crate::{
 
 pub mod request {
     use super::*;
-    use crate::sys::{wire::OpCode, Interface, ObjectType};
+    use crate::sys::{HasObjectType, InterfaceMessageArgument, ObjectType, wire::OpCode};
     use std::marker::PhantomData;
-
-    pub trait HasInterface {
-        const INTERFACE: Interface;
-    }
 
     /// Binds a new, client-created object to the server using the
     /// specified name as the identifier.
     #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-    pub struct Bind<T: HasInterface> {
+    pub struct Bind<T: HasObjectType> {
         _p: PhantomData<T>,
     }
 
-    impl<T: HasInterface> Bind<T> {
+    impl<T: HasObjectType> Bind<T> {
         pub const fn new() -> Self {
             Self { _p: PhantomData }
         }
     }
 
-    impl<T: HasInterface> Default for Bind<T> {
+    impl<T: HasObjectType> Default for Bind<T> {
         fn default() -> Self {
             Self::new()
         }
     }
 
-    impl<'b, T: HasInterface> Request<'b> for Bind<T> {
+    impl<'b, T: HasObjectType> Request<'b> for Bind<T> {
         const CODE: OpCode = 0;
-        const OUTGOING_INTERFACE: Option<ObjectType> = Some(T::INTERFACE.object_type);
+        const OUTGOING_INTERFACE: Option<ObjectType> = Some(T::OBJECT_TYPE);
 
         fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
             Message::builder(buf)
                 .opcode(Self::CODE)
-                .interface(T::INTERFACE)
+                // FIXME(hack3rmann):
+                .interface(InterfaceMessageArgument { ..todo!() })
                 .build()
         }
     }
 }
 
 pub mod event {
-    use crate::sys::wire::OpCode;
-
     use super::*;
+    use crate::sys::wire::OpCode;
     use std::ffi::CStr;
 
     /// Notify the client of global objects.

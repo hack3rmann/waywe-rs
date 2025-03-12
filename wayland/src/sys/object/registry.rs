@@ -2,13 +2,10 @@ use fxhash::FxHashMap;
 
 use super::{Dispatch, WlObject, WlObjectHandle};
 use crate::{
-    interface::{
-        Event as _, Request, WlRegistryBindRequest, WlRegistryGlobalEvent,
-        registry::request::HasInterface,
-    },
+    interface::{Event as _, Request, WlRegistryBindRequest, WlRegistryGlobalEvent},
     object::ObjectId,
     sys::{
-        ObjectType,
+        HasObjectType, ObjectType,
         object_storage::WlObjectStorage,
         wire::{Message, MessageBuffer},
     },
@@ -33,7 +30,7 @@ impl WlRegistry {
         object: T,
     ) -> Option<WlObjectHandle<T>>
     where
-        T: HasInterface + Dispatch + 'static,
+        T: HasObjectType + Dispatch + 'static,
     {
         let proxy = unsafe {
             WlRegistryBindRequest::<T>::new().send(storage.get_object(registry)?.proxy(), buf)?
@@ -48,7 +45,7 @@ impl WlRegistry {
         registry: WlObjectHandle<WlRegistry>,
     ) -> Option<WlObjectHandle<T>>
     where
-        T: HasInterface + Dispatch + Default + 'static,
+        T: HasObjectType + Dispatch + Default + 'static,
     {
         Self::bind(buf, storage, registry, T::default())
     }

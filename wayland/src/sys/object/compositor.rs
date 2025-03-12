@@ -1,11 +1,7 @@
 use super::{Dispatch, WlObject, WlObjectHandle, surface::WlSurface};
 use crate::{
-    interface::{Request, WlCompositorCreateSurface, registry::request::HasInterface},
-    sys::{
-        Interface, ObjectType,
-        object_storage::WlObjectStorage,
-        wire::{Message, MessageBuffer},
-    },
+    interface::{Request, WlCompositorCreateSurface},
+    sys::{object_storage::WlObjectStorage, wire::MessageBuffer, HasObjectType, ObjectType},
 };
 
 #[derive(Default)]
@@ -28,13 +24,8 @@ impl WlCompositor {
     }
 }
 
-impl HasInterface for WlCompositor {
-    const INTERFACE: Interface = Interface {
-        object_type: ObjectType::Compositor,
-        version: 6,
-    };
+impl HasObjectType for WlCompositor {
+    const OBJECT_TYPE: ObjectType = ObjectType::Compositor;
 }
 
-impl Dispatch for WlCompositor {
-    fn dispatch(&mut self, _message: Message<'_>) {}
-}
+impl Dispatch for WlCompositor {}

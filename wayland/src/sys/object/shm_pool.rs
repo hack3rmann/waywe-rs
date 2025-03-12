@@ -1,11 +1,7 @@
 use super::{Dispatch, WlObject, WlObjectHandle, buffer::WlBuffer};
 use crate::{
-    interface::{Request, WlShmPoolCreateBufferRequest, registry::request::HasInterface},
-    sys::{
-        Interface, ObjectType,
-        object_storage::WlObjectStorage,
-        wire::{Message, MessageBuffer},
-    },
+    interface::{Request, WlShmPoolCreateBufferRequest},
+    sys::{HasObjectType, ObjectType, object_storage::WlObjectStorage, wire::MessageBuffer},
 };
 
 #[derive(Debug)]
@@ -24,13 +20,8 @@ impl WlShmPool {
     }
 }
 
-impl HasInterface for WlShmPool {
-    const INTERFACE: Interface = Interface {
-        object_type: ObjectType::ShmPool,
-        version: 2,
-    };
+impl HasObjectType for WlShmPool {
+    const OBJECT_TYPE: ObjectType = ObjectType::ShmPool;
 }
 
-impl Dispatch for WlShmPool {
-    fn dispatch(&mut self, _: Message<'_>) {}
-}
+impl Dispatch for WlShmPool {}
