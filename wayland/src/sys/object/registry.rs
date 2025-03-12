@@ -1,8 +1,6 @@
-use fxhash::FxHashMap;
-
 use super::{Dispatch, WlObject, WlObjectHandle};
 use crate::{
-    interface::{Event as _, Request, WlRegistryBindRequest, WlRegistryGlobalEvent},
+    interface::{Event as _, WlRegistryBindRequest, WlRegistryGlobalEvent},
     object::ObjectId,
     sys::{
         HasObjectType, ObjectType,
@@ -10,6 +8,7 @@ use crate::{
         wire::{Message, MessageBuffer},
     },
 };
+use fxhash::FxHashMap;
 
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
 pub struct WlRegistryGlobalInfo {
@@ -32,9 +31,8 @@ impl WlRegistry {
     where
         T: HasObjectType + Dispatch + 'static,
     {
-        let proxy = unsafe {
-            WlRegistryBindRequest::<T>::new().send(storage.get_object(registry)?.proxy(), buf)?
-        };
+        let proxy =
+            unsafe { WlRegistryBindRequest::<T>::new().send(storage.get_object(registry)?, buf)? };
 
         Some(storage.insert(WlObject::new(proxy, object)))
     }
@@ -48,6 +46,10 @@ impl WlRegistry {
         T: HasObjectType + Dispatch + Default + 'static,
     {
         Self::bind(buf, storage, registry, T::default())
+    }
+
+    pub fn name_of(&self, object_type: ObjectType) -> Option<ObjectId> {
+        self.interfaces.get(&object_type).map(|global| global.name)
     }
 }
 

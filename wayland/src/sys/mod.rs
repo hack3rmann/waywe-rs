@@ -39,6 +39,7 @@ pub enum ObjectType {
     WlrLayerShellV1,
     // non-globals
     Callback,
+    Output,
     WlrLayerSurfaceV1,
 }
 
@@ -53,6 +54,7 @@ impl ObjectType {
             "wl_buffer" => ObjectType::Buffer,
             "wl_surface" => ObjectType::Surface,
             "wl_region" => ObjectType::Region,
+            "wl_output" => ObjectType::Output,
             "zwlr_layer_shell_v1" => ObjectType::WlrLayerShellV1,
         };
 
@@ -70,6 +72,7 @@ impl ObjectType {
             Self::Compositor => &protocols::wl_compositor::INTERFACE,
             Self::Shm => &protocols::wl_shm::INTERFACE,
             Self::Buffer => &protocols::wl_buffer::INTERFACE,
+            Self::Output => &protocols::wl_output::INTERFACE,
             Self::WlrLayerShellV1 => &protocols::zwlr_layer_shell_v1::INTERFACE,
             Self::WlrLayerSurfaceV1 => &protocols::zwlr_layer_surface_v1::INTERFACE,
         }
@@ -86,6 +89,7 @@ impl ObjectType {
             Self::Compositor => &protocols::wl_compositor::WL_INTERFACE,
             Self::Shm => &protocols::wl_shm::WL_INTERFACE,
             Self::Buffer => &protocols::wl_buffer::WL_INTERFACE,
+            Self::Output => &protocols::wl_output::WL_INTERFACE,
             Self::WlrLayerShellV1 => &protocols::zwlr_layer_shell_v1::WL_INTERFACE,
             Self::WlrLayerSurfaceV1 => &protocols::zwlr_layer_surface_v1::WL_INTERFACE,
         }

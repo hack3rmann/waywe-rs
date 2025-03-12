@@ -5,6 +5,8 @@ pub mod shm;
 pub mod shm_pool;
 pub mod surface;
 pub mod zwlr_layer_shell_v1;
+pub mod zwlr_layer_surface_v1;
+pub mod output;
 
 use super::{
     ffi::{wl_argument, wl_message, wl_proxy_add_dispatcher, wl_proxy_get_user_data},
@@ -315,7 +317,7 @@ impl<T: fmt::Debug> fmt::Debug for WlObject<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::compositor::WlCompositor;
+    use super::{compositor::WlCompositor, zwlr_layer_shell_v1::WlrLayerShellV1};
     use crate::{
         init::connect_wayland_socket,
         sys::{
@@ -366,6 +368,23 @@ mod tests {
             storage.object(surface).proxy().interface_name(),
             "wl_surface",
         );
+    }
+
+    #[test]
+    fn bind_wlr_shell() {
+        let mut buf = SmallVecMessageBuffer::<8>::new();
+
+        // Safety: called once on the start of the program
+        let display = unsafe { connect_display() };
+        let mut storage = display.create_storage();
+        let registry = display.create_registry(&mut buf, &mut storage);
+
+        display.sync_all();
+
+        let _layer_shell =
+            WlRegistry::bind_default::<WlrLayerShellV1>(&mut buf, &mut storage, registry).unwrap();
+
+        display.sync_all();
     }
 
     #[test]

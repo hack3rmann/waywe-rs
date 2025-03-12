@@ -42,6 +42,13 @@ pub use {
         },
         wl_enum::Error as WlSurfaceError,
     },
+    zwlr_layer_shell_v1::{
+        request::{
+            Destroy as ZwlrLayerShellDestroyRequest,
+            GetLayerSurface as ZwlrLayerShellGetLayerSurfaceRequest,
+        },
+        wl_enum::Layer as ZwlrLayerShellV1Layer,
+    },
 };
 
 /// Represents requests on Wayland's interfaces

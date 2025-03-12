@@ -20,15 +20,22 @@
 //! the object.
 
 use crate::{
-    interface::{Event, Request},
+    interface::Event,
     object::ObjectId,
     sys::wire::{Message, MessageBuffer},
 };
 
 pub mod request {
+    use wayland_sys::wl_proxy_marshal_array_constructor;
+
     use super::*;
-    use crate::sys::{HasObjectType, InterfaceMessageArgument, ObjectType, wire::OpCode};
-    use std::marker::PhantomData;
+    use crate::sys::{
+        HasObjectType, InterfaceMessageArgument, ObjectType,
+        object::{WlObject, registry::WlRegistry},
+        proxy::WlProxy,
+        wire::OpCode,
+    };
+    use std::{marker::PhantomData, ptr::NonNull};
 
     /// Binds a new, client-created object to the server using the
     /// specified name as the identifier.
@@ -49,16 +56,42 @@ pub mod request {
         }
     }
 
-    impl<'b, T: HasObjectType> Request<'b> for Bind<T> {
-        const CODE: OpCode = 0;
-        const OUTGOING_INTERFACE: Option<ObjectType> = Some(T::OBJECT_TYPE);
+    impl<T: HasObjectType> Bind<T> {
+        const OPCODE: OpCode = 0;
+        const OUTGOING_INTERFACE: ObjectType = T::OBJECT_TYPE;
 
-        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+        fn build_message(self, buf: &mut impl MessageBuffer, name: ObjectId) -> Message<'_> {
             Message::builder(buf)
-                .opcode(Self::CODE)
-                // FIXME(hack3rmann):
-                .interface(InterfaceMessageArgument { ..todo!() })
+                .opcode(Self::OPCODE)
+                .interface(InterfaceMessageArgument {
+                    object_type: T::OBJECT_TYPE,
+                    name,
+                })
                 .build()
+        }
+
+        /// # Safety
+        ///
+        /// - `parent` proxy should match the parent interface
+        /// - resulting `WlProxy` object should be owned by `ObjectStorage` after call
+        pub unsafe fn send(
+            self,
+            registry: &WlObject<WlRegistry>,
+            buf: &mut impl MessageBuffer,
+        ) -> Option<WlProxy> {
+            let message = self.build_message(buf, registry.name_of(T::OBJECT_TYPE)?);
+            let interface = &raw const *Self::OUTGOING_INTERFACE.backend_interface();
+
+            let raw_proxy = unsafe {
+                wl_proxy_marshal_array_constructor(
+                    registry.proxy().as_raw().as_ptr(),
+                    message.opcode.into(),
+                    message.arguments.as_ptr().cast_mut(),
+                    interface,
+                )
+            };
+
+            Some(unsafe { WlProxy::from_raw(NonNull::new(raw_proxy)?) })
         }
     }
 }
