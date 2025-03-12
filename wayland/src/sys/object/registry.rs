@@ -1,3 +1,5 @@
+use fxhash::FxHashMap;
+
 use super::{Dispatch, WlObject, WlObjectHandle};
 use crate::{
     interface::{
@@ -6,11 +8,11 @@ use crate::{
     },
     object::ObjectId,
     sys::{
+        ObjectType,
         object_storage::WlObjectStorage,
         wire::{Message, MessageBuffer},
     },
 };
-use std::{collections::HashMap, ffi::CString};
 
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
 pub struct WlRegistryGlobalInfo {
@@ -20,8 +22,7 @@ pub struct WlRegistryGlobalInfo {
 
 #[derive(Debug, Default)]
 pub struct WlRegistry {
-    // TODO(hack3rmann): make it faster
-    pub interfaces: HashMap<CString, WlRegistryGlobalInfo>,
+    pub interfaces: FxHashMap<ObjectType, WlRegistryGlobalInfo>,
 }
 
 impl WlRegistry {
@@ -60,12 +61,19 @@ impl Dispatch for WlRegistry {
             return;
         };
 
-        self.interfaces.insert(
-            event.interface.to_owned(),
-            WlRegistryGlobalInfo {
-                name: event.name,
-                version: event.version,
-            },
-        );
+        let name = event
+            .interface
+            .to_str()
+            .expect("interface name expected to be a valid utf-8 string");
+
+        if let Some(ty) = ObjectType::from_interface_name(name) {
+            self.interfaces.insert(
+                ty,
+                WlRegistryGlobalInfo {
+                    name: event.name,
+                    version: event.version,
+                },
+            );
+        }
     }
 }

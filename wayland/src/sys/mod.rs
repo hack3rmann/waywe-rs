@@ -24,7 +24,8 @@ use std::ffi::CStr;
 use wayland_sys::Interface as FfiInterface;
 
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
-pub enum InterfaceObjectType {
+pub enum ObjectType {
+    // globals
     #[default]
     Display = 1,
     Registry = 2,
@@ -34,14 +35,31 @@ pub enum InterfaceObjectType {
     Buffer = 6,
     Surface = 13,
     Region = 19,
-    Callback,
     WlrLayerShellV1,
+    // non-globals
+    Callback,
     WlrLayerSurfaceV1,
 }
 
-impl InterfaceObjectType {
+impl ObjectType {
     pub const fn integer_name(self) -> ObjectId {
         ObjectId::new(self as u32)
+    }
+
+    pub fn from_interface_name(name: &str) -> Option<Self> {
+        static MAP: phf::Map<&'static str, ObjectType> = phf::phf_map! {
+            "wl_display" => ObjectType::Display,
+            "wl_registry" => ObjectType::Registry,
+            "wl_compositor" => ObjectType::Compositor,
+            "wl_shm_pool" => ObjectType::ShmPool,
+            "wl_shm" => ObjectType::Shm,
+            "wl_buffer" => ObjectType::Buffer,
+            "wl_surface" => ObjectType::Surface,
+            "wl_region" => ObjectType::Region,
+            "zwlr_layer_shell_v1" => ObjectType::WlrLayerShellV1,
+        };
+
+        MAP.get(name).copied()
     }
 
     pub const fn backend_ffi_interface(self) -> &'static FfiInterface<'static> {
@@ -81,7 +99,7 @@ impl InterfaceObjectType {
     }
 }
 
-impl fmt::Display for InterfaceObjectType {
+impl fmt::Display for ObjectType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.interface_name().to_str().unwrap())
     }
@@ -90,7 +108,7 @@ impl fmt::Display for InterfaceObjectType {
 /// Stores some information about some global object
 #[derive(Clone, Debug, PartialEq, Copy, Eq, PartialOrd, Ord, Hash)]
 pub struct Interface {
-    pub object_type: InterfaceObjectType,
+    pub object_type: ObjectType,
     pub version: u32,
 }
 
@@ -101,7 +119,7 @@ impl Interface {
     ///
     /// `wl_display` always has `version` set to `1`
     pub const DISPLAY: Self = Self {
-        object_type: InterfaceObjectType::Display,
+        object_type: ObjectType::Display,
         version: 1,
     };
 

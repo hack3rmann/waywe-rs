@@ -49,7 +49,7 @@ pub mod request {
     use super::*;
     use crate::{
         interface::Request,
-        sys::{InterfaceObjectType, proxy::WlProxy, wire::OpCode},
+        sys::{ObjectType, proxy::WlProxy, wire::OpCode},
     };
 
     /// Deletes the surface and invalidates its object ID.
@@ -214,7 +214,7 @@ pub mod request {
 
     impl<'b> Request<'b> for Frame {
         const CODE: OpCode = 3;
-        const OUTGOING_INTERFACE: Option<InterfaceObjectType> = Some(InterfaceObjectType::Callback);
+        const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::Callback);
 
         fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
             Message::builder(buf).opcode(Self::CODE).new_id().build()

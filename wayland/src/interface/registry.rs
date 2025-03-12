@@ -27,7 +27,7 @@ use crate::{
 
 pub mod request {
     use super::*;
-    use crate::sys::{wire::OpCode, Interface, InterfaceObjectType};
+    use crate::sys::{wire::OpCode, Interface, ObjectType};
     use std::marker::PhantomData;
 
     pub trait HasInterface {
@@ -55,7 +55,7 @@ pub mod request {
 
     impl<'b, T: HasInterface> Request<'b> for Bind<T> {
         const CODE: OpCode = 0;
-        const OUTGOING_INTERFACE: Option<InterfaceObjectType> = Some(T::INTERFACE.object_type);
+        const OUTGOING_INTERFACE: Option<ObjectType> = Some(T::INTERFACE.object_type);
 
         fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
             Message::builder(buf)

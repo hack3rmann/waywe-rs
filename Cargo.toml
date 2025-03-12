@@ -8,7 +8,6 @@ edition = "2024"
 
 [workspace.dependencies]
 wayland = { path = "wayland" }
-waylnad-scanner = { path = "wayland-scanner" }
 wayland-sys = { path = "wayland-sys" }
 tracing = "0.1.41"
 thiserror = "2.0.11"

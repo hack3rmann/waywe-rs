@@ -16,3 +16,5 @@ glam = "0.30.0"
 wayland-scanner = { path = "../wayland-scanner" }
 wayland-sys.workspace = true
 paste = "1.0.15"
+phf = { version = "0.11.3", features = ["macros", "phf_macros"] }
+fxhash = "0.2.1"

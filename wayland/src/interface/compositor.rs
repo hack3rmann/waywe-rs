@@ -6,7 +6,7 @@ pub mod request {
     use crate::{
         interface::Request,
         sys::{
-            InterfaceObjectType,
+            ObjectType,
             wire::{Message, MessageBuffer, OpCode},
         },
     };
@@ -17,7 +17,7 @@ pub mod request {
 
     impl<'b> Request<'b> for CreateSurface {
         const CODE: OpCode = 0;
-        const OUTGOING_INTERFACE: Option<InterfaceObjectType> = Some(InterfaceObjectType::Surface);
+        const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::Surface);
 
         fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
             Message::builder(buf).opcode(Self::CODE).new_id().build()
@@ -30,7 +30,7 @@ pub mod request {
 
     impl<'b> Request<'b> for CreateRegion {
         const CODE: OpCode = 1;
-        const OUTGOING_INTERFACE: Option<InterfaceObjectType> = Some(InterfaceObjectType::Region);
+        const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::Region);
 
         fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
             Message::builder(buf).opcode(Self::CODE).new_id().build()

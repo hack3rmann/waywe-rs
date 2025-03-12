@@ -8,7 +8,7 @@ use crate::{
 
 pub mod request {
     use super::*;
-    use crate::sys::{InterfaceObjectType, wire::OpCode};
+    use crate::sys::{ObjectType, wire::OpCode};
 
     /// The sync request asks the server to emit the 'done' event
     /// on the returned wl_callback object.  Since requests are
@@ -26,7 +26,7 @@ pub mod request {
 
     impl<'b> Request<'b> for Sync {
         const CODE: OpCode = 0;
-        const OUTGOING_INTERFACE: Option<InterfaceObjectType> = Some(InterfaceObjectType::Callback);
+        const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::Callback);
 
         fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
             Message::builder(buf).opcode(Self::CODE).new_id().build()
@@ -47,7 +47,7 @@ pub mod request {
 
     impl<'b> Request<'b> for GetRegistry {
         const CODE: OpCode = 1;
-        const OUTGOING_INTERFACE: Option<InterfaceObjectType> = Some(InterfaceObjectType::Registry);
+        const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::Registry);
 
         fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
             Message::builder(buf).opcode(Self::CODE).new_id().build()

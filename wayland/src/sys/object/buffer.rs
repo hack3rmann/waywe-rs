@@ -1,7 +1,7 @@
 use super::Dispatch;
 use crate::{
     interface::registry::request::HasInterface,
-    sys::{Interface, InterfaceObjectType, wire::Message},
+    sys::{Interface, ObjectType, wire::Message},
 };
 
 #[derive(Debug)]
@@ -9,7 +9,7 @@ pub struct WlBuffer;
 
 impl HasInterface for WlBuffer {
     const INTERFACE: Interface = Interface {
-        object_type: InterfaceObjectType::Buffer,
+        object_type: ObjectType::Buffer,
         version: 1,
     };
 }

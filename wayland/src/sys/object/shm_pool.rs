@@ -2,7 +2,7 @@ use super::{Dispatch, WlObject, WlObjectHandle, buffer::WlBuffer};
 use crate::{
     interface::{Request, WlShmPoolCreateBufferRequest, registry::request::HasInterface},
     sys::{
-        Interface, InterfaceObjectType,
+        Interface, ObjectType,
         object_storage::WlObjectStorage,
         wire::{Message, MessageBuffer},
     },
@@ -26,7 +26,7 @@ impl WlShmPool {
 
 impl HasInterface for WlShmPool {
     const INTERFACE: Interface = Interface {
-        object_type: InterfaceObjectType::ShmPool,
+        object_type: ObjectType::ShmPool,
         version: 2,
     };
 }

@@ -2,7 +2,7 @@ use super::{Dispatch, WlObject, WlObjectHandle, surface::WlSurface};
 use crate::{
     interface::{Request, WlCompositorCreateSurface, registry::request::HasInterface},
     sys::{
-        Interface, InterfaceObjectType,
+        Interface, ObjectType,
         object_storage::WlObjectStorage,
         wire::{Message, MessageBuffer},
     },
@@ -30,7 +30,7 @@ impl WlCompositor {
 
 impl HasInterface for WlCompositor {
     const INTERFACE: Interface = Interface {
-        object_type: InterfaceObjectType::Compositor,
+        object_type: ObjectType::Compositor,
         version: 6,
     };
 }

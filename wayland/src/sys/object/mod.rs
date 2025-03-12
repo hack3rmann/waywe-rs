@@ -317,7 +317,10 @@ mod tests {
     use super::compositor::WlCompositor;
     use crate::{
         init::connect_wayland_socket,
-        sys::{display::WlDisplay, object::registry::WlRegistry, wire::SmallVecMessageBuffer},
+        sys::{
+            ObjectType, display::WlDisplay, object::registry::WlRegistry,
+            wire::SmallVecMessageBuffer,
+        },
     };
 
     unsafe fn connect_display() -> WlDisplay {
@@ -340,7 +343,7 @@ mod tests {
             storage
                 .object(registry)
                 .interfaces
-                .contains_key(c"wl_compositor")
+                .contains_key(&ObjectType::from_interface_name("wl_compositor").unwrap())
         );
     }
 

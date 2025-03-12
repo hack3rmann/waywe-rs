@@ -4,7 +4,7 @@ use crate::{
         registry::request::HasInterface, Request, WlSurfaceAttachRequest, WlSurfaceDamageRequest, WlSurfaceDestroyRequest
     },
     sys::{
-        object_storage::WlObjectStorage, wire::{Message, MessageBuffer}, Interface, InterfaceObjectType
+        object_storage::WlObjectStorage, wire::{Message, MessageBuffer}, Interface, ObjectType
     },
 };
 use glam::{IVec2, UVec2};
@@ -60,7 +60,7 @@ impl WlSurface {
 
 impl HasInterface for WlSurface {
     const INTERFACE: Interface = Interface {
-        object_type: InterfaceObjectType::Surface,
+        object_type: ObjectType::Surface,
         version: 6,
     };
 }

@@ -9,7 +9,7 @@
 pub mod request {
     use super::wl_enum::Layer;
     use crate::interface::Request;
-    use crate::sys::InterfaceObjectType;
+    use crate::sys::ObjectType;
     use crate::sys::proxy::WlProxy;
     use crate::sys::wire::{Message, MessageBuffer, OpCode};
     use std::ffi::CStr;
@@ -44,8 +44,8 @@ pub mod request {
     }
 
     impl<'b> Request<'b> for GetLayerSurface<'b> {
-        const OUTGOING_INTERFACE: Option<InterfaceObjectType> =
-            Some(InterfaceObjectType::WlrLayerSurfaceV1);
+        const OUTGOING_INTERFACE: Option<ObjectType> =
+            Some(ObjectType::WlrLayerSurfaceV1);
 
         const CODE: OpCode = 0;
 

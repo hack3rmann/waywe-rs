@@ -9,7 +9,7 @@ pub mod zwlr_layer_shell_v1;
 pub mod zwlr_layer_surface_v1;
 
 use crate::sys::{
-    InterfaceObjectType,
+    ObjectType,
     ffi::{wl_proxy, wl_proxy_marshal_array_constructor},
     proxy::WlProxy,
     wire::{Message, MessageBuffer, OpCode},
@@ -50,7 +50,7 @@ pub trait Request<'b>: Sized {
     const CODE: OpCode;
 
     /// The type of an interface object of which will be created by libwayland
-    const OUTGOING_INTERFACE: Option<InterfaceObjectType> = None;
+    const OUTGOING_INTERFACE: Option<ObjectType> = None;
 
     /// Builds the message on the top of given message buffer
     fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b>;
