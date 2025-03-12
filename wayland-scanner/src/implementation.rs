@@ -201,11 +201,7 @@ pub fn maybe_name_to_outgoing_interface(parent: &Interface, name: Option<&str>) 
     }
 }
 
-pub fn message_to_wl_message(
-    message: &Message,
-    index: usize,
-    ty: MessageType,
-) -> TokenStream {
+pub fn message_to_wl_message(message: &Message, index: usize, ty: MessageType) -> TokenStream {
     let index_string = index.to_string();
     let index_lit = LitInt::new(&index_string, Span::call_site());
 

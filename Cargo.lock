@@ -1181,6 +1181,7 @@ dependencies = [
  "smallvec",
  "syn",
  "thiserror 2.0.11",
+ "wayland-sys",
  "xml_serde",
 ]
 

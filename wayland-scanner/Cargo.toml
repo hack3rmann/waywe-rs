@@ -11,6 +11,7 @@ smallvec = { version = "1.14.0", features = ["union", "serde", "const_generics",
 syn = "2.0.99"
 xml_serde = "1.4.1"
 thiserror.workspace = true
+wayland-sys.workspace = true
 
 [lib]
 proc-macro = true
