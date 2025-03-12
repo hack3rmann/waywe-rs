@@ -159,7 +159,7 @@ pub fn message_to_wl_message(message: &Message, index: usize, ty: MessageType) -
                         >(REF.as_ptr())
                     }
                 } else {
-                    ::core::ptr::null()
+                    ::std::ptr::dangling()
                 }
             },
         }
