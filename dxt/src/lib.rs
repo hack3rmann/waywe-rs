@@ -1,11 +1,30 @@
+use rayon::iter::IntoParallelIterator;
+use rayon::prelude::*;
 use safe_transmute::{guard::SingleManyGuard, transmute_many, transmute_one_to_bytes};
 
-// The format of the dxt image
+/// The format of the dxt image
 pub enum DxtFormat {
     Dxt1,
     Dxt3,
     Dxt5,
 }
+
+/// Wrapper for *mut u32 to send it across threads
+///
+/// This is used to parllelize decompression and is only used
+/// to get shared mutable access to non-overlapping
+/// slices of the Vec
+///
+/// # Safety
+///
+/// - Send and Sync constraints are ensured by the implementation, so that
+///   access to any vector element is exclusive at a time
+/// - All threads that get this pointer finish their work after the main thread
+///   that contains the vector itself
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, PartialOrd, Ord)]
+struct SendableU32MutPointer(*mut u32);
+unsafe impl Send for SendableU32MutPointer {}
+unsafe impl Sync for SendableU32MutPointer {}
 
 /// Decompresses dxt image given its width, height and bytes
 ///
@@ -29,10 +48,14 @@ pub fn decompress_image(width: usize, height: usize, data: &[u32], format: DxtFo
     );
 
     let mut res = vec![0; width * height];
+    let res_ptr = SendableU32MutPointer(res.as_mut_ptr());
 
-    let mut block_idx = 0;
-    for block_y in 0..num_blocks_height {
-        for block_x in 0..num_blocks_width {
+    (0..num_blocks_height * num_blocks_width)
+        .into_par_iter()
+        .for_each(|block_idx| {
+            let block_y = block_idx / num_blocks_width;
+            let block_x = block_idx % num_blocks_width;
+
             let offset = block_idx * block_size;
             let data = &data[offset..offset + block_size];
 
@@ -40,22 +63,21 @@ pub fn decompress_image(width: usize, height: usize, data: &[u32], format: DxtFo
             let y = block_y * 4;
 
             match format {
-                DxtFormat::Dxt1 => decompress_dxt1_block(data, &mut res, x, y, width, height),
-                DxtFormat::Dxt3 => decompress_dxt3_block(data, &mut res, x, y, width, height),
-                DxtFormat::Dxt5 => decompress_dxt5_block(data, &mut res, x, y, width, height),
+                DxtFormat::Dxt1 => decompress_dxt1_block(data, res_ptr, x, y, width, height),
+                DxtFormat::Dxt3 => decompress_dxt3_block(data, res_ptr, x, y, width, height),
+                DxtFormat::Dxt5 => decompress_dxt5_block(data, res_ptr, x, y, width, height),
             }
-
-            block_idx += 1;
-        }
-    }
+        });
 
     res
 }
 
 /// Extracts color palette encoded in u32
 #[rustfmt::skip]
-fn get_color_palette<'a>(data: u32, format: DxtFormat) -> [u32; 4] {
-    let colors = transmute_many::<u16, SingleManyGuard>(transmute_one_to_bytes(&data)).expect("u32 can be safely transmuted to the slice of two u16");
+fn get_color_palette(data: u32, format: DxtFormat) -> [u32; 4] {
+    let colors =
+        transmute_many::<u16, SingleManyGuard>(transmute_one_to_bytes(&data))
+            .expect("u32 can be safely transmuted to the slice of two u16");
 
     let color0 = colors[0] as u32;
     let color1 = colors[1] as u32;
@@ -114,7 +136,7 @@ fn get_color_palette<'a>(data: u32, format: DxtFormat) -> [u32; 4] {
 /// - 4 bytes: color indices (2 bits per pixel)
 fn decompress_dxt1_block(
     data: &[u32],
-    out_pixels: &mut [u32],
+    out_pixels: SendableU32MutPointer,
     x: usize,
     y: usize,
     width: usize,
@@ -123,14 +145,21 @@ fn decompress_dxt1_block(
     let palette = get_color_palette(data[0], DxtFormat::Dxt1);
 
     let byte_view = transmute_one_to_bytes(&data[1]);
-    for i in 0..4 {
+    for (i, byte) in byte_view.iter().enumerate().take(4) {
         for j in 0..4 {
             if y + i < height && x + j < width {
                 // Each pixel index (in block) takes 2 bits, so one byte can encode 4 indices
-                let color_idx = (byte_view[i] >> (j * 2)) & 3;
+                let color_idx = (byte >> (j * 2)) & 3;
                 let color = palette[color_idx as usize];
 
-                out_pixels[(y + i) * width + x + j] = color;
+                // Safety
+                //
+                // Only one thread has access to this block at a time
+                // so it is safe to dereference the pointer
+                // and write to the pointee
+                unsafe {
+                    *out_pixels.0.add((y + i) * width + x + j) = color;
+                }
             }
         }
     }
@@ -147,7 +176,7 @@ fn decompress_dxt1_block(
 ///   - 4 bytes: color indices (2 bits per pixel)
 fn decompress_dxt3_block(
     data: &[u32],
-    out_pixels: &mut [u32],
+    out_pixels: SendableU32MutPointer,
     x: usize,
     y: usize,
     width: usize,
@@ -159,11 +188,11 @@ fn decompress_dxt3_block(
     let color_palette = get_color_palette(data[2], DxtFormat::Dxt3);
 
     let color_indices_byte_view = transmute_one_to_bytes(&data[3]);
-    for i in 0..4 {
+    for (i, colors_byte) in color_indices_byte_view.iter().enumerate().take(4) {
         for j in 0..4 {
             if y + i < height && x + j < width {
                 // Each pixel index (in block) takes 2 bits, so one byte can encode 4 indices
-                let color_idx = (color_indices_byte_view[i] >> (j * 2)) & 3;
+                let color_idx = (colors_byte >> (j * 2)) & 3;
                 let mut color = color_palette[color_idx as usize];
 
                 let idx = i * 4 + j;
@@ -183,7 +212,14 @@ fn decompress_dxt3_block(
                 color &= u32::MAX << 8;
                 color |= alpha as u32;
 
-                out_pixels[(y + i) * width + x + j] = color;
+                // Safety
+                //
+                // Only one thread has access to this block at a time
+                // so it is safe to dereference the pointer
+                // and write to the pointee
+                unsafe {
+                    *(out_pixels.0.add((y + i) * width + x + j)) = color;
+                }
             }
         }
     }
@@ -202,7 +238,7 @@ fn decompress_dxt3_block(
 ///   - 4 bytes: color indices (2 bits per pixel)
 fn decompress_dxt5_block(
     data: &[u32],
-    out_pixels: &mut [u32],
+    out_pixels: SendableU32MutPointer,
     x: usize,
     y: usize,
     width: usize,
@@ -233,7 +269,7 @@ fn decompress_dxt5_block(
     let mut bits = 0;
     let mut cur_byte = 0;
     let color_indices_byte_view = transmute_one_to_bytes(&data[3]);
-    for i in 0..4 {
+    for (i, color_indices_byte) in color_indices_byte_view.iter().enumerate().take(4) {
         for j in 0..4 {
             if bits < 3 {
                 let idx = 2 + (i * 4 + j) * 3 / 8;
@@ -249,7 +285,7 @@ fn decompress_dxt5_block(
 
             if y + i < height && x + j < width {
                 // Each pixel index (in block) takes 2 bits, so one byte can encode 4 indices
-                let color_idx = (color_indices_byte_view[i] >> (j * 2)) & 3;
+                let color_idx = (color_indices_byte >> (j * 2)) & 3;
                 let mut color = color_palette[color_idx as usize];
 
                 let alpha = alpha_palette[alpha_idx as usize];
@@ -257,7 +293,14 @@ fn decompress_dxt5_block(
                 color &= u32::MAX >> 8;
                 color |= (alpha as u32) << 24;
 
-                out_pixels[(y + i) * width + x + j] = color;
+                // Safety
+                //
+                // Only one thread has access to this block at a time
+                // so it is safe to dereference the pointer
+                // and write to the pointee
+                unsafe {
+                    *out_pixels.0.add((y + i) * width + x + j) = color;
+                }
             }
 
             cur_byte >>= 3;

@@ -9,3 +9,4 @@ edition = "2021"
 [workspace.dependencies]
 thiserror = "2.0.12"
 safe-transmute = "0.11.3"
+rayon = "1.10.0"

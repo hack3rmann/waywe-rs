@@ -5,4 +5,5 @@ edition.workspace = true
 
 [dependencies]
 safe-transmute.workspace = true
+rayon.workspace = true
 transmute-extra = {path = "../transmute-extra"}
