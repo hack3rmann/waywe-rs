@@ -44,8 +44,8 @@ pub mod request {
     }
 
     impl<'b> Request<'b> for GetLayerSurface<'b> {
-        // FIXME(hack3rmann): add static for zwlr_layer_surface
-        const OUTGOING_INTERFACE: Option<InterfaceObjectType> = None;
+        const OUTGOING_INTERFACE: Option<InterfaceObjectType> =
+            Some(InterfaceObjectType::WlrLayerSurfaceV1);
 
         const CODE: OpCode = 0;
 

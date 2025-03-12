@@ -322,7 +322,7 @@ mod tests {
 
     unsafe fn connect_display() -> WlDisplay {
         let wayland_sock = unsafe { connect_wayland_socket().unwrap() };
-        WlDisplay::connect_to_fd(wayland_sock)
+        WlDisplay::connect_to_fd(wayland_sock).unwrap()
     }
 
     #[test]

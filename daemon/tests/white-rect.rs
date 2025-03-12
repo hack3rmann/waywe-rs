@@ -15,7 +15,7 @@ async fn t1() {
     let wayland_sock = unsafe { connect_wayland_socket().unwrap() };
     let mut buf = SmallVecMessageBuffer::<8>::new();
 
-    let display = WlDisplay::connect_to_fd(wayland_sock);
+    let display = WlDisplay::connect_to_fd(wayland_sock).unwrap();
     let mut storage = display.create_storage();
     let registry = display.create_registry(&mut buf, &mut storage);
 

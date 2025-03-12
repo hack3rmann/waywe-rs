@@ -80,7 +80,6 @@ pub mod event {
         const CODE: OpCode = 0;
 
         fn from_message(message: Message<'s>) -> Option<Self> {
-            // FIXME(hack3rmann): check the interface of the message sender
             if message.opcode != Self::CODE {
                 return None;
             }

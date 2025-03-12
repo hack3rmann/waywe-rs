@@ -35,6 +35,8 @@ pub enum InterfaceObjectType {
     Surface = 13,
     Region = 19,
     Callback,
+    WlrLayerShellV1,
+    WlrLayerSurfaceV1,
 }
 
 impl InterfaceObjectType {
@@ -43,7 +45,6 @@ impl InterfaceObjectType {
     }
 
     pub const fn backend_ffi_interface(self) -> &'static FfiInterface<'static> {
-        // FIXME(hack3rmann): add statics for zwlr_layer_shell_v1 and zwlr_layer_surface_v1
         match self {
             Self::Display => &protocols::wl_display::INTERFACE,
             Self::Surface => &protocols::wl_surface::INTERFACE,
@@ -54,11 +55,12 @@ impl InterfaceObjectType {
             Self::Compositor => &protocols::wl_compositor::INTERFACE,
             Self::Shm => &protocols::wl_shm::INTERFACE,
             Self::Buffer => &protocols::wl_buffer::INTERFACE,
+            Self::WlrLayerShellV1 => &protocols::zwlr_layer_shell_v1::INTERFACE,
+            Self::WlrLayerSurfaceV1 => &protocols::zwlr_layer_surface_v1::INTERFACE,
         }
     }
 
     pub const fn backend_interface(self) -> &'static wl_interface {
-        // FIXME(hack3rmann): add statics for zwlr_layer_shell_v1 and zwlr_layer_surface_v1
         match self {
             Self::Display => &protocols::wl_display::WL_INTERFACE,
             Self::Surface => &protocols::wl_surface::WL_INTERFACE,
@@ -69,6 +71,8 @@ impl InterfaceObjectType {
             Self::Compositor => &protocols::wl_compositor::WL_INTERFACE,
             Self::Shm => &protocols::wl_shm::WL_INTERFACE,
             Self::Buffer => &protocols::wl_buffer::WL_INTERFACE,
+            Self::WlrLayerShellV1 => &protocols::zwlr_layer_shell_v1::WL_INTERFACE,
+            Self::WlrLayerSurfaceV1 => &protocols::zwlr_layer_surface_v1::WL_INTERFACE,
         }
     }
 
