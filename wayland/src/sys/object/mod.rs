@@ -394,8 +394,11 @@ mod tests {
         // Safety: called once on the start of the program
         let display = unsafe { connect_display() };
         let mut storage = display.create_storage();
-        let _registry = display.create_registry(&mut buf, &mut storage);
+        let registry = display.create_registry(&mut buf, &mut storage);
 
         display.sync_all();
+
+        let compositor = WlRegistry::bind_default::<WlCompositor>(&mut buf, &mut storage, registry).unwrap();
+        let _surface = WlCompositor::create_surface(&mut buf, &mut storage, compositor);
     }
 }

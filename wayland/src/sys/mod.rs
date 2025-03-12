@@ -35,11 +35,11 @@ pub enum ObjectType {
     Shm = 5,
     Buffer = 6,
     Surface = 13,
+    Output = 18,
     Region = 19,
     WlrLayerShellV1,
     // non-globals
     Callback,
-    Output,
     WlrLayerSurfaceV1,
 }
 
