@@ -52,7 +52,7 @@ pub struct Arg<'s> {
     pub summary: Option<Cow<'s, str>>,
     #[serde(rename = "$attr:interface")]
     pub interface: Option<Cow<'s, str>>,
-    #[serde(rename = "$attr:allow_null", default)]
+    #[serde(rename = "$attr:allow-null", default)]
     pub allow_null: bool,
 }
 
