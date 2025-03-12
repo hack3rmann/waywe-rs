@@ -6,3 +6,4 @@ edition.workspace = true
 [dependencies]
 libc = "0.2.170"
 thiserror.workspace = true
+static_assertions.workspace = true

@@ -90,6 +90,8 @@ pub struct wl_message {
     pub types: *const *const wl_interface,
 }
 
+unsafe impl Sync for wl_message {}
+
 #[repr(C)]
 pub struct wl_array {
     pub size: usize,
@@ -493,6 +495,8 @@ pub struct wl_interface {
     pub events: *const wl_message,
 }
 
+unsafe impl Sync for wl_interface {}
+
 pub struct Interface<'s> {
     pub name: &'s CStr,
     pub version: u32,
@@ -504,15 +508,14 @@ pub struct InterfaceWlMessages<'s> {
     pub methods: &'s [wl_message],
     pub events: &'s [wl_message],
 }
+static_assertions::assert_impl_all!(InterfaceWlMessages<'static>: Sync);
 
 pub struct InterfaceMessage<'s> {
     pub name: &'s CStr,
     pub signature: &'s CStr,
-    // FIXME(hack3rmann):
-    // - add enum OutgoingInterface { This, Other(&Interface), None }
-    // - defeat self-referential constants
     pub outgoing_interfaces: &'s [Option<&'s Interface<'s>>],
 }
+static_assertions::assert_impl_all!(InterfaceMessage<'static>: Sync);
 
 #[repr(C)]
 pub struct wl_registry_listener {

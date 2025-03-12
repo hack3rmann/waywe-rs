@@ -10,7 +10,7 @@ rustix = { version = "0.38.44", features = ["fs", "net", "process", "mm", "shm"]
 thiserror.workspace = true
 tracing.workspace = true
 bitflags = "2.8.0"
-static_assertions = "1.1.0"
+static_assertions.workspace = true
 smallvec = { version = "1.14.0", features = ["const_generics", "union"] }
 glam = "0.30.0"
 wayland-scanner = { path = "../wayland-scanner" }

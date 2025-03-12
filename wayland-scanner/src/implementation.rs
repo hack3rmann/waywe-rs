@@ -131,7 +131,7 @@ pub fn interface_to_module(interface: &Interface) -> TokenStream {
 
     quote! {
         pub mod #module {
-            pub const INTERFACE: ::wayland_sys::Interface<'static>
+            pub static INTERFACE: ::wayland_sys::Interface<'static>
                 = ::wayland_sys::Interface {
                     name: #interface_name_cstr_lit,
                     version: #interface_version_int_lit,
@@ -143,7 +143,7 @@ pub fn interface_to_module(interface: &Interface) -> TokenStream {
                     ],
                 };
 
-            pub const WL_MESSAGES: ::wayland_sys::InterfaceWlMessages<'static>
+            pub static WL_MESSAGES: ::wayland_sys::InterfaceWlMessages<'static>
                 = ::wayland_sys::InterfaceWlMessages {
                     methods: &[
                         #( #requests_wl_messages ),*
@@ -153,7 +153,7 @@ pub fn interface_to_module(interface: &Interface) -> TokenStream {
                     ],
                 };
 
-            pub const WL_INTERFACE: ::wayland_sys::wl_interface
+            pub static WL_INTERFACE: ::wayland_sys::wl_interface
                 = ::wayland_sys::wl_interface {
                     name: INTERFACE.name.as_ptr(),
                     version: INTERFACE.version as i32,
@@ -207,7 +207,7 @@ pub fn message_to_wl_message(message: &Message, index: usize, ty: MessageType) -
             name: INTERFACE. #slice_name [ #index_lit ].name.as_ptr(),
             signature: INTERFACE. #slice_name [ #index_lit ].signature.as_ptr(),
             types: {
-                const REF: &[Option<&::wayland_sys::wl_interface>] = &[
+                static REF: &[Option<&::wayland_sys::wl_interface>] = &[
                     #( #outgoing_interfaces ),*
                 ];
 

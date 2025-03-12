@@ -12,7 +12,7 @@ pub mod protocols {
 
     // TODO(hack3rmann): uncomment
     //
-    // include_wl_interfaces!("wayland-protocols/stable/xdg-shell/xdg-shell.xml");
+    include_wl_interfaces!("wayland-protocols/stable/xdg-shell/xdg-shell.xml");
     // include_wl_interfaces!(
     //     "wayland-protocols/wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml"
     // );

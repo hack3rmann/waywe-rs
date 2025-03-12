@@ -1189,6 +1189,7 @@ name = "wayland-sys"
 version = "0.0.1"
 dependencies = [
  "libc",
+ "static_assertions",
  "thiserror 2.0.11",
 ]
 
