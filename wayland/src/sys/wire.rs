@@ -189,7 +189,7 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
     pub fn interface(self, value: InterfaceMessageArgument) -> Self {
         self.uint(value.name().into())
             .str(value.interface())
-            .uint(value.version())
+            .uint(value.min_supported_version().get())
             .new_id()
     }
 

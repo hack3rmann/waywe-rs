@@ -2,10 +2,7 @@
 
 use libc::{free, malloc, realloc};
 use std::{
-    ffi::{CStr, c_char, c_int, c_void},
-    mem::offset_of,
-    os::fd::RawFd,
-    ptr,
+    ffi::{c_char, c_int, c_void, CStr}, mem::offset_of, num::NonZeroU32, os::fd::RawFd, ptr
 };
 use thiserror::Error;
 
@@ -498,10 +495,10 @@ pub struct wl_interface {
 
 unsafe impl Sync for wl_interface {}
 
-#[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Copy, Eq, PartialOrd, Ord, Hash)]
 pub struct Interface<'s> {
     pub name: &'s CStr,
-    pub version: u32,
+    pub version: NonZeroU32,
     pub methods: &'s [InterfaceMessage<'s>],
     pub events: &'s [InterfaceMessage<'s>],
 }

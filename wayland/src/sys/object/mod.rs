@@ -1,12 +1,12 @@
 pub mod buffer;
 pub mod compositor;
+pub mod output;
 pub mod registry;
 pub mod shm;
 pub mod shm_pool;
 pub mod surface;
 pub mod zwlr_layer_shell_v1;
 pub mod zwlr_layer_surface_v1;
-pub mod output;
 
 use super::{
     ffi::{wl_argument, wl_message, wl_proxy_add_dispatcher, wl_proxy_get_user_data},
@@ -317,13 +317,26 @@ impl<T: fmt::Debug> fmt::Debug for WlObject<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::{compositor::WlCompositor, zwlr_layer_shell_v1::WlrLayerShellV1};
+    use super::{compositor::WlCompositor, output::WlOutput, zwlr_layer_shell_v1::WlrLayerShellV1};
     use crate::{
         init::connect_wayland_socket,
+        interface::ZwlrLayerShellV1Layer,
         sys::{
-            ObjectType, display::WlDisplay, object::registry::WlRegistry,
+            ObjectType,
+            display::WlDisplay,
+            object::{registry::WlRegistry, shm::WlShm},
             wire::SmallVecMessageBuffer,
         },
+    };
+    use rustix::{
+        fs::Mode,
+        mm::{MapFlags, ProtFlags},
+        shm::OFlags,
+    };
+    use std::{
+        mem,
+        os::fd::{AsFd as _, OwnedFd},
+        ptr, slice,
     };
 
     unsafe fn connect_display() -> WlDisplay {
@@ -387,6 +400,24 @@ mod tests {
         display.sync_all();
     }
 
+    fn open_shm() -> Result<(OwnedFd, String), rustix::io::Errno> {
+        for i in 0.. {
+            let wl_shm_path = format!("/wl_shm#{i}");
+
+            match rustix::shm::open(
+                &wl_shm_path,
+                OFlags::EXCL | OFlags::RDWR | OFlags::CREATE | OFlags::TRUNC,
+                Mode::RUSR | Mode::WUSR,
+            ) {
+                Ok(fd) => return Ok((fd, wl_shm_path)),
+                Err(rustix::io::Errno::EXIST) => continue,
+                Err(error) => return Err(error),
+            };
+        }
+
+        unreachable!();
+    }
+
     #[test]
     fn white_rect() {
         let mut buf = SmallVecMessageBuffer::<8>::new();
@@ -398,7 +429,92 @@ mod tests {
 
         display.sync_all();
 
-        let compositor = WlRegistry::bind_default::<WlCompositor>(&mut buf, &mut storage, registry).unwrap();
-        let _surface = WlCompositor::create_surface(&mut buf, &mut storage, compositor);
+        let shm = WlRegistry::bind_default::<WlShm>(&mut buf, &mut storage, registry).unwrap();
+
+        let compositor =
+            WlRegistry::bind_default::<WlCompositor>(&mut buf, &mut storage, registry).unwrap();
+
+        let surface = WlCompositor::create_surface(&mut buf, &mut storage, compositor);
+
+        let output =
+            WlRegistry::bind_default::<WlOutput>(&mut buf, &mut storage, registry).unwrap();
+
+        let layer_shell =
+            WlRegistry::bind_default::<WlrLayerShellV1>(&mut buf, &mut storage, registry).unwrap();
+
+        let _layer_surface = WlrLayerShellV1::get_layer_surface(
+            &mut buf,
+            &mut storage,
+            layer_shell,
+            surface,
+            Some(output),
+            ZwlrLayerShellV1Layer::Background,
+            c"wallpaper",
+        )
+        .unwrap();
+
+        let (shm_fd, _shm_path) = open_shm().unwrap();
+
+        const BUFFER_WIDTH: usize = 2520;
+        const BUFFER_HEIGHT: usize = 1680;
+        const COLOR_SIZE: usize = mem::size_of::<u32>();
+        const BUFFER_SIZE: usize = BUFFER_WIDTH * BUFFER_HEIGHT * COLOR_SIZE;
+
+        rustix::fs::ftruncate(&shm_fd, BUFFER_SIZE as u64).unwrap();
+
+        let shm_ptr = unsafe {
+            rustix::mm::mmap(
+                ptr::null_mut(),
+                BUFFER_SIZE,
+                ProtFlags::READ | ProtFlags::WRITE,
+                MapFlags::SHARED,
+                &shm_fd,
+                0,
+            )
+            .unwrap()
+            .cast::<u32>()
+        };
+
+        assert!(!shm_ptr.is_null());
+        assert!(shm_ptr.is_aligned());
+
+        unsafe { shm_ptr.write_bytes(0xFF, BUFFER_SIZE / COLOR_SIZE) };
+
+        let _buffer =
+            unsafe { slice::from_raw_parts_mut(shm_ptr.cast::<u32>(), BUFFER_SIZE / COLOR_SIZE) };
+
+        // rustix::shm::unlink(&shm_path).unwrap();
+
+        let _shm_pool =
+            WlShm::create_pool(&mut buf, &mut storage, shm, shm_fd.as_fd(), BUFFER_SIZE);
+
+        // let _buffer = WlShmPool::create_buffer(
+        //     &mut buf,
+        //     &mut storage,
+        //     shm_pool,
+        //     WlShmPoolCreateBufferRequest {
+        //         offset: 0,
+        //         width: BUFFER_WIDTH as i32,
+        //         height: BUFFER_HEIGHT as i32,
+        //         stride: (BUFFER_WIDTH * COLOR_SIZE) as i32,
+        //         format: WlShmFormat::Argb8888,
+        //     },
+        // );
+
+        // WlSurface::attach(&mut buf, &mut storage, surface, buffer, IVec2::ZERO);
+        // WlSurface::damage(
+        //     &mut buf,
+        //     &mut storage,
+        //     surface,
+        //     IVec2::ZERO,
+        //     UVec2::new(BUFFER_WIDTH as u32, BUFFER_HEIGHT as u32),
+        // );
+        // WlSurface::commit(
+        //     &mut buf,
+        //     &mut storage,
+        //     surface,
+        // );
+
+        display.sync_all();
     }
 }

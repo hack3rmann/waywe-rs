@@ -5,7 +5,7 @@ use crate::{
 };
 use std::os::fd::BorrowedFd;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct WlShm;
 
 impl WlShm {

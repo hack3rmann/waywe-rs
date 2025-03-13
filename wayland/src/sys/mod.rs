@@ -19,7 +19,7 @@ pub mod protocols {
 
 use core::fmt;
 use ffi::wl_interface;
-use std::ffi::CStr;
+use std::{ffi::CStr, num::NonZeroU32};
 use wayland_sys::Interface as FfiInterface;
 
 use crate::object::ObjectId;
@@ -122,7 +122,14 @@ impl InterfaceMessageArgument {
         self.object_type.backend_ffi_interface().name
     }
 
-    pub const fn version(self) -> u32 {
+    pub const fn min_supported_version(self) -> NonZeroU32 {
+        match self.object_type {
+            ObjectType::Shm => const { NonZeroU32::new(1).unwrap() },
+            _ => self.version()
+        }
+    }
+
+    pub const fn version(self) -> NonZeroU32 {
         self.object_type.backend_ffi_interface().version
     }
 

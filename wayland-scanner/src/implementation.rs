@@ -88,6 +88,7 @@ pub fn interface_to_module(interface: &Interface) -> TokenStream {
         .expect("interface name expected to be a valid c-string");
     let interface_name_cstr_lit = LitCStr::new(&interface_name_cstring, Span::call_site());
 
+    assert_ne!(interface.version, 0);
     let interface_version = interface.version.to_string();
     let interface_version_int_lit = LitInt::new(&interface_version, Span::call_site());
 
@@ -134,7 +135,7 @@ pub fn interface_to_module(interface: &Interface) -> TokenStream {
             pub const INTERFACE: ::wayland_sys::Interface<'static>
                 = ::wayland_sys::Interface {
                     name: #interface_name_cstr_lit,
-                    version: #interface_version_int_lit,
+                    version: ::std::num::NonZeroU32::new(#interface_version_int_lit).unwrap(),
                     methods: &[
                         #( #requests ),*
                     ],
@@ -156,7 +157,7 @@ pub fn interface_to_module(interface: &Interface) -> TokenStream {
             pub static WL_INTERFACE: ::wayland_sys::wl_interface
                 = ::wayland_sys::wl_interface {
                     name: INTERFACE.name.as_ptr(),
-                    version: INTERFACE.version as i32,
+                    version: INTERFACE.version.get() as i32,
                     method_count: WL_MESSAGES.methods.len() as i32,
                     methods: WL_MESSAGES.methods.as_ptr(),
                     event_count: WL_MESSAGES.events.len() as i32,

@@ -20,7 +20,7 @@ use std::{
 };
 use thiserror::Error;
 
-/// A handle to libwayland backend
+/// A handle to the libwayland backend
 pub struct WlDisplay {
     proxy: ManuallyDrop<WlProxy>,
 }
@@ -64,9 +64,11 @@ impl WlDisplay {
 
     pub fn sync_all(&self) {
         // Safety: `self.as_raw_display_ptr()` is a valid display object
-        assert_ne!(-1, unsafe {
-            wl_display_roundtrip(self.as_raw_display_ptr().as_ptr())
-        });
+        assert_ne!(
+            -1,
+            unsafe { wl_display_roundtrip(self.as_raw_display_ptr().as_ptr()) },
+            "wl_display_roundtrip failed",
+        );
     }
 }
 

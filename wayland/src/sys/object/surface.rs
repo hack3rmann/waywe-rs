@@ -1,6 +1,9 @@
 use super::{Dispatch, WlObject, WlObjectHandle, buffer::WlBuffer};
 use crate::{
-    interface::{Request, WlSurfaceAttachRequest, WlSurfaceDamageRequest, WlSurfaceDestroyRequest},
+    interface::{
+        Request, WlSurfaceAttachRequest, WlSurfaceCommitRequest, WlSurfaceDamageRequest,
+        WlSurfaceDestroyRequest,
+    },
     sys::{HasObjectType, ObjectType, object_storage::WlObjectStorage, wire::MessageBuffer},
 };
 use glam::{IVec2, UVec2};
@@ -51,6 +54,14 @@ impl WlSurface {
             }
             .send_raw(storage.object(surface).proxy(), buf)
         };
+    }
+
+    pub fn commit(
+        buf: &mut impl MessageBuffer,
+        storage: &mut WlObjectStorage,
+        surface: WlObjectHandle<Self>,
+    ) {
+        _ = unsafe { WlSurfaceCommitRequest.send_raw(storage.object(surface).proxy(), buf) };
     }
 }
 
