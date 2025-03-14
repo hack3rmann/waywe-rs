@@ -48,13 +48,17 @@ use crate::sys::wire::{Message, MessageBuffer};
 pub mod request {
     use super::*;
     use crate::{
-        interface::Request,
-        sys::{ObjectType, proxy::WlProxy, wire::OpCode},
+        interface::{ObjectParent, Request},
+        sys::{object::callback::WlCallback, proxy::WlProxy, wire::OpCode, HasObjectType, ObjectType},
     };
 
     /// Deletes the surface and invalidates its object ID.
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub struct Destroy;
+
+    impl HasObjectType for Destroy {
+        const OBJECT_TYPE: ObjectType = ObjectType::Surface;
+    }
 
     impl<'b> Request<'b> for Destroy {
         const CODE: OpCode = 0;
@@ -138,6 +142,10 @@ pub mod request {
         pub y: i32,
     }
 
+    impl HasObjectType for Attach<'_> {
+        const OBJECT_TYPE: ObjectType = ObjectType::Surface;
+    }
+
     impl<'b> Request<'b> for Attach<'b> {
         const CODE: OpCode = 1;
 
@@ -161,6 +169,10 @@ pub mod request {
         pub width: i32,
         /// height of damage rectangle
         pub height: i32,
+    }
+
+    impl HasObjectType for Damage {
+        const OBJECT_TYPE: ObjectType = ObjectType::Surface;
     }
 
     impl<'b> Request<'b> for Damage {
@@ -212,6 +224,14 @@ pub mod request {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash)]
     pub struct Frame;
 
+    impl ObjectParent for Frame {
+        type Child = WlCallback;
+    }
+
+    impl HasObjectType for Frame {
+        const OBJECT_TYPE: ObjectType = ObjectType::Surface;
+    }
+
     impl<'b> Request<'b> for Frame {
         const CODE: OpCode = 3;
         const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::Callback);
@@ -249,6 +269,10 @@ pub mod request {
     pub struct SetOpaqueRegion<'a> {
         /// opaque region of the surface
         pub region: Option<&'a WlProxy>,
+    }
+
+    impl HasObjectType for SetOpaqueRegion<'_> {
+        const OBJECT_TYPE: ObjectType = ObjectType::Surface;
     }
 
     impl<'b> Request<'b> for SetOpaqueRegion<'b> {
@@ -290,6 +314,10 @@ pub mod request {
         pub region: Option<&'a WlProxy>,
     }
 
+    impl HasObjectType for SetInputRegion<'_> {
+        const OBJECT_TYPE: ObjectType = ObjectType::Surface;
+    }
+
     impl<'b> Request<'b> for SetInputRegion<'b> {
         const CODE: OpCode = 5;
 
@@ -322,6 +350,10 @@ pub mod request {
     /// Other interfaces may add further double-buffered surface state.
     #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Hash, Default, Eq, Ord)]
     pub struct Commit;
+
+    impl HasObjectType for Commit {
+        const OBJECT_TYPE: ObjectType = ObjectType::Surface;
+    }
 
     impl<'b> Request<'b> for Commit {
         const CODE: OpCode = 6;

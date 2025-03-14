@@ -4,6 +4,7 @@ pub mod request {
     use super::wl_enum::{Anchor, KeyboardInteractivity};
     use super::*;
     use crate::interface::Request;
+    use crate::sys::{HasObjectType, ObjectType};
 
     /// Sets the size of the surface in surface-local coordinates. The
     /// compositor will display the surface centered with respect to its
@@ -19,6 +20,10 @@ pub mod request {
     pub struct SetSize {
         pub width: u32,
         pub height: u32,
+    }
+
+    impl HasObjectType for SetSize {
+        const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerSurfaceV1;
     }
 
     impl<'b> Request<'b> for SetSize {
@@ -43,6 +48,10 @@ pub mod request {
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
     pub struct SetAnchor {
         pub anchor: Anchor,
+    }
+
+    impl HasObjectType for SetAnchor {
+        const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerSurfaceV1;
     }
 
     impl<'b> Request<'b> for SetAnchor {
@@ -93,6 +102,10 @@ pub mod request {
         pub zone: i32,
     }
 
+    impl HasObjectType for SetExclusiveZone {
+        const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerSurfaceV1;
+    }
+
     impl<'b> Request<'b> for SetExclusiveZone {
         const CODE: OpCode = 2;
 
@@ -117,6 +130,10 @@ pub mod request {
         pub right: i32,
         pub bottom: i32,
         pub left: i32,
+    }
+
+    impl HasObjectType for SetMargine {
+        const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerSurfaceV1;
     }
 
     impl<'b> Request<'b> for SetMargine {
@@ -148,6 +165,10 @@ pub mod request {
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
     pub struct SetKeyboardInteractivity {
         keyboard_interactivity: KeyboardInteractivity,
+    }
+
+    impl HasObjectType for SetKeyboardInteractivity {
+        const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerSurfaceV1;
     }
 
     impl<'b> Request<'b> for SetKeyboardInteractivity {

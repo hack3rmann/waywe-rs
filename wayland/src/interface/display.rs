@@ -8,7 +8,7 @@ use crate::{
 
 pub mod request {
     use super::*;
-    use crate::sys::{ObjectType, wire::OpCode};
+    use crate::{interface::ObjectParent, sys::{object::{callback::WlCallback, registry::WlRegistry}, wire::OpCode, HasObjectType, ObjectType}};
 
     /// The sync request asks the server to emit the 'done' event
     /// on the returned wl_callback object.  Since requests are
@@ -23,6 +23,14 @@ pub mod request {
     /// The callback_data passed in the callback is undefined and should be ignored.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct Sync;
+
+    impl ObjectParent for Sync {
+        type Child = WlCallback;
+    }
+
+    impl HasObjectType for Sync {
+        const OBJECT_TYPE: ObjectType = ObjectType::Display;
+    }
 
     impl<'b> Request<'b> for Sync {
         const CODE: OpCode = 0;
@@ -44,6 +52,14 @@ pub mod request {
     /// possible to avoid wasting memory.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct GetRegistry;
+
+    impl ObjectParent for GetRegistry {
+        type Child = WlRegistry;
+    }
+
+    impl HasObjectType for GetRegistry {
+        const OBJECT_TYPE: ObjectType = ObjectType::Registry;
+    }
 
     impl<'b> Request<'b> for GetRegistry {
         const CODE: OpCode = 1;

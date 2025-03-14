@@ -11,7 +11,7 @@ use crate::sys::wire::{Message, MessageBuffer, OpCode};
 
 pub mod request {
     use super::*;
-    use crate::{interface::WlShmFormat, sys::ObjectType};
+    use crate::{interface::{ObjectParent, WlShmFormat}, sys::{object::buffer::WlBuffer, HasObjectType, ObjectType}};
 
     /// Create a wl_buffer object from the pool.
     ///
@@ -38,6 +38,14 @@ pub mod request {
         pub format: WlShmFormat,
     }
 
+    impl ObjectParent for CreateBuffer {
+        type Child = WlBuffer;
+    }
+
+    impl HasObjectType for CreateBuffer {
+        const OBJECT_TYPE: ObjectType = ObjectType::ShmPool;
+    }
+
     impl<'b> Request<'b> for CreateBuffer {
         const CODE: OpCode = 0;
         const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::Buffer);
@@ -62,6 +70,10 @@ pub mod request {
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct Destroy;
 
+    impl HasObjectType for Destroy {
+        const OBJECT_TYPE: ObjectType = ObjectType::ShmPool;
+    }
+
     impl<'b> Request<'b> for Destroy {
         const CODE: OpCode = 1;
 
@@ -84,6 +96,10 @@ pub mod request {
     pub struct Resize {
         /// new size of the pool, in bytes
         pub size: i32,
+    }
+
+    impl HasObjectType for Resize {
+        const OBJECT_TYPE: ObjectType = ObjectType::ShmPool;
     }
 
     impl<'b> Request<'b> for Resize {

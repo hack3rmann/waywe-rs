@@ -54,10 +54,7 @@ impl WlDisplay {
         storage: &mut WlObjectStorage<'_>,
     ) -> WlObjectHandle<WlRegistry> {
         // Safety: parent interface matcher request's one
-        let raw_proxy = unsafe { WlDisplayGetRegistryRequest.send_raw(&self.proxy, buf) };
-
-        // Safety: resulting proxy is a valid object provided by libwayland
-        let proxy = unsafe { WlProxy::from_raw(NonNull::new(raw_proxy).unwrap()) };
+        let proxy = unsafe { WlDisplayGetRegistryRequest.send(&self.proxy, buf).unwrap() };
 
         storage.insert(WlObject::new(proxy, WlRegistry::default()))
     }

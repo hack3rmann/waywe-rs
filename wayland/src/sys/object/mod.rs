@@ -1,6 +1,8 @@
 pub mod buffer;
+pub mod callback;
 pub mod compositor;
 pub mod output;
+pub mod region;
 pub mod registry;
 pub mod shm;
 pub mod shm_pool;
@@ -9,11 +11,16 @@ pub mod zwlr_layer_shell_v1;
 pub mod zwlr_layer_surface_v1;
 
 use super::{
+    HasObjectType,
     ffi::{wl_argument, wl_message, wl_proxy_add_dispatcher, wl_proxy_get_user_data},
+    object_storage::WlObjectStorage,
     proxy::WlProxy,
-    wire::Message,
+    wire::{Message, MessageBuffer},
 };
-use crate::object::ObjectId;
+use crate::{
+    interface::{ObjectParent, Request},
+    object::ObjectId,
+};
 use std::{
     any::{self, TypeId},
     ffi::{CStr, c_int, c_void},
@@ -92,6 +99,62 @@ impl<T> WlObjectHandle<T> {
             id,
             _p: PhantomData,
         }
+    }
+
+    pub fn request<'r, R>(
+        self,
+        buf: &'r mut impl MessageBuffer,
+        storage: &WlObjectStorage,
+        request: R,
+    ) where
+        T: Dispatch + HasObjectType + 'static,
+        R: Request<'r>,
+    {
+        const {
+            assert!(
+                T::OBJECT_TYPE as u32 == R::OBJECT_TYPE as u32,
+                "request's parent interface should match the self type one's"
+            );
+
+            assert!(
+                R::OUTGOING_INTERFACE.is_none(),
+                "request's outgoing interface should be set to None",
+            )
+        };
+
+        let proxy = unsafe { request.send(storage.object(self).proxy(), buf) };
+        debug_assert!(proxy.is_none());
+    }
+
+    pub fn create_object<'r, R>(
+        self,
+        buf: &'r mut impl MessageBuffer,
+        storage: &mut WlObjectStorage,
+        request: R,
+    ) -> WlObjectHandle<R::Child>
+    where
+        R: Request<'r> + ObjectParent,
+        R::Child: Dispatch + HasObjectType + Default + 'static,
+        T: Dispatch + HasObjectType + 'static,
+    {
+        const {
+            assert!(
+                T::OBJECT_TYPE as u32 == R::OBJECT_TYPE as u32,
+                "request's parent interface should match the self type one's"
+            );
+
+            match R::OUTGOING_INTERFACE {
+                Some(object_type) => assert!(
+                    object_type as u32 == R::Child::OBJECT_TYPE as u32,
+                    "request's outgoing interface should match the return type one's"
+                ),
+                None => panic!("the request should have outgoing interface set to Some"),
+            }
+        };
+
+        let proxy = unsafe { request.send(storage.object(self).proxy(), buf).unwrap() };
+
+        storage.insert(WlObject::new(proxy, R::Child::default()))
     }
 }
 
@@ -320,21 +383,28 @@ mod tests {
     use super::{compositor::WlCompositor, output::WlOutput, zwlr_layer_shell_v1::WlrLayerShellV1};
     use crate::{
         init::connect_wayland_socket,
-        interface::{WlShmFormat, WlShmPoolCreateBufferRequest, ZwlrLayerShellV1Layer},
+        interface::{
+            WlCompositorCreateSurface, WlShmCreatePoolRequest, WlShmFormat,
+            WlShmPoolCreateBufferRequest, WlSurfaceAttachRequest, WlSurfaceCommitRequest,
+            WlSurfaceDamageRequest, ZwlrLayerShellV1Layer,
+        },
         sys::{
             ObjectType,
             display::WlDisplay,
-            object::{registry::WlRegistry, shm::WlShm, shm_pool::WlShmPool, surface::WlSurface},
+            object::{registry::WlRegistry, shm::WlShm},
             wire::SmallVecMessageBuffer,
         },
     };
-    use glam::{IVec2, UVec2};
     use rustix::{
         fs::Mode,
         mm::{MapFlags, ProtFlags},
         shm::OFlags,
     };
-    use std::{mem, os::fd::OwnedFd, ptr, slice};
+    use std::{
+        mem,
+        os::fd::{AsFd as _, OwnedFd},
+        ptr, slice,
+    };
 
     unsafe fn connect_display() -> WlDisplay {
         let wayland_sock = unsafe { connect_wayland_socket().unwrap() };
@@ -371,8 +441,10 @@ mod tests {
 
         display.sync_all();
 
-        let compositor = WlRegistry::bind_default(&mut buf, &mut storage, registry).unwrap();
-        let surface = WlCompositor::create_surface(&mut buf, &mut storage, compositor);
+        let compositor =
+            WlRegistry::bind_default::<WlCompositor>(&mut buf, &mut storage, registry).unwrap();
+
+        let surface = compositor.create_object(&mut buf, &mut storage, WlCompositorCreateSurface);
 
         assert_eq!(
             storage.object(surface).proxy().interface_name(),
@@ -431,7 +503,7 @@ mod tests {
         let compositor =
             WlRegistry::bind_default::<WlCompositor>(&mut buf, &mut storage, registry).unwrap();
 
-        let surface = WlCompositor::create_surface(&mut buf, &mut storage, compositor);
+        let surface = compositor.create_object(&mut buf, &mut storage, WlCompositorCreateSurface);
 
         let output =
             WlRegistry::bind_default::<WlOutput>(&mut buf, &mut storage, registry).unwrap();
@@ -483,12 +555,18 @@ mod tests {
         let _buffer =
             unsafe { slice::from_raw_parts_mut(shm_ptr.cast::<u32>(), BUFFER_SIZE_PIXELS) };
 
-        let shm_pool = WlShm::create_pool(&mut buf, &mut storage, shm, &shm_fd, BUFFER_SIZE_BYTES);
-
-        let buffer = WlShmPool::create_buffer(
+        let shm_pool = shm.create_object(
             &mut buf,
             &mut storage,
-            shm_pool,
+            WlShmCreatePoolRequest {
+                fd: shm_fd.as_fd(),
+                size: BUFFER_SIZE_BYTES as i32,
+            },
+        );
+
+        let buffer = shm_pool.create_object(
+            &mut buf,
+            &mut storage,
             WlShmPoolCreateBufferRequest {
                 offset: 0,
                 width: BUFFER_WIDTH_PIXELS as i32,
@@ -498,16 +576,29 @@ mod tests {
             },
         );
 
-        WlSurface::attach(&mut buf, &mut storage, surface, buffer, IVec2::ZERO);
-        WlSurface::damage(
+        surface.request(
             &mut buf,
-            &mut storage,
-            surface,
-            IVec2::ZERO,
-            UVec2::new(BUFFER_WIDTH_PIXELS as u32, BUFFER_HEIGHT_PIXELS as u32),
+            &storage,
+            WlSurfaceAttachRequest {
+                buffer: Some(storage.object(buffer).proxy()),
+                x: 0,
+                y: 0,
+            },
         );
-        WlSurface::commit(&mut buf, &mut storage, surface);
 
-        display.sync_all();
+        surface.request(
+            &mut buf,
+            &storage,
+            WlSurfaceDamageRequest {
+                x: 0,
+                y: 0,
+                width: BUFFER_WIDTH_PIXELS as i32,
+                height: BUFFER_HEIGHT_PIXELS as i32,
+            },
+        );
+
+        surface.request(&mut buf, &storage, WlSurfaceCommitRequest);
+
+        // display.sync_all();
     }
 }

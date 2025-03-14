@@ -14,7 +14,9 @@ use std::os::fd::BorrowedFd;
 
 pub mod request {
     use super::*;
-    use crate::sys::ObjectType;
+    use crate::interface::ObjectParent;
+    use crate::sys::object::shm_pool::WlShmPool;
+    use crate::sys::{HasObjectType, ObjectType};
     use crate::sys::wire::MessageBuffer;
 
     /// Create a new wl_shm_pool object.
@@ -28,6 +30,14 @@ pub mod request {
         pub fd: BorrowedFd<'s>,
         /// Pool size, in bytes
         pub size: i32,
+    }
+
+    impl ObjectParent for CreatePool<'_> {
+        type Child = WlShmPool;
+    }
+
+    impl HasObjectType for CreatePool<'_> {
+        const OBJECT_TYPE: ObjectType = ObjectType::Shm;
     }
 
     impl<'b> Request<'b> for CreatePool<'b> {
@@ -50,6 +60,10 @@ pub mod request {
     /// Objects created via this interface remain unaffected.
     #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub struct Release;
+
+    impl HasObjectType for Release {
+        const OBJECT_TYPE: ObjectType = ObjectType::Shm;
+    }
 
     impl<'b> Request<'b> for Release {
         const CODE: OpCode = 1;

@@ -8,8 +8,9 @@
 
 pub mod request {
     use super::wl_enum::Layer;
-    use crate::interface::Request;
-    use crate::sys::ObjectType;
+    use crate::interface::{ObjectParent, Request};
+    use crate::sys::object::zwlr_layer_surface_v1::WlrLayerSurfaceV1;
+    use crate::sys::{HasObjectType, ObjectType};
     use crate::sys::proxy::WlProxy;
     use crate::sys::wire::{Message, MessageBuffer, OpCode};
     use std::ffi::CStr;
@@ -43,6 +44,14 @@ pub mod request {
         pub namespace: &'a CStr,
     }
 
+    impl ObjectParent for GetLayerSurface<'_> {
+        type Child = WlrLayerSurfaceV1;
+    }
+
+    impl HasObjectType for GetLayerSurface<'_> {
+        const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerShellV1;
+    }
+
     impl<'b> Request<'b> for GetLayerSurface<'b> {
         const CODE: OpCode = 0;
         const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::WlrLayerSurfaceV1);
@@ -64,6 +73,10 @@ pub mod request {
     /// are not affected.
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
     pub struct Destroy;
+
+    impl HasObjectType for Destroy {
+        const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerShellV1;
+    }
 
     impl<'b> Request<'b> for Destroy {
         const CODE: OpCode = 1;

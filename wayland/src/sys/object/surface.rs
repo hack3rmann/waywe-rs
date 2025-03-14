@@ -1,69 +1,11 @@
-use super::{Dispatch, WlObject, WlObjectHandle, buffer::WlBuffer};
-use crate::{
-    interface::{
-        Request, WlSurfaceAttachRequest, WlSurfaceCommitRequest, WlSurfaceDamageRequest,
-        WlSurfaceDestroyRequest,
-    },
-    sys::{HasObjectType, ObjectType, object_storage::WlObjectStorage, wire::MessageBuffer},
-};
-use glam::{IVec2, UVec2};
+use super::{Dispatch, WlObject};
+use crate::sys::{HasObjectType, ObjectType};
 use raw_window_handle::{
     HandleError, HasWindowHandle, RawWindowHandle, WaylandWindowHandle, WindowHandle,
 };
 
 #[derive(Debug, Default)]
 pub struct WlSurface;
-
-impl WlObject<WlSurface> {
-    pub fn destroy(&self, buf: &mut impl MessageBuffer) {
-        _ = unsafe { WlSurfaceDestroyRequest.send_raw(&self.proxy, buf) };
-    }
-}
-
-impl WlSurface {
-    pub fn attach(
-        buf: &mut impl MessageBuffer,
-        storage: &mut WlObjectStorage,
-        surface: WlObjectHandle<Self>,
-        buffer: WlObjectHandle<WlBuffer>,
-        pos: IVec2,
-    ) {
-        _ = unsafe {
-            WlSurfaceAttachRequest {
-                buffer: Some(storage.object(buffer).proxy()),
-                x: pos.x,
-                y: pos.y,
-            }
-            .send_raw(storage.object(surface).proxy(), buf)
-        };
-    }
-
-    pub fn damage(
-        buf: &mut impl MessageBuffer,
-        storage: &mut WlObjectStorage,
-        surface: WlObjectHandle<Self>,
-        pos: IVec2,
-        size: UVec2,
-    ) {
-        _ = unsafe {
-            WlSurfaceDamageRequest {
-                x: pos.x,
-                y: pos.y,
-                width: size.x as i32,
-                height: size.y as i32,
-            }
-            .send_raw(storage.object(surface).proxy(), buf)
-        };
-    }
-
-    pub fn commit(
-        buf: &mut impl MessageBuffer,
-        storage: &mut WlObjectStorage,
-        surface: WlObjectHandle<Self>,
-    ) {
-        _ = unsafe { WlSurfaceCommitRequest.send_raw(storage.object(surface).proxy(), buf) };
-    }
-}
 
 impl HasObjectType for WlSurface {
     const OBJECT_TYPE: ObjectType = ObjectType::Surface;

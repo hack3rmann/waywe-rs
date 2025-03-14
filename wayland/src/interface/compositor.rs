@@ -4,16 +4,23 @@
 
 pub mod request {
     use crate::{
-        interface::Request,
+        interface::{ObjectParent, Request},
         sys::{
-            ObjectType,
-            wire::{Message, MessageBuffer, OpCode},
+            object::{region::WlRegion, surface::WlSurface}, wire::{Message, MessageBuffer, OpCode}, HasObjectType, ObjectType
         },
     };
 
     /// Ask the compositor to create a new surface.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct CreateSurface;
+
+    impl ObjectParent for CreateSurface {
+        type Child = WlSurface;
+    }
+
+    impl HasObjectType for CreateSurface {
+        const OBJECT_TYPE: ObjectType = ObjectType::Compositor;
+    }
 
     impl<'b> Request<'b> for CreateSurface {
         const CODE: OpCode = 0;
@@ -27,6 +34,14 @@ pub mod request {
     /// Ask the compositor to create a new region.
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct CreateRegion;
+
+    impl ObjectParent for CreateRegion {
+        type Child = WlRegion;
+    }
+
+    impl HasObjectType for CreateRegion {
+        const OBJECT_TYPE: ObjectType = ObjectType::Compositor;
+    }
 
     impl<'b> Request<'b> for CreateRegion {
         const CODE: OpCode = 1;

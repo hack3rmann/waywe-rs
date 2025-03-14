@@ -1,7 +1,7 @@
 use super::Dispatch;
 use crate::{sys::HasObjectType, sys::ObjectType};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct WlBuffer;
 
 impl HasObjectType for WlBuffer {
