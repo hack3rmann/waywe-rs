@@ -60,6 +60,8 @@ impl WlDisplay {
         storage.insert(WlObject::new(proxy, WlRegistry::default()))
     }
 
+    // Safety: all dispatchers use `Pin<&mut WlObjectStorage>`
+    // therefore we require it to call `sync_all`
     pub fn sync_all(&self, _storage: Pin<&mut WlObjectStorage>) {
         // Safety: `self.as_raw_display_ptr()` is a valid display object
         assert_ne!(

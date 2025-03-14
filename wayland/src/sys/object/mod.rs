@@ -12,6 +12,8 @@ pub mod viewporter;
 pub mod zwlr_layer_shell_v1;
 pub mod zwlr_layer_surface_v1;
 
+use wayland_sys::wl_proxy_get_id;
+
 use super::{
     HasObjectType,
     ffi::{wl_argument, wl_message, wl_proxy_add_dispatcher, wl_proxy_get_user_data},
@@ -57,6 +59,8 @@ unsafe extern "C" fn dispatch_raw<T>(
     arguments: *mut wl_argument,
 ) -> c_int {
     std::panic::catch_unwind(|| {
+        let id = unsafe { ObjectId::try_from(wl_proxy_get_id(proxy)).unwrap_unchecked() };
+
         // Safety: `proxy` is valid object provided by libwayland
         let data = unsafe { wl_proxy_get_user_data(proxy.cast()) }.cast::<WlDispatchData<T>>();
 
@@ -90,7 +94,9 @@ unsafe extern "C" fn dispatch_raw<T>(
 
         let message = Message { opcode, arguments };
 
-        (data.dispatch)(&mut data.data, storage, message);
+        storage.with_object_data_acquired(id, |storage| {
+            (data.dispatch)(&mut data.data, storage, message);
+        });
 
         0
     })
@@ -134,7 +140,7 @@ impl<T> WlObjectHandle<T> {
             )
         };
 
-        let proxy = unsafe { request.send(buf, storage, storage.object(self).proxy()) };
+        let proxy = unsafe { request.send(buf, storage, storage.get_proxy(self.id).unwrap()) };
         debug_assert!(proxy.is_none());
     }
 
@@ -166,7 +172,11 @@ impl<T> WlObjectHandle<T> {
 
         let proxy = unsafe {
             request
-                .send(buf, storage.as_ref().get_ref(), storage.object(self).proxy())
+                .send(
+                    buf,
+                    storage.as_ref().get_ref(),
+                    storage.get_proxy(self.id).unwrap(),
+                )
                 .unwrap()
         };
 
@@ -480,7 +490,8 @@ mod tests {
         let compositor =
             WlRegistry::bind_default::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
 
-        let surface = compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurface);
+        let surface =
+            compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurface);
 
         assert_eq!(
             storage.object(surface).proxy().interface_name(),
@@ -500,7 +511,8 @@ mod tests {
         display.sync_all(storage.as_mut());
 
         let _layer_shell =
-            WlRegistry::bind_default::<WlrLayerShellV1>(&mut buf, storage.as_mut(), registry).unwrap();
+            WlRegistry::bind_default::<WlrLayerShellV1>(&mut buf, storage.as_mut(), registry)
+                .unwrap();
 
         display.sync_all(storage.as_mut());
     }
@@ -542,7 +554,8 @@ mod tests {
         let compositor =
             WlRegistry::bind_default::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
 
-        let surface = compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurface);
+        let surface =
+            compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurface);
 
         let _viewport = viewporter.create_object(
             &mut buf,
@@ -566,7 +579,8 @@ mod tests {
             WlRegistry::bind_default::<WlOutput>(&mut buf, storage.as_mut(), registry).unwrap();
 
         let layer_shell =
-            WlRegistry::bind_default::<WlrLayerShellV1>(&mut buf, storage.as_mut(), registry).unwrap();
+            WlRegistry::bind_default::<WlrLayerShellV1>(&mut buf, storage.as_mut(), registry)
+                .unwrap();
 
         let layer_surface = layer_shell.create_object(
             &mut buf,

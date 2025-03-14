@@ -15,6 +15,7 @@ pub struct WlObjectStorageEntry {
 pub struct WlObjectStorage<'d> {
     // NOTE(hack3rmann): this is a fast map as long as `ObjectId` hashes to itself
     pub objects: HashMap<ObjectId, WlObjectStorageEntry>,
+    pub acquired_object: Option<ObjectId>,
     pub _display: PhantomData<&'d WlDisplay>,
 }
 
@@ -31,6 +32,7 @@ impl WlObjectStorage<'_> {
     pub unsafe fn new() -> Self {
         Self {
             objects: HashMap::new(),
+            acquired_object: None,
             _display: PhantomData,
         }
     }
@@ -63,6 +65,12 @@ impl WlObjectStorage<'_> {
         &self,
         handle: WlObjectHandle<T>,
     ) -> Option<&WlObject<T>> {
+        if let Some(id) = self.acquired_object {
+            if id == handle.id {
+                return None;
+            }
+        }
+
         self.objects
             .get(&handle.id)
             .map(|e| &e.object)
@@ -81,6 +89,12 @@ impl WlObjectStorage<'_> {
         &mut self,
         handle: WlObjectHandle<T>,
     ) -> Option<&mut WlObject<T>> {
+        if let Some(id) = self.acquired_object {
+            if id == handle.id {
+                return None;
+            }
+        }
+
         self.objects
             .get_mut(&handle.id)
             .map(|e| &mut e.object)
@@ -89,5 +103,15 @@ impl WlObjectStorage<'_> {
 
     pub fn object_mut<T: Dispatch + 'static>(&mut self, handle: WlObjectHandle<T>) -> &WlObject<T> {
         self.get_object_mut(handle).unwrap()
+    }
+
+    pub fn with_object_data_acquired(
+        mut self: Pin<&mut Self>,
+        id: ObjectId,
+        f: impl FnOnce(Pin<&mut Self>),
+    ) {
+        _ = self.acquired_object.insert(id);
+        f(self.as_mut());
+        _ = self.acquired_object.take();
     }
 }
