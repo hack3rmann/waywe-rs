@@ -11,7 +11,7 @@ use crate::sys::wire::{Message, MessageBuffer, OpCode};
 
 pub mod request {
     use super::*;
-    use crate::interface::WlShmFormat;
+    use crate::{interface::WlShmFormat, sys::ObjectType};
 
     /// Create a wl_buffer object from the pool.
     ///
@@ -40,6 +40,7 @@ pub mod request {
 
     impl<'b> Request<'b> for CreateBuffer {
         const CODE: OpCode = 0;
+        const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::Buffer);
 
         fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
             Message::builder(buf)

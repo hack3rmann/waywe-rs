@@ -17,26 +17,25 @@ pub mod protocols {
     );
 }
 
+use crate::object::ObjectId;
 use core::fmt;
 use ffi::wl_interface;
 use std::{ffi::CStr, num::NonZeroU32};
 use wayland_sys::Interface as FfiInterface;
 
-use crate::object::ObjectId;
-
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
 pub enum ObjectType {
     // globals
     #[default]
-    Display = 1,
-    Registry = 2,
-    Compositor = 3,
-    ShmPool = 4,
-    Shm = 5,
-    Buffer = 6,
-    Surface = 13,
-    Output = 18,
-    Region = 19,
+    Display,
+    Registry,
+    Compositor,
+    ShmPool,
+    Shm,
+    Buffer,
+    Surface,
+    Output,
+    Region,
     WlrLayerShellV1,
     // non-globals
     Callback,
@@ -46,6 +45,7 @@ pub enum ObjectType {
 impl ObjectType {
     pub fn from_interface_name(name: &str) -> Option<Self> {
         static MAP: phf::Map<&'static str, ObjectType> = phf::phf_map! {
+            // globals
             "wl_display" => ObjectType::Display,
             "wl_registry" => ObjectType::Registry,
             "wl_compositor" => ObjectType::Compositor,
@@ -56,6 +56,9 @@ impl ObjectType {
             "wl_region" => ObjectType::Region,
             "wl_output" => ObjectType::Output,
             "zwlr_layer_shell_v1" => ObjectType::WlrLayerShellV1,
+            // non-globals
+            "wl_callback" => ObjectType::Callback,
+            "zwlr_layer_surface_v1" => ObjectType::WlrLayerSurfaceV1,
         };
 
         MAP.get(name).copied()
@@ -110,7 +113,7 @@ pub trait HasObjectType {
     const OBJECT_TYPE: ObjectType;
 }
 
-/// Stores some information about some global object
+/// The type and the integer name for the global object.
 #[derive(Clone, Debug, PartialEq, Copy, Eq, PartialOrd, Ord, Hash)]
 pub struct InterfaceMessageArgument {
     pub(crate) object_type: ObjectType,
@@ -125,7 +128,7 @@ impl InterfaceMessageArgument {
     pub const fn min_supported_version(self) -> NonZeroU32 {
         match self.object_type {
             ObjectType::Shm => const { NonZeroU32::new(1).unwrap() },
-            _ => self.version()
+            _ => self.version(),
         }
     }
 

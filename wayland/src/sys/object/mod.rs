@@ -185,7 +185,7 @@ impl Drop for WlDynObject {
 
         // # Safety
         //
-        // - `data_ptr` points to valid `T` location
+        // - `data_ptr` points to a valid location of `T`
         // - `drop` called once
         unsafe { (self.type_info.drop)(data_ptr) }
     }
@@ -247,7 +247,7 @@ impl<T: Dispatch + 'static> WlObject<T> {
         let mut this = MaybeUninit::new(self);
 
         WlDynObject {
-            // Safety: here we moving out of `WlObject` without calling the destructor
+            // Safety: here we moving out of `WlObject` without the destructor being called
             proxy: unsafe {
                 this.as_mut_ptr()
                     .wrapping_byte_add(offset_of!(Self, proxy))
@@ -320,24 +320,21 @@ mod tests {
     use super::{compositor::WlCompositor, output::WlOutput, zwlr_layer_shell_v1::WlrLayerShellV1};
     use crate::{
         init::connect_wayland_socket,
-        interface::ZwlrLayerShellV1Layer,
+        interface::{WlShmFormat, WlShmPoolCreateBufferRequest, ZwlrLayerShellV1Layer},
         sys::{
             ObjectType,
             display::WlDisplay,
-            object::{registry::WlRegistry, shm::WlShm},
+            object::{registry::WlRegistry, shm::WlShm, shm_pool::WlShmPool, surface::WlSurface},
             wire::SmallVecMessageBuffer,
         },
     };
+    use glam::{IVec2, UVec2};
     use rustix::{
         fs::Mode,
         mm::{MapFlags, ProtFlags},
         shm::OFlags,
     };
-    use std::{
-        mem,
-        os::fd::{AsFd as _, OwnedFd},
-        ptr, slice,
-    };
+    use std::{mem, os::fd::OwnedFd, ptr, slice};
 
     unsafe fn connect_display() -> WlDisplay {
         let wayland_sock = unsafe { connect_wayland_socket().unwrap() };
@@ -453,19 +450,20 @@ mod tests {
         )
         .unwrap();
 
-        let (shm_fd, _shm_path) = open_shm().unwrap();
+        let (shm_fd, shm_path) = open_shm().unwrap();
 
-        const BUFFER_WIDTH: usize = 2520;
-        const BUFFER_HEIGHT: usize = 1680;
-        const COLOR_SIZE: usize = mem::size_of::<u32>();
-        const BUFFER_SIZE: usize = BUFFER_WIDTH * BUFFER_HEIGHT * COLOR_SIZE;
+        const BUFFER_WIDTH_PIXELS: usize = 10;
+        const BUFFER_HEIGHT_PIXELS: usize = 10;
+        const PIXEL_SIZE_BYTES: usize = mem::size_of::<u32>();
+        const BUFFER_SIZE_PIXELS: usize = BUFFER_WIDTH_PIXELS * BUFFER_HEIGHT_PIXELS;
+        const BUFFER_SIZE_BYTES: usize = BUFFER_SIZE_PIXELS * PIXEL_SIZE_BYTES;
 
-        rustix::fs::ftruncate(&shm_fd, BUFFER_SIZE as u64).unwrap();
+        rustix::fs::ftruncate(&shm_fd, BUFFER_SIZE_BYTES as u64).unwrap();
 
         let shm_ptr = unsafe {
             rustix::mm::mmap(
                 ptr::null_mut(),
-                BUFFER_SIZE,
+                BUFFER_SIZE_BYTES,
                 ProtFlags::READ | ProtFlags::WRITE,
                 MapFlags::SHARED,
                 &shm_fd,
@@ -475,45 +473,40 @@ mod tests {
             .cast::<u32>()
         };
 
+        rustix::shm::unlink(&shm_path).unwrap();
+
         assert!(!shm_ptr.is_null());
         assert!(shm_ptr.is_aligned());
 
-        unsafe { shm_ptr.write_bytes(0xFF, BUFFER_SIZE / COLOR_SIZE) };
+        unsafe { shm_ptr.write_bytes(0xFF, BUFFER_SIZE_PIXELS) };
 
         let _buffer =
-            unsafe { slice::from_raw_parts_mut(shm_ptr.cast::<u32>(), BUFFER_SIZE / COLOR_SIZE) };
+            unsafe { slice::from_raw_parts_mut(shm_ptr.cast::<u32>(), BUFFER_SIZE_PIXELS) };
 
-        // rustix::shm::unlink(&shm_path).unwrap();
+        let shm_pool = WlShm::create_pool(&mut buf, &mut storage, shm, &shm_fd, BUFFER_SIZE_BYTES);
 
-        let _shm_pool =
-            WlShm::create_pool(&mut buf, &mut storage, shm, shm_fd.as_fd(), BUFFER_SIZE);
+        let buffer = WlShmPool::create_buffer(
+            &mut buf,
+            &mut storage,
+            shm_pool,
+            WlShmPoolCreateBufferRequest {
+                offset: 0,
+                width: BUFFER_WIDTH_PIXELS as i32,
+                height: BUFFER_HEIGHT_PIXELS as i32,
+                stride: (BUFFER_WIDTH_PIXELS * PIXEL_SIZE_BYTES) as i32,
+                format: WlShmFormat::Xrgb8888,
+            },
+        );
 
-        // let _buffer = WlShmPool::create_buffer(
-        //     &mut buf,
-        //     &mut storage,
-        //     shm_pool,
-        //     WlShmPoolCreateBufferRequest {
-        //         offset: 0,
-        //         width: BUFFER_WIDTH as i32,
-        //         height: BUFFER_HEIGHT as i32,
-        //         stride: (BUFFER_WIDTH * COLOR_SIZE) as i32,
-        //         format: WlShmFormat::Argb8888,
-        //     },
-        // );
-
-        // WlSurface::attach(&mut buf, &mut storage, surface, buffer, IVec2::ZERO);
-        // WlSurface::damage(
-        //     &mut buf,
-        //     &mut storage,
-        //     surface,
-        //     IVec2::ZERO,
-        //     UVec2::new(BUFFER_WIDTH as u32, BUFFER_HEIGHT as u32),
-        // );
-        // WlSurface::commit(
-        //     &mut buf,
-        //     &mut storage,
-        //     surface,
-        // );
+        WlSurface::attach(&mut buf, &mut storage, surface, buffer, IVec2::ZERO);
+        WlSurface::damage(
+            &mut buf,
+            &mut storage,
+            surface,
+            IVec2::ZERO,
+            UVec2::new(BUFFER_WIDTH_PIXELS as u32, BUFFER_HEIGHT_PIXELS as u32),
+        );
+        WlSurface::commit(&mut buf, &mut storage, surface);
 
         display.sync_all();
     }

@@ -44,10 +44,8 @@ pub mod request {
     }
 
     impl<'b> Request<'b> for GetLayerSurface<'b> {
-        const OUTGOING_INTERFACE: Option<ObjectType> =
-            Some(ObjectType::WlrLayerSurfaceV1);
-
         const CODE: OpCode = 0;
+        const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::WlrLayerSurfaceV1);
 
         fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
             Message::builder(buf)
@@ -77,6 +75,8 @@ pub mod request {
 }
 
 pub mod wl_enum {
+    use thiserror::Error;
+
     /// These values indicate which layers a surface can be rendered in. They
     /// are ordered by z depth, bottom-most first. Traditional shell surfaces
     /// will typically be rendered between the bottom and top layers.
@@ -91,17 +91,23 @@ pub mod wl_enum {
         Overlay = 3,
     }
 
-    impl From<u32> for Layer {
-        fn from(value: u32) -> Self {
-            match value {
+    impl TryFrom<u32> for Layer {
+        type Error = WrongEnumVariant;
+
+        fn try_from(value: u32) -> Result<Self, Self::Error> {
+            Ok(match value {
                 0 => Layer::Background,
                 1 => Layer::Bottom,
                 2 => Layer::Top,
                 3 => Layer::Overlay,
-                _ => panic!("inappropriate variant for layer enum"),
-            }
+                _ => return Err(WrongEnumVariant(value)),
+            })
         }
     }
+
+    #[derive(Debug, Error)]
+    #[error("no Layer enum variant for {0} value")]
+    pub struct WrongEnumVariant(pub u32);
 
     impl From<Layer> for u32 {
         fn from(value: Layer) -> Self {

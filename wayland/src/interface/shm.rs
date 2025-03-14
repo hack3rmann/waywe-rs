@@ -32,8 +32,7 @@ pub mod request {
 
     impl<'b> Request<'b> for CreatePool<'b> {
         const CODE: OpCode = 0;
-        const OUTGOING_INTERFACE: Option<ObjectType> =
-            Some(ObjectType::ShmPool);
+        const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::ShmPool);
 
         fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
             Message::builder(buf)
@@ -47,7 +46,7 @@ pub mod request {
 
     /// Using this request a client can tell the server that it is not going to
     /// use the shm object anymore.
-    /// 
+    ///
     /// Objects created via this interface remain unaffected.
     #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub struct Release;

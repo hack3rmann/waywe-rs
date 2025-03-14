@@ -163,13 +163,15 @@ pub mod request {
 }
 
 pub mod wl_enum {
+    use thiserror::Error;
+
     bitflags::bitflags! {
         #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
         pub struct Anchor: u32 {
-            const TOP = 0b00000001;
-            const BOTTOM = 0b00000010;
-            const LEFT = 0b00000100;
-            const RIGHT = 0b00001000;
+            const TOP = 0x1;
+            const BOTTOM = 0x2;
+            const LEFT = 0x4;
+            const RIGHT = 0x8;
         }
     }
 
@@ -188,16 +190,22 @@ pub mod wl_enum {
         OnDemand = 2,
     }
 
-    impl From<u32> for KeyboardInteractivity {
-        fn from(value: u32) -> Self {
-            match value {
+    impl TryFrom<u32> for KeyboardInteractivity {
+        type Error = WrongEnumVariant;
+
+        fn try_from(value: u32) -> Result<Self, Self::Error> {
+            Ok(match value {
                 0 => Self::None,
                 1 => Self::Exclusive,
                 2 => Self::OnDemand,
-                _ => panic!("wrong enum variant"),
-            }
+                _ => return Err(WrongEnumVariant(value)),
+            })
         }
     }
+
+    #[derive(Debug, Error)]
+    #[error("no KeyboardInteractivity enum variant for {0} value")]
+    pub struct WrongEnumVariant(pub u32);
 
     impl From<KeyboardInteractivity> for u32 {
         fn from(value: KeyboardInteractivity) -> Self {

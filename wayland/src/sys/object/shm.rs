@@ -3,7 +3,7 @@ use crate::{
     interface::{Request, WlShmCreatePoolRequest},
     sys::{HasObjectType, ObjectType, object_storage::WlObjectStorage, wire::MessageBuffer},
 };
-use std::os::fd::BorrowedFd;
+use std::os::fd::AsFd;
 
 #[derive(Debug, Default)]
 pub struct WlShm;
@@ -13,12 +13,12 @@ impl WlShm {
         buf: &mut impl MessageBuffer,
         storage: &mut WlObjectStorage,
         shm: WlObjectHandle<Self>,
-        fd: BorrowedFd<'_>,
+        fd: impl AsFd,
         size: usize,
     ) -> WlObjectHandle<WlShmPool> {
         let proxy = unsafe {
             WlShmCreatePoolRequest {
-                fd,
+                fd: fd.as_fd(),
                 size: size as i32,
             }
             .send(storage.object(shm).proxy(), buf)
