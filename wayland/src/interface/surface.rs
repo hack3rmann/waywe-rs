@@ -416,6 +416,58 @@ pub mod request {
             Message::builder(buf).opcode(Self::CODE).build()
         }
     }
+
+    /// Sets the buffer scaling factor
+    ///
+    /// This request sets an optional scaling factor on how the compositor
+    /// interprets the contents of the buffer attached to the window.
+    ///
+    /// Buffer scale is double-buffered state, see wl_surface.commit.
+    ///
+    /// A newly created surface has its buffer scale set to 1.
+    ///
+    /// wl_surface.set_buffer_scale changes the pending buffer scale.
+    /// wl_surface.commit copies the pending buffer scale to the current one.
+    /// Otherwise, the pending and current values are never changed.
+    ///
+    /// The purpose of this request is to allow clients to supply higher
+    /// resolution buffer data for use on high resolution outputs. It is
+    /// intended that you pick the same buffer scale as the scale of the
+    /// output that the surface is displayed on. This means the compositor
+    /// can avoid scaling when rendering the surface on that output.
+    ///
+    /// Note that if the scale is larger than 1, then you have to attach
+    /// a buffer that is larger (by a factor of scale in each dimension)
+    /// than the desired surface size.
+    ///
+    /// If scale is not positive the invalid_scale protocol error is
+    /// raised.
+    #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Hash, Default, Eq, Ord)]
+    pub struct SetBufferScale {
+        pub scale: i32,
+    }
+
+    impl HasObjectType for SetBufferScale {
+        const OBJECT_TYPE: ObjectType = ObjectType::Surface;
+    }
+
+    impl<'s> Request<'s> for SetBufferScale {
+        const CODE: OpCode = 8;
+
+        fn build_message<'m>(
+            self,
+            buf: &'m mut impl MessageBuffer,
+            _: &'m WlObjectStorage,
+        ) -> Message<'m>
+        where
+            's: 'm,
+        {
+            Message::builder(buf)
+                .opcode(Self::CODE)
+                .int(self.scale)
+                .build()
+        }
+    }
 }
 
 pub mod event {

@@ -1,10 +1,12 @@
 pub mod callback;
 pub mod compositor;
 pub mod display;
+pub mod region;
 pub mod registry;
 pub mod shm;
 pub mod shm_pool;
 pub mod surface;
+pub mod viewporter;
 pub mod zwlr_layer_shell_v1;
 pub mod zwlr_layer_surface_v1;
 
@@ -27,6 +29,7 @@ pub use {
         request::{GetRegistry as WlDisplayGetRegistryRequest, Sync as WlDisplaySyncRequest},
         wl_enum::Error as WlDisplayErrorEnum,
     },
+    region::request::Destroy as WlRegionDestroyRequest,
     registry::{
         event::{Global as WlRegistryGlobalEvent, GlobalRemove as WlRegistryGlobalRemoveEvent},
         request::Bind as WlRegistryBindRequest,
@@ -38,17 +41,29 @@ pub use {
         request::{
             Attach as WlSurfaceAttachRequest, Commit as WlSurfaceCommitRequest,
             Damage as WlSurfaceDamageRequest, Destroy as WlSurfaceDestroyRequest,
-            Frame as WlSurfaceFrameRequest, SetInputRegion as WlSurfaceSetInputRegionRequest,
-            SetOpaqueRegion as SetOpaqueRegionRequest,
+            Frame as WlSurfaceFrameRequest, SetBufferScale as WlSurfaceSetBufferScaleRequest,
+            SetInputRegion as WlSurfaceSetInputRegionRequest,
+            SetOpaqueRegion as WlSurfaceSetOpaqueRegionRequest,
         },
         wl_enum::Error as WlSurfaceError,
     },
+    viewporter::request::GetViewport as WpViewporterGetViewportRequest,
     zwlr_layer_shell_v1::{
         request::{
             Destroy as ZwlrLayerShellDestroyRequest,
             GetLayerSurface as ZwlrLayerShellGetLayerSurfaceRequest,
         },
         wl_enum::Layer as ZwlrLayerShellV1Layer,
+    },
+    zwlr_layer_surface_v1::{
+        event::Configure as LayerSurfaceConfigureEvent,
+        request::{
+            SetAnchor as LayerSurfaceSetAnchorRequest,
+            SetExclusiveZone as LayerSurfaceSetExclusiveZoneRequest,
+            SetKeyboardInteractivity as LayerSurfaceSetKeyboardInteractivityRequest,
+            SetMargin as LayerSurfaceSetMarginRequest, SetSize as LayerSurfaceSetSizeRequest,
+            AckConfigure as LayerSurfaceAckConfigureRequest,
+        },
     },
 };
 

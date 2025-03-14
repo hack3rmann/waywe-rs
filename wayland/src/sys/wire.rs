@@ -272,7 +272,7 @@ impl<'s> MessageReader<'s> {
     ///
     /// The argument read from the message at this point should have
     /// the same type as the argument that was written to the message
-    /// as this point before
+    /// at this point before
     pub unsafe fn read<A: FromWlArgument<'s>>(&mut self) -> Option<A> {
         let first_arg = self.arguments.first().copied()?;
         self.arguments = &self.arguments[1..];

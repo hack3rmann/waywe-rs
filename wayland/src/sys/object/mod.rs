@@ -7,6 +7,8 @@ pub mod registry;
 pub mod shm;
 pub mod shm_pool;
 pub mod surface;
+pub mod viewport;
+pub mod viewporter;
 pub mod zwlr_layer_shell_v1;
 pub mod zwlr_layer_surface_v1;
 
@@ -28,18 +30,22 @@ use std::{
     marker::PhantomData,
     mem::{self, MaybeUninit, offset_of},
     ops::{Deref, DerefMut},
-    process, ptr, slice,
+    pin::Pin,
+    process,
+    ptr::{self, NonNull},
+    slice,
 };
 
 pub trait Dispatch {
-    fn dispatch(&mut self, _message: Message<'_>) {}
+    fn dispatch(&mut self, _storage: Pin<&mut WlObjectStorage<'_>>, _message: Message<'_>) {}
 }
 static_assertions::assert_obj_safe!(Dispatch);
 
-pub type WlDispatchFn<T> = fn(&mut T, Message<'_>);
+pub type WlDispatchFn<T> = fn(&mut T, Pin<&mut WlObjectStorage<'_>>, Message<'_>);
 
 pub struct WlDispatchData<T> {
     pub dispatch: WlDispatchFn<T>,
+    pub storage: Option<NonNull<WlObjectStorage<'static>>>,
     pub data: T,
 }
 
@@ -52,15 +58,21 @@ unsafe extern "C" fn dispatch_raw<T>(
 ) -> c_int {
     std::panic::catch_unwind(|| {
         // Safety: `proxy` is valid object provided by libwayland
-        let data = unsafe { wl_proxy_get_user_data(proxy.cast()) };
+        let data = unsafe { wl_proxy_get_user_data(proxy.cast()) }.cast::<WlDispatchData<T>>();
 
         // # Safety
         //
         // - `data` points to a valid box-allocated instance of `WlDispatchData`
         // - `data` only being used in dispatcher, libwayland provides exclusive access to the data
-        let Some(data) = (unsafe { data.cast::<WlDispatchData<T>>().as_mut() }) else {
+        let Some(data) = (unsafe { data.as_mut() }) else {
             return -1;
         };
+
+        let Some(storage_ptr) = data.storage else {
+            return -1;
+        };
+
+        let storage = unsafe { Pin::new_unchecked(storage_ptr.cast::<WlObjectStorage>().as_mut()) };
 
         let Ok(opcode) = u16::try_from(opcode) else {
             return -1;
@@ -78,7 +90,7 @@ unsafe extern "C" fn dispatch_raw<T>(
 
         let message = Message { opcode, arguments };
 
-        (data.dispatch)(&mut data.data, message);
+        (data.dispatch)(&mut data.data, storage, message);
 
         0
     })
@@ -86,6 +98,10 @@ unsafe extern "C" fn dispatch_raw<T>(
         tracing::error!("panic in wl_dispatcher_func_t");
         process::abort();
     })
+}
+
+pub trait FromProxy: Sized {
+    fn from_proxy(proxy: &WlProxy) -> Self;
 }
 
 pub struct WlObjectHandle<T> {
@@ -125,12 +141,12 @@ impl<T> WlObjectHandle<T> {
     pub fn create_object<'r, R>(
         self,
         buf: &mut impl MessageBuffer,
-        storage: &mut WlObjectStorage,
+        storage: Pin<&mut WlObjectStorage>,
         request: R,
     ) -> WlObjectHandle<R::Child>
     where
         R: Request<'r> + ObjectParent,
-        R::Child: Dispatch + HasObjectType + Default + 'static,
+        R::Child: Dispatch + HasObjectType + FromProxy + 'static,
         T: Dispatch + HasObjectType + 'static,
     {
         const {
@@ -150,11 +166,12 @@ impl<T> WlObjectHandle<T> {
 
         let proxy = unsafe {
             request
-                .send(buf, storage, storage.object(self).proxy())
+                .send(buf, storage.as_ref().get_ref(), storage.object(self).proxy())
                 .unwrap()
         };
 
-        storage.insert(WlObject::new(proxy, R::Child::default()))
+        let data = R::Child::from_proxy(&proxy);
+        storage.insert(WlObject::new(proxy, data))
     }
 }
 
@@ -272,6 +289,7 @@ impl<T: Dispatch + 'static> WlObject<T> {
     pub fn new(proxy: WlProxy, data: T) -> Self {
         let dispatch_data = Box::new(WlDispatchData {
             dispatch: T::dispatch,
+            storage: None,
             data,
         });
 
@@ -298,6 +316,17 @@ impl<T: Dispatch + 'static> WlObject<T> {
             proxy,
             _p: PhantomData,
         }
+    }
+
+    pub fn write_storage_location(&mut self, mut storage: Pin<&mut WlObjectStorage>) {
+        // Safety: the proxy is valid so it is safe
+        let user_data_ptr = unsafe { wl_proxy_get_user_data(self.proxy().as_raw().as_ptr()) }
+            .cast::<WlDispatchData<T>>();
+
+        // Safety: the `WlObject` always has valid user data being set
+        let user_data = unsafe { user_data_ptr.as_mut().unwrap_unchecked() };
+
+        user_data.storage = Some(NonNull::new(&raw mut *storage).unwrap().cast());
     }
 
     pub fn proxy(&self) -> &WlProxy {
@@ -384,14 +413,20 @@ mod tests {
     use crate::{
         init::connect_wayland_socket,
         interface::{
-            WlCompositorCreateSurface, WlShmCreatePoolRequest, WlShmFormat,
+            LayerSurfaceSetAnchorRequest, LayerSurfaceSetExclusiveZoneRequest,
+            LayerSurfaceSetKeyboardInteractivityRequest, LayerSurfaceSetMarginRequest,
+            LayerSurfaceSetSizeRequest, WlCompositorCreateRegion, WlCompositorCreateSurface,
+            WlRegionDestroyRequest, WlShmCreatePoolRequest, WlShmFormat,
             WlShmPoolCreateBufferRequest, WlSurfaceAttachRequest, WlSurfaceCommitRequest,
-            WlSurfaceDamageRequest, ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellV1Layer,
+            WlSurfaceDamageRequest, WlSurfaceSetBufferScaleRequest, WlSurfaceSetInputRegionRequest,
+            WpViewporterGetViewportRequest, ZwlrLayerShellGetLayerSurfaceRequest,
+            ZwlrLayerShellV1Layer,
+            zwlr_layer_surface_v1::wl_enum::{Anchor, KeyboardInteractivity},
         },
         sys::{
             ObjectType,
             display::WlDisplay,
-            object::{registry::WlRegistry, shm::WlShm},
+            object::{registry::WlRegistry, shm::WlShm, viewporter::WpViewporter},
             wire::SmallVecMessageBuffer,
         },
     };
@@ -403,6 +438,7 @@ mod tests {
     use std::{
         mem,
         os::fd::{AsFd as _, OwnedFd},
+        pin::pin,
         ptr, slice,
     };
 
@@ -417,10 +453,10 @@ mod tests {
 
         // Safety: called once on the start of the program
         let display = unsafe { connect_display() };
-        let mut storage = display.create_storage();
-        let registry = display.create_registry(&mut buf, &mut storage);
+        let mut storage = pin!(display.create_storage());
+        let registry = display.create_registry(&mut buf, storage.as_mut());
 
-        display.sync_all();
+        display.sync_all(storage.as_mut());
 
         assert!(
             storage
@@ -436,15 +472,15 @@ mod tests {
 
         // Safety: called once on the start of the program
         let display = unsafe { connect_display() };
-        let mut storage = display.create_storage();
-        let registry = display.create_registry(&mut buf, &mut storage);
+        let mut storage = pin!(display.create_storage());
+        let registry = display.create_registry(&mut buf, storage.as_mut());
 
-        display.sync_all();
+        display.sync_all(storage.as_mut());
 
         let compositor =
-            WlRegistry::bind_default::<WlCompositor>(&mut buf, &mut storage, registry).unwrap();
+            WlRegistry::bind_default::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
 
-        let surface = compositor.create_object(&mut buf, &mut storage, WlCompositorCreateSurface);
+        let surface = compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurface);
 
         assert_eq!(
             storage.object(surface).proxy().interface_name(),
@@ -458,15 +494,15 @@ mod tests {
 
         // Safety: called once on the start of the program
         let display = unsafe { connect_display() };
-        let mut storage = display.create_storage();
-        let registry = display.create_registry(&mut buf, &mut storage);
+        let mut storage = pin!(display.create_storage());
+        let registry = display.create_registry(&mut buf, storage.as_mut());
 
-        display.sync_all();
+        display.sync_all(storage.as_mut());
 
         let _layer_shell =
-            WlRegistry::bind_default::<WlrLayerShellV1>(&mut buf, &mut storage, registry).unwrap();
+            WlRegistry::bind_default::<WlrLayerShellV1>(&mut buf, storage.as_mut(), registry).unwrap();
 
-        display.sync_all();
+        display.sync_all(storage.as_mut());
     }
 
     fn open_shm() -> Result<(OwnedFd, String), rustix::io::Errno> {
@@ -493,27 +529,48 @@ mod tests {
 
         // Safety: called once on the start of the program
         let display = unsafe { connect_display() };
-        let mut storage = display.create_storage();
-        let registry = display.create_registry(&mut buf, &mut storage);
+        let mut storage = pin!(display.create_storage());
+        let registry = display.create_registry(&mut buf, storage.as_mut());
 
-        display.sync_all();
+        display.sync_all(storage.as_mut());
 
-        let shm = WlRegistry::bind_default::<WlShm>(&mut buf, &mut storage, registry).unwrap();
+        let shm = WlRegistry::bind_default::<WlShm>(&mut buf, storage.as_mut(), registry).unwrap();
+
+        let viewporter =
+            WlRegistry::bind_default::<WpViewporter>(&mut buf, storage.as_mut(), registry).unwrap();
 
         let compositor =
-            WlRegistry::bind_default::<WlCompositor>(&mut buf, &mut storage, registry).unwrap();
+            WlRegistry::bind_default::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
 
-        let surface = compositor.create_object(&mut buf, &mut storage, WlCompositorCreateSurface);
+        let surface = compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurface);
+
+        let _viewport = viewporter.create_object(
+            &mut buf,
+            storage.as_mut(),
+            WpViewporterGetViewportRequest { surface },
+        );
+
+        let region = compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateRegion);
+
+        surface.request(
+            &mut buf,
+            &storage,
+            WlSurfaceSetInputRegionRequest {
+                region: Some(region),
+            },
+        );
+
+        region.request(&mut buf, &storage, WlRegionDestroyRequest);
 
         let output =
-            WlRegistry::bind_default::<WlOutput>(&mut buf, &mut storage, registry).unwrap();
+            WlRegistry::bind_default::<WlOutput>(&mut buf, storage.as_mut(), registry).unwrap();
 
         let layer_shell =
-            WlRegistry::bind_default::<WlrLayerShellV1>(&mut buf, &mut storage, registry).unwrap();
+            WlRegistry::bind_default::<WlrLayerShellV1>(&mut buf, storage.as_mut(), registry).unwrap();
 
-        let _layer_surface = layer_shell.create_object(
+        let layer_surface = layer_shell.create_object(
             &mut buf,
-            &mut storage,
+            storage.as_mut(),
             ZwlrLayerShellGetLayerSurfaceRequest {
                 surface,
                 output: Some(output),
@@ -522,10 +579,47 @@ mod tests {
             },
         );
 
+        layer_surface.request(
+            &mut buf,
+            &storage,
+            LayerSurfaceSetAnchorRequest {
+                anchor: Anchor::all(),
+            },
+        );
+
+        layer_surface.request(
+            &mut buf,
+            &storage,
+            LayerSurfaceSetExclusiveZoneRequest { zone: -1 },
+        );
+
+        layer_surface.request(&mut buf, &storage, LayerSurfaceSetMarginRequest::zero());
+
+        layer_surface.request(
+            &mut buf,
+            &storage,
+            LayerSurfaceSetKeyboardInteractivityRequest {
+                keyboard_interactivity: KeyboardInteractivity::None,
+            },
+        );
+
+        layer_surface.request(
+            &mut buf,
+            &storage,
+            LayerSurfaceSetSizeRequest {
+                width: BUFFER_WIDTH_PIXELS as u32,
+                height: BUFFER_HEIGHT_PIXELS as u32,
+            },
+        );
+
+        surface.request(&mut buf, &storage, WlSurfaceCommitRequest);
+
+        display.sync_all(storage.as_mut());
+
         let (shm_fd, shm_path) = open_shm().unwrap();
 
-        const BUFFER_WIDTH_PIXELS: usize = 10;
-        const BUFFER_HEIGHT_PIXELS: usize = 10;
+        const BUFFER_WIDTH_PIXELS: usize = 2520;
+        const BUFFER_HEIGHT_PIXELS: usize = 1680;
         const PIXEL_SIZE_BYTES: usize = mem::size_of::<u32>();
         const BUFFER_SIZE_PIXELS: usize = BUFFER_WIDTH_PIXELS * BUFFER_HEIGHT_PIXELS;
         const BUFFER_SIZE_BYTES: usize = BUFFER_SIZE_PIXELS * PIXEL_SIZE_BYTES;
@@ -557,7 +651,7 @@ mod tests {
 
         let shm_pool = shm.create_object(
             &mut buf,
-            &mut storage,
+            storage.as_mut(),
             WlShmCreatePoolRequest {
                 fd: shm_fd.as_fd(),
                 size: BUFFER_SIZE_BYTES as i32,
@@ -566,7 +660,7 @@ mod tests {
 
         let buffer = shm_pool.create_object(
             &mut buf,
-            &mut storage,
+            storage.as_mut(),
             WlShmPoolCreateBufferRequest {
                 offset: 0,
                 width: BUFFER_WIDTH_PIXELS as i32,
@@ -589,6 +683,12 @@ mod tests {
         surface.request(
             &mut buf,
             &storage,
+            WlSurfaceSetBufferScaleRequest { scale: 1 },
+        );
+
+        surface.request(
+            &mut buf,
+            &storage,
             WlSurfaceDamageRequest {
                 x: 0,
                 y: 0,
@@ -599,6 +699,6 @@ mod tests {
 
         surface.request(&mut buf, &storage, WlSurfaceCommitRequest);
 
-        // display.sync_all();
+        display.sync_all(storage.as_mut());
     }
 }

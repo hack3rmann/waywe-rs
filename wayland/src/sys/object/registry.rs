@@ -1,10 +1,13 @@
-use super::{Dispatch, WlObject, WlObjectHandle};
+use std::pin::Pin;
+
+use super::{Dispatch, FromProxy, WlObject, WlObjectHandle};
 use crate::{
     interface::{Event as _, WlRegistryBindRequest, WlRegistryGlobalEvent},
     object::ObjectId,
     sys::{
         HasObjectType, ObjectType,
         object_storage::WlObjectStorage,
+        proxy::WlProxy,
         wire::{Message, MessageBuffer},
     },
 };
@@ -24,7 +27,7 @@ pub struct WlRegistry {
 impl WlRegistry {
     pub fn bind<T>(
         buf: &mut impl MessageBuffer,
-        storage: &mut WlObjectStorage,
+        storage: Pin<&mut WlObjectStorage>,
         registry: WlObjectHandle<WlRegistry>,
         object: T,
     ) -> Option<WlObjectHandle<T>>
@@ -39,7 +42,7 @@ impl WlRegistry {
 
     pub fn bind_default<T>(
         buf: &mut impl MessageBuffer,
-        storage: &mut WlObjectStorage,
+        storage: Pin<&mut WlObjectStorage>,
         registry: WlObjectHandle<WlRegistry>,
     ) -> Option<WlObjectHandle<T>>
     where
@@ -53,9 +56,15 @@ impl WlRegistry {
     }
 }
 
+impl FromProxy for WlRegistry {
+    fn from_proxy(_: &WlProxy) -> Self {
+        Self::default()
+    }
+}
+
 impl Dispatch for WlRegistry {
     // TODO(hack3rmann): handle all events
-    fn dispatch(&mut self, message: Message<'_>) {
+    fn dispatch(&mut self, _storage: Pin<&mut WlObjectStorage>, message: Message<'_>) {
         let Some(event) = WlRegistryGlobalEvent::from_message(message) else {
             return;
         };

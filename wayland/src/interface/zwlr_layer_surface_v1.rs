@@ -147,18 +147,29 @@ pub mod request {
     ///
     /// Margin is double-buffered, see wl_surface.commit.
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-    pub struct SetMargine {
+    pub struct SetMargin {
         pub top: i32,
         pub right: i32,
         pub bottom: i32,
         pub left: i32,
     }
 
-    impl HasObjectType for SetMargine {
+    impl SetMargin {
+        pub const fn zero() -> Self {
+            Self {
+                top: 0,
+                right: 0,
+                bottom: 0,
+                left: 0,
+            }
+        }
+    }
+
+    impl HasObjectType for SetMargin {
         const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerSurfaceV1;
     }
 
-    impl<'s> Request<'s> for SetMargine {
+    impl<'s> Request<'s> for SetMargin {
         const CODE: OpCode = 3;
 
         fn build_message<'m>(
@@ -193,7 +204,7 @@ pub mod request {
     /// Keyboard interactivity is double-buffered, see wl_surface.commit.
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
     pub struct SetKeyboardInteractivity {
-        keyboard_interactivity: KeyboardInteractivity,
+        pub keyboard_interactivity: KeyboardInteractivity,
     }
 
     impl HasObjectType for SetKeyboardInteractivity {
@@ -215,6 +226,97 @@ pub mod request {
                 .opcode(Self::CODE)
                 .uint(self.keyboard_interactivity.into())
                 .build()
+        }
+    }
+
+    /// When a configure event is received, if a client commits the
+    /// surface in response to the configure event, then the client
+    /// must make an ack_configure request sometime before the commit
+    /// request, passing along the serial of the configure event.
+    ///
+    /// If the client receives multiple configure events before it
+    /// can respond to one, it only has to ack the last configure event.
+    ///
+    /// A client is not required to commit immediately after sending
+    /// an ack_configure request - it may even ack_configure several times
+    /// before its next surface commit.
+    ///
+    /// A client may send multiple ack_configure requests before committing, but
+    /// only the last request sent before a commit indicates which configure
+    /// event the client really is responding to.
+    pub struct AckConfigure {
+        /// The serial from the configure event
+        pub serial: u32,
+    }
+
+    impl HasObjectType for AckConfigure {
+        const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerSurfaceV1;
+    }
+
+    impl<'s> Request<'s> for AckConfigure {
+        const CODE: OpCode = 6;
+
+        fn build_message<'m>(
+            self,
+            buf: &'m mut impl MessageBuffer,
+            _: &'m WlObjectStorage,
+        ) -> Message<'m>
+        where
+            's: 'm,
+        {
+            Message::builder(buf)
+                .opcode(Self::CODE)
+                .uint(self.serial)
+                .build()
+        }
+    }
+}
+
+pub mod event {
+    use crate::{interface::Event, sys::wire::{Message, OpCode}};
+
+    /// The configure event asks the client to resize its surface.
+    ///
+    /// Clients should arrange their surface for the new states, and then send
+    /// an ack_configure request with the serial sent in this configure event at
+    /// some point before committing the new surface.
+    ///
+    /// The client is free to dismiss all but the last configure event it
+    /// received.
+    ///
+    /// The width and height arguments specify the size of the window in
+    /// surface-local coordinates.
+    ///
+    /// The size is a hint, in the sense that the client is free to ignore it if
+    /// it doesn't resize, pick a smaller size (to satisfy aspect ratio or
+    /// resize in steps of NxM pixels). If the client picks a smaller size and
+    /// is anchored to two opposite anchors (e.g. 'top' and 'bottom'), the
+    /// surface will be centered on this axis.
+    ///
+    /// If the width or height arguments are zero, it means the client should
+    /// decide its own window dimension.
+    #[derive(Clone, Default, Debug, PartialEq, Copy, Eq, PartialOrd, Ord, Hash)]
+    pub struct Configure {
+        pub serial: u32,
+        pub width: u32,
+        pub height: u32,
+    }
+
+    impl<'s> Event<'s> for Configure {
+        const CODE: OpCode = 0;
+
+        fn from_message(message: Message<'s>) -> Option<Self> {
+            if message.opcode != Self::CODE {
+                return None;
+            }
+
+            let mut reader = message.reader();
+
+            let serial = unsafe { reader.read::<u32>()? };
+            let width = unsafe { reader.read::<u32>()? };
+            let height = unsafe { reader.read::<u32>()? };
+
+            Some(Self { serial, width, height })
         }
     }
 }

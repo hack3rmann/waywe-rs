@@ -11,6 +11,8 @@ pub mod protocols {
     include_wl_interfaces!("wayland-protocols/wayland.xml");
 
     include_wl_interfaces!("wayland-protocols/stable/xdg-shell/xdg-shell.xml");
+    
+    include_wl_interfaces!("wayland-protocols/stable/viewporter/viewporter.xml");
 
     include_wl_interfaces!(
         "wayland-protocols/wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml"
@@ -37,7 +39,9 @@ pub enum ObjectType {
     Output,
     Region,
     WlrLayerShellV1,
+    Viewporter,
     // non-globals
+    Viewport,
     Callback,
     WlrLayerSurfaceV1,
 }
@@ -56,7 +60,9 @@ impl ObjectType {
             "wl_region" => ObjectType::Region,
             "wl_output" => ObjectType::Output,
             "zwlr_layer_shell_v1" => ObjectType::WlrLayerShellV1,
+            "wp_viewporter" => ObjectType::Viewporter,
             // non-globals
+            "wp_viewport" => ObjectType::Viewport,
             "wl_callback" => ObjectType::Callback,
             "zwlr_layer_surface_v1" => ObjectType::WlrLayerSurfaceV1,
         };
@@ -78,6 +84,8 @@ impl ObjectType {
             Self::Output => &protocols::wl_output::INTERFACE,
             Self::WlrLayerShellV1 => &protocols::zwlr_layer_shell_v1::INTERFACE,
             Self::WlrLayerSurfaceV1 => &protocols::zwlr_layer_surface_v1::INTERFACE,
+            Self::Viewporter => &protocols::wp_viewporter::INTERFACE,
+            Self::Viewport => &protocols::wp_viewport::INTERFACE,
         }
     }
 
@@ -95,6 +103,8 @@ impl ObjectType {
             Self::Output => &protocols::wl_output::WL_INTERFACE,
             Self::WlrLayerShellV1 => &protocols::zwlr_layer_shell_v1::WL_INTERFACE,
             Self::WlrLayerSurfaceV1 => &protocols::zwlr_layer_surface_v1::WL_INTERFACE,
+            Self::Viewporter => &protocols::wp_viewporter::WL_INTERFACE,
+            Self::Viewport => &protocols::wp_viewport::WL_INTERFACE,
         }
     }
 

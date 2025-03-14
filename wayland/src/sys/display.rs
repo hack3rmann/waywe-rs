@@ -13,10 +13,7 @@ use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, RawDisplayHandle, WaylandDisplayHandle,
 };
 use std::{
-    any, fmt,
-    mem::ManuallyDrop,
-    os::fd::{FromRawFd, IntoRawFd, OwnedFd},
-    ptr::NonNull,
+    any, fmt, mem::ManuallyDrop, os::fd::{FromRawFd, IntoRawFd, OwnedFd}, pin::Pin, ptr::NonNull
 };
 use thiserror::Error;
 
@@ -51,19 +48,19 @@ impl WlDisplay {
     pub fn create_registry(
         &self,
         buf: &mut impl MessageBuffer,
-        storage: &mut WlObjectStorage<'_>,
+        storage: Pin<&mut WlObjectStorage<'_>>,
     ) -> WlObjectHandle<WlRegistry> {
         // Safety: parent interface matcher request's one
         let proxy = unsafe {
             WlDisplayGetRegistryRequest
-                .send(buf, storage, &self.proxy)
+                .send(buf, storage.as_ref().get_ref(), &self.proxy)
                 .unwrap()
         };
 
         storage.insert(WlObject::new(proxy, WlRegistry::default()))
     }
 
-    pub fn sync_all(&self) {
+    pub fn sync_all(&self, _storage: Pin<&mut WlObjectStorage>) {
         // Safety: `self.as_raw_display_ptr()` is a valid display object
         assert_ne!(
             -1,

@@ -1,9 +1,10 @@
 use super::{
     display::WlDisplay,
-    object::{Dispatch, WlDynObject, WlObject, WlObjectHandle}, proxy::WlProxy,
+    object::{Dispatch, WlDynObject, WlObject, WlObjectHandle},
+    proxy::WlProxy,
 };
 use crate::object::ObjectId;
-use std::{collections::HashMap, marker::PhantomData};
+use std::{collections::HashMap, marker::PhantomData, pin::Pin};
 
 #[derive(Debug)]
 pub struct WlObjectStorageEntry {
@@ -34,10 +35,15 @@ impl WlObjectStorage<'_> {
         }
     }
 
-    pub fn insert<T: Dispatch + 'static>(&mut self, object: WlObject<T>) -> WlObjectHandle<T> {
+    pub fn insert<T: Dispatch + 'static>(
+        mut self: Pin<&mut Self>,
+        mut object: WlObject<T>,
+    ) -> WlObjectHandle<T> {
         let id = object.proxy().id();
 
-        let _ = self
+        object.write_storage_location(self.as_mut());
+
+        if self
             .objects
             .insert(
                 id,
@@ -45,7 +51,10 @@ impl WlObjectStorage<'_> {
                     object: object.upcast(),
                 },
             )
-            .is_none_or(|_| panic!("map should not contain any object with this id"));
+            .is_some()
+        {
+            panic!("map should not contain any object with this id");
+        }
 
         WlObjectHandle::new(id)
     }
