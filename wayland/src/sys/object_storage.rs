@@ -1,6 +1,6 @@
 use super::{
     display::WlDisplay,
-    object::{Dispatch, WlDynObject, WlObject, WlObjectHandle},
+    object::{Dispatch, WlDynObject, WlObject, WlObjectHandle}, proxy::WlProxy,
 };
 use crate::object::ObjectId;
 use std::{collections::HashMap, marker::PhantomData};
@@ -62,6 +62,10 @@ impl WlObjectStorage<'_> {
 
     pub fn object<T: Dispatch + 'static>(&self, handle: WlObjectHandle<T>) -> &WlObject<T> {
         self.get_object(handle).unwrap()
+    }
+
+    pub fn get_proxy(&self, id: ObjectId) -> Option<&WlProxy> {
+        self.objects.get(&id).map(|e| &e.object.proxy)
     }
 
     pub fn get_object_mut<T: Dispatch + 'static>(

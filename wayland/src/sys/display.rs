@@ -54,7 +54,11 @@ impl WlDisplay {
         storage: &mut WlObjectStorage<'_>,
     ) -> WlObjectHandle<WlRegistry> {
         // Safety: parent interface matcher request's one
-        let proxy = unsafe { WlDisplayGetRegistryRequest.send(&self.proxy, buf).unwrap() };
+        let proxy = unsafe {
+            WlDisplayGetRegistryRequest
+                .send(buf, storage, &self.proxy)
+                .unwrap()
+        };
 
         storage.insert(WlObject::new(proxy, WlRegistry::default()))
     }

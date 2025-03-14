@@ -101,12 +101,8 @@ impl<T> WlObjectHandle<T> {
         }
     }
 
-    pub fn request<'r, R>(
-        self,
-        buf: &'r mut impl MessageBuffer,
-        storage: &WlObjectStorage,
-        request: R,
-    ) where
+    pub fn request<'r, R>(self, buf: &mut impl MessageBuffer, storage: &WlObjectStorage, request: R)
+    where
         T: Dispatch + HasObjectType + 'static,
         R: Request<'r>,
     {
@@ -122,13 +118,13 @@ impl<T> WlObjectHandle<T> {
             )
         };
 
-        let proxy = unsafe { request.send(storage.object(self).proxy(), buf) };
+        let proxy = unsafe { request.send(buf, storage, storage.object(self).proxy()) };
         debug_assert!(proxy.is_none());
     }
 
     pub fn create_object<'r, R>(
         self,
-        buf: &'r mut impl MessageBuffer,
+        buf: &mut impl MessageBuffer,
         storage: &mut WlObjectStorage,
         request: R,
     ) -> WlObjectHandle<R::Child>
@@ -152,7 +148,11 @@ impl<T> WlObjectHandle<T> {
             }
         };
 
-        let proxy = unsafe { request.send(storage.object(self).proxy(), buf).unwrap() };
+        let proxy = unsafe {
+            request
+                .send(buf, storage, storage.object(self).proxy())
+                .unwrap()
+        };
 
         storage.insert(WlObject::new(proxy, R::Child::default()))
     }
@@ -386,7 +386,7 @@ mod tests {
         interface::{
             WlCompositorCreateSurface, WlShmCreatePoolRequest, WlShmFormat,
             WlShmPoolCreateBufferRequest, WlSurfaceAttachRequest, WlSurfaceCommitRequest,
-            WlSurfaceDamageRequest, ZwlrLayerShellV1Layer,
+            WlSurfaceDamageRequest, ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellV1Layer,
         },
         sys::{
             ObjectType,
@@ -511,16 +511,16 @@ mod tests {
         let layer_shell =
             WlRegistry::bind_default::<WlrLayerShellV1>(&mut buf, &mut storage, registry).unwrap();
 
-        let _layer_surface = WlrLayerShellV1::get_layer_surface(
+        let _layer_surface = layer_shell.create_object(
             &mut buf,
             &mut storage,
-            layer_shell,
-            surface,
-            Some(output),
-            ZwlrLayerShellV1Layer::Background,
-            c"wallpaper",
-        )
-        .unwrap();
+            ZwlrLayerShellGetLayerSurfaceRequest {
+                surface,
+                output: Some(output),
+                layer: ZwlrLayerShellV1Layer::Background,
+                namespace: c"wallpaper-engine",
+            },
+        );
 
         let (shm_fd, shm_path) = open_shm().unwrap();
 
@@ -580,7 +580,7 @@ mod tests {
             &mut buf,
             &storage,
             WlSurfaceAttachRequest {
-                buffer: Some(storage.object(buffer).proxy()),
+                buffer: Some(buffer),
                 x: 0,
                 y: 0,
             },

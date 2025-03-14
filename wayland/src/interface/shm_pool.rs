@@ -11,7 +11,12 @@ use crate::sys::wire::{Message, MessageBuffer, OpCode};
 
 pub mod request {
     use super::*;
-    use crate::{interface::{ObjectParent, WlShmFormat}, sys::{object::buffer::WlBuffer, HasObjectType, ObjectType}};
+    use crate::{
+        interface::{ObjectParent, WlShmFormat},
+        sys::{
+            HasObjectType, ObjectType, object::buffer::WlBuffer, object_storage::WlObjectStorage,
+        },
+    };
 
     /// Create a wl_buffer object from the pool.
     ///
@@ -46,11 +51,18 @@ pub mod request {
         const OBJECT_TYPE: ObjectType = ObjectType::ShmPool;
     }
 
-    impl<'b> Request<'b> for CreateBuffer {
+    impl<'s> Request<'s> for CreateBuffer {
         const CODE: OpCode = 0;
         const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::Buffer);
 
-        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+        fn build_message<'m>(
+            self,
+            buf: &'m mut impl MessageBuffer,
+            _: &'m WlObjectStorage,
+        ) -> Message<'m>
+        where
+            's: 'm,
+        {
             Message::builder(buf)
                 .opcode(Self::CODE)
                 .new_id()
@@ -74,10 +86,17 @@ pub mod request {
         const OBJECT_TYPE: ObjectType = ObjectType::ShmPool;
     }
 
-    impl<'b> Request<'b> for Destroy {
+    impl<'s> Request<'s> for Destroy {
         const CODE: OpCode = 1;
 
-        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+        fn build_message<'m>(
+            self,
+            buf: &'m mut impl MessageBuffer,
+            _: &'m WlObjectStorage,
+        ) -> Message<'m>
+        where
+            's: 'm,
+        {
             Message::builder(buf).opcode(Self::CODE).build()
         }
     }
@@ -102,10 +121,17 @@ pub mod request {
         const OBJECT_TYPE: ObjectType = ObjectType::ShmPool;
     }
 
-    impl<'b> Request<'b> for Resize {
+    impl<'s> Request<'s> for Resize {
         const CODE: OpCode = 2;
 
-        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+        fn build_message<'m>(
+            self,
+            buf: &'m mut impl MessageBuffer,
+            _: &'m WlObjectStorage,
+        ) -> Message<'m>
+        where
+            's: 'm,
+        {
             Message::builder(buf)
                 .opcode(Self::CODE)
                 .int(self.size)

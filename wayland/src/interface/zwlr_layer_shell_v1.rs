@@ -9,10 +9,13 @@
 pub mod request {
     use super::wl_enum::Layer;
     use crate::interface::{ObjectParent, Request};
+    use crate::sys::object::WlObjectHandle;
+    use crate::sys::object::output::WlOutput;
+    use crate::sys::object::surface::WlSurface;
     use crate::sys::object::zwlr_layer_surface_v1::WlrLayerSurfaceV1;
-    use crate::sys::{HasObjectType, ObjectType};
-    use crate::sys::proxy::WlProxy;
+    use crate::sys::object_storage::WlObjectStorage;
     use crate::sys::wire::{Message, MessageBuffer, OpCode};
+    use crate::sys::{HasObjectType, ObjectType};
     use std::ffi::CStr;
 
     /// Create a layer surface for an existing surface. This assigns the role of
@@ -38,8 +41,8 @@ pub mod request {
     /// surface.
     #[derive(Debug, Clone, Copy)]
     pub struct GetLayerSurface<'a> {
-        pub surface: &'a WlProxy,
-        pub output: Option<&'a WlProxy>,
+        pub surface: WlObjectHandle<WlSurface>,
+        pub output: Option<WlObjectHandle<WlOutput>>,
         pub layer: Layer,
         pub namespace: &'a CStr,
     }
@@ -52,16 +55,23 @@ pub mod request {
         const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerShellV1;
     }
 
-    impl<'b> Request<'b> for GetLayerSurface<'b> {
+    impl<'s> Request<'s> for GetLayerSurface<'s> {
         const CODE: OpCode = 0;
         const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::WlrLayerSurfaceV1);
 
-        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+        fn build_message<'m>(
+            self,
+            buf: &'m mut impl MessageBuffer,
+            storage: &'m WlObjectStorage,
+        ) -> Message<'m>
+        where
+            's: 'm,
+        {
             Message::builder(buf)
                 .opcode(Self::CODE)
                 .new_id()
-                .object(self.surface)
-                .maybe_object(self.output)
+                .object(storage.object(self.surface).proxy())
+                .maybe_object(self.output.map(|h| storage.object(h).proxy()))
                 .uint(self.layer.into())
                 .str(self.namespace)
                 .build()
@@ -78,10 +88,17 @@ pub mod request {
         const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerShellV1;
     }
 
-    impl<'b> Request<'b> for Destroy {
+    impl<'s> Request<'s> for Destroy {
         const CODE: OpCode = 1;
 
-        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+        fn build_message<'m>(
+            self,
+            buf: &'m mut impl MessageBuffer,
+            _: &'m WlObjectStorage,
+        ) -> Message<'m>
+        where
+            's: 'm,
+        {
             Message::builder(buf).opcode(Self::CODE).build()
         }
     }

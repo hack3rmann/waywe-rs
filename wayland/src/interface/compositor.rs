@@ -6,7 +6,10 @@ pub mod request {
     use crate::{
         interface::{ObjectParent, Request},
         sys::{
-            object::{region::WlRegion, surface::WlSurface}, wire::{Message, MessageBuffer, OpCode}, HasObjectType, ObjectType
+            HasObjectType, ObjectType,
+            object::{region::WlRegion, surface::WlSurface},
+            object_storage::WlObjectStorage,
+            wire::{Message, MessageBuffer, OpCode},
         },
     };
 
@@ -22,11 +25,18 @@ pub mod request {
         const OBJECT_TYPE: ObjectType = ObjectType::Compositor;
     }
 
-    impl<'b> Request<'b> for CreateSurface {
+    impl<'s> Request<'s> for CreateSurface {
         const CODE: OpCode = 0;
         const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::Surface);
 
-        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+        fn build_message<'m>(
+            self,
+            buf: &'m mut impl MessageBuffer,
+            _: &'m WlObjectStorage,
+        ) -> Message<'m>
+        where
+            's: 'm,
+        {
             Message::builder(buf).opcode(Self::CODE).new_id().build()
         }
     }
@@ -43,11 +53,18 @@ pub mod request {
         const OBJECT_TYPE: ObjectType = ObjectType::Compositor;
     }
 
-    impl<'b> Request<'b> for CreateRegion {
+    impl<'s> Request<'s> for CreateRegion {
         const CODE: OpCode = 1;
         const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::Region);
 
-        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+        fn build_message<'m>(
+            self,
+            buf: &'m mut impl MessageBuffer,
+            _: &'m WlObjectStorage,
+        ) -> Message<'m>
+        where
+            's: 'm,
+        {
             Message::builder(buf).opcode(Self::CODE).new_id().build()
         }
     }

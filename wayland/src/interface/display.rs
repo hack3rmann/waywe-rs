@@ -8,7 +8,15 @@ use crate::{
 
 pub mod request {
     use super::*;
-    use crate::{interface::ObjectParent, sys::{object::{callback::WlCallback, registry::WlRegistry}, wire::OpCode, HasObjectType, ObjectType}};
+    use crate::{
+        interface::ObjectParent,
+        sys::{
+            HasObjectType, ObjectType,
+            object::{callback::WlCallback, registry::WlRegistry},
+            object_storage::WlObjectStorage,
+            wire::OpCode,
+        },
+    };
 
     /// The sync request asks the server to emit the 'done' event
     /// on the returned wl_callback object.  Since requests are
@@ -32,11 +40,18 @@ pub mod request {
         const OBJECT_TYPE: ObjectType = ObjectType::Display;
     }
 
-    impl<'b> Request<'b> for Sync {
+    impl<'s> Request<'s> for Sync {
         const CODE: OpCode = 0;
         const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::Callback);
 
-        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+        fn build_message<'m>(
+            self,
+            buf: &'m mut impl MessageBuffer,
+            _: &'m WlObjectStorage,
+        ) -> Message<'m>
+        where
+            's: 'm,
+        {
             Message::builder(buf).opcode(Self::CODE).new_id().build()
         }
     }
@@ -61,11 +76,18 @@ pub mod request {
         const OBJECT_TYPE: ObjectType = ObjectType::Registry;
     }
 
-    impl<'b> Request<'b> for GetRegistry {
+    impl<'s> Request<'s> for GetRegistry {
         const CODE: OpCode = 1;
         const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::Registry);
 
-        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+        fn build_message<'m>(
+            self,
+            buf: &'m mut impl MessageBuffer,
+            _: &'m WlObjectStorage,
+        ) -> Message<'m>
+        where
+            's: 'm,
+        {
             Message::builder(buf).opcode(Self::CODE).new_id().build()
         }
     }

@@ -4,6 +4,7 @@ pub mod request {
     use super::wl_enum::{Anchor, KeyboardInteractivity};
     use super::*;
     use crate::interface::Request;
+    use crate::sys::object_storage::WlObjectStorage;
     use crate::sys::{HasObjectType, ObjectType};
 
     /// Sets the size of the surface in surface-local coordinates. The
@@ -26,10 +27,17 @@ pub mod request {
         const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerSurfaceV1;
     }
 
-    impl<'b> Request<'b> for SetSize {
+    impl<'s> Request<'s> for SetSize {
         const CODE: OpCode = 0;
 
-        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+        fn build_message<'m>(
+            self,
+            buf: &'m mut impl MessageBuffer,
+            _: &'m WlObjectStorage,
+        ) -> Message<'m>
+        where
+            's: 'm,
+        {
             Message::builder(buf)
                 .opcode(Self::CODE)
                 .uint(self.width)
@@ -54,10 +62,17 @@ pub mod request {
         const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerSurfaceV1;
     }
 
-    impl<'b> Request<'b> for SetAnchor {
+    impl<'s> Request<'s> for SetAnchor {
         const CODE: OpCode = 1;
 
-        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+        fn build_message<'m>(
+            self,
+            buf: &'m mut impl MessageBuffer,
+            _: &'m WlObjectStorage,
+        ) -> Message<'m>
+        where
+            's: 'm,
+        {
             Message::builder(buf)
                 .opcode(Self::CODE)
                 .uint(self.anchor.bits())
@@ -106,10 +121,17 @@ pub mod request {
         const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerSurfaceV1;
     }
 
-    impl<'b> Request<'b> for SetExclusiveZone {
+    impl<'s> Request<'s> for SetExclusiveZone {
         const CODE: OpCode = 2;
 
-        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+        fn build_message<'m>(
+            self,
+            buf: &'m mut impl MessageBuffer,
+            _: &'m WlObjectStorage,
+        ) -> Message<'m>
+        where
+            's: 'm,
+        {
             Message::builder(buf)
                 .opcode(Self::CODE)
                 .int(self.zone)
@@ -136,10 +158,17 @@ pub mod request {
         const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerSurfaceV1;
     }
 
-    impl<'b> Request<'b> for SetMargine {
+    impl<'s> Request<'s> for SetMargine {
         const CODE: OpCode = 3;
 
-        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+        fn build_message<'m>(
+            self,
+            buf: &'m mut impl MessageBuffer,
+            _: &'m WlObjectStorage,
+        ) -> Message<'m>
+        where
+            's: 'm,
+        {
             Message::builder(buf)
                 .opcode(Self::CODE)
                 .int(self.top)
@@ -171,10 +200,17 @@ pub mod request {
         const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerSurfaceV1;
     }
 
-    impl<'b> Request<'b> for SetKeyboardInteractivity {
+    impl<'s> Request<'s> for SetKeyboardInteractivity {
         const CODE: OpCode = 4;
 
-        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+        fn build_message<'m>(
+            self,
+            buf: &'m mut impl MessageBuffer,
+            _: &'m WlObjectStorage,
+        ) -> Message<'m>
+        where
+            's: 'm,
+        {
             Message::builder(buf)
                 .opcode(Self::CODE)
                 .uint(self.keyboard_interactivity.into())

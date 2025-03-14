@@ -11,6 +11,7 @@ pub mod zwlr_layer_surface_v1;
 use crate::sys::{
     HasObjectType, ObjectType,
     ffi::wl_proxy_marshal_array_constructor,
+    object_storage::WlObjectStorage,
     proxy::WlProxy,
     wire::{Message, MessageBuffer, OpCode},
 };
@@ -56,7 +57,7 @@ pub trait ObjectParent {
 }
 
 /// Represents requests on Wayland's interfaces
-pub trait Request<'b>: Sized + HasObjectType {
+pub trait Request<'s>: Sized + HasObjectType {
     /// The opcode for the request
     const CODE: OpCode;
 
@@ -64,14 +65,25 @@ pub trait Request<'b>: Sized + HasObjectType {
     const OUTGOING_INTERFACE: Option<ObjectType> = None;
 
     /// Builds the message on the top of given message buffer
-    fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b>;
+    fn build_message<'m>(
+        self,
+        buf: &'m mut impl MessageBuffer,
+        storage: &'m WlObjectStorage,
+    ) -> Message<'m>
+    where
+        's: 'm;
 
     /// # Safety
     ///
     /// - `parent` proxy should match the parent interface
     /// - resulting `WlProxy` object should be owned
-    unsafe fn send(self, parent: &WlProxy, buf: &'b mut impl MessageBuffer) -> Option<WlProxy> {
-        let message = self.build_message(buf);
+    unsafe fn send(
+        self,
+        buf: &mut impl MessageBuffer,
+        storage: &WlObjectStorage,
+        parent: &WlProxy,
+    ) -> Option<WlProxy> {
+        let message = self.build_message(buf, storage);
         let interface = Self::OUTGOING_INTERFACE
             .map(|i| &raw const *i.backend_interface())
             .unwrap_or(ptr::null());

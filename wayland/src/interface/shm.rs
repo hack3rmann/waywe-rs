@@ -16,8 +16,9 @@ pub mod request {
     use super::*;
     use crate::interface::ObjectParent;
     use crate::sys::object::shm_pool::WlShmPool;
-    use crate::sys::{HasObjectType, ObjectType};
+    use crate::sys::object_storage::WlObjectStorage;
     use crate::sys::wire::MessageBuffer;
+    use crate::sys::{HasObjectType, ObjectType};
 
     /// Create a new wl_shm_pool object.
     ///
@@ -40,11 +41,18 @@ pub mod request {
         const OBJECT_TYPE: ObjectType = ObjectType::Shm;
     }
 
-    impl<'b> Request<'b> for CreatePool<'b> {
+    impl<'s> Request<'s> for CreatePool<'s> {
         const CODE: OpCode = 0;
         const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::ShmPool);
 
-        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+        fn build_message<'m>(
+            self,
+            buf: &'m mut impl MessageBuffer,
+            _: &'m WlObjectStorage,
+        ) -> Message<'m>
+        where
+            's: 'm,
+        {
             Message::builder(buf)
                 .opcode(Self::CODE)
                 .new_id()
@@ -65,10 +73,17 @@ pub mod request {
         const OBJECT_TYPE: ObjectType = ObjectType::Shm;
     }
 
-    impl<'b> Request<'b> for Release {
+    impl<'s> Request<'s> for Release {
         const CODE: OpCode = 1;
 
-        fn build_message(self, buf: &'b mut impl MessageBuffer) -> Message<'b> {
+        fn build_message<'m>(
+            self,
+            buf: &'m mut impl MessageBuffer,
+            _: &'m WlObjectStorage,
+        ) -> Message<'m>
+        where
+            's: 'm,
+        {
             Message::builder(buf).opcode(Self::CODE).build()
         }
     }
