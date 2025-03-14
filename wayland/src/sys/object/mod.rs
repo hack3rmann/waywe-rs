@@ -12,8 +12,6 @@ pub mod viewporter;
 pub mod zwlr_layer_shell_v1;
 pub mod zwlr_layer_surface_v1;
 
-use wayland_sys::wl_proxy_get_id;
-
 use super::{
     HasObjectType,
     ffi::{wl_argument, wl_message, wl_proxy_add_dispatcher, wl_proxy_get_user_data},
@@ -37,14 +35,16 @@ use std::{
     ptr::{self, NonNull},
     slice,
 };
+use wayland_sys::wl_proxy_get_id;
 
 pub trait Dispatch {
     fn dispatch(&mut self, _storage: Pin<&mut WlObjectStorage<'_>>, _message: Message<'_>) {}
 }
 static_assertions::assert_obj_safe!(Dispatch);
 
-pub type WlDispatchFn<T> = fn(&mut T, Pin<&mut WlObjectStorage<'_>>, Message<'_>);
+pub type WlDispatchFn<T> = unsafe fn(&mut T, Pin<&mut WlObjectStorage<'_>>, Message<'_>);
 
+#[repr(C)]
 pub struct WlDispatchData<T> {
     pub dispatch: WlDispatchFn<T>,
     pub storage: Option<NonNull<WlObjectStorage<'static>>>,
@@ -72,11 +72,11 @@ unsafe extern "C" fn dispatch_raw<T>(
             return -1;
         };
 
-        let Some(storage_ptr) = data.storage else {
+        let Some(mut storage_ptr) = data.storage.map(|p| p.cast::<WlObjectStorage>()) else {
             return -1;
         };
 
-        let storage = unsafe { Pin::new_unchecked(storage_ptr.cast::<WlObjectStorage>().as_mut()) };
+        let storage = unsafe { Pin::new_unchecked(storage_ptr.as_mut()) };
 
         let Ok(opcode) = u16::try_from(opcode) else {
             return -1;
@@ -94,7 +94,7 @@ unsafe extern "C" fn dispatch_raw<T>(
 
         let message = Message { opcode, arguments };
 
-        storage.with_object_data_acquired(id, |storage| {
+        storage.with_object_data_acquired(id, |storage| unsafe {
             (data.dispatch)(&mut data.data, storage, message);
         });
 
@@ -449,12 +449,18 @@ mod tests {
         mem,
         os::fd::{AsFd as _, OwnedFd},
         pin::pin,
-        ptr, slice,
+        ptr, slice, thread,
+        time::Duration,
     };
 
     unsafe fn connect_display() -> WlDisplay {
         let wayland_sock = unsafe { connect_wayland_socket().unwrap() };
         WlDisplay::connect_to_fd(wayland_sock).unwrap()
+    }
+
+    #[test]
+    fn just_connect_displat() {
+        _ = unsafe { connect_display() };
     }
 
     #[test]
@@ -472,7 +478,7 @@ mod tests {
             storage
                 .object(registry)
                 .interfaces
-                .contains_key(&ObjectType::from_interface_name("wl_compositor").unwrap())
+                .contains_key(&ObjectType::Compositor)
         );
     }
 
@@ -687,17 +693,17 @@ mod tests {
         surface.request(
             &mut buf,
             &storage,
-            WlSurfaceAttachRequest {
-                buffer: Some(buffer),
-                x: 0,
-                y: 0,
-            },
+            WlSurfaceSetBufferScaleRequest { scale: 1 },
         );
 
         surface.request(
             &mut buf,
             &storage,
-            WlSurfaceSetBufferScaleRequest { scale: 1 },
+            WlSurfaceAttachRequest {
+                buffer: Some(buffer),
+                x: 0,
+                y: 0,
+            },
         );
 
         surface.request(
@@ -714,5 +720,7 @@ mod tests {
         surface.request(&mut buf, &storage, WlSurfaceCommitRequest);
 
         display.sync_all(storage.as_mut());
+
+        thread::sleep(Duration::from_millis(200));
     }
 }
