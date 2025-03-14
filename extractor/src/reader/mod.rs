@@ -1,0 +1,249 @@
+// TODO(ArnoDarkrose): maybe make every new reader a deref into the previous step
+// to avoid multiple similar methods and fields
+
+use std::io;
+use transmute_extra::transmute_vec;
+
+pub mod stages;
+
+#[derive(Debug, thiserror::Error)]
+pub enum TexExtractError {
+    #[error(transparent)]
+    Io(#[from] io::Error),
+
+    #[error("encountered unkown magic in the file")]
+    UnknownMagic,
+
+    #[error("unknown tex_format in the file")]
+    UnknownTexFormat,
+
+    #[error("invalid tex_flags in the file")]
+    InvalidTexFlags,
+
+    #[error(transparent)]
+    Utf8(#[from] std::str::Utf8Error),
+
+    #[error("failed to transmute Vec<u8> to Vec<u32>, input data is likely corrupt")]
+    TransmuteError,
+}
+
+#[derive(Default, Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub enum TexFormat {
+    #[default]
+    Rgba8888 = 0,
+    Dxt5 = 4,
+    Dxt3 = 6,
+    Dxt1 = 7,
+    Rg88 = 8,
+    R8 = 9,
+}
+
+impl TryFrom<i32> for TexFormat {
+    type Error = TexExtractError;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        Ok(match value {
+            0 => Self::Rgba8888,
+            4 => Self::Dxt5,
+            6 => Self::Dxt3,
+            7 => Self::Dxt1,
+            8 => Self::Rg88,
+            9 => Self::R8,
+            _ => return Err(TexExtractError::UnknownTexFormat),
+        })
+    }
+}
+
+bitflags::bitflags! {
+    #[derive(Default, Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+    pub struct TexFlags: u8 {
+        const None = 0b0000_0000;
+        const NoInterpolation = 0b0000_0001;
+        const ClampUVs = 0b0000_0010;
+        const IsGif = 0b0000_0100;
+        const Unk3 = 0b0000_1000;
+        const Unk4 = 0b0001_0000;
+        const IsVideoTexture = 0b0010_0000;
+        const Unk6 = 0b0100_0000;
+        const Unk7 = 0b1000_0000;
+    }
+}
+
+#[derive(Default, Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub struct HeaderMeta {
+    pub format: TexFormat,
+    pub flags: TexFlags,
+    pub texture_width: i32,
+    pub texture_height: i32,
+    pub image_width: i32,
+    pub image_height: i32,
+    pub unk_int0: i32,
+}
+
+#[derive(Default, Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub enum ImageContainerVersion {
+    #[default]
+    Texb0003,
+    Texb0002,
+    Texb0001,
+}
+
+#[derive(Default, Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub enum FreeImageFormat {
+    #[default]
+    Unknow = -1,
+    Bmp = 0,
+    Ico = 1,
+    Jpeg = 2,
+    Jng = 3,
+    Koala = 4,
+    // TODO(ArnoDarkrose): For some reason this has the same number as
+    // Lbm in the original library
+    Iff = 5,
+    Mng = 6,
+    Pbm = 7,
+    PbmRaw = 8,
+    Pcd = 9,
+    Pcx = 10,
+    Pgm = 11,
+    PgmRaw = 12,
+    Png = 13,
+    Ppm = 14,
+    PpmRaw = 15,
+    Ras = 16,
+    Targa = 17,
+    Tiff = 18,
+    Wbmp = 19,
+    Psd = 20,
+    Cut = 21,
+    Xbm = 22,
+    Xpm = 23,
+    Dds = 24,
+    Gif = 25,
+    Hdr = 26,
+    Faxg3 = 27,
+    Sgi = 28,
+    Exr = 29,
+    J2k = 30,
+    Jp2 = 31,
+    Pfm = 32,
+    Pict = 33,
+    Raw = 34,
+    Lbm,
+}
+
+impl From<i32> for FreeImageFormat {
+    fn from(value: i32) -> Self {
+        match value {
+            0 => FreeImageFormat::Bmp,
+            1 => FreeImageFormat::Ico,
+            2 => FreeImageFormat::Jpeg,
+            3 => FreeImageFormat::Jng,
+            4 => FreeImageFormat::Koala,
+            5 => FreeImageFormat::Iff,
+            6 => FreeImageFormat::Mng,
+            7 => FreeImageFormat::Pbm,
+            8 => FreeImageFormat::PbmRaw,
+            9 => FreeImageFormat::Pcd,
+            10 => FreeImageFormat::Pcx,
+            11 => FreeImageFormat::Pgm,
+            12 => FreeImageFormat::PgmRaw,
+            13 => FreeImageFormat::Png,
+            14 => FreeImageFormat::Ppm,
+            15 => FreeImageFormat::PpmRaw,
+            16 => FreeImageFormat::Ras,
+            17 => FreeImageFormat::Targa,
+            18 => FreeImageFormat::Tiff,
+            19 => FreeImageFormat::Wbmp,
+            20 => FreeImageFormat::Psd,
+            21 => FreeImageFormat::Cut,
+            22 => FreeImageFormat::Xbm,
+            23 => FreeImageFormat::Xpm,
+            24 => FreeImageFormat::Dds,
+            25 => FreeImageFormat::Gif,
+            26 => FreeImageFormat::Hdr,
+            27 => FreeImageFormat::Faxg3,
+            28 => FreeImageFormat::Sgi,
+            29 => FreeImageFormat::Exr,
+            30 => FreeImageFormat::J2k,
+            31 => FreeImageFormat::Jp2,
+            32 => FreeImageFormat::Pfm,
+            33 => FreeImageFormat::Pict,
+            34 => FreeImageFormat::Raw,
+            _ => FreeImageFormat::Unknow,
+        }
+    }
+}
+
+#[derive(Default, Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub enum GifContainerVersion {
+    Texs0001,
+    Texs0002,
+    #[default]
+    Texs0003,
+}
+
+#[derive(Default, Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub struct ImageContainerMeta {
+    pub version: ImageContainerVersion,
+    pub image_count: i32,
+    pub image_format: Option<FreeImageFormat>,
+}
+
+#[derive(Default, Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub struct GifContainerMeta {
+    pub version: GifContainerVersion,
+    pub frame_count: i32,
+}
+
+#[derive(Default, Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub struct Mipmap {
+    width: i32,
+    height: i32,
+    data: Vec<u32>,
+    lz4_compressed: bool,
+    // makes sense only for versions 2 and 3
+    decompressed_bytes_count: i32,
+}
+
+#[derive(Default, Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub struct TexImage {
+    mipmaps: Vec<Mipmap>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
+pub struct TexGifFrame {
+    image_id: i32,
+    frame_time: f32,
+    x: f32,
+    y: f32,
+    width: f32,
+    width_y: f32,
+    height_x: f32,
+    height: f32,
+}
+
+/// Reads exactly `n` bytes from `src` into an initialized buffer
+/// and returns it as a [`Vec`]
+pub fn read_into_uninit(src: &mut impl std::io::Read, n: usize) -> std::io::Result<Vec<u8>> {
+    let mut data = Box::new_uninit_slice(n);
+    let ptr = data.as_mut_ptr().cast();
+
+    // Safety
+    //
+    // - `ptr` is non-null and aligned as it was allocated via a call to `Box::new_uninit_slice`
+    // - `ptr` is allocated within a single object via a call to `Box::new_uinit_slice`
+    // - `ptr` points to n elements as this exact value was passed to `new_uninit_slice`
+    // - there are no other pointers that access this memory while this slice is being operated on
+    // - `Box::new_uninit_slice` wouldn't let to create an allocation that is more than isize::MAX bytes
+    let dest_slice = unsafe { std::slice::from_raw_parts_mut(ptr, n) };
+
+    src.read_exact(dest_slice)?;
+
+    // Safety
+    //
+    // The contents of the slice were initialized above
+    let data = unsafe { data.assume_init() };
+
+    Ok(Vec::from(data))
+}

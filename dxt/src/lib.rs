@@ -1,4 +1,3 @@
-use rayon::iter::IntoParallelIterator;
 use rayon::prelude::*;
 use safe_transmute::{guard::SingleManyGuard, transmute_many, transmute_one_to_bytes};
 
@@ -19,7 +18,7 @@ pub enum DxtFormat {
 ///
 /// - Send and Sync constraints are ensured by the implementation, so that
 ///   access to any vector element is exclusive at a time
-/// - All threads that get this pointer finish their work after the main thread
+/// - All threads that get this pointer finish their work before the main thread
 ///   that contains the vector itself
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, PartialOrd, Ord)]
 struct SendableU32MutPointer(*mut u32);

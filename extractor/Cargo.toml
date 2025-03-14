@@ -6,3 +6,5 @@ edition.workspace = true
 [dependencies]
 safe-transmute.workspace = true
 thiserror.workspace = true
+bitflags.workspace = true
+transmute-extra = {path = "../transmute-extra"}
