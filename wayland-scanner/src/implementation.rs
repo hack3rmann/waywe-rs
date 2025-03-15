@@ -235,7 +235,7 @@ pub fn message_to_wl_message(message: &Message, index: usize, ty: MessageType) -
 
                 if !REF.is_empty() {
                     // Safety: transmuting `*const Option<&T>` to `*const *const T`
-                    // Note transmutes to `ptr::null()`
+                    // None transmutes to `ptr::null()`
                     unsafe {
                         ::std::mem::transmute::<
                             *const Option<&::wayland_sys::wl_interface>,

@@ -12,12 +12,12 @@ pub mod zwlr_layer_surface_v1;
 
 use crate::sys::{
     HasObjectType, ObjectType,
-    ffi::wl_proxy_marshal_array_constructor,
     object_storage::WlObjectStorage,
     proxy::WlProxy,
     wire::{Message, MessageBuffer, OpCode},
 };
 use std::ptr::{self, NonNull};
+use wayland_sys::wl_proxy_marshal_array_constructor;
 
 pub use {
     callback::event::Done as WlCallbackDoneEvent,
@@ -58,11 +58,11 @@ pub use {
     zwlr_layer_surface_v1::{
         event::Configure as LayerSurfaceConfigureEvent,
         request::{
+            AckConfigure as LayerSurfaceAckConfigureRequest,
             SetAnchor as LayerSurfaceSetAnchorRequest,
             SetExclusiveZone as LayerSurfaceSetExclusiveZoneRequest,
             SetKeyboardInteractivity as LayerSurfaceSetKeyboardInteractivityRequest,
             SetMargin as LayerSurfaceSetMarginRequest, SetSize as LayerSurfaceSetSizeRequest,
-            AckConfigure as LayerSurfaceAckConfigureRequest,
         },
     },
 };

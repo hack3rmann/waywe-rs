@@ -1,21 +1,24 @@
 use super::{
-    ffi::{wl_display, wl_display_connect_to_fd, wl_display_disconnect},
     object::{WlObject, WlObjectHandle, registry::WlRegistry},
     object_storage::WlObjectStorage,
     proxy::WlProxy,
     wire::MessageBuffer,
 };
-use crate::{
-    interface::{Request, WlDisplayGetRegistryRequest},
-    sys::ffi::wl_display_roundtrip,
-};
+use crate::interface::{Request, WlDisplayGetRegistryRequest};
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, RawDisplayHandle, WaylandDisplayHandle,
 };
 use std::{
-    any, fmt, mem::ManuallyDrop, os::fd::{FromRawFd, IntoRawFd, OwnedFd}, pin::Pin, ptr::NonNull
+    any, fmt,
+    mem::ManuallyDrop,
+    os::fd::{FromRawFd, IntoRawFd, OwnedFd},
+    pin::Pin,
+    ptr::NonNull,
 };
 use thiserror::Error;
+use wayland_sys::{
+    wl_display, wl_display_connect_to_fd, wl_display_disconnect, wl_display_roundtrip,
+};
 
 /// A handle to the libwayland backend
 pub struct WlDisplay {

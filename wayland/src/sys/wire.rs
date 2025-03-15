@@ -1,14 +1,15 @@
 use super::{
     InterfaceMessageArgument,
-    ffi::{WlArgument, wl_fixed_t, wl_object, wl_proxy},
     proxy::{WlProxy, WlProxyQuery},
 };
 use smallvec::SmallVec;
 use std::{
     ffi::CStr,
+    mem::MaybeUninit,
     os::fd::{AsRawFd, BorrowedFd, FromRawFd as _, OwnedFd},
     ptr,
 };
+use wayland_sys::{WlArgument, wl_fixed_t, wl_object, wl_proxy};
 
 /// The code of the performing operation on the interface
 pub type OpCode = u16;
@@ -75,6 +76,71 @@ unsafe impl<const N: usize> MessageBuffer for SmallVecMessageBuffer<N> {
 
 pub type VecMessageBuffer = Vec<WlArgument>;
 pub type SmallVecMessageBuffer<const N: usize> = SmallVec<[WlArgument; N]>;
+
+/// Message buffer constrained to the stack.
+#[derive(Clone)]
+pub struct StackMessageBuffer {
+    len: usize,
+    buf: [MaybeUninit<WlArgument>; StackMessageBuffer::CAPACITY],
+}
+
+impl StackMessageBuffer {
+    pub const CAPACITY: usize = 20;
+
+    /// Clears the buffer
+    pub const fn clear(&mut self) {
+        self.len = 0;
+    }
+
+    /// Adds `argument` to the end of the buffer
+    pub const fn push(&mut self, argument: WlArgument) {
+        assert!(
+            self.len < Self::CAPACITY,
+            "failed to push to already filled `StackMessageBuffer`",
+        );
+
+        self.buf[self.len].write(argument);
+        self.len += 1;
+    }
+
+    /// Buffer length (in elements)
+    pub const fn len(&self) -> usize {
+        self.len
+    }
+
+    /// Checks buffer length is zero
+    pub const fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// Buffer as a slice of arguments
+    pub const fn as_slice(&self) -> &[WlArgument] {
+        let ptr = (&raw const self.buf).cast::<WlArgument>();
+        unsafe { std::slice::from_raw_parts(ptr, self.len) }
+    }
+}
+
+unsafe impl MessageBuffer for StackMessageBuffer {
+    fn clear(&mut self) {
+        Self::clear(self);
+    }
+
+    fn push(&mut self, argument: WlArgument) {
+        Self::push(self, argument);
+    }
+
+    fn len(&self) -> usize {
+        Self::len(self)
+    }
+
+    fn is_empty(&self) -> bool {
+        Self::is_empty(self)
+    }
+
+    fn as_slice(&self) -> &[WlArgument] {
+        Self::as_slice(self)
+    }
+}
 
 /// Represents the message on the libwayland backend
 #[derive(Clone, Copy)]

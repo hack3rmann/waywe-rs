@@ -1,9 +1,8 @@
-use super::ffi::{wl_proxy, wl_proxy_destroy, wl_proxy_get_class, wl_proxy_get_id};
+use wayland_sys::{wl_proxy, wl_proxy_destroy, wl_proxy_get_class, wl_proxy_get_id, wl_proxy_get_user_data, wl_proxy_set_user_data};
 use crate::object::ObjectId;
 use core::fmt;
 use std::{
-    ffi::CStr,
-    mem::ManuallyDrop,
+    ffi::{c_void, CStr},
     ptr::NonNull,
     sync::atomic::{
         AtomicUsize,
@@ -29,14 +28,17 @@ impl WlProxy {
         }
     }
 
-    pub fn as_raw(&self) -> NonNull<wl_proxy> {
+    pub const fn as_raw(&self) -> NonNull<wl_proxy> {
         self.raw
     }
 
-    pub fn into_raw(self) -> NonNull<wl_proxy> {
-        ManuallyDrop::new(self).raw
+    pub const fn into_raw(self) -> NonNull<wl_proxy> {
+        let raw = self.raw;
+        std::mem::forget(self);
+        raw
     }
 
+    /// The id for the proxy object
     pub fn id(&self) -> ObjectId {
         // Safety: calling this on a valid object is safe
         let raw = unsafe { wl_proxy_get_id(self.raw.as_ptr()) };
@@ -46,6 +48,7 @@ impl WlProxy {
         unsafe { ObjectId::try_from(raw).unwrap_unchecked() }
     }
 
+    /// A name of the interface which proxy implements
     pub fn interface_name(&self) -> &str {
         // Safety: calling this on a valid object is safe
         let ptr = unsafe { wl_proxy_get_class(self.raw.as_ptr()) };
@@ -68,6 +71,23 @@ impl WlProxy {
         // Safety: interface name obtained from libwayland contains
         // only valid ASCII characters
         unsafe { std::str::from_utf8_unchecked(string_bytes) }
+    }
+
+    /// Reads a user data pointer from [`wl_proxy`]
+    pub fn get_user_data(&self) -> *mut c_void {
+        // Safety: calling this on a valid object is safe
+        unsafe { wl_proxy_get_user_data(self.as_raw().as_ptr()) }
+    }
+
+    /// Sets user data pointer for this [`wl_proxy`]
+    ///
+    /// # Safety
+    ///
+    /// The caller should uphold all the invariants for the previous value
+    /// written to this pointer before.
+    pub unsafe fn set_user_data(&mut self, data: *mut c_void) {
+        // Safety: calling this on a valid object is safe
+        unsafe { wl_proxy_set_user_data(self.as_raw().as_ptr(), data) };
     }
 }
 

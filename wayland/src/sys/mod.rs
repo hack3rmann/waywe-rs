@@ -1,5 +1,4 @@
 pub mod display;
-pub mod ffi;
 pub mod object;
 pub mod object_storage;
 pub mod proxy;
@@ -11,7 +10,7 @@ pub mod protocols {
     include_wl_interfaces!("wayland-protocols/wayland.xml");
 
     include_wl_interfaces!("wayland-protocols/stable/xdg-shell/xdg-shell.xml");
-    
+
     include_wl_interfaces!("wayland-protocols/stable/viewporter/viewporter.xml");
 
     include_wl_interfaces!(
@@ -21,9 +20,9 @@ pub mod protocols {
 
 use crate::object::ObjectId;
 use core::fmt;
-use ffi::wl_interface;
 use std::{ffi::CStr, num::NonZeroU32};
 use wayland_sys::Interface as FfiInterface;
+use wayland_sys::wl_interface;
 
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
 pub enum ObjectType {
@@ -119,6 +118,7 @@ impl fmt::Display for ObjectType {
     }
 }
 
+/// Assocciated `ObjectType`
 pub trait HasObjectType {
     const OBJECT_TYPE: ObjectType;
 }
@@ -126,15 +126,17 @@ pub trait HasObjectType {
 /// The type and the integer name for the global object.
 #[derive(Clone, Debug, PartialEq, Copy, Eq, PartialOrd, Ord, Hash)]
 pub struct InterfaceMessageArgument {
-    pub(crate) object_type: ObjectType,
-    pub(crate) name: ObjectId,
+    pub object_type: ObjectType,
+    pub name: ObjectId,
 }
 
 impl InterfaceMessageArgument {
+    /// Interface name
     pub const fn interface(self) -> &'static CStr {
         self.object_type.backend_ffi_interface().name
     }
 
+    /// Minimal version supported by this crate
     pub const fn min_supported_version(self) -> NonZeroU32 {
         match self.object_type {
             ObjectType::Shm => const { NonZeroU32::new(1).unwrap() },
@@ -142,10 +144,12 @@ impl InterfaceMessageArgument {
         }
     }
 
+    /// Version stored in the interface
     pub const fn version(self) -> NonZeroU32 {
         self.object_type.backend_ffi_interface().version
     }
 
+    /// Integer name for this interface
     pub const fn name(self) -> ObjectId {
         self.name
     }
