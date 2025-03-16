@@ -1,7 +1,7 @@
 use super::{
     display::WlDisplay,
     object::{dispatch::Dispatch, WlDynObject, WlObject, WlObjectHandle},
-    proxy::WlProxy,
+    proxy::WlProxy, HasObjectType,
 };
 use crate::object::ObjectId;
 use std::{collections::HashMap, marker::PhantomData, pin::Pin};
@@ -53,7 +53,7 @@ impl WlObjectStorage<'_> {
     /// # Panic
     ///
     /// Panics if the storage already contains object with the same id.
-    pub fn insert<T: Dispatch>(
+    pub fn insert<T: Dispatch + HasObjectType>(
         mut self: Pin<&mut Self>,
         mut object: WlObject<T>,
     ) -> WlObjectHandle<T> {

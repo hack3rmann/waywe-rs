@@ -1,6 +1,6 @@
 use crate::{
     object::ObjectId,
-    sys::{object_storage::WlObjectStorage, wire::Message},
+    sys::{object_storage::WlObjectStorage, wire::{Message, OpCode}, HasObjectType},
 };
 use std::{
     ffi::{CStr, c_int, c_void},
@@ -28,13 +28,19 @@ pub(crate) struct WlDispatchData<T> {
     pub data: T,
 }
 
-pub(crate) unsafe extern "C" fn dispatch_raw<T>(
+pub(crate) unsafe extern "C" fn dispatch_raw<T: HasObjectType>(
     _impl: *const c_void,
     proxy: *mut c_void,
     opcode: u32,
     message: *const wl_message,
     arguments: *mut wl_argument,
 ) -> c_int {
+    tracing::info!(
+        "libwayland event dispatch: {}::{}",
+        T::OBJECT_TYPE.interface_name(),
+        T::OBJECT_TYPE.event_name(opcode as OpCode),
+    );
+
     std::panic::catch_unwind(|| {
         // Safety: `proxy` in libwayland dispatcher is always valid
         let id = unsafe { ObjectId::try_from(wl_proxy_get_id(proxy)).unwrap_unchecked() };

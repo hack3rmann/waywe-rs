@@ -24,7 +24,7 @@ async fn use_wgpu_to_draw_anything() {
     display.sync_all(storage.as_mut());
 
     let compositor =
-        WlRegistry::bind_default::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
+        WlRegistry::bind::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
 
     let surface = compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurface);
 

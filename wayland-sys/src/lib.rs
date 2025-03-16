@@ -503,6 +503,15 @@ pub struct Interface<'s> {
     pub events: &'s [InterfaceMessage<'s>],
 }
 
+impl<'s> Interface<'s> {
+    /// # Safety
+    ///
+    /// Caller ensures the interface name is a valid UTF-8 string
+    pub const unsafe fn name_str_unchecked(&self) -> &'s str {
+        unsafe { std::str::from_utf8_unchecked(self.name.to_bytes()) }
+    }
+}
+
 #[derive(Clone, Default, Copy)]
 pub struct InterfaceWlMessages<'s> {
     pub methods: &'s [wl_message],
@@ -525,6 +534,22 @@ pub struct InterfaceMessage<'s> {
     pub outgoing_interfaces: &'s [OutgoingInterface<'s>],
 }
 static_assertions::assert_impl_all!(InterfaceMessage<'static>: Sync);
+
+impl<'s> InterfaceMessage<'s> {
+    /// # Safety
+    ///
+    /// Caller ensures the interface name is a valid UTF-8 string
+    pub const unsafe fn name_str_unchecked(&self) -> &'s str {
+        unsafe { std::str::from_utf8_unchecked(self.name.to_bytes()) }
+    }
+
+    /// # Safety
+    ///
+    /// Caller ensures the interface name is a valid UTF-8 string
+    pub const unsafe fn signature_str_unchecked(&self) -> &'s str {
+        unsafe { std::str::from_utf8_unchecked(self.signature.to_bytes()) }
+    }
+}
 
 pub fn count_arguments_from_message_signature(signature: &CStr) -> usize {
     signature

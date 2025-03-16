@@ -1,5 +1,3 @@
-use std::pin::Pin;
-
 use super::{Dispatch, FromProxy, WlObject, WlObjectHandle};
 use crate::{
     interface::{Event as _, WlRegistryBindRequest, WlRegistryGlobalEvent},
@@ -12,6 +10,7 @@ use crate::{
     },
 };
 use fxhash::FxHashMap;
+use std::pin::Pin;
 
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
 pub struct WlRegistryGlobalInfo {
@@ -25,14 +24,14 @@ pub struct WlRegistry {
 }
 
 impl WlRegistry {
-    pub fn bind<T>(
+    pub fn bind_value<T>(
         buf: &mut impl MessageBuffer,
         storage: Pin<&mut WlObjectStorage>,
         registry: WlObjectHandle<WlRegistry>,
         object: T,
     ) -> Option<WlObjectHandle<T>>
     where
-        T: HasObjectType + Dispatch + 'static,
+        T: HasObjectType + Dispatch,
     {
         let proxy =
             unsafe { WlRegistryBindRequest::<T>::new().send(storage.get_object(registry)?, buf)? };
@@ -40,15 +39,20 @@ impl WlRegistry {
         Some(storage.insert(WlObject::new(proxy, object)))
     }
 
-    pub fn bind_default<T>(
+    pub fn bind<T>(
         buf: &mut impl MessageBuffer,
         storage: Pin<&mut WlObjectStorage>,
         registry: WlObjectHandle<WlRegistry>,
     ) -> Option<WlObjectHandle<T>>
     where
-        T: HasObjectType + Dispatch + Default + 'static,
+        T: HasObjectType + Dispatch + FromProxy,
     {
-        Self::bind(buf, storage, registry, T::default())
+        let proxy =
+            unsafe { WlRegistryBindRequest::<T>::new().send(storage.get_object(registry)?, buf)? };
+
+        let data = T::from_proxy(&proxy);
+
+        Some(storage.insert(WlObject::new(proxy, data)))
     }
 
     pub fn name_of(&self, object_type: ObjectType) -> Option<ObjectId> {
@@ -60,6 +64,10 @@ impl FromProxy for WlRegistry {
     fn from_proxy(_: &WlProxy) -> Self {
         Self::default()
     }
+}
+
+impl HasObjectType for WlRegistry {
+    const OBJECT_TYPE: ObjectType = ObjectType::Registry;
 }
 
 impl Dispatch for WlRegistry {

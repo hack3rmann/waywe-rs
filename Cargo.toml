@@ -12,3 +12,4 @@ wayland-sys = { path = "wayland-sys" }
 tracing = "0.1.41"
 thiserror = "2.0.11"
 static_assertions = "1.1.0"
+tracing-test = "0.2.5"

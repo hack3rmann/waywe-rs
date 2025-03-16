@@ -222,7 +222,7 @@ pub struct WlObject<T> {
     pub(crate) _p: PhantomData<T>,
 }
 
-impl<T: Dispatch> WlObject<T> {
+impl<T: Dispatch + HasObjectType> WlObject<T> {
     pub fn new(proxy: WlProxy, data: T) -> Self {
         let dispatch_data = Box::new(WlDispatchData {
             dispatch: T::dispatch,
@@ -374,6 +374,7 @@ mod tests {
         ptr, slice, thread,
         time::Duration,
     };
+    use tracing_test::traced_test;
 
     unsafe fn connect_display() -> WlDisplay {
         let wayland_sock = unsafe { connect_wayland_socket().unwrap() };
@@ -416,7 +417,7 @@ mod tests {
         display.sync_all(storage.as_mut());
 
         let compositor =
-            WlRegistry::bind_default::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
+            WlRegistry::bind::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
 
         let surface =
             compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurface);
@@ -439,8 +440,7 @@ mod tests {
         display.sync_all(storage.as_mut());
 
         let _layer_shell =
-            WlRegistry::bind_default::<WlrLayerShellV1>(&mut buf, storage.as_mut(), registry)
-                .unwrap();
+            WlRegistry::bind::<WlrLayerShellV1>(&mut buf, storage.as_mut(), registry).unwrap();
 
         display.sync_all(storage.as_mut());
     }
@@ -464,6 +464,7 @@ mod tests {
     }
 
     #[test]
+    #[traced_test]
     fn white_rect() {
         let mut buf = SmallVecMessageBuffer::<8>::new();
 
@@ -474,13 +475,13 @@ mod tests {
 
         display.sync_all(storage.as_mut());
 
-        let shm = WlRegistry::bind_default::<WlShm>(&mut buf, storage.as_mut(), registry).unwrap();
+        let shm = WlRegistry::bind::<WlShm>(&mut buf, storage.as_mut(), registry).unwrap();
 
         let viewporter =
-            WlRegistry::bind_default::<WpViewporter>(&mut buf, storage.as_mut(), registry).unwrap();
+            WlRegistry::bind::<WpViewporter>(&mut buf, storage.as_mut(), registry).unwrap();
 
         let compositor =
-            WlRegistry::bind_default::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
+            WlRegistry::bind::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
 
         let surface =
             compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurface);
@@ -503,12 +504,10 @@ mod tests {
 
         region.request(&mut buf, &storage, WlRegionDestroyRequest);
 
-        let output =
-            WlRegistry::bind_default::<WlOutput>(&mut buf, storage.as_mut(), registry).unwrap();
+        let output = WlRegistry::bind::<WlOutput>(&mut buf, storage.as_mut(), registry).unwrap();
 
         let layer_shell =
-            WlRegistry::bind_default::<WlrLayerShellV1>(&mut buf, storage.as_mut(), registry)
-                .unwrap();
+            WlRegistry::bind::<WlrLayerShellV1>(&mut buf, storage.as_mut(), registry).unwrap();
 
         let layer_surface = layer_shell.create_object(
             &mut buf,
