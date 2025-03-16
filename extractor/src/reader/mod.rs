@@ -1,16 +1,19 @@
 // TODO(ArnoDarkrose): maybe make every new reader a deref into the previous step
 // to avoid multiple similar methods and fields
 
-use std::io;
+use std::io::{self, Read};
 use transmute_extra::transmute_vec;
 
 pub mod stages;
+
+pub use stages::*;
 
 #[derive(Debug, thiserror::Error)]
 pub enum TexExtractError {
     #[error(transparent)]
     Io(#[from] io::Error),
 
+    // TODO(ArnoDarkrose): add String that shows that magic
     #[error("encountered unkown magic in the file")]
     UnknownMagic,
 
@@ -25,6 +28,9 @@ pub enum TexExtractError {
 
     #[error("failed to transmute Vec<u8> to Vec<u32>, input data is likely corrupt")]
     TransmuteError,
+
+    #[error(transparent)]
+    IntoString(#[from] std::ffi::IntoStringError),
 }
 
 #[derive(Default, Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
@@ -83,6 +89,7 @@ pub struct HeaderMeta {
 #[derive(Default, Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub enum ImageContainerVersion {
     #[default]
+    Texb0004,
     Texb0003,
     Texb0002,
     Texb0001,
@@ -129,6 +136,7 @@ pub enum FreeImageFormat {
     Pfm = 32,
     Pict = 33,
     Raw = 34,
+    Mp4 = 35,
     Lbm,
 }
 
@@ -170,7 +178,132 @@ impl From<i32> for FreeImageFormat {
             32 => FreeImageFormat::Pfm,
             33 => FreeImageFormat::Pict,
             34 => FreeImageFormat::Raw,
+            35 => FreeImageFormat::Mp4,
             _ => FreeImageFormat::Unknow,
+        }
+    }
+}
+
+#[derive(Default, Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub enum MipmapFormat {
+    #[default]
+    Invalid = 0,
+    Rgba8888 = 1,
+    R8 = 2,
+    Rg88 = 3,
+    CompressedDxt5,
+    CompressedDxt3,
+    CompressedDxt1,
+    VideoMp4,
+    ImageBmp = 1000,
+    ImageIco,
+    ImageJpeg,
+    ImageJng,
+    ImageKoala,
+    ImageLbm,
+    ImageIff,
+    ImageMng,
+    ImagePbm,
+    ImagePbmRaw,
+    ImagePcd,
+    ImagePcx,
+    ImagePgm,
+    ImagePgmRaw,
+    ImagePng,
+    ImagePpm,
+    ImagePpmRaw,
+    ImageRas,
+    ImageTarga,
+    ImageTiff,
+    ImageWbmp,
+    ImagePsd,
+    ImageCut,
+    ImageXbm,
+    ImageXpm,
+    ImageDds,
+    ImageGif,
+    ImageHdr,
+    ImageFaxg3,
+    ImageSgi,
+    ImageExr,
+    ImageJ2k,
+    ImageJp2,
+    ImagePfm,
+    ImagePict,
+    ImageRaw,
+}
+
+impl MipmapFormat {
+    pub fn from_image_and_tex(
+        image_format: Option<FreeImageFormat>,
+        tex_format: TexFormat,
+    ) -> Self {
+        if let Some(format) = image_format {
+            if format != FreeImageFormat::Unknow {
+                return Self::from(format);
+            }
+        }
+
+        Self::from(tex_format)
+    }
+}
+
+impl From<FreeImageFormat> for MipmapFormat {
+    fn from(value: FreeImageFormat) -> Self {
+        match value {
+            FreeImageFormat::Unknow => {
+                panic!("unexpected ImageFormat::Unknown when coverting to MipmapFormat")
+            }
+            FreeImageFormat::Bmp => MipmapFormat::ImageBmp,
+            FreeImageFormat::Ico => MipmapFormat::ImageIco,
+            FreeImageFormat::Jpeg => MipmapFormat::ImageJpeg,
+            FreeImageFormat::Jng => MipmapFormat::ImageJng,
+            FreeImageFormat::Koala => MipmapFormat::ImageKoala,
+            FreeImageFormat::Iff => MipmapFormat::ImageLbm,
+            FreeImageFormat::Mng => MipmapFormat::ImageMng,
+            FreeImageFormat::Pbm => MipmapFormat::ImagePbm,
+            FreeImageFormat::PbmRaw => MipmapFormat::ImagePbmRaw,
+            FreeImageFormat::Pcd => MipmapFormat::ImagePcd,
+            FreeImageFormat::Pcx => MipmapFormat::ImagePcx,
+            FreeImageFormat::Pgm => MipmapFormat::ImagePcx,
+            FreeImageFormat::PgmRaw => MipmapFormat::ImagePgmRaw,
+            FreeImageFormat::Png => MipmapFormat::ImagePng,
+            FreeImageFormat::Ppm => MipmapFormat::ImagePpm,
+            FreeImageFormat::PpmRaw => MipmapFormat::ImagePpmRaw,
+            FreeImageFormat::Ras => MipmapFormat::ImageRas,
+            FreeImageFormat::Targa => MipmapFormat::ImageTarga,
+            FreeImageFormat::Tiff => MipmapFormat::ImageTiff,
+            FreeImageFormat::Wbmp => MipmapFormat::ImageWbmp,
+            FreeImageFormat::Psd => MipmapFormat::ImagePsd,
+            FreeImageFormat::Cut => MipmapFormat::ImageCut,
+            FreeImageFormat::Xbm => MipmapFormat::ImageXbm,
+            FreeImageFormat::Xpm => MipmapFormat::ImageXpm,
+            FreeImageFormat::Dds => MipmapFormat::ImageDds,
+            FreeImageFormat::Gif => MipmapFormat::ImageGif,
+            FreeImageFormat::Hdr => MipmapFormat::ImageHdr,
+            FreeImageFormat::Faxg3 => MipmapFormat::ImageFaxg3,
+            FreeImageFormat::Sgi => MipmapFormat::ImageSgi,
+            FreeImageFormat::Exr => MipmapFormat::ImageExr,
+            FreeImageFormat::J2k => MipmapFormat::ImageJ2k,
+            FreeImageFormat::Jp2 => MipmapFormat::ImageJp2,
+            FreeImageFormat::Pfm => MipmapFormat::ImagePfm,
+            FreeImageFormat::Pict => MipmapFormat::ImagePict,
+            FreeImageFormat::Mp4 => MipmapFormat::VideoMp4,
+            FreeImageFormat::Lbm => MipmapFormat::ImageLbm,
+            FreeImageFormat::Raw => MipmapFormat::ImageRaw,
+        }
+    }
+}
+
+impl From<TexFormat> for MipmapFormat {
+    fn from(value: TexFormat) -> Self {
+        match value {
+            TexFormat::Rgba8888 => Self::Rgba8888,
+            TexFormat::Dxt5 => Self::CompressedDxt5,
+            TexFormat::Dxt3 => Self::CompressedDxt3,
+            TexFormat::Dxt1 => Self::CompressedDxt1,
+            TexFormat::Rg88 => Self::Rg88,
+            TexFormat::R8 => Self::R8,
         }
     }
 }
@@ -188,6 +321,7 @@ pub struct ImageContainerMeta {
     pub version: ImageContainerVersion,
     pub image_count: i32,
     pub image_format: Option<FreeImageFormat>,
+    pub is_video_mp4: bool,
 }
 
 #[derive(Default, Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
@@ -204,11 +338,88 @@ pub struct Mipmap {
     lz4_compressed: bool,
     // makes sense only for versions 2 and 3
     decompressed_bytes_count: i32,
+    condition_json: Option<String>,
+    format: MipmapFormat,
+}
+
+// FIXME(ArnoDarkrose): uncomment lines
+impl Mipmap {
+    pub fn decompress(&mut self) -> Result<(), TexExtractError> {
+        if self.lz4_compressed {
+            decompress_lz4(&mut self.data, self.decompressed_bytes_count)?;
+
+            self.lz4_compressed = false;
+        }
+
+        if self.format == MipmapFormat::VideoMp4 {
+            return Ok(());
+        }
+
+        match self.format {
+            MipmapFormat::CompressedDxt1 => {
+                dxt::decompress_image(
+                    self.width as usize,
+                    self.height as usize,
+                    &self.data,
+                    dxt::DxtFormat::Dxt1,
+                );
+
+                self.format = MipmapFormat::Rgba8888;
+            }
+            MipmapFormat::CompressedDxt3 => {
+                dxt::decompress_image(
+                    self.width as usize,
+                    self.height as usize,
+                    &self.data,
+                    dxt::DxtFormat::Dxt3,
+                );
+
+                self.format = MipmapFormat::Rgba8888;
+            }
+            MipmapFormat::CompressedDxt5 => {
+                dxt::decompress_image(
+                    self.width as usize,
+                    self.height as usize,
+                    &self.data,
+                    dxt::DxtFormat::Dxt5,
+                );
+
+                self.format = MipmapFormat::Rgba8888;
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
+}
+
+fn decompress_lz4(
+    data: &mut Vec<u32>,
+    decompressed_bytes_count: i32,
+) -> Result<(), TexExtractError> {
+    let res = lz4::block::decompress(
+        safe_transmute::transmute_to_bytes(data.as_slice()),
+        Some(decompressed_bytes_count),
+    )
+    .unwrap();
+    *data = transmute_vec(res).ok_or(TexExtractError::TransmuteError)?;
+
+    Ok(())
 }
 
 #[derive(Default, Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub struct TexImage {
     mipmaps: Vec<Mipmap>,
+}
+
+impl TexImage {
+    pub fn decompress(&mut self) -> Result<(), TexExtractError> {
+        for mipmap in self.mipmaps.iter_mut() {
+            mipmap.decompress()?;
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
@@ -246,4 +457,68 @@ pub fn read_into_uninit(src: &mut impl std::io::Read, n: usize) -> std::io::Resu
     let data = unsafe { data.assume_init() };
 
     Ok(Vec::from(data))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::io::Write as _;
+
+    #[test]
+    fn test_stages_up_to_images() {
+        let fd = io::BufReader::new(std::fs::File::open("futaba.tex").unwrap());
+
+        let reader = TexReader::new(fd);
+        let reader = reader.read_header().unwrap();
+
+        dbg!(&reader);
+
+        let reader = reader.read_image_container_meta().unwrap();
+
+        dbg!(&reader);
+
+        let mut reader = reader.read_images().unwrap();
+
+        println!(
+            "{:#?}, {:#?}",
+            reader.header(),
+            reader.image_container_meta()
+        );
+
+        let images = reader.images();
+
+        for mut image in images.unwrap() {
+            image.decompress().unwrap();
+
+            for mipmap in image.mipmaps {
+                println!(
+                    "{:#?}, {:#?}, {:#?}, {:#?}, {:#?}",
+                    mipmap.lz4_compressed,
+                    mipmap.width,
+                    mipmap.height,
+                    mipmap.decompressed_bytes_count,
+                    mipmap.condition_json
+                );
+
+                let fd = std::fs::File::create("futaba.png").unwrap();
+                let mut encoder = png::Encoder::new(fd, mipmap.width as u32, mipmap.height as u32);
+                encoder.set_color(png::ColorType::Rgba);
+                // encoder.set_depth(png::BitDepth::Eight);
+
+                let mut writer = encoder.write_header().unwrap();
+                writer
+                    .write_image_data(safe_transmute::transmute_to_bytes(mipmap.data.as_slice()))
+                    .unwrap();
+            }
+        }
+
+        // let reader = reader.read_gif_container().unwrap();
+
+        // dbg!(&reader);
+
+        // let reader = reader.read_gif_frames().unwrap();
+
+        // dbg!(&reader);
+    }
 }

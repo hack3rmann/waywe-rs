@@ -1,5 +1,8 @@
 use super::*;
-use std::io::{Read, Result as IoResult};
+use std::{
+    ffi::CString,
+    io::{Read, Result as IoResult},
+};
 
 #[derive(Default, Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 struct Reader<T: Read>(T);
@@ -28,13 +31,36 @@ impl<T: Read> Reader<T> {
     }
 
     fn read_pad_byte(&mut self) -> IoResult<()> {
-        let mut byte = 0_u8;
+        self.read_byte()?;
+        Ok(())
+    }
 
-        let view = safe_transmute::transmute_one_to_bytes_mut(&mut byte);
-        self.0.read_exact(view)
+    fn read_byte(&mut self) -> IoResult<u8> {
+        let mut byte = [0_u8];
+
+        self.0.read_exact(&mut byte)?;
+
+        Ok(byte[0])
+    }
+
+    fn read_cstr(&mut self) -> IoResult<CString> {
+        let mut res = Vec::new();
+
+        let mut character = self.read_byte()?;
+
+        // until reached null-terminator
+        while character != 0 {
+            res.push(character);
+
+            character = self.read_byte()?;
+        }
+        res.push(0);
+
+        Ok(CString::from_vec_with_nul(res).expect("null terminator is inserted manually above"))
     }
 }
 
+/// Entry point for `.tex` files decompression
 #[derive(Default, Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub struct TexReader<T: Read> {
     reader: Reader<T>,
@@ -115,7 +141,8 @@ impl<T: Read> TexReaderWithHeader<T> {
 
         let magic = std::str::from_utf8(&magic_buf)?;
 
-        let version = match magic {
+        let mut version = match magic {
+            "TEXB0004" => ImageContainerVersion::Texb0004,
             "TEXB0003" => ImageContainerVersion::Texb0003,
             "TEXB0002" => ImageContainerVersion::Texb0002,
             "TEXB0001" => ImageContainerVersion::Texb0001,
@@ -126,15 +153,31 @@ impl<T: Read> TexReaderWithHeader<T> {
 
         let mut image_format = None;
 
-        if version == ImageContainerVersion::Texb0003 {
+        if version == ImageContainerVersion::Texb0003 || version == ImageContainerVersion::Texb0004
+        {
             let fif = self.reader.read_int()?;
             image_format = Some(FreeImageFormat::from(fif));
+        }
+
+        let mut is_video_mp4 = false;
+
+        if version == ImageContainerVersion::Texb0004 {
+            is_video_mp4 = self.reader.read_int()? != 0;
+
+            if image_format.unwrap() == FreeImageFormat::Unknow && is_video_mp4 {
+                image_format = Some(FreeImageFormat::Mp4)
+            }
+
+            if !is_video_mp4 {
+                version = ImageContainerVersion::Texb0003;
+            }
         }
 
         let image_container = ImageContainerMeta {
             version,
             image_count,
             image_format,
+            is_video_mp4,
         };
 
         Ok(TexReaderWithImageContainerMeta {
@@ -168,7 +211,35 @@ impl<T: Read> TexReaderWithImageContainerMeta<T> {
 
             let mut mipmaps = Vec::with_capacity(mipmap_count as usize);
 
-            for _ in 0..mipmap_count {
+            // FIXME(ArnoDarkrose): remove this take
+            for _ in (0..mipmap_count).take(1) {
+                let format = MipmapFormat::from_image_and_tex(
+                    self.image_container.image_format,
+                    self.header.format,
+                );
+
+                let mut condition_json = None;
+
+                if self.image_container.version == ImageContainerVersion::Texb0004 {
+                    let param1 = self.reader.read_int()?;
+                    if param1 != 1 {
+                        panic!("param1 is not 1, the library is likely outdated")
+                    }
+
+                    let param2 = self.reader.read_int()?;
+                    if param2 != 2 {
+                        panic!("param1 is not 2, the library is likely outdated")
+                    }
+
+                    let condition_json_cstr = self.reader.read_cstr()?;
+                    condition_json = Some(condition_json_cstr.into_string()?);
+
+                    let param3 = self.reader.read_int()?;
+                    if param3 != 1 {
+                        panic!("param3 is not 1, the library is likely outdated")
+                    }
+                }
+
                 let width = self.reader.read_int()?;
                 let height = self.reader.read_int()?;
 
@@ -176,7 +247,7 @@ impl<T: Read> TexReaderWithImageContainerMeta<T> {
                     if self.image_container.version == ImageContainerVersion::Texb0001 {
                         false
                     } else {
-                        self.reader.read_int()? != 0
+                        self.reader.read_int()? == 1
                     };
 
                 let decompressed_bytes_count =
@@ -189,6 +260,10 @@ impl<T: Read> TexReaderWithImageContainerMeta<T> {
                 let byte_count = self.reader.read_int()?;
 
                 let data = read_into_uninit(&mut self.reader.0, byte_count as usize)?;
+
+                // FIXME(ArnoDarkrose): remove this
+                // println!("uncompressed_mipmap_data len: {}, decompressed_bytes_count: {decompressed_bytes_count}", data.len());
+
                 let data = transmute_vec(data).ok_or(TexExtractError::TransmuteError)?;
 
                 mipmaps.push(Mipmap {
@@ -197,6 +272,8 @@ impl<T: Read> TexReaderWithImageContainerMeta<T> {
                     data,
                     lz4_compressed,
                     decompressed_bytes_count,
+                    condition_json,
+                    format,
                 });
             }
 
