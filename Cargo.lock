@@ -1182,6 +1182,9 @@ dependencies = [
 [[package]]
 name = "transmute-extra"
 version = "0.0.1"
+dependencies = [
+ "thiserror 2.0.12",
+]
 
 [[package]]
 name = "unicode-ident"

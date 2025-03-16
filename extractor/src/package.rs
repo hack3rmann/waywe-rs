@@ -122,7 +122,7 @@ mod tests {
     use super::*;
 
     #[test]
-    // #[ignore = "requires scene.pkg file to be present in the crate directory"]
+    #[ignore = "requires scene.pkg file to be present in the crate directory"]
     fn test_pkg_extract() {
         let mut fd = File::open("scene.pkg").unwrap();
         let mut reader = PackageReader::new(&mut fd).unwrap();

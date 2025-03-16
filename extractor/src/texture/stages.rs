@@ -1,6 +1,8 @@
 use super::*;
 use std::{ffi::CString, io::Result as IoResult};
 
+use tracing::{debug, instrument};
+
 #[derive(Default, Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 struct Reader<T: Read>(T);
 
@@ -14,7 +16,7 @@ impl<T: Read> Reader<T> {
         Ok(res)
     }
 
-    fn read_string(&mut self, buf: &mut [u8]) -> IoResult<()> {
+    fn read_bytes_exact(&mut self, buf: &mut [u8]) -> IoResult<()> {
         self.0.read_exact(buf)
     }
 
@@ -40,7 +42,7 @@ impl<T: Read> Reader<T> {
         Ok(byte[0])
     }
 
-    fn read_cstr(&mut self) -> IoResult<CString> {
+    fn read_cstr(&mut self) -> Result<CString, TexExtractError> {
         let mut res = Vec::new();
 
         let mut character = self.read_byte()?;
@@ -53,7 +55,7 @@ impl<T: Read> Reader<T> {
         }
         res.push(0);
 
-        Ok(CString::from_vec_with_nul(res).expect("null terminator is inserted manually above"))
+        Ok(CString::from_vec_with_nul(res)?)
     }
 }
 
@@ -70,26 +72,33 @@ impl<T: Read> TexReader<T> {
         }
     }
 
+    #[instrument(skip_all)]
     pub fn read_header(mut self) -> Result<TexReaderWithHeader<T>, TexExtractError> {
         let mut magic_buf = [0_u8; 8];
 
-        self.reader.read_string(&mut magic_buf)?;
+        self.reader.read_bytes_exact(&mut magic_buf)?;
         self.reader.read_pad_byte()?;
         let magic = std::str::from_utf8(&magic_buf)?;
 
         if magic != "TEXV0005" {
-            return Err(TexExtractError::UnknownMagic);
+            return Err(TexExtractError::UnknownMagic {
+                magic: magic.to_owned(),
+            });
         }
 
-        self.reader.read_string(&mut magic_buf)?;
+        self.reader.read_bytes_exact(&mut magic_buf)?;
         self.reader.read_pad_byte()?;
         let magic = std::str::from_utf8(&magic_buf)?;
 
         if magic != "TEXI0001" {
-            return Err(TexExtractError::UnknownMagic);
+            return Err(TexExtractError::UnknownMagic {
+                magic: magic.to_owned(),
+            });
         }
 
         let format = TexFormat::try_from(self.reader.read_int()?)?;
+
+        debug!("extracting image with the following TexFormat: {format:?}");
 
         let flags = self.reader.read_int()?;
         let flags = TexFlags::from_bits(flags as u8).ok_or(TexExtractError::InvalidTexFlags)?;
@@ -133,7 +142,7 @@ impl<T: Read> TexReaderWithHeader<T> {
     ) -> Result<TexReaderWithImageContainerMeta<T>, TexExtractError> {
         let mut magic_buf = [0_u8; 8];
 
-        self.reader.read_string(&mut magic_buf)?;
+        self.reader.read_bytes_exact(&mut magic_buf)?;
         self.reader.read_pad_byte()?;
 
         let magic = std::str::from_utf8(&magic_buf)?;
@@ -143,15 +152,21 @@ impl<T: Read> TexReaderWithHeader<T> {
             "TEXB0003" => ImageContainerVersion::Texb0003,
             "TEXB0002" => ImageContainerVersion::Texb0002,
             "TEXB0001" => ImageContainerVersion::Texb0001,
-            _ => return Err(TexExtractError::UnknownMagic),
+            _ => {
+                return Err(TexExtractError::UnknownMagic {
+                    magic: magic.to_owned(),
+                })
+            }
         };
 
         let image_count = self.reader.read_int()?;
 
         let mut image_format = None;
 
-        if version == ImageContainerVersion::Texb0003 || version == ImageContainerVersion::Texb0004
-        {
+        if matches!(
+            version,
+            ImageContainerVersion::Texb0004 | ImageContainerVersion::Texb0003
+        ) {
             let fif = self.reader.read_int()?;
             image_format = Some(FreeImageFormat::from(fif));
         }
@@ -161,7 +176,10 @@ impl<T: Read> TexReaderWithHeader<T> {
         if version == ImageContainerVersion::Texb0004 {
             is_video_mp4 = self.reader.read_int()? != 0;
 
-            if image_format.unwrap() == FreeImageFormat::Unknow && is_video_mp4 {
+            if image_format.expect("the version is 4, so the image format is present")
+                == FreeImageFormat::Unknow
+                && is_video_mp4
+            {
                 image_format = Some(FreeImageFormat::Mp4)
             }
 
@@ -200,6 +218,56 @@ impl<T: Read> TexReaderWithImageContainerMeta<T> {
         self.image_container
     }
 
+    fn read_mipmap(&mut self) -> Result<Mipmap, TexExtractError> {
+        let format =
+            MipmapFormat::from_image_and_tex(self.image_container.image_format, self.header.format);
+
+        let mut condition_json = None;
+
+        if self.image_container.version == ImageContainerVersion::Texb0004 {
+            let param1 = self.reader.read_int()?;
+            if param1 != 1 {
+                panic!("param1 is not 1, the library is likely outdated")
+            }
+
+            let param2 = self.reader.read_int()?;
+            if param2 != 2 {
+                panic!("param1 is not 2, the library is likely outdated")
+            }
+
+            condition_json = Some(self.reader.read_cstr()?);
+
+            let param3 = self.reader.read_int()?;
+            if param3 != 1 {
+                panic!("param3 is not 1, the library is likely outdated")
+            }
+        }
+
+        let width = self.reader.read_int()?;
+        let height = self.reader.read_int()?;
+
+        let (lz4_compressed, decompressed_bytes_count) =
+            if self.image_container.version == ImageContainerVersion::Texb0001 {
+                (false, None)
+            } else {
+                (self.reader.read_int()? == 1, Some(self.reader.read_int()?))
+            };
+
+        let byte_count = self.reader.read_int()?;
+
+        let data = read_into_uninit(&mut self.reader.0, byte_count as usize)?;
+
+        Ok(Mipmap {
+            width,
+            height,
+            data,
+            lz4_compressed,
+            decompressed_bytes_count,
+            condition_json,
+            format,
+        })
+    }
+
     pub fn read_images(mut self) -> Result<TexReaderWithImages<T>, TexExtractError> {
         let mut images = Vec::with_capacity(self.image_container.image_count as usize);
 
@@ -209,63 +277,7 @@ impl<T: Read> TexReaderWithImageContainerMeta<T> {
             let mut mipmaps = Vec::with_capacity(mipmap_count as usize);
 
             for _ in 0..mipmap_count {
-                let format = MipmapFormat::from_image_and_tex(
-                    self.image_container.image_format,
-                    self.header.format,
-                );
-
-                let mut condition_json = None;
-
-                if self.image_container.version == ImageContainerVersion::Texb0004 {
-                    let param1 = self.reader.read_int()?;
-                    if param1 != 1 {
-                        panic!("param1 is not 1, the library is likely outdated")
-                    }
-
-                    let param2 = self.reader.read_int()?;
-                    if param2 != 2 {
-                        panic!("param1 is not 2, the library is likely outdated")
-                    }
-
-                    let condition_json_cstr = self.reader.read_cstr()?;
-                    condition_json = Some(condition_json_cstr.into_string()?);
-
-                    let param3 = self.reader.read_int()?;
-                    if param3 != 1 {
-                        panic!("param3 is not 1, the library is likely outdated")
-                    }
-                }
-
-                let width = self.reader.read_int()?;
-                let height = self.reader.read_int()?;
-
-                let lz4_compressed =
-                    if self.image_container.version == ImageContainerVersion::Texb0001 {
-                        false
-                    } else {
-                        self.reader.read_int()? == 1
-                    };
-
-                let decompressed_bytes_count =
-                    if self.image_container.version == ImageContainerVersion::Texb0001 {
-                        0
-                    } else {
-                        self.reader.read_int()?
-                    };
-
-                let byte_count = self.reader.read_int()?;
-
-                let data = read_into_uninit(&mut self.reader.0, byte_count as usize)?;
-
-                mipmaps.push(Mipmap {
-                    width,
-                    height,
-                    data,
-                    lz4_compressed,
-                    decompressed_bytes_count,
-                    condition_json,
-                    format,
-                });
+                mipmaps.push(self.read_mipmap()?);
             }
 
             images.push(TexImage { mipmaps });
@@ -304,7 +316,7 @@ impl<T: Read> TexReaderWithImages<T> {
     pub fn read_gif_container(mut self) -> Result<TexReaderWithGifContainer<T>, TexExtractError> {
         let mut magic_buf = [0_u8; 8];
 
-        self.reader.read_string(&mut magic_buf)?;
+        self.reader.read_bytes_exact(&mut magic_buf)?;
         self.reader.read_pad_byte()?;
 
         let magic = std::str::from_utf8(&magic_buf)?;
@@ -313,7 +325,11 @@ impl<T: Read> TexReaderWithImages<T> {
             "TEXS0001" => GifContainerVersion::Texs0001,
             "TEXS0002" => GifContainerVersion::Texs0002,
             "TEXS0003" => GifContainerVersion::Texs0003,
-            _ => return Err(TexExtractError::UnknownMagic),
+            _ => {
+                return Err(TexExtractError::UnknownMagic {
+                    magic: magic.to_owned(),
+                })
+            }
         };
 
         let frame_count = self.reader.read_int()?;
@@ -359,56 +375,56 @@ impl<T: Read> TexReaderWithGifContainer<T> {
         self.gif_container
     }
 
+    fn read_frame(&mut self) -> Result<TexGifFrame, TexExtractError> {
+        let image_id = self.reader.read_int()?;
+        let frame_time = self.reader.read_float()?;
+        let x;
+        let y;
+        let width;
+        let width_y;
+        let height_x;
+        let height;
+
+        if self.gif_container.version == GifContainerVersion::Texs0001 {
+            x = self.reader.read_int()? as f32;
+            y = self.reader.read_int()? as f32;
+            width = self.reader.read_int()? as f32;
+            width_y = self.reader.read_int()? as f32;
+            height_x = self.reader.read_int()? as f32;
+            height = self.reader.read_int()? as f32;
+        } else {
+            x = self.reader.read_float()?;
+            y = self.reader.read_float()?;
+            width = self.reader.read_float()?;
+            width_y = self.reader.read_float()?;
+            height_x = self.reader.read_float()?;
+            height = self.reader.read_float()?;
+        }
+
+        Ok(TexGifFrame {
+            image_id,
+            frame_time,
+            x,
+            y,
+            width,
+            width_y,
+            height_x,
+            height,
+        })
+    }
+
     pub fn read_gif_frames(mut self) -> Result<TexReaderWithGifFrames<T>, TexExtractError> {
-        let gif_width = if self.gif_container.version == GifContainerVersion::Texs0003 {
-            self.reader.read_int()?
+        let (gif_width, gif_height) = if self.gif_container.version == GifContainerVersion::Texs0003
+        {
+            (self.reader.read_int()?, self.reader.read_int()?)
         } else {
-            0
-        };
-        let gif_height = if self.gif_container.version == GifContainerVersion::Texs0003 {
-            self.reader.read_int()?
-        } else {
-            0
+            (0, 0)
         };
 
         let mut frames = Vec::with_capacity(self.gif_container.frame_count as usize);
 
         for _ in 0..self.gif_container.frame_count {
-            let image_id = self.reader.read_int()?;
-            let frame_time = self.reader.read_float()?;
-            let x;
-            let y;
-            let width;
-            let width_y;
-            let height_x;
-            let height;
-
-            if self.gif_container.version == GifContainerVersion::Texs0003 {
-                x = self.reader.read_int()? as f32;
-                y = self.reader.read_int()? as f32;
-                width = self.reader.read_int()? as f32;
-                width_y = self.reader.read_int()? as f32;
-                height_x = self.reader.read_int()? as f32;
-                height = self.reader.read_int()? as f32;
-            } else {
-                x = self.reader.read_float()?;
-                y = self.reader.read_float()?;
-                width = self.reader.read_float()?;
-                width_y = self.reader.read_float()?;
-                height_x = self.reader.read_float()?;
-                height = self.reader.read_float()?;
-            }
-
-            frames.push(TexGifFrame {
-                image_id,
-                frame_time,
-                x,
-                y,
-                width,
-                width_y,
-                height_x,
-                height,
-            });
+            frames.push(self.read_frame()?);
         }
 
         Ok(TexReaderWithGifFrames {
