@@ -1,8 +1,5 @@
 use super::*;
-use std::{
-    ffi::CString,
-    io::{Read, Result as IoResult},
-};
+use std::{ffi::CString, io::Result as IoResult};
 
 #[derive(Default, Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 struct Reader<T: Read>(T);
@@ -211,8 +208,7 @@ impl<T: Read> TexReaderWithImageContainerMeta<T> {
 
             let mut mipmaps = Vec::with_capacity(mipmap_count as usize);
 
-            // FIXME(ArnoDarkrose): remove this take
-            for _ in (0..mipmap_count).take(1) {
+            for _ in 0..mipmap_count {
                 let format = MipmapFormat::from_image_and_tex(
                     self.image_container.image_format,
                     self.header.format,
@@ -261,11 +257,6 @@ impl<T: Read> TexReaderWithImageContainerMeta<T> {
 
                 let data = read_into_uninit(&mut self.reader.0, byte_count as usize)?;
 
-                // FIXME(ArnoDarkrose): remove this
-                // println!("uncompressed_mipmap_data len: {}, decompressed_bytes_count: {decompressed_bytes_count}", data.len());
-
-                let data = transmute_vec(data).ok_or(TexExtractError::TransmuteError)?;
-
                 mipmaps.push(Mipmap {
                     width,
                     height,
@@ -309,6 +300,7 @@ impl<T: Read> TexReaderWithImages<T> {
         self.images.take()
     }
 
+    // TODO(ArnoDarkrose): handle eof when there is no gif data
     pub fn read_gif_container(mut self) -> Result<TexReaderWithGifContainer<T>, TexExtractError> {
         let mut magic_buf = [0_u8; 8];
 
@@ -443,4 +435,26 @@ pub struct TexReaderWithGifFrames<T: Read> {
     // These two fiedlds make sense only for the third version of gif container
     gif_width: i32,
     gif_height: i32,
+}
+
+impl<T: Read> TexReaderWithGifFrames<T> {
+    pub fn header(&self) -> HeaderMeta {
+        self.header
+    }
+
+    pub fn image_container(&self) -> ImageContainerMeta {
+        self.image_container
+    }
+
+    pub fn images(&mut self) -> Option<Vec<TexImage>> {
+        self.images.take()
+    }
+
+    pub fn gif_container(&self) -> GifContainerMeta {
+        self.gif_container
+    }
+
+    pub fn gif_frames(&mut self) -> Option<Vec<TexGifFrame>> {
+        self.gif_frames.take()
+    }
 }
