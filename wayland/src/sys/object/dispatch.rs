@@ -13,6 +13,7 @@ use wayland_sys::{
     wl_proxy_get_user_data,
 };
 
+/// Types capable of dispatching the incoming events.
 pub trait Dispatch: 'static {
     fn dispatch(&mut self, _storage: Pin<&mut WlObjectStorage<'_>>, _message: WlMessage<'_>) {}
 }
