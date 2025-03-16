@@ -1,17 +1,6 @@
-pub mod buffer;
-pub mod callback;
-pub mod compositor;
 pub mod dispatch;
-pub mod output;
-pub mod region;
 pub mod registry;
-pub mod shm;
-pub mod shm_pool;
-pub mod surface;
-pub mod viewport;
-pub mod viewporter;
-pub mod zwlr_layer_shell_v1;
-pub mod zwlr_layer_surface_v1;
+pub mod default_impl;
 
 use super::{object_storage::WlObjectStorage, proxy::WlProxy, wire::MessageBuffer};
 use crate::{

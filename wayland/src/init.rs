@@ -49,7 +49,7 @@ pub unsafe fn connect_wayland_socket() -> Result<OwnedFd, GetSocketPathError> {
     socket_path.push(&display_name);
 
     UnixStream::connect(&socket_path)
-        .map(Into::<OwnedFd>::into)
+        .map(OwnedFd::from)
         .map_err(|error| GetSocketPathError::FailedToConnectToPath {
             error,
             path: socket_path,
@@ -60,13 +60,10 @@ pub unsafe fn connect_wayland_socket() -> Result<OwnedFd, GetSocketPathError> {
 pub enum GetSocketPathError {
     #[error("invalid $WAYLAND_SOCKET env variable '{0}'")]
     InvallidWaylandSocketEnvVar(String),
-
     #[error(transparent)]
     GetSockNameFailed(#[from] rustix::io::Errno),
-
     #[error("socket address '{0:?}' is not unix")]
     SocketAddrIsNotUnix(SocketAddrAny),
-
     #[error("failed to connect to wayland socket from '{path}': {error}")]
     FailedToConnectToPath { error: io::Error, path: PathBuf },
 }

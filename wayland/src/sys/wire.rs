@@ -205,8 +205,8 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
         self
     }
 
-    /// Writes file descriptor to the message
-    pub fn file_desc(self, value: BorrowedFd<'s>) -> Self {
+    /// Writes a file descriptor to the message
+    pub fn fd(self, value: BorrowedFd<'s>) -> Self {
         self.buf.push(WlArgument::raw_fd(value.as_raw_fd()));
         self
     }

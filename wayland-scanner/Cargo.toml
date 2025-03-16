@@ -14,7 +14,7 @@ thiserror.workspace = true
 wayland-sys.workspace = true
 
 [dev-dependencies]
-paste = "1.0.15"
+paste.workspace = true
 
 [lib]
 proc-macro = true

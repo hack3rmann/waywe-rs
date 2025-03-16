@@ -5,9 +5,7 @@
 pub mod request {
     use crate::{
         interface::{ObjectParent, Request}, object::{HasObjectType, WlObjectType}, sys::{
-            object::{region::WlRegion, surface::WlSurface},
-            object_storage::WlObjectStorage,
-            wire::{WlMessage, MessageBuffer, OpCode},
+            object::default_impl::{WlRegion, WlSurface}, object_storage::WlObjectStorage, wire::{MessageBuffer, OpCode, WlMessage}
         }
     };
 

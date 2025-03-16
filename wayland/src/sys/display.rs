@@ -4,7 +4,11 @@ use super::{
     proxy::WlProxy,
     wire::MessageBuffer,
 };
-use crate::{interface::{Request, WlDisplayGetRegistryRequest}, object::{HasObjectType, WlObjectType}};
+use crate::{
+    init::{GetSocketPathError, connect_wayland_socket},
+    interface::{Request, WlDisplayGetRegistryRequest},
+    object::{HasObjectType, WlObjectType},
+};
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, RawDisplayHandle, WaylandDisplayHandle,
 };
@@ -20,12 +24,20 @@ pub struct WlDisplay {
 }
 
 impl WlDisplay {
-    pub fn connect_to_fd(fd: impl IntoRawFd) -> Result<Self, WaylandConnectionError> {
+    /// Connect to libwayland backend
+    pub fn connect() -> Result<Self, DisplayConnectError> {
+        let fd = unsafe { connect_wayland_socket()? };
+        Ok(Self::connect_to_fd(fd)?)
+    }
+
+    /// Connect to Wayland display on an already open fd.
+    /// The fd will be closed in case of failure.
+    pub fn connect_to_fd(fd: impl IntoRawFd) -> Result<Self, DisplayConnectToFdError> {
         let raw_fd = fd.into_raw_fd();
 
         // Safety: calling this function on a valid file descriptor is ok
         let display = NonNull::new(unsafe { wl_display_connect_to_fd(raw_fd) })
-            .ok_or(WaylandConnectionError)?;
+            .ok_or(DisplayConnectToFdError)?;
 
         // Safety: `*mut wl_display` is compatible with `*mut wl_proxy`
         let proxy = ManuallyDrop::new(unsafe { WlProxy::from_raw(display.cast()) });
@@ -33,20 +45,24 @@ impl WlDisplay {
         Ok(Self { proxy })
     }
 
+    /// Proxy corresponding to `wl_display` object
     pub fn proxy(&self) -> &WlProxy {
         &self.proxy
     }
 
+    /// Raw display pointer
     pub fn as_raw_display_ptr(&self) -> NonNull<wl_display> {
         self.proxy.as_raw().cast()
     }
 
+    /// Creates a [`WlObjectStorage`] borrowing display for the lifetime of the storage
     pub fn create_storage(&self) -> WlObjectStorage<'_> {
         // Safety: storage has captured the lifetime of `&self`
         // therefore it will be dropped before the `WlDisplay`
         unsafe { WlObjectStorage::new() }
     }
 
+    /// Creates `wl_registry` object and stores it in the storage
     pub fn create_registry(
         &self,
         buf: &mut impl MessageBuffer,
@@ -78,8 +94,16 @@ impl WlDisplay {
 }
 
 #[derive(Debug, Error)]
+pub enum DisplayConnectError {
+    #[error(transparent)]
+    ConnectWaylandSocket(#[from] GetSocketPathError),
+    #[error(transparent)]
+    ConnectToFd(#[from] DisplayConnectToFdError),
+}
+
+#[derive(Debug, Error)]
 #[error("failed to connect to wayland's socket")]
-pub struct WaylandConnectionError;
+pub struct DisplayConnectToFdError;
 
 impl HasObjectType for WlDisplay {
     const OBJECT_TYPE: WlObjectType = WlObjectType::Display;

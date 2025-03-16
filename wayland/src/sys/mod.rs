@@ -4,7 +4,7 @@ pub mod object_storage;
 pub mod proxy;
 pub mod wire;
 
-pub mod protocols {
+pub mod protocol {
     use wayland_scanner::include_wl_interfaces;
 
     include_wl_interfaces!("wayland-protocols/wayland.xml");

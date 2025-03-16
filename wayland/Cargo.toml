@@ -17,6 +17,7 @@ wayland-scanner = { path = "../wayland-scanner" }
 wayland-sys.workspace = true
 phf = { version = "0.11.3", features = ["macros", "phf_macros"] }
 fxhash = "0.2.1"
+paste.workspace = true
 
 [dev-dependencies]
 tracing-test.workspace = true

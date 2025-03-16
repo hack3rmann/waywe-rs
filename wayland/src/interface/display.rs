@@ -3,17 +3,15 @@
 
 use crate::{
     interface::{Event, Request},
-    sys::wire::{WlMessage, MessageBuffer},
+    sys::wire::{MessageBuffer, WlMessage},
 };
 
 pub mod request {
     use super::*;
     use crate::{
-        interface::ObjectParent, object::{HasObjectType, WlObjectType}, sys::{
-            object::{callback::WlCallback, registry::WlRegistry},
-            object_storage::WlObjectStorage,
-            wire::OpCode,
-        }
+        interface::ObjectParent,
+        object::{HasObjectType, WlObjectType},
+        sys::{object::{default_impl::WlCallback, registry::WlRegistry}, object_storage::WlObjectStorage, wire::OpCode},
     };
 
     /// The sync request asks the server to emit the 'done' event

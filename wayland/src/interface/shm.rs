@@ -8,15 +8,15 @@
 //! that can be used for buffers.
 
 use crate::interface::Request;
-use crate::sys::wire::WlMessage;
 use crate::sys::wire::OpCode;
+use crate::sys::wire::WlMessage;
 use std::os::fd::BorrowedFd;
 
 pub mod request {
     use super::*;
     use crate::interface::ObjectParent;
     use crate::object::{HasObjectType, WlObjectType};
-    use crate::sys::object::shm_pool::WlShmPool;
+    use crate::sys::object::default_impl::WlShmPool;
     use crate::sys::object_storage::WlObjectStorage;
     use crate::sys::wire::MessageBuffer;
 
@@ -56,7 +56,7 @@ pub mod request {
             WlMessage::builder(buf)
                 .opcode(Self::CODE)
                 .new_id()
-                .file_desc(self.fd)
+                .fd(self.fd)
                 .int(self.size)
                 .build()
         }
@@ -90,9 +90,8 @@ pub mod request {
 }
 
 pub mod event {
-    use crate::interface::Event;
-
     use super::*;
+    use crate::interface::Event;
 
     ///Informs the client about a valid pixel format that
     ///can be used for buffers. Known formats include

@@ -7,11 +7,13 @@
 
 pub mod request {
     use crate::{
-        interface::{ObjectParent, Request}, object::{HasObjectType, WlObjectType}, sys::{
-            object::{surface::WlSurface, viewport::WpViewport, WlObjectHandle},
+        interface::{ObjectParent, Request},
+        object::{HasObjectType, WlObjectType},
+        sys::{
+            object::{default_impl::{WlSurface, WlViewport}, WlObjectHandle},
             object_storage::WlObjectStorage,
-            wire::{WlMessage, MessageBuffer, OpCode},
-        }
+            wire::{MessageBuffer, OpCode, WlMessage},
+        },
     };
 
     /// Instantiate an interface extension for the given wl_surface to
@@ -25,7 +27,7 @@ pub mod request {
     }
 
     impl ObjectParent for GetViewport {
-        type Child = WpViewport;
+        type Child = WlViewport;
     }
 
     impl HasObjectType for GetViewport {

@@ -1361,6 +1361,7 @@ dependencies = [
  "bytemuck",
  "fxhash",
  "glam",
+ "paste",
  "phf",
  "raw-window-handle",
  "rustix",

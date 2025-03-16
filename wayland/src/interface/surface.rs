@@ -43,16 +43,14 @@
 
 // TODO(ArnoDarkrose): implement the rest of the requests and events for wl_surface
 
-use crate::sys::wire::{WlMessage, MessageBuffer};
+use crate::sys::wire::{MessageBuffer, WlMessage};
 
 pub mod request {
     use super::*;
     use crate::{
-        interface::{ObjectParent, Request}, object::{HasObjectType, WlObjectType}, sys::{
-            object::{buffer::WlBuffer, callback::WlCallback, region::WlRegion, WlObjectHandle},
-            object_storage::WlObjectStorage,
-            wire::OpCode,
-        }
+        interface::{ObjectParent, Request},
+        object::{HasObjectType, WlObjectType},
+        sys::{object::{default_impl::{WlBuffer, WlCallback, WlRegion}, WlObjectHandle}, object_storage::WlObjectStorage, wire::OpCode},
     };
 
     /// Deletes the surface and invalidates its object ID.

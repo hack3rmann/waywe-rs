@@ -6,7 +6,7 @@ use wayland::{
     interface::WlCompositorCreateSurface,
     sys::{
         display::WlDisplay,
-        object::{compositor::WlCompositor, registry::WlRegistry},
+        object::{default_impl::WlCompositor, registry::WlRegistry},
         wire::SmallVecMessageBuffer,
     },
 };

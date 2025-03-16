@@ -7,14 +7,14 @@
 //! a surface or for many small buffers.
 
 use crate::interface::Request;
-use crate::sys::wire::{WlMessage, MessageBuffer, OpCode};
+use crate::sys::wire::{MessageBuffer, OpCode, WlMessage};
 
 pub mod request {
     use super::*;
     use crate::{
-        interface::{ObjectParent, WlShmFormat}, object::{HasObjectType, WlObjectType}, sys::{
-            object::buffer::WlBuffer, object_storage::WlObjectStorage,
-        }
+        interface::{ObjectParent, WlShmFormat},
+        object::{HasObjectType, WlObjectType},
+        sys::{object::default_impl::WlBuffer, object_storage::WlObjectStorage},
     };
 
     /// Create a wl_buffer object from the pool.

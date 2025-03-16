@@ -27,10 +27,11 @@ use wayland::{
     object::WlObjectType,
     sys::{
         display::WlDisplay,
-        object::{
-            compositor::WlCompositor, output::WlOutput, registry::WlRegistry, shm::WlShm,
-            viewporter::WpViewporter, zwlr_layer_shell_v1::WlrLayerShellV1,
+        object::default_impl::{
+            WlCompositor, WlOutput, WlShm,
+            WlViewporter, WlrLayerShellV1,
         },
+        object::registry::WlRegistry,
         wire::SmallVecMessageBuffer,
     },
 };
@@ -136,7 +137,7 @@ fn white_rect() {
     let shm = WlRegistry::bind::<WlShm>(&mut buf, storage.as_mut(), registry).unwrap();
 
     let viewporter =
-        WlRegistry::bind::<WpViewporter>(&mut buf, storage.as_mut(), registry).unwrap();
+        WlRegistry::bind::<WlViewporter>(&mut buf, storage.as_mut(), registry).unwrap();
 
     let compositor =
         WlRegistry::bind::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
