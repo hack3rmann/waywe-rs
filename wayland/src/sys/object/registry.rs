@@ -1,12 +1,11 @@
 use super::{Dispatch, FromProxy, WlObject, WlObjectHandle};
 use crate::{
     interface::{Event as _, WlRegistryBindRequest, WlRegistryGlobalEvent},
-    object::ObjectId,
+    object::{HasObjectType, WlObjectId, WlObjectType},
     sys::{
-        HasObjectType, ObjectType,
         object_storage::WlObjectStorage,
         proxy::WlProxy,
-        wire::{Message, MessageBuffer},
+        wire::{WlMessage, MessageBuffer},
     },
 };
 use fxhash::FxHashMap;
@@ -14,13 +13,13 @@ use std::pin::Pin;
 
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
 pub struct WlRegistryGlobalInfo {
-    pub name: ObjectId,
+    pub name: WlObjectId,
     pub version: u32,
 }
 
 #[derive(Debug, Default)]
 pub struct WlRegistry {
-    pub interfaces: FxHashMap<ObjectType, WlRegistryGlobalInfo>,
+    pub interfaces: FxHashMap<WlObjectType, WlRegistryGlobalInfo>,
 }
 
 impl WlRegistry {
@@ -55,7 +54,7 @@ impl WlRegistry {
         Some(storage.insert(WlObject::new(proxy, data)))
     }
 
-    pub fn name_of(&self, object_type: ObjectType) -> Option<ObjectId> {
+    pub fn name_of(&self, object_type: WlObjectType) -> Option<WlObjectId> {
         self.interfaces.get(&object_type).map(|global| global.name)
     }
 }
@@ -67,12 +66,12 @@ impl FromProxy for WlRegistry {
 }
 
 impl HasObjectType for WlRegistry {
-    const OBJECT_TYPE: ObjectType = ObjectType::Registry;
+    const OBJECT_TYPE: WlObjectType = WlObjectType::Registry;
 }
 
 impl Dispatch for WlRegistry {
     // TODO(hack3rmann): handle all events
-    fn dispatch(&mut self, _storage: Pin<&mut WlObjectStorage>, message: Message<'_>) {
+    fn dispatch(&mut self, _storage: Pin<&mut WlObjectStorage>, message: WlMessage<'_>) {
         let Some(event) = WlRegistryGlobalEvent::from_message(message) else {
             return;
         };
@@ -82,7 +81,7 @@ impl Dispatch for WlRegistry {
             .to_str()
             .expect("interface name expected to be a valid utf-8 string");
 
-        if let Some(ty) = ObjectType::from_interface_name(name) {
+        if let Some(ty) = WlObjectType::from_interface_name(name) {
             self.interfaces.insert(
                 ty,
                 WlRegistryGlobalInfo {

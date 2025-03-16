@@ -1,11 +1,14 @@
 use super::{Dispatch, FromProxy};
-use crate::sys::{proxy::WlProxy, HasObjectType, ObjectType};
+use crate::{
+    object::{HasObjectType, WlObjectType},
+    sys::proxy::WlProxy,
+};
 
 #[derive(Debug, Default)]
 pub struct WlOutput;
 
 impl HasObjectType for WlOutput {
-    const OBJECT_TYPE: ObjectType = ObjectType::Output;
+    const OBJECT_TYPE: WlObjectType = WlObjectType::Output;
 }
 
 impl FromProxy for WlOutput {

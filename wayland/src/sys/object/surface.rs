@@ -1,5 +1,8 @@
 use super::{Dispatch, FromProxy, WlObject};
-use crate::sys::{HasObjectType, ObjectType, proxy::WlProxy};
+use crate::{
+    object::{HasObjectType, WlObjectType},
+    sys::proxy::WlProxy,
+};
 use raw_window_handle::{
     HandleError, HasWindowHandle, RawWindowHandle, WaylandWindowHandle, WindowHandle,
 };
@@ -8,7 +11,7 @@ use raw_window_handle::{
 pub struct WlSurface;
 
 impl HasObjectType for WlSurface {
-    const OBJECT_TYPE: ObjectType = ObjectType::Surface;
+    const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
 }
 
 impl FromProxy for WlSurface {

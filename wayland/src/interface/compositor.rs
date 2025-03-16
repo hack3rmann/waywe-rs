@@ -4,13 +4,11 @@
 
 pub mod request {
     use crate::{
-        interface::{ObjectParent, Request},
-        sys::{
-            HasObjectType, ObjectType,
+        interface::{ObjectParent, Request}, object::{HasObjectType, WlObjectType}, sys::{
             object::{region::WlRegion, surface::WlSurface},
             object_storage::WlObjectStorage,
-            wire::{Message, MessageBuffer, OpCode},
-        },
+            wire::{WlMessage, MessageBuffer, OpCode},
+        }
     };
 
     /// Ask the compositor to create a new surface.
@@ -22,22 +20,22 @@ pub mod request {
     }
 
     impl HasObjectType for CreateSurface {
-        const OBJECT_TYPE: ObjectType = ObjectType::Compositor;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Compositor;
     }
 
     impl<'s> Request<'s> for CreateSurface {
         const CODE: OpCode = 0;
-        const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::Surface);
+        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::Surface);
 
         fn build_message<'m>(
             self,
             buf: &'m mut impl MessageBuffer,
             _: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf).opcode(Self::CODE).new_id().build()
+            WlMessage::builder(buf).opcode(Self::CODE).new_id().build()
         }
     }
 
@@ -50,22 +48,22 @@ pub mod request {
     }
 
     impl HasObjectType for CreateRegion {
-        const OBJECT_TYPE: ObjectType = ObjectType::Compositor;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Compositor;
     }
 
     impl<'s> Request<'s> for CreateRegion {
         const CODE: OpCode = 1;
-        const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::Region);
+        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::Region);
 
         fn build_message<'m>(
             self,
             buf: &'m mut impl MessageBuffer,
             _: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf).opcode(Self::CODE).new_id().build()
+            WlMessage::builder(buf).opcode(Self::CODE).new_id().build()
         }
     }
 }

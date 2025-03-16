@@ -5,12 +5,10 @@
 
 pub mod request {
     use crate::{
-        interface::Request,
-        sys::{
-            HasObjectType, ObjectType,
+        interface::Request, object::{HasObjectType, WlObjectType}, sys::{
             object_storage::WlObjectStorage,
-            wire::{Message, MessageBuffer, OpCode},
-        },
+            wire::{WlMessage, MessageBuffer, OpCode},
+        }
     };
 
     /// Destroy the region. This will invalidate the object ID.
@@ -18,22 +16,22 @@ pub mod request {
     pub struct Destroy;
 
     impl HasObjectType for Destroy {
-        const OBJECT_TYPE: ObjectType = ObjectType::Region;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Region;
     }
 
     impl<'s> Request<'s> for Destroy {
         const CODE: OpCode = 0;
-        const OUTGOING_INTERFACE: Option<ObjectType> = None;
+        const OUTGOING_INTERFACE: Option<WlObjectType> = None;
 
         fn build_message<'m>(
             self,
             buf: &'m mut impl MessageBuffer,
             _: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf).opcode(Self::CODE).build()
+            WlMessage::builder(buf).opcode(Self::CODE).build()
         }
     }
 }

@@ -1,11 +1,11 @@
-use crate::sys::wire::{Message, MessageBuffer, OpCode};
+use crate::sys::wire::{WlMessage, MessageBuffer, OpCode};
 
 pub mod request {
     use super::wl_enum::{Anchor, KeyboardInteractivity};
     use super::*;
     use crate::interface::Request;
+    use crate::object::{HasObjectType, WlObjectType};
     use crate::sys::object_storage::WlObjectStorage;
-    use crate::sys::{HasObjectType, ObjectType};
 
     /// Sets the size of the surface in surface-local coordinates. The
     /// compositor will display the surface centered with respect to its
@@ -24,7 +24,7 @@ pub mod request {
     }
 
     impl HasObjectType for SetSize {
-        const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerSurfaceV1;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::WlrLayerSurfaceV1;
     }
 
     impl<'s> Request<'s> for SetSize {
@@ -34,11 +34,11 @@ pub mod request {
             self,
             buf: &'m mut impl MessageBuffer,
             _: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf)
+            WlMessage::builder(buf)
                 .opcode(Self::CODE)
                 .uint(self.width)
                 .uint(self.height)
@@ -59,7 +59,7 @@ pub mod request {
     }
 
     impl HasObjectType for SetAnchor {
-        const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerSurfaceV1;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::WlrLayerSurfaceV1;
     }
 
     impl<'s> Request<'s> for SetAnchor {
@@ -69,11 +69,11 @@ pub mod request {
             self,
             buf: &'m mut impl MessageBuffer,
             _: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf)
+            WlMessage::builder(buf)
                 .opcode(Self::CODE)
                 .uint(self.anchor.bits())
                 .build()
@@ -118,7 +118,7 @@ pub mod request {
     }
 
     impl HasObjectType for SetExclusiveZone {
-        const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerSurfaceV1;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::WlrLayerSurfaceV1;
     }
 
     impl<'s> Request<'s> for SetExclusiveZone {
@@ -128,11 +128,11 @@ pub mod request {
             self,
             buf: &'m mut impl MessageBuffer,
             _: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf)
+            WlMessage::builder(buf)
                 .opcode(Self::CODE)
                 .int(self.zone)
                 .build()
@@ -166,7 +166,7 @@ pub mod request {
     }
 
     impl HasObjectType for SetMargin {
-        const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerSurfaceV1;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::WlrLayerSurfaceV1;
     }
 
     impl<'s> Request<'s> for SetMargin {
@@ -176,11 +176,11 @@ pub mod request {
             self,
             buf: &'m mut impl MessageBuffer,
             _: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf)
+            WlMessage::builder(buf)
                 .opcode(Self::CODE)
                 .int(self.top)
                 .int(self.right)
@@ -208,7 +208,7 @@ pub mod request {
     }
 
     impl HasObjectType for SetKeyboardInteractivity {
-        const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerSurfaceV1;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::WlrLayerSurfaceV1;
     }
 
     impl<'s> Request<'s> for SetKeyboardInteractivity {
@@ -218,11 +218,11 @@ pub mod request {
             self,
             buf: &'m mut impl MessageBuffer,
             _: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf)
+            WlMessage::builder(buf)
                 .opcode(Self::CODE)
                 .uint(self.keyboard_interactivity.into())
                 .build()
@@ -250,7 +250,7 @@ pub mod request {
     }
 
     impl HasObjectType for AckConfigure {
-        const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerSurfaceV1;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::WlrLayerSurfaceV1;
     }
 
     impl<'s> Request<'s> for AckConfigure {
@@ -260,11 +260,11 @@ pub mod request {
             self,
             buf: &'m mut impl MessageBuffer,
             _: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf)
+            WlMessage::builder(buf)
                 .opcode(Self::CODE)
                 .uint(self.serial)
                 .build()
@@ -273,7 +273,7 @@ pub mod request {
 }
 
 pub mod event {
-    use crate::{interface::Event, sys::wire::{Message, OpCode}};
+    use crate::{interface::Event, sys::wire::{WlMessage, OpCode}};
 
     /// The configure event asks the client to resize its surface.
     ///
@@ -305,7 +305,7 @@ pub mod event {
     impl<'s> Event<'s> for Configure {
         const CODE: OpCode = 0;
 
-        fn from_message(message: Message<'s>) -> Option<Self> {
+        fn from_message(message: WlMessage<'s>) -> Option<Self> {
             if message.opcode != Self::CODE {
                 return None;
             }

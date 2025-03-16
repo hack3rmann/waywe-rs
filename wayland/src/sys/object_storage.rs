@@ -1,9 +1,9 @@
 use super::{
     display::WlDisplay,
     object::{dispatch::Dispatch, WlDynObject, WlObject, WlObjectHandle},
-    proxy::WlProxy, HasObjectType,
+    proxy::WlProxy,
 };
-use crate::object::ObjectId;
+use crate::object::{HasObjectType, WlObjectId};
 use std::{collections::HashMap, marker::PhantomData, pin::Pin};
 use thiserror::Error;
 
@@ -16,8 +16,8 @@ pub(crate) struct WlObjectStorageEntry {
 #[derive(Debug)]
 pub struct WlObjectStorage<'d> {
     // NOTE(hack3rmann): this is a fast map as long as `ObjectId` hashes to itself
-    objects: HashMap<ObjectId, WlObjectStorageEntry>,
-    acquired_object: Option<ObjectId>,
+    objects: HashMap<WlObjectId, WlObjectStorageEntry>,
+    acquired_object: Option<WlObjectId>,
     _display: PhantomData<&'d WlDisplay>,
 }
 
@@ -88,13 +88,13 @@ impl WlObjectStorage<'_> {
         handle: WlObjectHandle<T>,
     ) -> Option<&WlObject<T>> {
         if let Some(id) = self.acquired_object {
-            if id == handle.id {
+            if id == handle.id() {
                 return None;
             }
         }
 
         self.objects
-            .get(&handle.id)
+            .get(&handle.id())
             .map(|e| &e.object)
             .and_then(WlDynObject::downcast_ref)
     }
@@ -115,13 +115,13 @@ impl WlObjectStorage<'_> {
         handle: WlObjectHandle<T>,
     ) -> Option<&mut WlObject<T>> {
         if let Some(id) = self.acquired_object {
-            if id == handle.id {
+            if id == handle.id() {
                 return None;
             }
         }
 
         self.objects
-            .get_mut(&handle.id)
+            .get_mut(&handle.id())
             .map(|e| &mut e.object)
             .and_then(WlDynObject::downcast_mut)
     }
@@ -141,7 +141,7 @@ impl WlObjectStorage<'_> {
     ///
     /// In contrast to [`WlObjectStorage::get_object`] it does not fail
     /// when the object was acquired via a call to [`WlObjectStorage::with_object_data_acquired`]
-    pub fn get_proxy(&self, id: ObjectId) -> Option<&WlProxy> {
+    pub fn get_proxy(&self, id: WlObjectId) -> Option<&WlProxy> {
         self.objects.get(&id).map(|e| &e.object.proxy)
     }
 
@@ -151,7 +151,7 @@ impl WlObjectStorage<'_> {
         handle: WlObjectHandle<T>,
     ) -> Result<(), NoEntryError<T>> {
         self.objects
-            .remove(&handle.id)
+            .remove(&handle.id())
             .ok_or(NoEntryError(handle))
             .map(|_| ())
     }
@@ -163,11 +163,11 @@ impl WlObjectStorage<'_> {
     ///
     /// Will return [`Err`] if
     ///
-    /// - this object has acquired already.
+    /// - this object had been acquired already.
     /// - acquired object id has corrupted after the `f` call.
     pub fn with_object_data_acquired(
         mut self: Pin<&mut Self>,
-        id: ObjectId,
+        id: WlObjectId,
         f: impl FnOnce(Pin<&mut Self>),
     ) -> Result<(), ObjectDataAcquireError> {
         if self.acquired_object.replace(id).is_some() {
@@ -193,5 +193,5 @@ pub enum ObjectDataAcquireError {
 }
 
 #[derive(Debug, Error)]
-#[error("no entry for {name}, with id = {id}", name = std::any::type_name::<T>(), id = u32::from(self.0.id))]
+#[error("no entry for {name}, with id = {id}", name = std::any::type_name::<T>(), id = u32::from(self.0.id()))]
 pub struct NoEntryError<T>(pub WlObjectHandle<T>);

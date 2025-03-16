@@ -10,12 +10,11 @@ pub mod viewporter;
 pub mod zwlr_layer_shell_v1;
 pub mod zwlr_layer_surface_v1;
 
-use crate::sys::{
-    HasObjectType, ObjectType,
+use crate::{object::{HasObjectType, WlObjectType}, sys::{
     object_storage::WlObjectStorage,
     proxy::WlProxy,
-    wire::{Message, MessageBuffer, OpCode},
-};
+    wire::{WlMessage, MessageBuffer, OpCode},
+}};
 use std::ptr::{self, NonNull};
 use wayland_sys::wl_proxy_marshal_array_constructor;
 
@@ -77,14 +76,14 @@ pub trait Request<'s>: Sized + HasObjectType {
     const CODE: OpCode;
 
     /// The type of an interface object of which will be created by libwayland
-    const OUTGOING_INTERFACE: Option<ObjectType> = None;
+    const OUTGOING_INTERFACE: Option<WlObjectType> = None;
 
     /// Builds the message on the top of given message buffer
     fn build_message<'m>(
         self,
         buf: &'m mut impl MessageBuffer,
         storage: &'m WlObjectStorage,
-    ) -> Message<'m>
+    ) -> WlMessage<'m>
     where
         's: 'm;
 
@@ -122,5 +121,5 @@ pub trait Event<'s>: Sized {
     const CODE: OpCode;
 
     /// Tries to read the given message as an event of implementor type
-    fn from_message(message: Message<'s>) -> Option<Self>;
+    fn from_message(message: WlMessage<'s>) -> Option<Self>;
 }

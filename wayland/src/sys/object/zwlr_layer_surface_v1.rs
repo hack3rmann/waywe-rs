@@ -1,22 +1,22 @@
 use super::{Dispatch, FromProxy, WlObjectHandle};
 use crate::{
     interface::{Event, LayerSurfaceAckConfigureRequest, LayerSurfaceConfigureEvent},
+    object::{HasObjectType, WlObjectType},
     sys::{
-        HasObjectType, ObjectType,
         object_storage::WlObjectStorage,
         proxy::WlProxy,
-        wire::{Message, SmallVecMessageBuffer},
+        wire::{WlMessage, SmallVecMessageBuffer},
     },
 };
 use std::pin::Pin;
 
 #[derive(Debug, Default)]
 pub struct WlrLayerSurfaceV1 {
-    pub handle: WlObjectHandle<WlrLayerSurfaceV1>,
+    pub handle: WlObjectHandle<Self>,
 }
 
 impl HasObjectType for WlrLayerSurfaceV1 {
-    const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerSurfaceV1;
+    const OBJECT_TYPE: WlObjectType = WlObjectType::WlrLayerSurfaceV1;
 }
 
 impl FromProxy for WlrLayerSurfaceV1 {
@@ -28,7 +28,7 @@ impl FromProxy for WlrLayerSurfaceV1 {
 }
 
 impl Dispatch for WlrLayerSurfaceV1 {
-    fn dispatch(&mut self, storage: Pin<&mut WlObjectStorage>, message: Message<'_>) {
+    fn dispatch(&mut self, storage: Pin<&mut WlObjectStorage>, message: WlMessage<'_>) {
         let Some(LayerSurfaceConfigureEvent { serial, .. }) =
             LayerSurfaceConfigureEvent::from_message(message)
         else {

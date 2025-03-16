@@ -1,11 +1,14 @@
 use super::{Dispatch, FromProxy};
-use crate::sys::{HasObjectType, ObjectType, proxy::WlProxy};
+use crate::{
+    object::{HasObjectType, WlObjectType},
+    sys::proxy::WlProxy,
+};
 
 #[derive(Debug, Default)]
 pub struct WlRegion;
 
 impl HasObjectType for WlRegion {
-    const OBJECT_TYPE: ObjectType = ObjectType::Region;
+    const OBJECT_TYPE: WlObjectType = WlObjectType::Region;
 }
 
 impl FromProxy for WlRegion {

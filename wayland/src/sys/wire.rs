@@ -1,7 +1,5 @@
-use super::{
-    InterfaceMessageArgument,
-    proxy::{WlProxy, WlProxyQuery},
-};
+use super::proxy::{WlProxy, WlProxyQuery};
+use crate::object::InterfaceMessageArgument;
 use smallvec::SmallVec;
 use std::{
     ffi::CStr,
@@ -144,14 +142,14 @@ unsafe impl MessageBuffer for StackMessageBuffer {
 
 /// Represents the message on the libwayland backend
 #[derive(Clone, Copy)]
-pub struct Message<'s> {
+pub struct WlMessage<'s> {
     /// The opcode for the request/event
     pub opcode: OpCode,
     /// Additional arguments for the request/event
     pub arguments: &'s [WlArgument],
 }
 
-impl<'s> Message<'s> {
+impl<'s> WlMessage<'s> {
     /// Returns the builder for the message
     pub fn builder<Buffer: MessageBuffer>(
         buf: &'s mut Buffer,
@@ -260,8 +258,8 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
     }
 
     /// Builds the message
-    pub fn build(self) -> Message<'s> {
-        Message {
+    pub fn build(self) -> WlMessage<'s> {
+        WlMessage {
             opcode: self.opcode,
             arguments: self.buf.as_slice(),
         }
@@ -336,9 +334,8 @@ impl<'s> MessageReader<'s> {
     ///
     /// # Safety
     ///
-    /// The argument read from the message at this point should have
-    /// the same type as the argument that was written to the message
-    /// at this point before
+    /// An argument being read by this call thould have the same type
+    /// as the argument written to the message before
     pub unsafe fn read<A: FromWlArgument<'s>>(&mut self) -> Option<A> {
         let first_arg = self.arguments.first().copied()?;
         self.arguments = &self.arguments[1..];

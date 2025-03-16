@@ -8,17 +8,17 @@
 //! that can be used for buffers.
 
 use crate::interface::Request;
-use crate::sys::wire::Message;
+use crate::sys::wire::WlMessage;
 use crate::sys::wire::OpCode;
 use std::os::fd::BorrowedFd;
 
 pub mod request {
     use super::*;
     use crate::interface::ObjectParent;
+    use crate::object::{HasObjectType, WlObjectType};
     use crate::sys::object::shm_pool::WlShmPool;
     use crate::sys::object_storage::WlObjectStorage;
     use crate::sys::wire::MessageBuffer;
-    use crate::sys::{HasObjectType, ObjectType};
 
     /// Create a new wl_shm_pool object.
     ///
@@ -38,22 +38,22 @@ pub mod request {
     }
 
     impl HasObjectType for CreatePool<'_> {
-        const OBJECT_TYPE: ObjectType = ObjectType::Shm;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Shm;
     }
 
     impl<'s> Request<'s> for CreatePool<'s> {
         const CODE: OpCode = 0;
-        const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::ShmPool);
+        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::ShmPool);
 
         fn build_message<'m>(
             self,
             buf: &'m mut impl MessageBuffer,
             _: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf)
+            WlMessage::builder(buf)
                 .opcode(Self::CODE)
                 .new_id()
                 .file_desc(self.fd)
@@ -70,7 +70,7 @@ pub mod request {
     pub struct Release;
 
     impl HasObjectType for Release {
-        const OBJECT_TYPE: ObjectType = ObjectType::Shm;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Shm;
     }
 
     impl<'s> Request<'s> for Release {
@@ -80,11 +80,11 @@ pub mod request {
             self,
             buf: &'m mut impl MessageBuffer,
             _: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf).opcode(Self::CODE).build()
+            WlMessage::builder(buf).opcode(Self::CODE).build()
         }
     }
 }
@@ -105,7 +105,7 @@ pub mod event {
     impl<'s> Event<'s> for Format {
         const CODE: OpCode = 0;
 
-        fn from_message(message: Message<'s>) -> Option<Self> {
+        fn from_message(message: WlMessage<'s>) -> Option<Self> {
             if message.opcode != Self::CODE {
                 return None;
             }

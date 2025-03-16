@@ -21,20 +21,19 @@
 
 use crate::{
     interface::Event,
-    object::ObjectId,
-    sys::wire::{Message, MessageBuffer},
+    object::WlObjectId,
+    sys::wire::{WlMessage, MessageBuffer},
 };
 
 pub mod request {
     use wayland_sys::wl_proxy_marshal_array_constructor;
 
     use super::*;
-    use crate::sys::{
-        HasObjectType, InterfaceMessageArgument, ObjectType,
-        object::{WlObject, registry::WlRegistry},
+    use crate::{object::{HasObjectType, InterfaceMessageArgument, WlObjectType}, sys::{
+        object::{registry::WlRegistry, WlObject},
         proxy::WlProxy,
         wire::OpCode,
-    };
+    }};
     use std::{marker::PhantomData, ptr::NonNull};
 
     /// Binds a new, client-created object to the server using the
@@ -58,10 +57,10 @@ pub mod request {
 
     impl<T: HasObjectType> Bind<T> {
         const OPCODE: OpCode = 0;
-        const OUTGOING_INTERFACE: ObjectType = T::OBJECT_TYPE;
+        const OUTGOING_INTERFACE: WlObjectType = T::OBJECT_TYPE;
 
-        fn build_message(self, buf: &mut impl MessageBuffer, name: ObjectId) -> Message<'_> {
-            Message::builder(buf)
+        fn build_message(self, buf: &mut impl MessageBuffer, name: WlObjectId) -> WlMessage<'_> {
+            WlMessage::builder(buf)
                 .opcode(Self::OPCODE)
                 .interface(InterfaceMessageArgument {
                     object_type: T::OBJECT_TYPE,
@@ -109,7 +108,7 @@ pub mod event {
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct Global<'s> {
         /// Numeric name of the global object
-        pub name: ObjectId,
+        pub name: WlObjectId,
         /// Interface implemented by the object
         pub interface: &'s CStr,
         /// Interface version
@@ -119,14 +118,14 @@ pub mod event {
     impl<'s> Event<'s> for Global<'s> {
         const CODE: OpCode = 0;
 
-        fn from_message(message: Message<'s>) -> Option<Self> {
+        fn from_message(message: WlMessage<'s>) -> Option<Self> {
             if message.opcode != Self::CODE {
                 return None;
             }
 
             let mut reader = message.reader();
 
-            let name = ObjectId::try_from(unsafe { reader.read::<u32>()? }).ok()?;
+            let name = WlObjectId::try_from(unsafe { reader.read::<u32>()? }).ok()?;
             let interface = unsafe { reader.read::<&CStr>()? };
             let version = unsafe { reader.read::<u32>()? };
 
@@ -151,19 +150,19 @@ pub mod event {
     #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct GlobalRemove {
         /// Numeric name of the global object
-        pub name: ObjectId,
+        pub name: WlObjectId,
     }
 
     impl<'s> Event<'s> for GlobalRemove {
         const CODE: OpCode = 1;
 
-        fn from_message(message: Message<'s>) -> Option<Self> {
+        fn from_message(message: WlMessage<'s>) -> Option<Self> {
             if message.opcode != Self::CODE {
                 return None;
             }
 
             let mut reader = message.reader();
-            let name = ObjectId::try_from(unsafe { reader.read::<u32>()? }).ok()?;
+            let name = WlObjectId::try_from(unsafe { reader.read::<u32>()? }).ok()?;
 
             Some(Self { name })
         }

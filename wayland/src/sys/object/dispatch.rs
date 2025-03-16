@@ -1,13 +1,12 @@
 use crate::{
-    object::ObjectId,
-    sys::{object_storage::WlObjectStorage, wire::{Message, OpCode}, HasObjectType},
+    object::{HasObjectType, WlObjectId},
+    sys::{
+        object_storage::WlObjectStorage,
+        wire::{WlMessage, OpCode},
+    },
 };
 use std::{
-    ffi::{CStr, c_int, c_void},
-    pin::Pin,
-    process,
-    ptr::NonNull,
-    slice,
+    ffi::{c_int, c_void, CStr}, panic, pin::Pin, process, ptr::NonNull, slice
 };
 use wayland_sys::{
     count_arguments_from_message_signature, wl_argument, wl_message, wl_proxy_get_id,
@@ -15,11 +14,11 @@ use wayland_sys::{
 };
 
 pub trait Dispatch: 'static {
-    fn dispatch(&mut self, _storage: Pin<&mut WlObjectStorage<'_>>, _message: Message<'_>) {}
+    fn dispatch(&mut self, _storage: Pin<&mut WlObjectStorage<'_>>, _message: WlMessage<'_>) {}
 }
 static_assertions::assert_obj_safe!(Dispatch);
 
-pub(crate) type WlDispatchFn<T> = unsafe fn(&mut T, Pin<&mut WlObjectStorage<'_>>, Message<'_>);
+pub(crate) type WlDispatchFn<T> = unsafe fn(&mut T, Pin<&mut WlObjectStorage<'_>>, WlMessage<'_>);
 
 #[repr(C)]
 pub(crate) struct WlDispatchData<T> {
@@ -38,12 +37,16 @@ pub(crate) unsafe extern "C" fn dispatch_raw<T: HasObjectType>(
     tracing::info!(
         "libwayland event dispatch: {}::{}",
         T::OBJECT_TYPE.interface_name(),
-        T::OBJECT_TYPE.event_name(opcode as OpCode),
+        T::OBJECT_TYPE
+            .event_name(opcode as OpCode)
+            .unwrap_or("invalid-event"),
     );
 
-    std::panic::catch_unwind(|| {
+    // NOTE(hack3rmann): to use `extern "Rust"` functions inside `extern "C"`
+    // catching unwind is important to prevent UB from calling `panic()` in `extern "C"`
+    panic::catch_unwind(|| {
         // Safety: `proxy` in libwayland dispatcher is always valid
-        let id = unsafe { ObjectId::try_from(wl_proxy_get_id(proxy)).unwrap_unchecked() };
+        let id = unsafe { WlObjectId::try_from(wl_proxy_get_id(proxy)).unwrap_unchecked() };
         let data = unsafe { wl_proxy_get_user_data(proxy) }.cast::<WlDispatchData<T>>();
 
         // # Safety
@@ -60,12 +63,16 @@ pub(crate) unsafe extern "C" fn dispatch_raw<T: HasObjectType>(
             return -1;
         };
 
+        // # Safety
+        //
+        // - the storage pointer is pinned
+        //   (see `WlObjectStorage::insert<T>(self: Pin<&mut Self>, object: WlObject<T>)`)
+        // - here we have exclusive access to the storage
+        //   (see `WlDisplay::dispatch(&self, _storage: Pin<&mut WlObjectStorage>)`)
         let storage = unsafe { Pin::new_unchecked(storage_ptr.as_mut()) };
 
-        let Ok(opcode) = u16::try_from(opcode) else {
-            tracing::error!("invalid opcode {opcode}");
-            return -1;
-        };
+        // Safety: an opcode provided by the libwayland backend is always valid (often really small)
+        let opcode = unsafe { u16::try_from(opcode).unwrap_unchecked() };
 
         // # Safety
         //
@@ -77,7 +84,7 @@ pub(crate) unsafe extern "C" fn dispatch_raw<T: HasObjectType>(
         // Safety: libwayland provides all arguments according to the signature of the event
         let arguments = unsafe { slice::from_raw_parts(arguments, n_arguments) };
 
-        let message = Message { opcode, arguments };
+        let message = WlMessage { opcode, arguments };
 
         if let Err(err) = storage.with_object_data_acquired(id, |storage| unsafe {
             (data.dispatch)(&mut data.data, storage, message);

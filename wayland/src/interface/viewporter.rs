@@ -7,13 +7,11 @@
 
 pub mod request {
     use crate::{
-        interface::{ObjectParent, Request},
-        sys::{
-            HasObjectType, ObjectType,
-            object::{WlObjectHandle, surface::WlSurface, viewport::WpViewport},
+        interface::{ObjectParent, Request}, object::{HasObjectType, WlObjectType}, sys::{
+            object::{surface::WlSurface, viewport::WpViewport, WlObjectHandle},
             object_storage::WlObjectStorage,
-            wire::{Message, MessageBuffer, OpCode},
-        },
+            wire::{WlMessage, MessageBuffer, OpCode},
+        }
     };
 
     /// Instantiate an interface extension for the given wl_surface to
@@ -31,22 +29,22 @@ pub mod request {
     }
 
     impl HasObjectType for GetViewport {
-        const OBJECT_TYPE: ObjectType = ObjectType::Viewporter;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Viewporter;
     }
 
     impl<'s> Request<'s> for GetViewport {
         const CODE: OpCode = 1;
-        const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::Viewport);
+        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::Viewport);
 
         fn build_message<'m>(
             self,
             buf: &'m mut impl MessageBuffer,
             storage: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf)
+            WlMessage::builder(buf)
                 .opcode(Self::CODE)
                 .new_id()
                 .object(storage.object(self.surface).proxy())

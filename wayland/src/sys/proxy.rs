@@ -1,19 +1,24 @@
-use wayland_sys::{wl_proxy, wl_proxy_destroy, wl_proxy_get_class, wl_proxy_get_id, wl_proxy_get_user_data, wl_proxy_set_user_data};
-use crate::object::ObjectId;
+use crate::object::WlObjectId;
 use core::fmt;
 use std::{
-    ffi::{c_void, CStr},
+    ffi::{CStr, c_void},
+    mem,
     ptr::NonNull,
+    slice,
     sync::atomic::{
         AtomicUsize,
         Ordering::{Acquire, Release},
     },
 };
+use wayland_sys::{
+    wl_proxy, wl_proxy_destroy, wl_proxy_get_class, wl_proxy_get_id, wl_proxy_get_user_data,
+    wl_proxy_set_user_data,
+};
 
 /// Represents a proxy object created on the libwayland backend
 pub struct WlProxy {
-    pub(crate) raw: NonNull<wl_proxy>,
-    pub(crate) interface_name_length: AtomicUsize,
+    raw: NonNull<wl_proxy>,
+    interface_name_length: AtomicUsize,
 }
 
 impl WlProxy {
@@ -28,24 +33,26 @@ impl WlProxy {
         }
     }
 
+    /// Raw proxy (opaque pointer to the libwayland backend)
     pub const fn as_raw(&self) -> NonNull<wl_proxy> {
         self.raw
     }
 
+    /// Turns [`WlProxy`] into its raw value without calling the destructor
     pub const fn into_raw(self) -> NonNull<wl_proxy> {
         let raw = self.raw;
-        std::mem::forget(self);
+        mem::forget(self);
         raw
     }
 
     /// The id for the proxy object
-    pub fn id(&self) -> ObjectId {
+    pub fn id(&self) -> WlObjectId {
         // Safety: calling this on a valid object is safe
         let raw = unsafe { wl_proxy_get_id(self.raw.as_ptr()) };
 
         // Safety: any valid object in libwayland has nonzero id
         // `WlProxy`'s safety guarantees `self` is a valid object
-        unsafe { ObjectId::try_from(raw).unwrap_unchecked() }
+        unsafe { WlObjectId::try_from(raw).unwrap_unchecked() }
     }
 
     /// A name of the interface which proxy implements
@@ -65,7 +72,7 @@ impl WlProxy {
             c_str.to_bytes()
         } else {
             // Safety: there exactly `len` bytes in the string (excluding nul-terminator)
-            unsafe { std::slice::from_raw_parts(ptr.cast::<u8>(), len) }
+            unsafe { slice::from_raw_parts(ptr.cast::<u8>(), len) }
         };
 
         // Safety: interface name obtained from libwayland contains
@@ -106,7 +113,7 @@ impl PartialEq for WlProxy {
 impl Eq for WlProxy {}
 
 impl fmt::Debug for WlProxy {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct(std::any::type_name::<Self>())
             .finish_non_exhaustive()
     }
@@ -120,6 +127,8 @@ pub struct WlProxyQuery {
 }
 
 impl WlProxyQuery {
+    /// Constructs [`WlProxyQuery`] from raw proxy pointer
+    ///
     /// # Safety
     ///
     /// - `raw` should be a valid object or null
@@ -127,13 +136,14 @@ impl WlProxyQuery {
         Self { raw }
     }
 
-    pub const fn into_raw(self) -> *const wl_proxy {
+    /// Raw representation of the query
+    pub const fn to_raw(self) -> *const wl_proxy {
         self.raw
     }
 }
 
 impl fmt::Debug for WlProxyQuery {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct(std::any::type_name::<Self>())
             .finish_non_exhaustive()
     }

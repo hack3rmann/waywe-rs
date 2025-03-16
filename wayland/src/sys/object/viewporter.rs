@@ -1,11 +1,14 @@
 use super::{Dispatch, FromProxy};
-use crate::sys::{HasObjectType, ObjectType, proxy::WlProxy};
+use crate::{
+    object::{HasObjectType, WlObjectType},
+    sys::proxy::WlProxy,
+};
 
 #[derive(Debug, Default)]
 pub struct WpViewporter;
 
 impl HasObjectType for WpViewporter {
-    const OBJECT_TYPE: ObjectType = ObjectType::Viewporter;
+    const OBJECT_TYPE: WlObjectType = WlObjectType::Viewporter;
 }
 
 impl FromProxy for WpViewporter {

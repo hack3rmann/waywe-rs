@@ -43,18 +43,16 @@
 
 // TODO(ArnoDarkrose): implement the rest of the requests and events for wl_surface
 
-use crate::sys::wire::{Message, MessageBuffer};
+use crate::sys::wire::{WlMessage, MessageBuffer};
 
 pub mod request {
     use super::*;
     use crate::{
-        interface::{ObjectParent, Request},
-        sys::{
-            HasObjectType, ObjectType,
-            object::{WlObjectHandle, buffer::WlBuffer, callback::WlCallback, region::WlRegion},
+        interface::{ObjectParent, Request}, object::{HasObjectType, WlObjectType}, sys::{
+            object::{buffer::WlBuffer, callback::WlCallback, region::WlRegion, WlObjectHandle},
             object_storage::WlObjectStorage,
             wire::OpCode,
-        },
+        }
     };
 
     /// Deletes the surface and invalidates its object ID.
@@ -62,7 +60,7 @@ pub mod request {
     pub struct Destroy;
 
     impl HasObjectType for Destroy {
-        const OBJECT_TYPE: ObjectType = ObjectType::Surface;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
     }
 
     impl<'s> Request<'s> for Destroy {
@@ -72,11 +70,11 @@ pub mod request {
             self,
             buf: &'m mut impl MessageBuffer,
             _: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf).opcode(Self::CODE).build()
+            WlMessage::builder(buf).opcode(Self::CODE).build()
         }
     }
 
@@ -155,7 +153,7 @@ pub mod request {
     }
 
     impl HasObjectType for Attach {
-        const OBJECT_TYPE: ObjectType = ObjectType::Surface;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
     }
 
     impl<'s> Request<'s> for Attach {
@@ -165,11 +163,11 @@ pub mod request {
             self,
             buf: &'m mut impl MessageBuffer,
             storage: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf)
+            WlMessage::builder(buf)
                 .opcode(Self::CODE)
                 .maybe_object(self.buffer.map(|h| storage.object(h).proxy()))
                 .int(self.x)
@@ -191,7 +189,7 @@ pub mod request {
     }
 
     impl HasObjectType for Damage {
-        const OBJECT_TYPE: ObjectType = ObjectType::Surface;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
     }
 
     impl<'s> Request<'s> for Damage {
@@ -201,11 +199,11 @@ pub mod request {
             self,
             buf: &'m mut impl MessageBuffer,
             _: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf)
+            WlMessage::builder(buf)
                 .opcode(Self::CODE)
                 .int(self.x)
                 .int(self.y)
@@ -255,22 +253,22 @@ pub mod request {
     }
 
     impl HasObjectType for Frame {
-        const OBJECT_TYPE: ObjectType = ObjectType::Surface;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
     }
 
     impl<'s> Request<'s> for Frame {
         const CODE: OpCode = 3;
-        const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::Callback);
+        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::Callback);
 
         fn build_message<'m>(
             self,
             buf: &'m mut impl MessageBuffer,
             _: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf).opcode(Self::CODE).new_id().build()
+            WlMessage::builder(buf).opcode(Self::CODE).new_id().build()
         }
     }
 
@@ -305,7 +303,7 @@ pub mod request {
     }
 
     impl HasObjectType for SetOpaqueRegion {
-        const OBJECT_TYPE: ObjectType = ObjectType::Surface;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
     }
 
     impl<'s> Request<'s> for SetOpaqueRegion {
@@ -315,11 +313,11 @@ pub mod request {
             self,
             buf: &'m mut impl MessageBuffer,
             storage: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf)
+            WlMessage::builder(buf)
                 .opcode(Self::CODE)
                 .maybe_object(self.region.map(|h| storage.object(h).proxy()))
                 .build()
@@ -355,7 +353,7 @@ pub mod request {
     }
 
     impl HasObjectType for SetInputRegion {
-        const OBJECT_TYPE: ObjectType = ObjectType::Surface;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
     }
 
     impl<'s> Request<'s> for SetInputRegion {
@@ -365,11 +363,11 @@ pub mod request {
             self,
             buf: &'m mut impl MessageBuffer,
             storage: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf)
+            WlMessage::builder(buf)
                 .opcode(Self::CODE)
                 .maybe_object(self.region.map(|h| storage.object(h).proxy()))
                 .build()
@@ -399,7 +397,7 @@ pub mod request {
     pub struct Commit;
 
     impl HasObjectType for Commit {
-        const OBJECT_TYPE: ObjectType = ObjectType::Surface;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
     }
 
     impl<'s> Request<'s> for Commit {
@@ -409,11 +407,11 @@ pub mod request {
             self,
             buf: &'m mut impl MessageBuffer,
             _: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf).opcode(Self::CODE).build()
+            WlMessage::builder(buf).opcode(Self::CODE).build()
         }
     }
 
@@ -448,7 +446,7 @@ pub mod request {
     }
 
     impl HasObjectType for SetBufferScale {
-        const OBJECT_TYPE: ObjectType = ObjectType::Surface;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
     }
 
     impl<'s> Request<'s> for SetBufferScale {
@@ -458,11 +456,11 @@ pub mod request {
             self,
             buf: &'m mut impl MessageBuffer,
             _: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf)
+            WlMessage::builder(buf)
                 .opcode(Self::CODE)
                 .int(self.scale)
                 .build()
@@ -491,7 +489,7 @@ pub mod event {
     impl<'s> Event<'s> for Enter {
         const CODE: OpCode = 0;
 
-        fn from_message(message: Message<'s>) -> Option<Self> {
+        fn from_message(message: WlMessage<'s>) -> Option<Self> {
             if message.opcode != Self::CODE {
                 return None;
             }
@@ -521,7 +519,7 @@ pub mod event {
     impl<'s> Event<'s> for Leave {
         const CODE: OpCode = 1;
 
-        fn from_message(message: Message<'s>) -> Option<Self> {
+        fn from_message(message: WlMessage<'s>) -> Option<Self> {
             if message.opcode != Self::CODE {
                 return None;
             }

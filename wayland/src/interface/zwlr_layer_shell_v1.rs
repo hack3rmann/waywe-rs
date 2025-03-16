@@ -9,13 +9,13 @@
 pub mod request {
     use super::wl_enum::Layer;
     use crate::interface::{ObjectParent, Request};
-    use crate::sys::object::WlObjectHandle;
-    use crate::sys::object::output::WlOutput;
-    use crate::sys::object::surface::WlSurface;
-    use crate::sys::object::zwlr_layer_surface_v1::WlrLayerSurfaceV1;
+    use crate::object::{HasObjectType, WlObjectType};
+    use crate::sys::object::{
+        WlObjectHandle, output::WlOutput, surface::WlSurface,
+        zwlr_layer_surface_v1::WlrLayerSurfaceV1,
+    };
     use crate::sys::object_storage::WlObjectStorage;
-    use crate::sys::wire::{Message, MessageBuffer, OpCode};
-    use crate::sys::{HasObjectType, ObjectType};
+    use crate::sys::wire::{WlMessage, MessageBuffer, OpCode};
     use std::ffi::CStr;
 
     /// Create a layer surface for an existing surface. This assigns the role of
@@ -52,22 +52,22 @@ pub mod request {
     }
 
     impl HasObjectType for GetLayerSurface<'_> {
-        const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerShellV1;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::WlrLayerShellV1;
     }
 
     impl<'s> Request<'s> for GetLayerSurface<'s> {
         const CODE: OpCode = 0;
-        const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::WlrLayerSurfaceV1);
+        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::WlrLayerSurfaceV1);
 
         fn build_message<'m>(
             self,
             buf: &'m mut impl MessageBuffer,
             storage: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf)
+            WlMessage::builder(buf)
                 .opcode(Self::CODE)
                 .new_id()
                 .object(storage.object(self.surface).proxy())
@@ -85,7 +85,7 @@ pub mod request {
     pub struct Destroy;
 
     impl HasObjectType for Destroy {
-        const OBJECT_TYPE: ObjectType = ObjectType::WlrLayerShellV1;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::WlrLayerShellV1;
     }
 
     impl<'s> Request<'s> for Destroy {
@@ -95,11 +95,11 @@ pub mod request {
             self,
             buf: &'m mut impl MessageBuffer,
             _: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf).opcode(Self::CODE).build()
+            WlMessage::builder(buf).opcode(Self::CODE).build()
         }
     }
 }

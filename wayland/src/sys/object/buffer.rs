@@ -1,11 +1,14 @@
 use super::{Dispatch, FromProxy};
-use crate::sys::{HasObjectType, ObjectType, proxy::WlProxy};
+use crate::{
+    object::{HasObjectType, WlObjectType},
+    sys::proxy::WlProxy,
+};
 
 #[derive(Debug, Default)]
 pub struct WlBuffer;
 
 impl HasObjectType for WlBuffer {
-    const OBJECT_TYPE: ObjectType = ObjectType::Buffer;
+    const OBJECT_TYPE: WlObjectType = WlObjectType::Buffer;
 }
 
 impl FromProxy for WlBuffer {

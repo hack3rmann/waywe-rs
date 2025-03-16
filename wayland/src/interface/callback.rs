@@ -7,7 +7,7 @@
 pub mod event {
     use crate::{
         interface::Event,
-        sys::wire::{Message, OpCode},
+        sys::wire::{WlMessage, OpCode},
     };
 
     /// Notify the client when the related request is done.
@@ -20,7 +20,7 @@ pub mod event {
     impl<'s> Event<'s> for Done {
         const CODE: OpCode = 0;
 
-        fn from_message(message: Message<'s>) -> Option<Self> {
+        fn from_message(message: WlMessage<'s>) -> Option<Self> {
             if message.opcode != Self::CODE {
                 return None;
             }

@@ -3,19 +3,17 @@
 
 use crate::{
     interface::{Event, Request},
-    sys::wire::{Message, MessageBuffer},
+    sys::wire::{WlMessage, MessageBuffer},
 };
 
 pub mod request {
     use super::*;
     use crate::{
-        interface::ObjectParent,
-        sys::{
-            HasObjectType, ObjectType,
+        interface::ObjectParent, object::{HasObjectType, WlObjectType}, sys::{
             object::{callback::WlCallback, registry::WlRegistry},
             object_storage::WlObjectStorage,
             wire::OpCode,
-        },
+        }
     };
 
     /// The sync request asks the server to emit the 'done' event
@@ -37,22 +35,22 @@ pub mod request {
     }
 
     impl HasObjectType for Sync {
-        const OBJECT_TYPE: ObjectType = ObjectType::Display;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Display;
     }
 
     impl<'s> Request<'s> for Sync {
         const CODE: OpCode = 0;
-        const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::Callback);
+        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::Callback);
 
         fn build_message<'m>(
             self,
             buf: &'m mut impl MessageBuffer,
             _: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf).opcode(Self::CODE).new_id().build()
+            WlMessage::builder(buf).opcode(Self::CODE).new_id().build()
         }
     }
 
@@ -73,22 +71,22 @@ pub mod request {
     }
 
     impl HasObjectType for GetRegistry {
-        const OBJECT_TYPE: ObjectType = ObjectType::Registry;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Registry;
     }
 
     impl<'s> Request<'s> for GetRegistry {
         const CODE: OpCode = 1;
-        const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::Registry);
+        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::Registry);
 
         fn build_message<'m>(
             self,
             buf: &'m mut impl MessageBuffer,
             _: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf).opcode(Self::CODE).new_id().build()
+            WlMessage::builder(buf).opcode(Self::CODE).new_id().build()
         }
     }
 }
@@ -117,7 +115,7 @@ pub mod event {
     impl<'s> Event<'s> for Error<'s> {
         const CODE: OpCode = 0;
 
-        fn from_message(message: Message<'s>) -> Option<Self> {
+        fn from_message(message: WlMessage<'s>) -> Option<Self> {
             if message.opcode != Self::CODE {
                 return None;
             }
@@ -151,7 +149,7 @@ pub mod event {
     impl<'s> Event<'s> for DeleteId {
         const CODE: OpCode = 1;
 
-        fn from_message(message: Message<'s>) -> Option<Self> {
+        fn from_message(message: WlMessage<'s>) -> Option<Self> {
             if message.opcode != Self::CODE {
                 return None;
             }

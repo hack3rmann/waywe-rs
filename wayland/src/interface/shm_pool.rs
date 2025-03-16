@@ -7,15 +7,14 @@
 //! a surface or for many small buffers.
 
 use crate::interface::Request;
-use crate::sys::wire::{Message, MessageBuffer, OpCode};
+use crate::sys::wire::{WlMessage, MessageBuffer, OpCode};
 
 pub mod request {
     use super::*;
     use crate::{
-        interface::{ObjectParent, WlShmFormat},
-        sys::{
-            HasObjectType, ObjectType, object::buffer::WlBuffer, object_storage::WlObjectStorage,
-        },
+        interface::{ObjectParent, WlShmFormat}, object::{HasObjectType, WlObjectType}, sys::{
+            object::buffer::WlBuffer, object_storage::WlObjectStorage,
+        }
     };
 
     /// Create a wl_buffer object from the pool.
@@ -48,22 +47,22 @@ pub mod request {
     }
 
     impl HasObjectType for CreateBuffer {
-        const OBJECT_TYPE: ObjectType = ObjectType::ShmPool;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::ShmPool;
     }
 
     impl<'s> Request<'s> for CreateBuffer {
         const CODE: OpCode = 0;
-        const OUTGOING_INTERFACE: Option<ObjectType> = Some(ObjectType::Buffer);
+        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::Buffer);
 
         fn build_message<'m>(
             self,
             buf: &'m mut impl MessageBuffer,
             _: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf)
+            WlMessage::builder(buf)
                 .opcode(Self::CODE)
                 .new_id()
                 .int(self.offset)
@@ -83,7 +82,7 @@ pub mod request {
     pub struct Destroy;
 
     impl HasObjectType for Destroy {
-        const OBJECT_TYPE: ObjectType = ObjectType::ShmPool;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::ShmPool;
     }
 
     impl<'s> Request<'s> for Destroy {
@@ -93,11 +92,11 @@ pub mod request {
             self,
             buf: &'m mut impl MessageBuffer,
             _: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf).opcode(Self::CODE).build()
+            WlMessage::builder(buf).opcode(Self::CODE).build()
         }
     }
 
@@ -118,7 +117,7 @@ pub mod request {
     }
 
     impl HasObjectType for Resize {
-        const OBJECT_TYPE: ObjectType = ObjectType::ShmPool;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::ShmPool;
     }
 
     impl<'s> Request<'s> for Resize {
@@ -128,11 +127,11 @@ pub mod request {
             self,
             buf: &'m mut impl MessageBuffer,
             _: &'m WlObjectStorage,
-        ) -> Message<'m>
+        ) -> WlMessage<'m>
         where
             's: 'm,
         {
-            Message::builder(buf)
+            WlMessage::builder(buf)
                 .opcode(Self::CODE)
                 .int(self.size)
                 .build()

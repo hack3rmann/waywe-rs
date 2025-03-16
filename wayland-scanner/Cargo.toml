@@ -13,5 +13,8 @@ xml_serde = "1.4.1"
 thiserror.workspace = true
 wayland-sys.workspace = true
 
+[dev-dependencies]
+paste = "1.0.15"
+
 [lib]
 proc-macro = true
