@@ -1,5 +1,7 @@
 use std::io;
 
+use super::DecompressedTexImage;
+
 #[derive(Debug, thiserror::Error)]
 pub enum TexExtractError {
     #[error(transparent)]
@@ -22,6 +24,9 @@ pub enum TexExtractError {
 
     #[error(transparent)]
     FromVecWithNul(#[from] std::ffi::FromVecWithNulError),
+
+    #[error("corrupt data in the file: {about}")]
+    Corrupt { about: String },
 }
 
 #[derive(Default, Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
@@ -294,4 +299,12 @@ pub enum GifContainerVersion {
     Texs0002,
     #[default]
     Texs0003,
+}
+
+// TODO(ArnoDarkrose): add gif variants data
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub enum TexExtractData {
+    Video(Vec<DecompressedTexImage>),
+    Gif,
+    Image(Vec<DecompressedTexImage>),
 }

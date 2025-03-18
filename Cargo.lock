@@ -299,6 +299,7 @@ version = "0.0.1"
 dependencies = [
  "bitflags 2.9.0",
  "dxt",
+ "gif",
  "image",
  "lz4",
  "png",

@@ -473,4 +473,13 @@ impl<T: Read> TexReaderWithGifFrames<T> {
     pub fn gif_frames(&mut self) -> Option<Vec<TexGifFrame>> {
         self.gif_frames.take()
     }
+
+    pub fn write_gif(self, dest: &mut impl Write) -> Option<Result<(), TexExtractError>> {
+        if self.images.is_none() || self.gif_frames.is_none() {
+            return None;
+        }
+
+        todo!();
+        Some(Ok(()))
+    }
 }

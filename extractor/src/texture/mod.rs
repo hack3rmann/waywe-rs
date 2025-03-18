@@ -1,7 +1,10 @@
 // TODO(ArnoDarkrose): add image cropping and rotating and gifs
+// TODO(ArnoDarkrose): add tracing
+// TODO(ArnoDarkrose): i can parallelize mipmap decompression
 
+use safe_transmute::transmute_to_bytes;
 use std::ffi::CString;
-use std::io::Read;
+use std::io::{Read, Write};
 use transmute_extra::{read_into_uninit, transmute_vec};
 
 pub mod enums;
@@ -49,11 +52,11 @@ pub struct Mipmap {
 
 #[derive(Default, Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub struct DecompressedMipmap {
-    width: u32,
-    height: u32,
-    data: Vec<u32>,
-    condition_json: Option<CString>,
-    format: MipmapFormat,
+    pub width: u32,
+    pub height: u32,
+    pub data: Vec<u32>,
+    pub condition_json: Option<CString>,
+    pub format: MipmapFormat,
 }
 
 impl From<Mipmap> for DecompressedMipmap {
@@ -172,11 +175,6 @@ pub struct TexImage {
     mipmaps: Vec<Mipmap>,
 }
 
-#[derive(Default, Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
-pub struct DecompressedTexImage {
-    pub mipmaps: Vec<DecompressedMipmap>,
-}
-
 impl TexImage {
     pub fn decompress(self) -> Result<DecompressedTexImage, TexExtractError> {
         let mipmaps = self
@@ -189,6 +187,11 @@ impl TexImage {
     }
 }
 
+#[derive(Default, Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub struct DecompressedTexImage {
+    pub mipmaps: Vec<DecompressedMipmap>,
+}
+
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct TexGifFrame {
     image_id: i32,
@@ -199,6 +202,47 @@ pub struct TexGifFrame {
     width_y: f32,
     height_x: f32,
     height: f32,
+}
+
+pub fn extract_data(src: impl Read) -> Result<TexExtractData, TexExtractError> {
+    let mut reader = TexReader::new(src)
+        .read_header()?
+        .read_image_container_meta()?
+        .read_images()?;
+
+    let images = reader
+        .images()
+        .expect("this is the first acquisition of this field so it is some");
+
+    let decompressed_images = images
+        .into_iter()
+        .map(|image| image.decompress())
+        .collect::<Result<Vec<_>, _>>()?;
+
+    if reader.header().flags.contains(TexFlags::IsGif) {
+        todo!()
+    } else if reader.header().flags.contains(TexFlags::IsVideoTexture) {
+        let first_image_bytes = transmute_to_bytes(&decompressed_images[0].mipmaps[0].data);
+        if first_image_bytes.len() < 12 {
+            return Err(TexExtractError::Corrupt {
+                about:
+                    "expected magic header for the video texture but len in bytes is not sufficient"
+                        .to_string(),
+            });
+        }
+
+        let magic = std::str::from_utf8(&first_image_bytes[4..9])?;
+
+        if !matches!(magic, "ftypisom" | "ftypmsnv" | "ftypmp42") {
+            return Err(TexExtractError::Corrupt {
+                about: "expected magic header for the video texture".to_string(),
+            });
+        }
+
+        Ok(TexExtractData::Video(decompressed_images))
+    } else {
+        Ok(TexExtractData::Image(decompressed_images))
+    }
 }
 
 #[cfg(test)]
@@ -217,15 +261,15 @@ mod tests {
         let reader = TexReader::new(fd);
         let reader = reader.read_header().unwrap();
 
-        dbg!(&reader);
+        tracing::debug!("{reader:#?}");
 
         let reader = reader.read_image_container_meta().unwrap();
 
-        dbg!(&reader);
+        tracing::debug!("{reader:#?}");
 
         let mut reader = reader.read_images().unwrap();
 
-        println!(
+        tracing::debug!(
             "{:#?}, {:#?}",
             reader.header(),
             reader.image_container_meta()
@@ -234,14 +278,14 @@ mod tests {
         let images = reader.images();
 
         for image in images.unwrap() {
-            println!("here");
-
             let image = image.decompress().unwrap();
 
             for (i, mipmap) in image.mipmaps.iter().enumerate() {
-                println!(
+                tracing::debug!(
                     "mipmap_width: {:#?}, mipmap_height: {:#?}, condition_json: {:#?}",
-                    mipmap.width, mipmap.height, mipmap.condition_json
+                    mipmap.width,
+                    mipmap.height,
+                    mipmap.condition_json
                 );
 
                 let fd = std::fs::File::create(format!("futaba{i}.png")).unwrap();
@@ -300,8 +344,8 @@ mod tests {
             .read_gif_frames()
             .unwrap();
 
-        dbg!(&reader.image_container());
-        dbg!(&reader.gif_container());
+        tracing::debug!("{:#?}", reader.image_container());
+        tracing::debug!("{:#?}", reader.gif_container());
 
         for image in reader.images().unwrap() {
             let image = image.decompress().unwrap();
@@ -317,6 +361,63 @@ mod tests {
                     .write_image_data(safe_transmute::transmute_to_bytes(mipmap.data.as_slice()))
                     .unwrap();
             }
+        }
+    }
+
+    #[test]
+    fn test_extract_basic() {
+        let src = BufReader::new(File::open("futaba.tex").unwrap());
+        let data = extract_data(src).unwrap();
+
+        match data {
+            TexExtractData::Image(data) => {
+                for image in data {
+                    for (i, mipmap) in image.mipmaps.into_iter().enumerate() {
+                        let out = BufWriter::new(File::create(format!("futaba2_{i}.png")).unwrap());
+
+                        let mut encoder = png::Encoder::new(out, mipmap.width, mipmap.height);
+                        encoder.set_color(png::ColorType::Rgba);
+
+                        let mut writer = encoder.write_header().unwrap();
+
+                        writer
+                            .write_image_data(safe_transmute::transmute_to_bytes(
+                                mipmap.data.as_slice(),
+                            ))
+                            .unwrap();
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    #[test]
+    fn test_extract_dxt() {
+        let src = BufReader::new(File::open("dxt_image.tex").unwrap());
+        let data = extract_data(src).unwrap();
+
+        match data {
+            TexExtractData::Image(data) => {
+                for image in data {
+                    for (i, mipmap) in image.mipmaps.into_iter().enumerate() {
+                        let out =
+                            BufWriter::new(File::create(format!("dxt_image2_{i}.png")).unwrap());
+
+                        let mut encoder = png::Encoder::new(out, mipmap.width, mipmap.height);
+                        encoder.set_color(png::ColorType::Rgba);
+
+                        let mut writer = encoder.write_header().unwrap();
+
+                        writer
+                            .write_image_data(safe_transmute::transmute_to_bytes(
+                                mipmap.data.as_slice(),
+                            ))
+                            .unwrap();
+                    }
+                }
+            }
+            _ => {}
         }
     }
 }
