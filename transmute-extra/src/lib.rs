@@ -42,6 +42,23 @@ pub fn transmute_vec(mut src: Vec<u8>) -> Result<Vec<u32>, TransmuteVecError> {
     }
 }
 
+// TODO(ArnoDarkrose): write documentation and safety for unsafe block
+pub fn transmute_to_bytes_vec(mut src: Vec<u32>) -> Result<Vec<u8>, TransmuteVecError> {
+    let ptr = src.as_ptr();
+
+    if !ptr.cast::<u8>().is_aligned() {
+        Ok(src.into_iter().flat_map(|num| num.to_le_bytes()).collect())
+    } else {
+        unsafe {
+            let capacity = src.capacity();
+            let len = src.len();
+            let ptr = src.as_mut_ptr();
+            std::mem::forget(src);
+            Ok(Vec::from_raw_parts(ptr.cast(), len * 4, capacity * 4))
+        }
+    }
+}
+
 /// Reads exactly `n` bytes from `src` into an initialized buffer
 /// and returns it as a [`Vec`]
 pub fn read_into_uninit(src: &mut impl std::io::Read, n: usize) -> std::io::Result<Vec<u8>> {

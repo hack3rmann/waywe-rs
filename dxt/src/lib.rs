@@ -2,6 +2,7 @@ use rayon::prelude::*;
 use safe_transmute::{guard::SingleManyGuard, transmute_many, transmute_one_to_bytes};
 
 /// The format of the dxt image
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub enum DxtFormat {
     Dxt1,
     Dxt3,

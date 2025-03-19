@@ -1,6 +1,8 @@
 use std::io;
 
-use super::DecompressedTexImage;
+use image::EncodableLayout;
+
+use super::{DecompressedTexImage, TexGifFrame};
 
 #[derive(Debug, thiserror::Error)]
 pub enum TexExtractError {
@@ -59,15 +61,15 @@ impl TryFrom<i32> for TexFormat {
 bitflags::bitflags! {
     #[derive(Default, Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
     pub struct TexFlags: u8 {
-        const None = 0b0000_0000;
-        const NoInterpolation = 0b0000_0001;
-        const ClampUVs = 0b0000_0010;
-        const IsGif = 0b0000_0100;
-        const Unk3 = 0b0000_1000;
-        const Unk4 = 0b0001_0000;
-        const IsVideoTexture = 0b0010_0000;
-        const Unk6 = 0b0100_0000;
-        const Unk7 = 0b1000_0000;
+        const NONE = 0b0000_0000;
+        const NO_INTERPOLATION = 0b0000_0001;
+        const CLAMP_UVS = 0b0000_0010;
+        const IS_GIF = 0b0000_0100;
+        const UNK3 = 0b0000_1000;
+        const UNK4 = 0b0001_0000;
+        const IS_VIDEO_TEXTURE = 0b0010_0000;
+        const UNK6 = 0b0100_0000;
+        const UNK7 = 0b1000_0000;
     }
 }
 
@@ -301,10 +303,31 @@ pub enum GifContainerVersion {
     Texs0003,
 }
 
-// TODO(ArnoDarkrose): add gif variants data
-#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub enum MipmapData {
+    R8(image::GrayImage),
+    Rg88(image::GrayAlphaImage),
+    Rgba8888(image::RgbaImage),
+    Raw(Vec<u8>),
+}
+
+impl MipmapData {
+    pub fn as_bytes(&self) -> &[u8] {
+        match self {
+            MipmapData::R8(image) => image.as_bytes(),
+            MipmapData::Rg88(image) => image.as_bytes(),
+            MipmapData::Rgba8888(image) => image.as_bytes(),
+            MipmapData::Raw(image) => image.as_bytes(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum TexExtractData {
     Video(Vec<DecompressedTexImage>),
-    Gif,
+    Gif {
+        frames: Vec<DecompressedTexImage>,
+        frames_meta: Vec<TexGifFrame>,
+    },
     Image(Vec<DecompressedTexImage>),
 }
