@@ -12,6 +12,7 @@ use std::{
 };
 use tracing_test::traced_test;
 use wayland::{
+    StackMessageBuffer,
     init::connect_wayland_socket,
     interface::{
         LayerSurfaceSetAnchorRequest, LayerSurfaceSetExclusiveZoneRequest,
@@ -27,12 +28,10 @@ use wayland::{
     object::WlObjectType,
     sys::{
         display::WlDisplay,
-        object::default_impl::{
-            WlCompositor, WlOutput, WlShm,
-            WlViewporter, WlrLayerShellV1,
+        object::{
+            default_impl::{WlCompositor, WlOutput, WlShm, WlViewporter, WlrLayerShellV1},
+            registry::WlRegistry,
         },
-        object::registry::WlRegistry,
-        wire::SmallVecMessageBuffer,
     },
 };
 
@@ -48,7 +47,7 @@ fn just_connect_display() {
 
 #[test]
 fn get_registry() {
-    let mut buf = SmallVecMessageBuffer::<8>::new();
+    let mut buf = StackMessageBuffer::new();
 
     // Safety: called once on the start of the program
     let display = unsafe { connect_display() };
@@ -67,7 +66,7 @@ fn get_registry() {
 
 #[test]
 fn create_surface() {
-    let mut buf = SmallVecMessageBuffer::<8>::new();
+    let mut buf = StackMessageBuffer::new();
 
     // Safety: called once on the start of the program
     let display = unsafe { connect_display() };
@@ -89,7 +88,7 @@ fn create_surface() {
 
 #[test]
 fn bind_wlr_shell() {
-    let mut buf = SmallVecMessageBuffer::<8>::new();
+    let mut buf = StackMessageBuffer::new();
 
     // Safety: called once on the start of the program
     let display = unsafe { connect_display() };
@@ -125,7 +124,7 @@ fn open_shm() -> Result<(OwnedFd, String), rustix::io::Errno> {
 #[test]
 #[traced_test]
 fn white_rect() {
-    let mut buf = SmallVecMessageBuffer::<8>::new();
+    let mut buf = StackMessageBuffer::new();
 
     // Safety: called once on the start of the program
     let display = unsafe { connect_display() };

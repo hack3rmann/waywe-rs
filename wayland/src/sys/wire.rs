@@ -85,6 +85,14 @@ pub struct StackMessageBuffer {
 impl StackMessageBuffer {
     pub const CAPACITY: usize = 20;
 
+    /// Constructs new [`StackMessageBuffer`]
+    pub const fn new() -> Self {
+        Self {
+            len: 0,
+            buf: [MaybeUninit::uninit(); Self::CAPACITY],
+        }
+    }
+
     /// Clears the buffer
     pub const fn clear(&mut self) {
         self.len = 0;
@@ -115,6 +123,12 @@ impl StackMessageBuffer {
     pub const fn as_slice(&self) -> &[WlArgument] {
         let ptr = (&raw const self.buf).cast::<WlArgument>();
         unsafe { std::slice::from_raw_parts(ptr, self.len) }
+    }
+}
+
+impl Default for StackMessageBuffer {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
