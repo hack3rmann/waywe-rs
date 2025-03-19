@@ -35,7 +35,7 @@ pub(crate) unsafe extern "C" fn dispatch_raw<T: HasObjectType>(
     message: *const wl_message,
     arguments: *mut wl_argument,
 ) -> c_int {
-    tracing::info!(
+    tracing::trace!(
         "libwayland event dispatch: {}::{}",
         T::OBJECT_TYPE.interface_name(),
         T::OBJECT_TYPE

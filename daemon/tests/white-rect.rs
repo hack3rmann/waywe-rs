@@ -3,7 +3,7 @@ use std::mem;
 use std::pin::pin;
 use wayland::{
     init::connect_wayland_socket,
-    interface::WlCompositorCreateSurface,
+    interface::{WlCompositorCreateSurface, WlSurfaceCommitRequest},
     sys::{
         display::WlDisplay,
         object::{default_impl::{WlCompositor, WlSurface}, registry::WlRegistry},
@@ -38,7 +38,7 @@ async fn use_wgpu_to_draw_anything() {
     let raw_display_handle = display.display_handle().unwrap().as_raw();
     let raw_window_handle = storage.object(surface).window_handle().unwrap().as_raw();
 
-    let surface = unsafe {
+    let wgpu_surface = unsafe {
         instance
             .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
                 raw_display_handle,
@@ -51,7 +51,7 @@ async fn use_wgpu_to_draw_anything() {
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
             force_fallback_adapter: false,
-            compatible_surface: Some(&surface),
+            compatible_surface: Some(&wgpu_surface),
         })
         .await
         .expect("failed to request adapter");
@@ -71,12 +71,12 @@ async fn use_wgpu_to_draw_anything() {
 
     const WIDTH: u32 = 1000;
     const HEIGHT: u32 = WIDTH;
-    surface.configure(
+    wgpu_surface.configure(
         &device,
-        &surface.get_default_config(&adapter, WIDTH, HEIGHT).unwrap(),
+        &wgpu_surface.get_default_config(&adapter, WIDTH, HEIGHT).unwrap(),
     );
 
-    let surface_format = surface.get_capabilities(&adapter).formats[0];
+    let surface_format = wgpu_surface.get_capabilities(&adapter).formats[0];
 
     let vertex_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
@@ -162,7 +162,7 @@ async fn use_wgpu_to_draw_anything() {
         cache: None,
     });
 
-    let surface_texture = surface.get_current_texture().unwrap();
+    let surface_texture = wgpu_surface.get_current_texture().unwrap();
     let surface_view = surface_texture.texture.create_view(&Default::default());
 
     let mut encoder = device.create_command_encoder(&Default::default());
