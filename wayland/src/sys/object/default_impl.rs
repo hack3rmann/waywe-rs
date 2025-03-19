@@ -1,7 +1,7 @@
 use super::{WlObject, WlObjectHandle};
 use crate::{
     SmallVecMessageBuffer, WlObjectStorage,
-    interface::{Event, LayerSurfaceAckConfigureRequest, LayerSurfaceConfigureEvent},
+    interface::{Event, WlLayerSurfaceAckConfigureRequest, WlLayerSurfaceConfigureEvent},
     object::{HasObjectType, WlObjectType},
     sys::{
         object::{Dispatch, FromProxy},
@@ -46,6 +46,7 @@ define_empty_dispatchers! {
     Surface,
     Viewport,
     Viewporter,
+    LayerShell,
 }
 
 impl HasWindowHandle for WlObject<WlSurface> {
@@ -59,30 +60,15 @@ impl HasWindowHandle for WlObject<WlSurface> {
 }
 
 #[derive(Debug, Default)]
-pub struct WlrLayerShellV1;
-
-impl HasObjectType for WlrLayerShellV1 {
-    const OBJECT_TYPE: WlObjectType = WlObjectType::WlrLayerShellV1;
-}
-
-impl FromProxy for WlrLayerShellV1 {
-    fn from_proxy(_: &WlProxy) -> Self {
-        Self
-    }
-}
-
-impl Dispatch for WlrLayerShellV1 {}
-
-#[derive(Debug, Default)]
-pub struct WlrLayerSurfaceV1 {
+pub struct WlLayerSurface {
     pub handle: WlObjectHandle<Self>,
 }
 
-impl HasObjectType for WlrLayerSurfaceV1 {
-    const OBJECT_TYPE: WlObjectType = WlObjectType::WlrLayerSurfaceV1;
+impl HasObjectType for WlLayerSurface {
+    const OBJECT_TYPE: WlObjectType = WlObjectType::LayerSurface;
 }
 
-impl FromProxy for WlrLayerSurfaceV1 {
+impl FromProxy for WlLayerSurface {
     fn from_proxy(proxy: &WlProxy) -> Self {
         Self {
             handle: WlObjectHandle::new(proxy.id()),
@@ -90,20 +76,20 @@ impl FromProxy for WlrLayerSurfaceV1 {
     }
 }
 
-impl Dispatch for WlrLayerSurfaceV1 {
+impl Dispatch for WlLayerSurface {
     fn dispatch(&mut self, storage: Pin<&mut WlObjectStorage>, message: WlMessage<'_>) {
-        let Some(LayerSurfaceConfigureEvent { serial, .. }) =
-            LayerSurfaceConfigureEvent::from_message(message)
+        let Some(WlLayerSurfaceConfigureEvent { serial, .. }) =
+            WlLayerSurfaceConfigureEvent::from_message(message)
         else {
             return;
         };
 
-        let mut buf = SmallVecMessageBuffer::<4>::new();
+        let mut buf = SmallVecMessageBuffer::<1>::new();
 
         self.handle.request(
             &mut buf,
             storage.as_ref().get_ref(),
-            LayerSurfaceAckConfigureRequest { serial },
+            WlLayerSurfaceAckConfigureRequest { serial },
         );
     }
 }

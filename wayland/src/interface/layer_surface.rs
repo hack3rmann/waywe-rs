@@ -24,7 +24,7 @@ pub mod request {
     }
 
     impl HasObjectType for SetSize {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlrLayerSurfaceV1;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::LayerSurface;
     }
 
     impl<'s> Request<'s> for SetSize {
@@ -59,7 +59,7 @@ pub mod request {
     }
 
     impl HasObjectType for SetAnchor {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlrLayerSurfaceV1;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::LayerSurface;
     }
 
     impl<'s> Request<'s> for SetAnchor {
@@ -118,7 +118,7 @@ pub mod request {
     }
 
     impl HasObjectType for SetExclusiveZone {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlrLayerSurfaceV1;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::LayerSurface;
     }
 
     impl<'s> Request<'s> for SetExclusiveZone {
@@ -166,7 +166,7 @@ pub mod request {
     }
 
     impl HasObjectType for SetMargin {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlrLayerSurfaceV1;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::LayerSurface;
     }
 
     impl<'s> Request<'s> for SetMargin {
@@ -208,7 +208,7 @@ pub mod request {
     }
 
     impl HasObjectType for SetKeyboardInteractivity {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlrLayerSurfaceV1;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::LayerSurface;
     }
 
     impl<'s> Request<'s> for SetKeyboardInteractivity {
@@ -250,7 +250,7 @@ pub mod request {
     }
 
     impl HasObjectType for AckConfigure {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlrLayerSurfaceV1;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::LayerSurface;
     }
 
     impl<'s> Request<'s> for AckConfigure {

@@ -46,16 +46,16 @@ pub mod request {
     }
 
     impl ObjectParent for GetLayerSurface<'_> {
-        const CHILD_TYPE: WlObjectType = WlObjectType::WlrLayerSurfaceV1;
+        const CHILD_TYPE: WlObjectType = WlObjectType::LayerSurface;
     }
 
     impl HasObjectType for GetLayerSurface<'_> {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlrLayerShellV1;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::LayerShell;
     }
 
     impl<'s> Request<'s> for GetLayerSurface<'s> {
         const CODE: OpCode = 0;
-        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::WlrLayerSurfaceV1);
+        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::LayerSurface);
 
         fn build_message<'m>(
             self,
@@ -83,7 +83,7 @@ pub mod request {
     pub struct Destroy;
 
     impl HasObjectType for Destroy {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlrLayerShellV1;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::LayerShell;
     }
 
     impl<'s> Request<'s> for Destroy {

@@ -62,12 +62,12 @@ pub enum WlObjectType {
     Surface,
     Output,
     Region,
-    WlrLayerShellV1,
+    LayerShell,
     Viewporter,
     // non-globals
     Viewport,
     Callback,
-    WlrLayerSurfaceV1,
+    LayerSurface,
 }
 
 impl WlObjectType {
@@ -84,12 +84,12 @@ impl WlObjectType {
             "wl_surface" => WlObjectType::Surface,
             "wl_region" => WlObjectType::Region,
             "wl_output" => WlObjectType::Output,
-            "zwlr_layer_shell_v1" => WlObjectType::WlrLayerShellV1,
+            "zwlr_layer_shell_v1" => WlObjectType::LayerShell,
             "wp_viewporter" => WlObjectType::Viewporter,
             // non-globals
             "wp_viewport" => WlObjectType::Viewport,
             "wl_callback" => WlObjectType::Callback,
-            "zwlr_layer_surface_v1" => WlObjectType::WlrLayerSurfaceV1,
+            "zwlr_layer_surface_v1" => WlObjectType::LayerSurface,
         };
 
         MAP.get(name).copied()
@@ -108,8 +108,8 @@ impl WlObjectType {
             Self::Shm => &crate::sys::protocol::wl_shm::INTERFACE,
             Self::Buffer => &crate::sys::protocol::wl_buffer::INTERFACE,
             Self::Output => &crate::sys::protocol::wl_output::INTERFACE,
-            Self::WlrLayerShellV1 => &crate::sys::protocol::zwlr_layer_shell_v1::INTERFACE,
-            Self::WlrLayerSurfaceV1 => &crate::sys::protocol::zwlr_layer_surface_v1::INTERFACE,
+            Self::LayerShell => &crate::sys::protocol::zwlr_layer_shell_v1::INTERFACE,
+            Self::LayerSurface => &crate::sys::protocol::zwlr_layer_surface_v1::INTERFACE,
             Self::Viewporter => &crate::sys::protocol::wp_viewporter::INTERFACE,
             Self::Viewport => &crate::sys::protocol::wp_viewport::INTERFACE,
         }
@@ -128,8 +128,8 @@ impl WlObjectType {
             Self::Shm => &crate::sys::protocol::wl_shm::WL_INTERFACE,
             Self::Buffer => &crate::sys::protocol::wl_buffer::WL_INTERFACE,
             Self::Output => &crate::sys::protocol::wl_output::WL_INTERFACE,
-            Self::WlrLayerShellV1 => &crate::sys::protocol::zwlr_layer_shell_v1::WL_INTERFACE,
-            Self::WlrLayerSurfaceV1 => &crate::sys::protocol::zwlr_layer_surface_v1::WL_INTERFACE,
+            Self::LayerShell => &crate::sys::protocol::zwlr_layer_shell_v1::WL_INTERFACE,
+            Self::LayerSurface => &crate::sys::protocol::zwlr_layer_surface_v1::WL_INTERFACE,
             Self::Viewporter => &crate::sys::protocol::wp_viewporter::WL_INTERFACE,
             Self::Viewport => &crate::sys::protocol::wp_viewport::WL_INTERFACE,
         }

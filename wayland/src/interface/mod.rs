@@ -1,20 +1,23 @@
 pub mod callback;
 pub mod compositor;
 pub mod display;
+pub mod layer_shell;
+pub mod layer_surface;
 pub mod region;
 pub mod registry;
 pub mod shm;
 pub mod shm_pool;
 pub mod surface;
 pub mod viewporter;
-pub mod zwlr_layer_shell_v1;
-pub mod zwlr_layer_surface_v1;
 
-use crate::{object::{HasObjectType, WlObjectType}, sys::{
-    object_storage::WlObjectStorage,
-    proxy::WlProxy,
-    wire::{WlMessage, MessageBuffer, OpCode},
-}};
+use crate::{
+    object::{HasObjectType, WlObjectType},
+    sys::{
+        object_storage::WlObjectStorage,
+        proxy::WlProxy,
+        wire::{MessageBuffer, OpCode, WlMessage},
+    },
+};
 use std::ptr::{self, NonNull};
 use wayland_sys::wl_proxy_marshal_array_constructor;
 
@@ -27,6 +30,23 @@ pub use {
         event::{DeleteId as WlDisplayDeleteIdEvent, Error as WlDisplayErrorEvent},
         request::{GetRegistry as WlDisplayGetRegistryRequest, Sync as WlDisplaySyncRequest},
         wl_enum::Error as WlDisplayErrorEnum,
+    },
+    layer_shell::{
+        request::{
+            Destroy as WlLayerShellDestroyRequest,
+            GetLayerSurface as WlLayerShellGetLayerSurfaceRequest,
+        },
+        wl_enum::Layer as WlLayerShellLayer,
+    },
+    layer_surface::{
+        event::Configure as WlLayerSurfaceConfigureEvent,
+        request::{
+            AckConfigure as WlLayerSurfaceAckConfigureRequest,
+            SetAnchor as WlLayerSurfaceSetAnchorRequest,
+            SetExclusiveZone as WlLayerSurfaceSetExclusiveZoneRequest,
+            SetKeyboardInteractivity as WlLayerSurfaceSetKeyboardInteractivityRequest,
+            SetMargin as WlLayerSurfaceSetMarginRequest, SetSize as WlLayerSurfaceSetSizeRequest,
+        },
     },
     region::request::Destroy as WlRegionDestroyRequest,
     registry::{
@@ -46,24 +66,7 @@ pub use {
         },
         wl_enum::Error as WlSurfaceError,
     },
-    viewporter::request::GetViewport as WpViewporterGetViewportRequest,
-    zwlr_layer_shell_v1::{
-        request::{
-            Destroy as ZwlrLayerShellDestroyRequest,
-            GetLayerSurface as ZwlrLayerShellGetLayerSurfaceRequest,
-        },
-        wl_enum::Layer as ZwlrLayerShellV1Layer,
-    },
-    zwlr_layer_surface_v1::{
-        event::Configure as LayerSurfaceConfigureEvent,
-        request::{
-            AckConfigure as LayerSurfaceAckConfigureRequest,
-            SetAnchor as LayerSurfaceSetAnchorRequest,
-            SetExclusiveZone as LayerSurfaceSetExclusiveZoneRequest,
-            SetKeyboardInteractivity as LayerSurfaceSetKeyboardInteractivityRequest,
-            SetMargin as LayerSurfaceSetMarginRequest, SetSize as LayerSurfaceSetSizeRequest,
-        },
-    },
+    viewporter::request::GetViewport as WlViewporterGetViewportRequest,
 };
 
 pub trait ObjectParent {
