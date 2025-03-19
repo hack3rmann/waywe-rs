@@ -2,13 +2,17 @@ use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use std::mem;
 use std::pin::pin;
 use wayland::{
+    WlObjectHandle,
     init::connect_wayland_socket,
-    interface::{WlCompositorCreateSurface, WlSurfaceCommitRequest},
+    interface::WlCompositorCreateSurface,
     sys::{
         display::WlDisplay,
-        object::{default_impl::{WlCompositor, WlSurface}, registry::WlRegistry},
+        object::{
+            default_impl::{WlCompositor, WlSurface},
+            registry::WlRegistry,
+        },
         wire::SmallVecMessageBuffer,
-    }, WlObjectHandle,
+    },
 };
 use wgpu::util::DeviceExt as _;
 
@@ -73,7 +77,9 @@ async fn use_wgpu_to_draw_anything() {
     const HEIGHT: u32 = WIDTH;
     wgpu_surface.configure(
         &device,
-        &wgpu_surface.get_default_config(&adapter, WIDTH, HEIGHT).unwrap(),
+        &wgpu_surface
+            .get_default_config(&adapter, WIDTH, HEIGHT)
+            .unwrap(),
     );
 
     let surface_format = wgpu_surface.get_capabilities(&adapter).formats[0];

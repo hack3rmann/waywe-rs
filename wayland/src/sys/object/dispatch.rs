@@ -19,7 +19,7 @@ pub trait Dispatch: 'static {
 }
 static_assertions::assert_obj_safe!(Dispatch);
 
-pub(crate) type WlDispatchFn<T> = unsafe fn(&mut T, Pin<&mut WlObjectStorage<'_>>, WlMessage<'_>);
+pub(crate) type WlDispatchFn<T> = fn(&mut T, Pin<&mut WlObjectStorage<'_>>, WlMessage<'_>);
 
 #[repr(C)]
 pub(crate) struct WlDispatchData<T> {
@@ -87,7 +87,7 @@ pub(crate) unsafe extern "C" fn dispatch_raw<T: HasObjectType>(
 
         let message = WlMessage { opcode, arguments };
 
-        if let Err(err) = storage.with_object_data_acquired(id, |storage| unsafe {
+        if let Err(err) = storage.with_object_data_acquired(id, |storage| {
             (data.dispatch)(&mut data.data, storage, message);
         }) {
             tracing::error!("failed to acquire the object's data: {err}");

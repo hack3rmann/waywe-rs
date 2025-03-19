@@ -44,7 +44,7 @@ impl<T> WlObjectHandle<T> {
         self.id
     }
 
-    /// Send the `request` to the server with a several compile-time checks
+    /// Send the `request` to the server with several compile-time checks
     ///
     /// # Note
     ///
@@ -70,7 +70,7 @@ impl<T> WlObjectHandle<T> {
         debug_assert!(proxy.is_none());
     }
 
-    /// Send the `request` to the server with a several compile-time checks
+    /// Send the `request` to the server with several compile-time checks
     ///
     /// # Note
     ///
