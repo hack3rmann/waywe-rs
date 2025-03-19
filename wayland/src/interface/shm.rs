@@ -16,7 +16,6 @@ pub mod request {
     use super::*;
     use crate::interface::ObjectParent;
     use crate::object::{HasObjectType, WlObjectType};
-    use crate::sys::object::default_impl::WlShmPool;
     use crate::sys::object_storage::WlObjectStorage;
     use crate::sys::wire::MessageBuffer;
 
@@ -34,7 +33,7 @@ pub mod request {
     }
 
     impl ObjectParent for CreatePool<'_> {
-        type Child = WlShmPool;
+        const CHILD_TYPE: WlObjectType = WlObjectType::ShmPool;
     }
 
     impl HasObjectType for CreatePool<'_> {

@@ -50,7 +50,14 @@ pub mod request {
     use crate::{
         interface::{ObjectParent, Request},
         object::{HasObjectType, WlObjectType},
-        sys::{object::{default_impl::{WlBuffer, WlCallback, WlRegion}, WlObjectHandle}, object_storage::WlObjectStorage, wire::OpCode},
+        sys::{
+            object::{
+                WlObjectHandle,
+                default_impl::{WlBuffer, WlRegion},
+            },
+            object_storage::WlObjectStorage,
+            wire::OpCode,
+        },
     };
 
     /// Deletes the surface and invalidates its object ID.
@@ -247,7 +254,7 @@ pub mod request {
     pub struct Frame;
 
     impl ObjectParent for Frame {
-        type Child = WlCallback;
+        const CHILD_TYPE: WlObjectType = WlObjectType::Callback;
     }
 
     impl HasObjectType for Frame {

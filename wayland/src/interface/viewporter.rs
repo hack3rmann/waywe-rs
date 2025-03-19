@@ -10,7 +10,7 @@ pub mod request {
         interface::{ObjectParent, Request},
         object::{HasObjectType, WlObjectType},
         sys::{
-            object::{default_impl::{WlSurface, WlViewport}, WlObjectHandle},
+            object::{WlObjectHandle, default_impl::WlSurface},
             object_storage::WlObjectStorage,
             wire::{MessageBuffer, OpCode, WlMessage},
         },
@@ -27,7 +27,7 @@ pub mod request {
     }
 
     impl ObjectParent for GetViewport {
-        type Child = WlViewport;
+        const CHILD_TYPE: WlObjectType = WlObjectType::Viewport;
     }
 
     impl HasObjectType for GetViewport {

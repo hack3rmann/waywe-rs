@@ -11,7 +11,7 @@ pub mod request {
     use crate::{
         interface::ObjectParent,
         object::{HasObjectType, WlObjectType},
-        sys::{object::{default_impl::WlCallback, registry::WlRegistry}, object_storage::WlObjectStorage, wire::OpCode},
+        sys::{object_storage::WlObjectStorage, wire::OpCode},
     };
 
     /// The sync request asks the server to emit the 'done' event
@@ -29,7 +29,7 @@ pub mod request {
     pub struct Sync;
 
     impl ObjectParent for Sync {
-        type Child = WlCallback;
+        const CHILD_TYPE: WlObjectType = WlObjectType::Callback;
     }
 
     impl HasObjectType for Sync {
@@ -65,7 +65,7 @@ pub mod request {
     pub struct GetRegistry;
 
     impl ObjectParent for GetRegistry {
-        type Child = WlRegistry;
+        const CHILD_TYPE: WlObjectType = WlObjectType::Registry;
     }
 
     impl HasObjectType for GetRegistry {

@@ -14,7 +14,7 @@ pub mod request {
     use crate::{
         interface::{ObjectParent, WlShmFormat},
         object::{HasObjectType, WlObjectType},
-        sys::{object::default_impl::WlBuffer, object_storage::WlObjectStorage},
+        sys::object_storage::WlObjectStorage,
     };
 
     /// Create a wl_buffer object from the pool.
@@ -43,7 +43,7 @@ pub mod request {
     }
 
     impl ObjectParent for CreateBuffer {
-        type Child = WlBuffer;
+        const CHILD_TYPE: WlObjectType = WlObjectType::Buffer;
     }
 
     impl HasObjectType for CreateBuffer {

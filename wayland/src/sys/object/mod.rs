@@ -75,16 +75,16 @@ impl<T> WlObjectHandle<T> {
     /// # Note
     ///
     /// Can be used only for object creating requests (e.g. wl_compositor::create_surface)
-    pub fn create_object<'r, R>(
+    pub fn create_object<'r, D, R>(
         self,
         buf: &mut impl MessageBuffer,
         storage: Pin<&mut WlObjectStorage>,
         request: R,
-    ) -> WlObjectHandle<R::Child>
+    ) -> WlObjectHandle<D>
     where
         R: Request<'r> + ObjectParent,
-        R::Child: Dispatch + HasObjectType + FromProxy,
         T: Dispatch + HasObjectType,
+        D: Dispatch + HasObjectType + FromProxy,
     {
         const {
             assert!(
@@ -94,7 +94,7 @@ impl<T> WlObjectHandle<T> {
 
             match R::OUTGOING_INTERFACE {
                 Some(object_type) => assert!(
-                    object_type as u32 == R::Child::OBJECT_TYPE as u32,
+                    object_type as u32 == D::OBJECT_TYPE as u32,
                     "request's outgoing interface should match the return type one's"
                 ),
                 None => panic!("the request should have outgoing interface set to Some"),
@@ -111,7 +111,7 @@ impl<T> WlObjectHandle<T> {
                 .unwrap()
         };
 
-        let data = R::Child::from_proxy(&proxy);
+        let data = D::from_proxy(&proxy);
         storage.insert(WlObject::new(proxy, data))
     }
 }

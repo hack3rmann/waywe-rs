@@ -6,9 +6,9 @@ use wayland::{
     interface::WlCompositorCreateSurface,
     sys::{
         display::WlDisplay,
-        object::{default_impl::WlCompositor, registry::WlRegistry},
+        object::{default_impl::{WlCompositor, WlSurface}, registry::WlRegistry},
         wire::SmallVecMessageBuffer,
-    },
+    }, WlObjectHandle,
 };
 use wgpu::util::DeviceExt as _;
 
@@ -26,7 +26,8 @@ async fn use_wgpu_to_draw_anything() {
     let compositor =
         WlRegistry::bind::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
 
-    let surface = compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurface);
+    let surface: WlObjectHandle<WlSurface> =
+        compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurface);
 
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
         backends: wgpu::Backends::VULKAN,

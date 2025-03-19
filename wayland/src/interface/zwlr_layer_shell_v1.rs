@@ -10,8 +10,8 @@ pub mod request {
     use super::wl_enum::Layer;
     use crate::interface::{ObjectParent, Request};
     use crate::object::{HasObjectType, WlObjectType};
-    use crate::sys::object::default_impl::{WlOutput, WlSurface, WlrLayerSurfaceV1};
     use crate::sys::object::WlObjectHandle;
+    use crate::sys::object::default_impl::{WlOutput, WlSurface};
     use crate::sys::object_storage::WlObjectStorage;
     use crate::sys::wire::{MessageBuffer, OpCode, WlMessage};
     use std::ffi::CStr;
@@ -46,7 +46,7 @@ pub mod request {
     }
 
     impl ObjectParent for GetLayerSurface<'_> {
-        type Child = WlrLayerSurfaceV1;
+        const CHILD_TYPE: WlObjectType = WlObjectType::WlrLayerSurfaceV1;
     }
 
     impl HasObjectType for GetLayerSurface<'_> {

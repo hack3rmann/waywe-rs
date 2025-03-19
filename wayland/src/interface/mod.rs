@@ -67,7 +67,7 @@ pub use {
 };
 
 pub trait ObjectParent {
-    type Child;
+    const CHILD_TYPE: WlObjectType;
 }
 
 /// Represents requests on Wayland's interfaces

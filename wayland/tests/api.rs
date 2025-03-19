@@ -12,8 +12,7 @@ use std::{
 };
 use tracing_test::traced_test;
 use wayland::{
-    StackMessageBuffer,
-    init::connect_wayland_socket,
+    StackMessageBuffer, WlObjectHandle,
     interface::{
         LayerSurfaceSetAnchorRequest, LayerSurfaceSetExclusiveZoneRequest,
         LayerSurfaceSetKeyboardInteractivityRequest, LayerSurfaceSetMarginRequest,
@@ -29,28 +28,25 @@ use wayland::{
     sys::{
         display::WlDisplay,
         object::{
-            default_impl::{WlCompositor, WlOutput, WlShm, WlViewporter, WlrLayerShellV1},
+            default_impl::{
+                WlCompositor, WlOutput, WlRegion, WlShm, WlShmPool, WlSurface, WlViewport,
+                WlViewporter, WlrLayerShellV1, WlrLayerSurfaceV1,
+            },
             registry::WlRegistry,
         },
     },
 };
 
-unsafe fn connect_display() -> WlDisplay {
-    let wayland_sock = unsafe { connect_wayland_socket().unwrap() };
-    WlDisplay::connect_to_fd(wayland_sock).unwrap()
-}
-
 #[test]
 fn just_connect_display() {
-    _ = unsafe { connect_display() };
+    WlDisplay::connect().unwrap();
 }
 
 #[test]
 fn get_registry() {
     let mut buf = StackMessageBuffer::new();
 
-    // Safety: called once on the start of the program
-    let display = unsafe { connect_display() };
+    let display = WlDisplay::connect().unwrap();
     let mut storage = pin!(display.create_storage());
     let registry = display.create_registry(&mut buf, storage.as_mut());
 
@@ -68,8 +64,7 @@ fn get_registry() {
 fn create_surface() {
     let mut buf = StackMessageBuffer::new();
 
-    // Safety: called once on the start of the program
-    let display = unsafe { connect_display() };
+    let display = WlDisplay::connect().unwrap();
     let mut storage = pin!(display.create_storage());
     let registry = display.create_registry(&mut buf, storage.as_mut());
 
@@ -78,7 +73,8 @@ fn create_surface() {
     let compositor =
         WlRegistry::bind::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
 
-    let surface = compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurface);
+    let surface: WlObjectHandle<WlSurface> =
+        compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurface);
 
     assert_eq!(
         storage.object(surface).proxy().interface_name(),
@@ -90,8 +86,7 @@ fn create_surface() {
 fn bind_wlr_shell() {
     let mut buf = StackMessageBuffer::new();
 
-    // Safety: called once on the start of the program
-    let display = unsafe { connect_display() };
+    let display = WlDisplay::connect().unwrap();
     let mut storage = pin!(display.create_storage());
     let registry = display.create_registry(&mut buf, storage.as_mut());
 
@@ -126,8 +121,7 @@ fn open_shm() -> Result<(OwnedFd, String), rustix::io::Errno> {
 fn white_rect() {
     let mut buf = StackMessageBuffer::new();
 
-    // Safety: called once on the start of the program
-    let display = unsafe { connect_display() };
+    let display = WlDisplay::connect().unwrap();
     let mut storage = pin!(display.create_storage());
     let registry = display.create_registry(&mut buf, storage.as_mut());
 
@@ -141,15 +135,17 @@ fn white_rect() {
     let compositor =
         WlRegistry::bind::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
 
-    let surface = compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurface);
+    let surface: WlObjectHandle<WlSurface> =
+        compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurface);
 
-    let _viewport = viewporter.create_object(
+    let _viewport: WlObjectHandle<WlViewport> = viewporter.create_object(
         &mut buf,
         storage.as_mut(),
         WpViewporterGetViewportRequest { surface },
     );
 
-    let region = compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateRegion);
+    let region: WlObjectHandle<WlRegion> =
+        compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateRegion);
 
     surface.request(
         &mut buf,
@@ -167,7 +163,7 @@ fn white_rect() {
     let layer_shell =
         WlRegistry::bind::<WlrLayerShellV1>(&mut buf, storage.as_mut(), registry).unwrap();
 
-    let layer_surface = layer_shell.create_object(
+    let layer_surface: WlObjectHandle<WlrLayerSurfaceV1> = layer_shell.create_object(
         &mut buf,
         storage.as_mut(),
         ZwlrLayerShellGetLayerSurfaceRequest {
@@ -247,7 +243,7 @@ fn white_rect() {
 
     let _buffer = unsafe { slice::from_raw_parts_mut(shm_ptr.cast::<u32>(), BUFFER_SIZE_PIXELS) };
 
-    let shm_pool = shm.create_object(
+    let shm_pool: WlObjectHandle<WlShmPool> = shm.create_object(
         &mut buf,
         storage.as_mut(),
         WlShmCreatePoolRequest {

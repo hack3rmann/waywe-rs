@@ -1,12 +1,18 @@
-use std::pin::Pin;
-
-use raw_window_handle::{HandleError, HasWindowHandle, RawWindowHandle, WaylandWindowHandle, WindowHandle};
-
-use crate::{
-    interface::{Event, LayerSurfaceAckConfigureRequest, LayerSurfaceConfigureEvent}, object::{HasObjectType, WlObjectType}, sys::{object::{Dispatch, FromProxy}, proxy::WlProxy, wire::WlMessage}, SmallVecMessageBuffer, WlObjectStorage
-};
-
 use super::{WlObject, WlObjectHandle};
+use crate::{
+    SmallVecMessageBuffer, WlObjectStorage,
+    interface::{Event, LayerSurfaceAckConfigureRequest, LayerSurfaceConfigureEvent},
+    object::{HasObjectType, WlObjectType},
+    sys::{
+        object::{Dispatch, FromProxy},
+        proxy::WlProxy,
+        wire::WlMessage,
+    },
+};
+use raw_window_handle::{
+    HandleError, HasWindowHandle, RawWindowHandle, WaylandWindowHandle, WindowHandle,
+};
+use std::pin::Pin;
 
 macro_rules! define_empty_dispatchers {
     ( $( $name:ident ),* $(,)? ) => {
