@@ -45,7 +45,7 @@ pub(crate) type WlDispatchFn<T, S> =
 pub(crate) struct WlDispatchData<T, S: State> {
     pub dispatch: WlDispatchFn<T, S>,
     pub storage: Option<NonNull<WlObjectStorage<'static, S>>>,
-    pub state: NonNull<S>,
+    pub state: Option<NonNull<S>>,
     pub data: T,
 }
 
@@ -85,6 +85,11 @@ pub(crate) unsafe extern "C" fn dispatch_raw<T: HasObjectType, S: State>(
             return -1;
         };
 
+        let Some(mut state_ptr) = data.state else {
+            tracing::error!("no pointer to `WlObjectStorage` is set");
+            return -1;
+        };
+
         // # Safety
         //
         // - the storage pointer is pinned
@@ -94,7 +99,7 @@ pub(crate) unsafe extern "C" fn dispatch_raw<T: HasObjectType, S: State>(
         let storage = unsafe { Pin::new_unchecked(storage_ptr.as_mut()) };
 
         // TODO(hack3rmann): add safety
-        let state = unsafe { Pin::new_unchecked(data.state.as_mut()) };
+        let state = unsafe { Pin::new_unchecked(state_ptr.as_mut()) };
 
         // Safety: an opcode provided by the libwayland backend is always valid (often really small)
         let opcode = unsafe { u16::try_from(opcode).unwrap_unchecked() };

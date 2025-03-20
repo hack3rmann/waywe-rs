@@ -83,7 +83,6 @@ impl<T> WlObjectHandle<T> {
         self,
         buf: &mut impl MessageBuffer,
         storage: Pin<&mut WlObjectStorage<'_, D::State>>,
-        state: Pin<&mut D::State>,
         request: R,
     ) -> WlObjectHandle<D>
     where
@@ -117,7 +116,7 @@ impl<T> WlObjectHandle<T> {
         };
 
         let data = D::from_proxy(&proxy);
-        storage.insert(WlObject::new(proxy, data, state))
+        storage.insert(WlObject::new(proxy, data))
     }
 }
 
@@ -237,12 +236,11 @@ pub struct WlObject<T: Dispatch> {
 
 impl<T: Dispatch + HasObjectType> WlObject<T> {
     // TODO(hack3rmann): add state pointer here
-    pub fn new(proxy: WlProxy, data: T, state: Pin<&mut T::State>) -> Self {
+    pub fn new(proxy: WlProxy, data: T) -> Self {
         let dispatch_data = Box::new(WlDispatchData::<T, T::State> {
             dispatch: T::dispatch,
             storage: None,
-            // TODO(hack3rmann): add safety
-            state: NonNull::from(unsafe { state.get_unchecked_mut() }),
+            state: None,
             data,
         });
 
@@ -271,16 +269,34 @@ impl<T: Dispatch + HasObjectType> WlObject<T> {
         }
     }
 
-    pub fn write_storage_location(&mut self, mut storage: Pin<&mut WlObjectStorage<'_, T::State>>) {
+    pub fn write_storage_location(&mut self, storage: Pin<&mut WlObjectStorage<'_, T::State>>) {
         let user_data_ptr = self
             .proxy()
             .get_user_data()
             .cast::<WlDispatchData<T, T::State>>();
 
-        // Safety: the `WlObject` always has valid user data being set
+        // # Safety
+        //
+        // - the `WlObject` always has valid user data being set
+        // - we have exclusive access to the proxy object
         let user_data = unsafe { user_data_ptr.as_mut().unwrap_unchecked() };
 
-        user_data.storage = Some(NonNull::new(&raw mut *storage).unwrap().cast());
+        user_data.storage = Some(NonNull::from(unsafe { storage.get_unchecked_mut() }).cast());
+    }
+
+    pub fn write_state_location(&mut self, state: Pin<&mut T::State>) {
+        let user_data_ptr = self
+            .proxy()
+            .get_user_data()
+            .cast::<WlDispatchData<T, T::State>>();
+
+        // # Safety
+        //
+        // - the `WlObject` always has valid user data being set
+        // - we have exclusive access to the proxy object
+        let user_data = unsafe { user_data_ptr.as_mut().unwrap_unchecked() };
+
+        user_data.state = Some(NonNull::from(unsafe { state.get_unchecked_mut() }));
     }
 
     pub fn proxy(&self) -> &WlProxy {

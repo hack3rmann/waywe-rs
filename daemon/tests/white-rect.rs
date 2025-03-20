@@ -2,33 +2,36 @@ use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use std::mem;
 use std::pin::pin;
 use wayland::{
-    init::connect_wayland_socket, interface::WlCompositorCreateSurface, sys::{
+    WlObjectHandle,
+    interface::WlCompositorCreateSurface,
+    sys::{
         display::WlDisplay,
         object::{
-            default_impl::{WlCompositor, WlSurface}, dispatch::NoState, registry::WlRegistry
+            default_impl::{WlCompositor, WlSurface},
+            dispatch::NoState,
+            registry::WlRegistry,
         },
         wire::SmallVecMessageBuffer,
-    }, WlObjectHandle
+    },
 };
 use wgpu::util::DeviceExt as _;
 
 #[tokio::test]
 async fn use_wgpu_to_draw_anything() {
-    let wayland_sock = unsafe { connect_wayland_socket().unwrap() };
     let mut buf = SmallVecMessageBuffer::<8>::new();
 
-    let display = WlDisplay::<NoState>::connect_to_fd(wayland_sock).unwrap();
-    let mut storage = pin!(display.create_storage());
     let mut state = pin!(NoState);
-    let registry = display.create_registry(&mut buf, storage.as_mut(), state.as_mut());
+    let display = WlDisplay::connect(state.as_mut()).unwrap();
+    let mut storage = pin!(display.create_storage());
+    let registry = display.create_registry(&mut buf, storage.as_mut());
 
     display.dispatch_all_pending(storage.as_mut(), state.as_mut());
 
     let compositor =
-        WlRegistry::bind::<WlCompositor>(&mut buf, storage.as_mut(), state.as_mut(), registry).unwrap();
+        WlRegistry::bind::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
 
     let surface: WlObjectHandle<WlSurface> =
-        compositor.create_object(&mut buf, storage.as_mut(), state.as_mut(), WlCompositorCreateSurface);
+        compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurface);
 
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
         backends: wgpu::Backends::VULKAN,

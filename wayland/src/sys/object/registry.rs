@@ -38,7 +38,6 @@ impl<S: State> WlRegistry<S> {
     pub fn bind_value<T>(
         buf: &mut impl MessageBuffer,
         storage: Pin<&mut WlObjectStorage<'_, S>>,
-        state: Pin<&mut S>,
         registry: WlObjectHandle<WlRegistry<S>>,
         object: T,
     ) -> Option<WlObjectHandle<T>>
@@ -48,13 +47,12 @@ impl<S: State> WlRegistry<S> {
         let proxy =
             unsafe { WlRegistryBindRequest::<T>::new().send(storage.get_object(registry)?, buf)? };
 
-        Some(storage.insert(WlObject::new(proxy, object, state)))
+        Some(storage.insert(WlObject::new(proxy, object)))
     }
 
     pub fn bind<T>(
         buf: &mut impl MessageBuffer,
         storage: Pin<&mut WlObjectStorage<'_, S>>,
-        state: Pin<&mut S>,
         registry: WlObjectHandle<WlRegistry<S>>,
     ) -> Option<WlObjectHandle<T>>
     where
@@ -65,7 +63,7 @@ impl<S: State> WlRegistry<S> {
 
         let data = T::from_proxy(&proxy);
 
-        Some(storage.insert(WlObject::new(proxy, data, state)))
+        Some(storage.insert(WlObject::new(proxy, data)))
     }
 
     pub fn name_of(&self, object_type: WlObjectType) -> Option<WlObjectId> {

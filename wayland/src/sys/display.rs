@@ -13,7 +13,7 @@ use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, RawDisplayHandle, WaylandDisplayHandle,
 };
 use std::{
-    any, fmt, marker::PhantomData, mem::ManuallyDrop, os::fd::IntoRawFd, pin::Pin, ptr::NonNull,
+    any, fmt, mem::ManuallyDrop, os::fd::IntoRawFd, pin::Pin, ptr::NonNull,
 };
 use thiserror::Error;
 use wayland_sys::{
@@ -23,19 +23,19 @@ use wayland_sys::{
 /// A handle to the libwayland backend
 pub struct WlDisplay<S: State> {
     proxy: ManuallyDrop<WlProxy>,
-    _p: PhantomData<NonNull<S>>,
+    state: NonNull<S>,
 }
 
 impl<S: State> WlDisplay<S> {
     /// Connect to libwayland backend
-    pub fn connect() -> Result<Self, DisplayConnectError> {
+    pub fn connect(state: Pin<&mut S>) -> Result<Self, DisplayConnectError> {
         let fd = unsafe { connect_wayland_socket()? };
-        Ok(Self::connect_to_fd(fd)?)
+        Ok(Self::connect_to_fd(state, fd)?)
     }
 
     /// Connect to Wayland display on an already open fd.
     /// The fd will be closed in case of failure.
-    pub fn connect_to_fd(fd: impl IntoRawFd) -> Result<Self, DisplayConnectToFdError> {
+    pub fn connect_to_fd(state: Pin<&mut S>, fd: impl IntoRawFd) -> Result<Self, DisplayConnectToFdError> {
         let raw_fd = fd.into_raw_fd();
 
         // Safety: calling this function on a valid file descriptor is ok
@@ -47,7 +47,7 @@ impl<S: State> WlDisplay<S> {
 
         Ok(Self {
             proxy,
-            _p: PhantomData,
+            state: NonNull::from(unsafe { state.get_unchecked_mut() }),
         })
     }
 
@@ -65,7 +65,7 @@ impl<S: State> WlDisplay<S> {
     pub fn create_storage(&self) -> WlObjectStorage<'_, S> {
         // Safety: storage has captured the lifetime of `&self`
         // therefore it will be dropped before the `WlDisplay`
-        unsafe { WlObjectStorage::new() }
+        unsafe { WlObjectStorage::new(self.state) }
     }
 
     /// Creates `wl_registry` object and stores it in the storage
@@ -73,7 +73,6 @@ impl<S: State> WlDisplay<S> {
         &self,
         buf: &mut impl MessageBuffer,
         storage: Pin<&mut WlObjectStorage<'_, S>>,
-        state: Pin<&mut S>,
     ) -> WlObjectHandle<WlRegistry<S>> {
         // Safety: parent interface matcher request's one
         let proxy = unsafe {
@@ -82,9 +81,12 @@ impl<S: State> WlDisplay<S> {
                 .unwrap()
         };
 
-        storage.insert(WlObject::new(proxy, WlRegistry::default(), state))
+        storage.insert(WlObject::new(proxy, WlRegistry::default()))
     }
 
+    // FIXME(hack3rmann): check that storage and state pointers are the same
+    // as the pointers passed to object initializers
+    //
     /// Block until all pending requests are processed by the server.
     ///
     /// This function blocks until the server has processed all currently

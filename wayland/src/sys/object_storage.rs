@@ -1,10 +1,13 @@
 use super::{
     display::WlDisplay,
-    object::{dispatch::{Dispatch, State}, WlDynObject, WlObject, WlObjectHandle},
+    object::{
+        WlDynObject, WlObject, WlObjectHandle,
+        dispatch::{Dispatch, State},
+    },
     proxy::WlProxy,
 };
 use crate::object::{HasObjectType, WlObjectId};
-use std::{collections::HashMap, marker::PhantomData, pin::Pin};
+use std::{collections::HashMap, marker::PhantomData, pin::Pin, ptr::NonNull};
 use thiserror::Error;
 
 #[derive(Debug)]
@@ -18,6 +21,7 @@ pub struct WlObjectStorage<'d, S: State> {
     // NOTE(hack3rmann): this is a fast map as long as `ObjectId` hashes to itself
     objects: HashMap<WlObjectId, WlObjectStorageEntry>,
     acquired_object: Option<WlObjectId>,
+    state: NonNull<S>,
     _display: PhantomData<&'d WlDisplay<S>>,
 }
 
@@ -35,10 +39,11 @@ impl<S: State> WlObjectStorage<'_, S> {
     /// # Note
     ///
     /// The returned lifetime should be adjusted properly.
-    pub unsafe fn new() -> Self {
+    pub unsafe fn new(state: NonNull<S>) -> Self {
         Self {
             objects: HashMap::new(),
             acquired_object: None,
+            state,
             _display: PhantomData,
         }
     }
@@ -60,6 +65,7 @@ impl<S: State> WlObjectStorage<'_, S> {
         let id = object.proxy().id();
 
         object.write_storage_location(self.as_mut());
+        object.write_state_location(unsafe { Pin::new_unchecked(self.state.as_mut()) });
 
         if self
             .objects
@@ -127,7 +133,10 @@ impl<S: State> WlObjectStorage<'_, S> {
     }
 
     /// The same as [`WlObjectStorage::get_object_mut`] but unwraps for you.
-    pub fn object_mut<T: Dispatch<State = S>>(&mut self, handle: WlObjectHandle<T>) -> &WlObject<T> {
+    pub fn object_mut<T: Dispatch<State = S>>(
+        &mut self,
+        handle: WlObjectHandle<T>,
+    ) -> &WlObject<T> {
         self.get_object_mut(handle).unwrap()
     }
 
