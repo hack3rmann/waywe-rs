@@ -9,11 +9,17 @@ pub mod shm;
 pub mod shm_pool;
 pub mod surface;
 pub mod viewporter;
+pub mod wm_base;
+pub mod xdg_surface;
+pub mod toplevel;
 
 use crate::{
     object::{HasObjectType, WlObjectType},
     sys::{
-        object::dispatch::State, object_storage::WlObjectStorage, proxy::WlProxy, wire::{MessageBuffer, OpCode, WlMessage}
+        object::dispatch::State,
+        object_storage::WlObjectStorage,
+        proxy::WlProxy,
+        wire::{MessageBuffer, OpCode, WlMessage},
     },
 };
 use std::ptr::{self, NonNull};
@@ -22,7 +28,8 @@ use wayland_sys::wl_proxy_marshal_array_constructor;
 pub use {
     callback::event::Done as WlCallbackDoneEvent,
     compositor::request::{
-        CreateRegion as WlCompositorCreateRegion, CreateSurface as WlCompositorCreateSurface,
+        CreateRegion as WlCompositorCreateRegionRequest,
+        CreateSurface as WlCompositorCreateSurfaceRequest,
     },
     display::{
         event::{DeleteId as WlDisplayDeleteIdEvent, Error as WlDisplayErrorEvent},
@@ -65,6 +72,18 @@ pub use {
         wl_enum::Error as WlSurfaceError,
     },
     viewporter::request::GetViewport as WlViewporterGetViewportRequest,
+    wm_base::{
+        event::Ping as WlWmBasePingEvent,
+        request::{GetXdgSurface as WlWmBaseGetXdgSurfaceRequest, Pong as WlWmBasePongRequest},
+    },
+    xdg_surface::{
+        event::Configure as WlXdgSurfaceConfigureEvent,
+        request::{
+            AckConfigure as WlXdgSurfaceAckConfigureRequest,
+            GetToplevel as WlXdgSurfaceGetToplevelRequest,
+        },
+    },
+    toplevel::event::Configure as WlToplevelConfigureEvent,
 };
 
 pub trait ObjectParent {

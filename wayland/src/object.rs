@@ -63,10 +63,13 @@ pub enum WlObjectType {
     Region,
     LayerShell,
     Viewporter,
+    WmBase,
     // non-globals
     Viewport,
     Callback,
     LayerSurface,
+    XdgSurface,
+    Toplevel,
 }
 
 impl WlObjectType {
@@ -85,10 +88,13 @@ impl WlObjectType {
             "wl_output" => WlObjectType::Output,
             "zwlr_layer_shell_v1" => WlObjectType::LayerShell,
             "wp_viewporter" => WlObjectType::Viewporter,
+            "xdg_wm_base" => WlObjectType::WmBase,
             // non-globals
             "wp_viewport" => WlObjectType::Viewport,
             "wl_callback" => WlObjectType::Callback,
             "zwlr_layer_surface_v1" => WlObjectType::LayerSurface,
+            "xdg_surface" => WlObjectType::XdgSurface,
+            "xdg_toplevel" => WlObjectType::Toplevel,
         };
 
         MAP.get(name).copied()
@@ -111,6 +117,9 @@ impl WlObjectType {
             Self::LayerSurface => &protocol::zwlr_layer_surface_v1::INTERFACE,
             Self::Viewporter => &protocol::wp_viewporter::INTERFACE,
             Self::Viewport => &protocol::wp_viewport::INTERFACE,
+            Self::WmBase => &protocol::xdg_wm_base::INTERFACE,
+            Self::XdgSurface => &protocol::xdg_surface::INTERFACE,
+            Self::Toplevel => &protocol::xdg_toplevel::INTERFACE,
         }
     }
 
@@ -131,6 +140,9 @@ impl WlObjectType {
             Self::LayerSurface => &protocol::zwlr_layer_surface_v1::WL_INTERFACE,
             Self::Viewporter => &protocol::wp_viewporter::WL_INTERFACE,
             Self::Viewport => &protocol::wp_viewport::WL_INTERFACE,
+            Self::WmBase => &protocol::xdg_wm_base::WL_INTERFACE,
+            Self::XdgSurface => &protocol::xdg_surface::WL_INTERFACE,
+            Self::Toplevel => &protocol::xdg_toplevel::WL_INTERFACE,
         }
     }
 

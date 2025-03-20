@@ -1,11 +1,11 @@
 use super::proxy::{WlProxy, WlProxyQuery};
-use crate::object::InterfaceMessageArgument;
+use crate::{interface::Event, object::InterfaceMessageArgument};
 use smallvec::SmallVec;
 use std::{
     ffi::CStr,
-    mem::MaybeUninit,
+    mem::{self, MaybeUninit},
     os::fd::{AsRawFd, BorrowedFd, FromRawFd as _, OwnedFd},
-    ptr,
+    ptr, slice,
 };
 use wayland_sys::{WlArgument, wl_fixed_t, wl_object, wl_proxy};
 
@@ -175,6 +175,10 @@ impl<'s> WlMessage<'s> {
     pub fn reader(&self) -> MessageReader<'s> {
         MessageReader::new(self.arguments)
     }
+
+    pub fn as_event<E: Event<'s>>(self) -> Option<E> {
+        E::from_message(self)
+    }
 }
 
 /// Builder of the message header
@@ -328,6 +332,13 @@ impl<'s> FromWlArgument<'s> for &'s CStr {
         let ptr = unsafe { value.s };
         // Safety: string provided by the libwayland must be valid
         unsafe { CStr::from_ptr(ptr) }
+    }
+}
+
+impl<'s, T> FromWlArgument<'s> for &'s [T] {
+    unsafe fn from_argument(value: WlArgument) -> Self {
+        let raw = unsafe { value.a.read() };
+        unsafe { slice::from_raw_parts(raw.data.cast(), raw.size / mem::size_of::<T>()) }
     }
 }
 

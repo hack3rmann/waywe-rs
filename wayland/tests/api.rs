@@ -14,7 +14,7 @@ use tracing_test::traced_test;
 use wayland::{
     StackMessageBuffer, WlObjectHandle,
     interface::{
-        WlCompositorCreateRegion, WlCompositorCreateSurface, WlLayerShellGetLayerSurfaceRequest,
+        WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlLayerShellGetLayerSurfaceRequest,
         WlLayerShellLayer, WlLayerSurfaceSetAnchorRequest, WlLayerSurfaceSetExclusiveZoneRequest,
         WlLayerSurfaceSetKeyboardInteractivityRequest, WlLayerSurfaceSetMarginRequest,
         WlLayerSurfaceSetSizeRequest, WlRegionDestroyRequest, WlShmCreatePoolRequest, WlShmFormat,
@@ -77,7 +77,7 @@ fn create_surface() {
         WlRegistry::bind::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
 
     let surface: WlObjectHandle<WlSurface> =
-        compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurface);
+        compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurfaceRequest);
 
     assert_eq!(
         storage.object(surface).proxy().interface_name(),
@@ -141,7 +141,7 @@ fn white_rect() {
         WlRegistry::bind::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
 
     let surface: WlObjectHandle<WlSurface> =
-        compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurface);
+        compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurfaceRequest);
 
     let _viewport: WlObjectHandle<WlViewport> = viewporter.create_object(
         &mut buf,
@@ -152,7 +152,7 @@ fn white_rect() {
     );
 
     let region: WlObjectHandle<WlRegion> =
-        compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateRegion);
+        compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateRegionRequest);
 
     surface.request(
         &mut buf,

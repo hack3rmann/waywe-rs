@@ -3,7 +3,7 @@ use std::mem;
 use std::pin::pin;
 use wayland::{
     WlObjectHandle,
-    interface::WlCompositorCreateSurface,
+    interface::WlCompositorCreateSurfaceRequest,
     sys::{
         display::WlDisplay,
         object::{
@@ -31,7 +31,7 @@ async fn use_wgpu_to_draw_anything() {
         WlRegistry::bind::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
 
     let surface: WlObjectHandle<WlSurface> =
-        compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurface);
+        compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurfaceRequest);
 
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
         backends: wgpu::Backends::VULKAN,
