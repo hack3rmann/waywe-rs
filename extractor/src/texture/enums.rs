@@ -2,19 +2,26 @@ use std::io;
 
 use image::EncodableLayout;
 
-use super::{DecompressedTexImage, TexGifFrame};
+use super::{DecompressedTexImage, TexGifFrameMeta};
 
+/// Error that is returned by most of the functions that work with `.tex` files
 #[derive(Debug, thiserror::Error)]
 pub enum TexExtractError {
     #[error(transparent)]
     Io(#[from] io::Error),
 
+    /// A function encounters unknown magic which is likely
+    /// to be due to the library being outdated
     #[error("encountered unkown magic in the file: {magic}")]
     UnknownMagic { magic: String },
 
+    /// A function encountered a number that has to a `tex_format` but
+    /// no variants correspond to it
     #[error("unknown tex_format in the file")]
     UnknownTexFormat,
 
+    /// A function encountered a number that has to a `tex_flag` but
+    /// no variants correspond to it
     #[error("invalid tex_flags in the file")]
     InvalidTexFlags,
 
@@ -27,10 +34,12 @@ pub enum TexExtractError {
     #[error(transparent)]
     FromVecWithNul(#[from] std::ffi::FromVecWithNulError),
 
+    /// A function encountered some error while parsing input file
     #[error("corrupt data in the file: {about}")]
     Corrupt { about: String },
 }
 
+/// Format of the image stored in the texture
 #[derive(Default, Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub enum TexFormat {
     #[default]
@@ -59,6 +68,7 @@ impl TryFrom<i32> for TexFormat {
 }
 
 bitflags::bitflags! {
+    /// Flags that show what kind of data is stored in the texture
     #[derive(Default, Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
     pub struct TexFlags: u8 {
         const NONE = 0b0000_0000;
@@ -82,6 +92,7 @@ pub enum ImageContainerVersion {
     Texb0001,
 }
 
+/// Format of the uncompresed image
 #[derive(Default, Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub enum FreeImageFormat {
     #[default]
@@ -303,6 +314,7 @@ pub enum GifContainerVersion {
     Texs0003,
 }
 
+/// Resulting data of the decompressed mipmap
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum MipmapData {
     R8(image::GrayImage),
@@ -322,12 +334,13 @@ impl MipmapData {
     }
 }
 
+/// Resulting data extracted from the `.tex` file
 #[derive(Debug, Clone, PartialEq)]
 pub enum TexExtractData {
     Video(Vec<DecompressedTexImage>),
     Gif {
         frames: Vec<DecompressedTexImage>,
-        frames_meta: Vec<TexGifFrame>,
+        frames_meta: Vec<TexGifFrameMeta>,
     },
     Image(Vec<DecompressedTexImage>),
 }

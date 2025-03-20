@@ -1,6 +1,12 @@
+//!Functions and structs for working the `.tex` files
+//!
+//!A good starting point is the [`TexReader`] struct or [`extract_data`] function
+//!that does all the job done itself
+
+#![doc = include_str!("../../file-structure-doc.md")]
 // TODO(ArnoDarkrose): add image cropping and rotating
 // TODO(ArnoDarkrose): i can parallelize mipmap decompression
-
+// TODO(ArnoDarkrose): write documentation
 use image::ImageBuffer;
 use std::ffi::CString;
 use std::io::Read;
@@ -12,8 +18,9 @@ pub mod stages;
 
 pub use stages::*;
 
-use enums::*;
+pub use enums::*;
 
+/// Information about the header of the `.tex` file
 #[derive(Default, Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub struct HeaderMeta {
     pub format: TexFormat,
@@ -22,37 +29,51 @@ pub struct HeaderMeta {
     pub texture_height: i32,
     pub image_width: i32,
     pub image_height: i32,
+    /// a value of the unknown purpose
     pub unk_int0: i32,
 }
 
+/// Information about the image container (for file structure refer to the module level documentation)
 #[derive(Default, Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
-pub struct ImageContainerMeta {
+pub struct TexImageContainerMeta {
     pub version: ImageContainerVersion,
     pub image_count: i32,
     pub image_format: Option<FreeImageFormat>,
     pub is_video_mp4: bool,
 }
 
+/// Information about the gif container (for file stucture refer to the module level documentation)
 #[derive(Default, Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub struct TexGifContainerMeta {
     pub version: GifContainerVersion,
     pub frame_count: i32,
 }
 
+/// Contains (possibly) compressed data and meta info for a mipmap. In order to access the data, this has to
+/// be transformed into [`DecompressedTexMipmap`] by calling [`TexMipmap::decompress`]
 #[derive(Default, Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
-pub struct Mipmap {
+pub struct TexMipmap {
     width: i32,
     height: i32,
+    /// Buffer with the image data, can be compressed
     data: Vec<u8>,
+    /// Whether the image was lz4_compressed
     lz4_compressed: bool,
+    /// Size of the decompressed image data. This is uzed in lz4 decompression
     decompressed_bytes_count: Option<i32>,
     condition_json: Option<CString>,
     format: MipmapFormat,
 }
 
-impl Mipmap {
+impl TexMipmap {
+    /// Decompresses the inner data. This includes lz4 decompression (if applied) and tranformation
+    /// from one of `DXT` formats to `RGBA8888` (if applied).
+    ///
+    /// If the picture was not compressed by either method, nothing is done
+    ///
+    /// This method has to be used in order to get access to the underlying data buffer
     #[instrument(skip_all)]
-    pub fn decompress(mut self) -> Result<DecompressedMipmap, TexExtractError> {
+    pub fn decompress(mut self) -> Result<DecompressedTexMipmap, TexExtractError> {
         if self.lz4_compressed {
             debug!("decompressing lz4 compressed texture");
 
@@ -65,7 +86,7 @@ impl Mipmap {
             MipmapFormat::CompressedDxt1 => dxt::DxtFormat::Dxt1,
             MipmapFormat::CompressedDxt3 => dxt::DxtFormat::Dxt3,
             MipmapFormat::CompressedDxt5 => dxt::DxtFormat::Dxt5,
-            _ => return Ok(DecompressedMipmap::from(self)),
+            _ => return Ok(DecompressedTexMipmap::from(self)),
         };
 
         debug!("decompressing dxt texture: {dxt_format:?}");
@@ -76,14 +97,14 @@ impl Mipmap {
 
         let format = MipmapFormat::Rgba8888;
 
-        Ok(DecompressedMipmap {
+        Ok(DecompressedTexMipmap {
             width: self.width as u32,
             height: self.height as u32,
             data: MipmapData::Rgba8888(
                 ImageBuffer::from_raw(
                     self.width as u32,
                     self.height as u32,
-                    transmute_extra::transmute_to_bytes_vec(data).unwrap(),
+                    transmute_extra::transmute_to_bytes_vec(data),
                 )
                 .ok_or(TexExtractError::Corrupt {
                     about: "width and height of the texture read from file are to big:\
@@ -97,18 +118,20 @@ impl Mipmap {
     }
 }
 
+/// Contains decompressed, ready to use image data. This shoudl be constructed from [`TexMipmap`] via a call to [`TexMipmap::decompress`]
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct DecompressedMipmap {
+pub struct DecompressedTexMipmap {
     pub width: u32,
     pub height: u32,
+    /// Buffer with the image pixels
     pub data: MipmapData,
     pub condition_json: Option<CString>,
     pub format: MipmapFormat,
 }
 
-impl From<Mipmap> for DecompressedMipmap {
+impl From<TexMipmap> for DecompressedTexMipmap {
     /// This function will panic if the passed mipmap is compressed
-    fn from(value: Mipmap) -> Self {
+    fn from(value: TexMipmap) -> Self {
         if value.lz4_compressed
             || matches!(
                 value.format,
@@ -143,23 +166,27 @@ impl From<Mipmap> for DecompressedMipmap {
     }
 }
 
+/// Decompresses lz4 compressed data
 fn decompress_lz4(
     data: &mut Vec<u8>,
     decompressed_bytes_count: Option<i32>,
 ) -> Result<(), TexExtractError> {
-    let res = lz4::block::decompress(data.as_slice(), decompressed_bytes_count).unwrap();
+    let res = lz4::block::decompress(data.as_slice(), decompressed_bytes_count)?;
 
     *data = res;
 
     Ok(())
 }
 
+/// Buffer of (possibly) compressed mipmaps of a single image. In order to get access to
+/// mipmaps, this must be transformed to [`DecompressedTexImage`] via a call to [`TexImage::decompress`]
 #[derive(Default, Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub struct TexImage {
-    mipmaps: Vec<Mipmap>,
+    mipmaps: Vec<TexMipmap>,
 }
 
 impl TexImage {
+    /// Decompresses mipmaps contained in `self`
     pub fn decompress(self) -> Result<DecompressedTexImage, TexExtractError> {
         let mipmaps = self
             .mipmaps
@@ -171,23 +198,43 @@ impl TexImage {
     }
 }
 
+/// Buffer of decompressed mipmaps. This should ultimately be constructed via a call to [`TexImage::decompress`]
 #[derive(Default, Debug, Clone, Hash, Eq, PartialEq)]
 pub struct DecompressedTexImage {
-    pub mipmaps: Vec<DecompressedMipmap>,
+    pub mipmaps: Vec<DecompressedTexMipmap>,
 }
 
+/// Meta info for a single gif frame
+///
+/// See fields docs for the definition of frame width and height
+///
+/// The starting x coordinate is equal to the minimum of `x` and `x + frame_width`
+///
+/// The starting y coordinate is equal to the minimum of `y` and `y + frame_height`
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
-pub struct TexGifFrame {
-    image_id: i32,
-    frame_time: f32,
-    x: f32,
-    y: f32,
-    width: f32,
-    width_y: f32,
-    height_x: f32,
-    height: f32,
+pub struct TexGifFrameMeta {
+    pub image_id: i32,
+    /// Time for which the frame should be shown measured by the units of 10ms
+    pub frame_time: f32,
+    /// The (possibly)starting horizontal coordinate of a frame
+    pub x: f32,
+    /// The (possibly)starting vertical coordinate of a frame
+    pub y: f32,
+    /// Width of a gif frame. Can be zero in which case
+    /// the width of the frame should be considered equal to `height_x`
+    pub width: f32,
+    /// If `height` is zero, then this is equal to frame height
+    pub width_y: f32,
+    /// If `width` is zero, then this is equal to frame width
+    pub height_x: f32,
+    /// Height of a gif frame. Can be zero in which case
+    /// a height of the frame should be considered equal to `width_y`
+    pub height: f32,
 }
 
+/// The function used to just get all the data from the `.tex` file without extra hassle.
+///
+/// `src` must be have a structure of `.tex` file
 pub fn extract_data(src: &mut impl Read) -> Result<TexExtractData, TexExtractError> {
     let mut reader = TexReader::new(src)
         .read_header()?
@@ -204,12 +251,12 @@ pub fn extract_data(src: &mut impl Read) -> Result<TexExtractData, TexExtractErr
         .collect::<Result<Vec<_>, _>>()?;
 
     if reader.contains_gif() {
-        let mut reader = reader.read_gif_container()?.read_gif_frames()?;
+        let mut reader = reader.read_gif_container_meta()?.read_gif_frames_meta()?;
 
         Ok(TexExtractData::Gif {
             frames: decompressed_images,
             frames_meta: reader
-                .gif_frames()
+                .gif_frames_meta()
                 .expect("this is the first acquisition of this field so it is some"),
         })
     } else if reader.contains_video() {
@@ -245,7 +292,6 @@ mod tests {
     use super::*;
 
     #[test]
-    // #[ignore]
     fn test_stages_up_to_images() {
         let mut fd = std::io::BufReader::new(std::fs::File::open("futaba.tex").unwrap());
 
@@ -286,7 +332,6 @@ mod tests {
     }
 
     #[test]
-    // #[ignore]
     fn test_dxt_image() {
         let mut src = BufReader::new(File::open("dxt_image.tex").unwrap());
         let mut reader = TexReader::new(&mut src)
@@ -322,9 +367,9 @@ mod tests {
             .unwrap()
             .read_images()
             .unwrap()
-            .read_gif_container()
+            .read_gif_container_meta()
             .unwrap()
-            .read_gif_frames()
+            .read_gif_frames_meta()
             .unwrap();
 
         tracing::debug!("{:#?}", reader.image_container());

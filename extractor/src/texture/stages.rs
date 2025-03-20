@@ -1,3 +1,5 @@
+//! Various structs that represent different stages of the input `.tex` file
+
 use super::*;
 use std::{ffi::CString, io::Result as IoResult};
 
@@ -66,12 +68,14 @@ pub struct TexReader<'a, T: Read> {
 }
 
 impl<'a, T: Read> TexReader<'a, T> {
+    /// `src` has to have a structure of `.tex` file
     pub fn new(src: &'a mut T) -> Self {
         Self {
             reader: Reader(src),
         }
     }
 
+    /// Reads a header from the file
     #[instrument(skip_all)]
     pub fn read_header(mut self) -> Result<TexReaderWithHeader<'a, T>, TexExtractError> {
         let mut magic_buf = [0_u8; 8];
@@ -126,6 +130,7 @@ impl<'a, T: Read> TexReader<'a, T> {
     }
 }
 
+/// `TexReader` that represents the state when only header was read from the document
 #[derive(Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub struct TexReaderWithHeader<'a, T: Read> {
     reader: Reader<'a, T>,
@@ -133,6 +138,7 @@ pub struct TexReaderWithHeader<'a, T: Read> {
 }
 
 impl<'a, T: Read> TexReaderWithHeader<'a, T> {
+    /// Reads the meta info for image_container
     #[instrument(skip_all)]
     pub fn read_image_container_meta(
         mut self,
@@ -185,7 +191,7 @@ impl<'a, T: Read> TexReaderWithHeader<'a, T> {
             }
         }
 
-        let image_container = ImageContainerMeta {
+        let image_container = TexImageContainerMeta {
             version,
             image_count,
             image_format,
@@ -202,15 +208,17 @@ impl<'a, T: Read> TexReaderWithHeader<'a, T> {
     }
 }
 
+/// TexReader that represents the state when image_container was read from the document
 #[derive(Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub struct TexReaderWithImageContainer<'a, T: Read> {
     reader: Reader<'a, T>,
     header: HeaderMeta,
-    image_container: ImageContainerMeta,
+    image_container: TexImageContainerMeta,
 }
 
 impl<'a, T: Read> TexReaderWithImageContainer<'a, T> {
-    fn read_mipmap(&mut self) -> Result<Mipmap, TexExtractError> {
+    /// Reads single mipmap from the file
+    fn read_mipmap(&mut self) -> Result<TexMipmap, TexExtractError> {
         let format =
             MipmapFormat::from_image_and_tex(self.image_container.image_format, self.header.format);
 
@@ -249,7 +257,7 @@ impl<'a, T: Read> TexReaderWithImageContainer<'a, T> {
 
         let data = read_into_uninit(&mut self.reader.0, byte_count as usize)?;
 
-        Ok(Mipmap {
+        Ok(TexMipmap {
             width,
             height,
             data,
@@ -260,6 +268,7 @@ impl<'a, T: Read> TexReaderWithImageContainer<'a, T> {
         })
     }
 
+    /// Reads images from the file
     pub fn read_images(mut self) -> Result<TexReaderWithImages<'a, T>, TexExtractError> {
         let mut images = Vec::with_capacity(self.image_container.image_count as usize);
 
@@ -283,18 +292,21 @@ impl<'a, T: Read> TexReaderWithImageContainer<'a, T> {
         })
     }
 }
+
+/// `TexReader` that represents the state when images were read from the file
 #[derive(Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub struct TexReaderWithImages<'a, T: Read> {
     reader: Reader<'a, T>,
     header: HeaderMeta,
-    image_container: ImageContainerMeta,
+    image_container: TexImageContainerMeta,
     images: Option<Vec<TexImage>>,
 }
 
 impl<'a, T: Read> TexReaderWithImages<'a, T> {
-    pub fn read_gif_container(
+    /// Reads gif_container meta info from the file
+    pub fn read_gif_container_meta(
         mut self,
-    ) -> Result<TexReaderWithGifContainer<'a, T>, TexExtractError> {
+    ) -> Result<TexReaderWithGifContainerMeta<'a, T>, TexExtractError> {
         let mut magic_buf = [0_u8; 8];
 
         self.reader.read_bytes_exact(&mut magic_buf)?;
@@ -322,7 +334,7 @@ impl<'a, T: Read> TexReaderWithImages<'a, T> {
 
         debug!("got container_meta: {meta:?}");
 
-        Ok(TexReaderWithGifContainer {
+        Ok(TexReaderWithGifContainerMeta {
             reader: self.reader,
             header: self.header,
             image_container: self.image_container,
@@ -332,17 +344,19 @@ impl<'a, T: Read> TexReaderWithImages<'a, T> {
     }
 }
 
+/// `TexReader` that represents the state when gif_container_meta_was read from the file
 #[derive(Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
-pub struct TexReaderWithGifContainer<'a, T: Read> {
+pub struct TexReaderWithGifContainerMeta<'a, T: Read> {
     reader: Reader<'a, T>,
     header: HeaderMeta,
-    image_container: ImageContainerMeta,
+    image_container: TexImageContainerMeta,
     images: Option<Vec<TexImage>>,
     gif_container: TexGifContainerMeta,
 }
 
-impl<'a, T: Read> TexReaderWithGifContainer<'a, T> {
-    fn read_frame_meta(&mut self) -> Result<TexGifFrame, TexExtractError> {
+impl<'a, T: Read> TexReaderWithGifContainerMeta<'a, T> {
+    /// Reads meta info for a single gif frame
+    fn read_frame_meta(&mut self) -> Result<TexGifFrameMeta, TexExtractError> {
         let image_id = self.reader.read_int()?;
         let frame_time = self.reader.read_float()?;
         let x;
@@ -368,7 +382,7 @@ impl<'a, T: Read> TexReaderWithGifContainer<'a, T> {
             height = self.reader.read_float()?;
         }
 
-        Ok(TexGifFrame {
+        Ok(TexGifFrameMeta {
             image_id,
             frame_time,
             x,
@@ -380,7 +394,10 @@ impl<'a, T: Read> TexReaderWithGifContainer<'a, T> {
         })
     }
 
-    pub fn read_gif_frames(mut self) -> Result<TexReaderWithGifFrames<'a, T>, TexExtractError> {
+    /// Reads meta info for gif frames
+    pub fn read_gif_frames_meta(
+        mut self,
+    ) -> Result<TexReaderWithGifFramesMeta<'a, T>, TexExtractError> {
         let (gif_width, gif_height) = if self.gif_container.version == GifContainerVersion::Texs0003
         {
             (self.reader.read_int()?, self.reader.read_int()?)
@@ -396,7 +413,7 @@ impl<'a, T: Read> TexReaderWithGifContainer<'a, T> {
 
         debug!("got frames_meta: {frames_meta:?}");
 
-        Ok(TexReaderWithGifFrames {
+        Ok(TexReaderWithGifFramesMeta {
             reader: self.reader,
             header: self.header,
             image_container: self.image_container,
@@ -409,21 +426,25 @@ impl<'a, T: Read> TexReaderWithGifContainer<'a, T> {
     }
 }
 
+/// Reader that represents the state when all the file was read
 #[derive(Debug, PartialEq, PartialOrd)]
-pub struct TexReaderWithGifFrames<'a, T: Read> {
+pub struct TexReaderWithGifFramesMeta<'a, T: Read> {
     reader: Reader<'a, T>,
     header: HeaderMeta,
-    image_container: ImageContainerMeta,
+    image_container: TexImageContainerMeta,
     images: Option<Vec<TexImage>>,
     gif_container: TexGifContainerMeta,
-    gif_frames: Option<Vec<TexGifFrame>>,
+    gif_frames: Option<Vec<TexGifFrameMeta>>,
     // These two fiedlds make sense only for the third version of gif container
     gif_width: i32,
     gif_height: i32,
 }
 
-impl<T: Read> TexReaderWithGifFrames<'_, T> {
-    pub fn gif_frames(&mut self) -> Option<Vec<TexGifFrame>> {
+impl<T: Read> TexReaderWithGifFramesMeta<'_, T> {
+    /// Returns gif_frames_meta
+    ///
+    /// Returns `Some` if this is the first acquisition of the data and `None` otherwise
+    pub fn gif_frames_meta(&mut self) -> Option<Vec<TexGifFrameMeta>> {
         self.gif_frames.take()
     }
 }
@@ -436,10 +457,12 @@ macro_rules! impl_from_header {
                     self.header
                 }
 
+                /// Returns `true` if this texture contains a gif
                 pub fn contains_gif(&self) -> bool {
                     self.header.flags.contains(TexFlags::IS_GIF)
                 }
 
+                /// Returns `true` if this texture contains a video
                 pub fn contains_video(&self) -> bool {
                     self.header.flags.contains(TexFlags::IS_VIDEO_TEXTURE)
                 }
@@ -456,7 +479,7 @@ macro_rules! impl_from_image_cotainer {
     ($($struct:ident),*) => {
         $(
             impl<'a, T: Read> $struct<'a, T> {
-                pub fn image_container(&self) -> ImageContainerMeta {
+                pub fn image_container(&self) -> TexImageContainerMeta {
                     self.image_container
                 }
             }
@@ -468,6 +491,9 @@ macro_rules! impl_from_images {
     ($($struct:ident),*) => {
         $(
             impl<'a, T: Read> $struct<'a, T> {
+                /// Returns images
+                ///
+                /// Returns `Some` if this is the first acquisition of the data and `None` otherwise
                 pub fn images(&mut self) -> Option<Vec<TexImage>> {
                     self.images.take()
                 }
@@ -488,7 +514,7 @@ macro_rules! impl_from_gif_container {
     };
 }
 
-impl_from_header! {TexReaderWithHeader, TexReaderWithImageContainer, TexReaderWithImages, TexReaderWithGifContainer, TexReaderWithGifFrames}
-impl_from_image_cotainer! {TexReaderWithImageContainer, TexReaderWithImages, TexReaderWithGifContainer, TexReaderWithGifFrames}
-impl_from_images! {TexReaderWithImages, TexReaderWithGifContainer, TexReaderWithGifFrames}
-impl_from_gif_container! {TexReaderWithGifContainer, TexReaderWithGifFrames}
+impl_from_header! {TexReaderWithHeader, TexReaderWithImageContainer, TexReaderWithImages, TexReaderWithGifContainerMeta, TexReaderWithGifFramesMeta}
+impl_from_image_cotainer! {TexReaderWithImageContainer, TexReaderWithImages, TexReaderWithGifContainerMeta, TexReaderWithGifFramesMeta}
+impl_from_images! {TexReaderWithImages, TexReaderWithGifContainerMeta, TexReaderWithGifFramesMeta}
+impl_from_gif_container! {TexReaderWithGifContainerMeta, TexReaderWithGifFramesMeta}

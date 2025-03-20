@@ -29,7 +29,7 @@ pub fn transmute_vec(mut src: Vec<u8>) -> Result<Vec<u32>, TransmuteVecError> {
         // - the alignemnt is checked above
         // - capacity value is adjusted from the valid one (u32 is 4 times bigger than u8)
         // - len is less than or equal to capacity (this is ensured by the original vector)
-        // - elements can be transmuted from u8 to u32Z
+        // - elements can be transmuted from u8 to u32
         // - capacity is not changed
         // - allocated size in bytes cannot exceed isize::MAX. This is ensured by the original vector
         unsafe {
@@ -42,20 +42,27 @@ pub fn transmute_vec(mut src: Vec<u8>) -> Result<Vec<u32>, TransmuteVecError> {
     }
 }
 
-// TODO(ArnoDarkrose): write documentation and safety for unsafe block
-pub fn transmute_to_bytes_vec(mut src: Vec<u32>) -> Result<Vec<u8>, TransmuteVecError> {
-    let ptr = src.as_ptr();
-
-    if !ptr.cast::<u8>().is_aligned() {
-        Ok(src.into_iter().flat_map(|num| num.to_le_bytes()).collect())
-    } else {
-        unsafe {
-            let capacity = src.capacity();
-            let len = src.len();
-            let ptr = src.as_mut_ptr();
-            std::mem::forget(src);
-            Ok(Vec::from_raw_parts(ptr.cast(), len * 4, capacity * 4))
-        }
+/// This function transmutes the vec of u32  to the vec of bytes
+///
+/// # Return value
+///
+/// - Reinterprets bytes of the vector if it is properly aligned for u8 and manually constructs u8s otherwise
+pub fn transmute_to_bytes_vec(mut src: Vec<u32>) -> Vec<u8> {
+    // Safety
+    //
+    // - the pointer was previously allocated via another vec
+    // - the alignemnt is checked above
+    // - capacity value is adjusted from the valid one (u32 is 4 times bigger than u8)
+    // - len is less than or equal to capacity (this is ensured by the original vector)
+    // - elements can be transmuted from u32 to u8
+    // - capacity is not changed
+    // - allocated size in bytes cannot exceed isize::MAX. This is ensured by the original vector
+    unsafe {
+        let capacity = src.capacity();
+        let len = src.len();
+        let ptr = src.as_mut_ptr();
+        std::mem::forget(src);
+        Vec::from_raw_parts(ptr.cast(), len * 4, capacity * 4)
     }
 }
 
