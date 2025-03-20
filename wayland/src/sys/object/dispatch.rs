@@ -95,10 +95,15 @@ pub(crate) unsafe extern "C" fn dispatch_raw<T: HasObjectType, S: State>(
         // - the storage pointer is pinned
         //   (see `WlObjectStorage::insert<T>(self: Pin<&mut Self>, object: WlObject<T>)`)
         // - here we have exclusive access to the storage
-        //   (see `WlDisplay::dispatch(&self, _storage: Pin<&mut WlObjectStorage>)`)
+        //   (see `WlDisplay::dispatch`)
         let storage = unsafe { Pin::new_unchecked(storage_ptr.as_mut()) };
 
-        // TODO(hack3rmann): add safety
+        // # Safety
+        //
+        // - the state pointer is pinned
+        //   (see `WlObjectStorage::insert<T>(self: Pin<&mut Self>, object: WlObject<T>)`)
+        // - here we have exclusive access to the state
+        //   (see `WlDisplay::dispatch`)
         let state = unsafe { Pin::new_unchecked(state_ptr.as_mut()) };
 
         // Safety: an opcode provided by the libwayland backend is always valid (often really small)

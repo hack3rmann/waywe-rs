@@ -69,6 +69,7 @@ impl<S: State> WlRegistry<S> {
         T: HasObjectType + Dispatch<State = S>,
         F: FnOnce(&mut B, Pin<&mut WlObjectStorage<'_, S>>, &WlProxy) -> T,
     {
+        // Safety: `WlRegistry` is the parent for this request
         let proxy =
             unsafe { WlRegistryBindRequest::<T>::new().send(storage.get_object(registry)?, buf)? };
 
