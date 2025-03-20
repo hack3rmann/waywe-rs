@@ -3,6 +3,10 @@ name = "extractor"
 version.workspace = true
 edition.workspace = true
 
+[dev-dependencies]
+png = "0.17.16"
+
+
 [dependencies]
 safe-transmute.workspace = true
 thiserror.workspace = true
@@ -11,6 +15,4 @@ transmute-extra = {path = "../transmute-extra"}
 dxt = {path = "../dxt"}
 lz4 = "1.28.1"
 image = "0.25.5"
-png = "0.17.16"
 tracing.workspace = true
-gif = "0.13.1"

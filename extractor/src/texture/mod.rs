@@ -76,8 +76,7 @@
 #![doc = include_str!("../../file-structure-doc.md")]
 
 // TODO(ArnoDarkrose): add image cropping and rotating
-// TODO(ArnoDarkrose): i can parallelize mipmap decompression
-// TODO(ArnoDarkrose): use image instead of png in tests
+// TODO(ArnoDarkrose): maybe mipmap decompression should be parallelized
 
 use image::ImageBuffer;
 use std::ffi::CString;
