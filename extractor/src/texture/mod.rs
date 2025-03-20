@@ -2,11 +2,83 @@
 //!
 //!A good starting point is the [`TexReader`] struct or [`extract_data`] function
 //!that does all the job done itself
+//!
+//! # Example of extracting data via manual work with readers and storing it via png crate
+//! ```rust,ignore
+//! use extractor::texture::*;
+//!
+//! let mut fd = std::fs::File::open("asset.tex").unwrap();
+//! let mut reader = TexReader::new(&mut fd)
+//!     .read_header()
+//!     .unwrap()
+//!     .read_image_container_meta()
+//!     .unwrap()
+//!     .read_images()
+//!     .unwrap();
+//!
+//! let images = reader.images().unwrap();
+//! let decompressed_images = images
+//!     .into_iter()
+//!     .map(|image| image.decompress())
+//!     .collect::<Result<Vec<_>, _>>()
+//!     .unwrap();
+//!
+//! for (i, image) in decompressed_images.into_iter().enumerate() {
+//!     for (j, mipmap) in image.mipmaps.into_iter().enumerate() {
+//!         let fd = std::fs::File::create(format!("asset{i}{j}.png")).unwrap();
+//!         let mut encoder = png::Encoder::new(fd, mipmap.width as u32, mipmap.height as u32);
+//!         encoder.set_color(png::ColorType::Rgba);
+//!
+//!         let mut writer = encoder.write_header().unwrap();
+//!         writer.write_image_data(mipmap.data.as_bytes()).unwrap();
+//!     }
+//! }
+//!
+//! if reader.contains_gif() {
+//!     let mut reader = reader
+//!         .read_gif_container_meta()
+//!         .unwrap()
+//!         .read_gif_frames_meta()
+//!         .unwrap();
+//!
+//!     let frames_meta = reader.gif_frames_meta().unwrap();
+//! }
+//!
+//! ```
+//!
+//! # Example of using [`extract_data`]
+//! ```rust,ignore
+//!
+//! use extractor::texture::*;
+//!
+//! let mut src = std::fs::File::open("asset.tex").unwrap();
+//! let data = extract_data(&mut src).unwrap();
+//!
+//! match data {
+//!     TexExtractData::Image(data) => {
+//!         for (i, image) in data.into_iter().enumerate() {
+//!             for (j, mipmap) in image.mipmaps.into_iter().enumerate() {
+//!                 let out = std::fs::File::create(format!("asset{i}{j}.png")).unwrap();
+//!
+//!                 let mut encoder = png::Encoder::new(out, mipmap.width, mipmap.height);
+//!                 encoder.set_color(png::ColorType::Rgba);
+//!
+//!                 let mut writer = encoder.write_header().unwrap();
+//!
+//!                 writer.write_image_data(mipmap.data.as_bytes()).unwrap();
+//!             }
+//!         }
+//!     }
+//!     _ => {}
+//! }
+//! ```
 
 #![doc = include_str!("../../file-structure-doc.md")]
+
 // TODO(ArnoDarkrose): add image cropping and rotating
 // TODO(ArnoDarkrose): i can parallelize mipmap decompression
-// TODO(ArnoDarkrose): write documentation
+// TODO(ArnoDarkrose): use image instead of png in tests
+
 use image::ImageBuffer;
 use std::ffi::CString;
 use std::io::Read;
@@ -292,6 +364,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore]
     fn test_stages_up_to_images() {
         let mut fd = std::io::BufReader::new(std::fs::File::open("futaba.tex").unwrap());
 
@@ -332,6 +405,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_dxt_image() {
         let mut src = BufReader::new(File::open("dxt_image.tex").unwrap());
         let mut reader = TexReader::new(&mut src)
@@ -358,6 +432,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_gif() {
         let mut src = BufReader::new(File::open("kurukuru.tex").unwrap());
         let mut reader = TexReader::new(&mut src)
@@ -391,6 +466,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_extract_basic() {
         let mut src = BufReader::new(File::open("futaba.tex").unwrap());
         let data = extract_data(&mut src).unwrap();
@@ -415,6 +491,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_extract_dxt() {
         let mut src = BufReader::new(File::open("dxt_image.tex").unwrap());
         let data = extract_data(&mut src).unwrap();

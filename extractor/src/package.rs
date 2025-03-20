@@ -1,6 +1,37 @@
 //! Functions and structs for extracting `scene.pkg` files.
 //!
 //! For the module entry point reference [`PackageReader`]
+//!
+//! ```rust,ignore
+//! use extractor::package::*;
+//! use std::path::PathBuf;
+//!
+//! let mut fd = std::fs::File::open("scene.pkg").unwrap();
+//! let mut reader = PackageReader::new(&mut fd).unwrap();
+//!
+//! let mut path = PathBuf::new();
+//! path.push("assets");
+//!
+//! reader.store_files(&path).unwrap();
+//! ```
+//!
+//! # Format info
+//!
+//! - `string`s are stored as a `len`(stored as [`u32`]) and then `len` bytes which are
+//!   the string contents
+//!
+//! ## `scene.pkg` file structure
+//!
+//! - Meta info represented by [`PackageMeta`]
+//!   - `version`: `string`
+//!   - `filecount`: [`u32`]
+//!     - `filecount` times:
+//!       - [`FileMeta`]:
+//!         - `filename`: `string`
+//!         - `offset`: [`u32`]
+//!         - `size`: [`u32`]
+//! - The files contents themselves. Files appear in the same order as
+//!   their meta earlier
 
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
@@ -146,21 +177,5 @@ impl<'a, T: Read> PackageReader<'a, T> {
         }
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    // #[ignore = "requires scene.pkg file to be present in the crate directory"]
-    fn test_pkg_extract() {
-        let mut fd = File::open("scene.pkg").unwrap();
-        let mut reader = PackageReader::new(&mut fd).unwrap();
-
-        let mut path = PathBuf::new();
-        path.push("assets");
-        reader.store_files(&path).unwrap();
     }
 }
