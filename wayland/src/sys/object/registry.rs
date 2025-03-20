@@ -44,10 +44,7 @@ impl<S: State> WlRegistry<S> {
     where
         T: HasObjectType + Dispatch<State = S>,
     {
-        let proxy =
-            unsafe { WlRegistryBindRequest::<T>::new().send(storage.get_object(registry)?, buf)? };
-
-        Some(storage.insert(WlObject::new(proxy, object)))
+        Self::bind_from_fn(buf, storage, registry, |_, _, _| object)
     }
 
     pub fn bind<T>(
@@ -58,10 +55,24 @@ impl<S: State> WlRegistry<S> {
     where
         T: HasObjectType + Dispatch<State = S> + FromProxy,
     {
+        Self::bind_from_fn(buf, storage, registry, |_, _, proxy| T::from_proxy(proxy))
+    }
+
+    pub fn bind_from_fn<B, T, F>(
+        buf: &mut B,
+        mut storage: Pin<&mut WlObjectStorage<'_, S>>,
+        registry: WlObjectHandle<WlRegistry<S>>,
+        make_data: F,
+    ) -> Option<WlObjectHandle<T>>
+    where
+        B: MessageBuffer,
+        T: HasObjectType + Dispatch<State = S>,
+        F: FnOnce(&mut B, Pin<&mut WlObjectStorage<'_, S>>, &WlProxy) -> T,
+    {
         let proxy =
             unsafe { WlRegistryBindRequest::<T>::new().send(storage.get_object(registry)?, buf)? };
 
-        let data = T::from_proxy(&proxy);
+        let data = make_data(buf, storage.as_mut(), &proxy);
 
         Some(storage.insert(WlObject::new(proxy, data)))
     }
