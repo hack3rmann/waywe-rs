@@ -1,13 +1,13 @@
+pub mod default_impl;
 pub mod dispatch;
 pub mod registry;
-pub mod default_impl;
 
 use super::{object_storage::WlObjectStorage, proxy::WlProxy, wire::MessageBuffer};
 use crate::{
     interface::{ObjectParent, Request},
     object::{HasObjectType, WlObjectId},
 };
-use dispatch::{Dispatch, WlDispatchData, dispatch_raw};
+use dispatch::{Dispatch, NoState, WlDispatchData, dispatch_raw};
 use std::{
     any::{self, TypeId},
     fmt, hash,
@@ -49,8 +49,12 @@ impl<T> WlObjectHandle<T> {
     /// # Note
     ///
     /// Can be used only for requests which create no object
-    pub fn request<'r, R>(self, buf: &mut impl MessageBuffer, storage: &WlObjectStorage, request: R)
-    where
+    pub fn request<'r, R>(
+        self,
+        buf: &mut impl MessageBuffer,
+        storage: &WlObjectStorage<'_, T::State>,
+        request: R,
+    ) where
         T: Dispatch + HasObjectType,
         R: Request<'r>,
     {
@@ -78,12 +82,13 @@ impl<T> WlObjectHandle<T> {
     pub fn create_object<'r, D, R>(
         self,
         buf: &mut impl MessageBuffer,
-        storage: Pin<&mut WlObjectStorage>,
+        storage: Pin<&mut WlObjectStorage<'_, D::State>>,
+        state: Pin<&mut D::State>,
         request: R,
     ) -> WlObjectHandle<D>
     where
         R: Request<'r> + ObjectParent,
-        T: Dispatch + HasObjectType,
+        T: HasObjectType,
         D: Dispatch + HasObjectType + FromProxy,
     {
         const {
@@ -112,7 +117,7 @@ impl<T> WlObjectHandle<T> {
         };
 
         let data = D::from_proxy(&proxy);
-        storage.insert(WlObject::new(proxy, data))
+        storage.insert(WlObject::new(proxy, data, state))
     }
 }
 
@@ -180,7 +185,7 @@ pub(crate) struct WlDynObject {
 }
 
 impl WlDynObject {
-    pub(crate) fn downcast_ref<T: 'static>(&self) -> Option<&WlObject<T>> {
+    pub(crate) fn downcast_ref<T: Dispatch>(&self) -> Option<&WlObject<T>> {
         // # Safety
         //
         // - `WlDynObject` and `WlObject<T>` have the same header - `WlProxy`
@@ -189,7 +194,7 @@ impl WlDynObject {
             .then_some(unsafe { mem::transmute::<&WlDynObject, &WlObject<T>>(self) })
     }
 
-    pub(crate) fn downcast_mut<T: 'static>(&mut self) -> Option<&mut WlObject<T>> {
+    pub(crate) fn downcast_mut<T: Dispatch>(&mut self) -> Option<&mut WlObject<T>> {
         // # Safety
         //
         // - `WlDynObject` and `WlObject<T>` have the same header - `WlProxy`
@@ -205,7 +210,7 @@ impl Drop for WlDynObject {
         let user_data = self.proxy.get_user_data();
 
         let data_ptr = user_data
-            .wrapping_byte_add(offset_of!(WlDispatchData<()>, data))
+            .wrapping_byte_add(offset_of!(WlDispatchData<(), NoState>, data))
             .cast::<()>();
 
         // # Safety
@@ -225,16 +230,19 @@ impl fmt::Debug for WlDynObject {
 }
 
 #[repr(C)]
-pub struct WlObject<T> {
+pub struct WlObject<T: Dispatch> {
     pub(crate) proxy: WlProxy,
-    pub(crate) _p: PhantomData<T>,
+    pub(crate) _p: PhantomData<(T, NonNull<T::State>)>,
 }
 
 impl<T: Dispatch + HasObjectType> WlObject<T> {
-    pub fn new(proxy: WlProxy, data: T) -> Self {
-        let dispatch_data = Box::new(WlDispatchData {
+    // TODO(hack3rmann): add state pointer here
+    pub fn new(proxy: WlProxy, data: T, state: Pin<&mut T::State>) -> Self {
+        let dispatch_data = Box::new(WlDispatchData::<T, T::State> {
             dispatch: T::dispatch,
             storage: None,
+            // TODO(hack3rmann): add safety
+            state: NonNull::from(unsafe { state.get_unchecked_mut() }),
             data,
         });
 
@@ -244,7 +252,7 @@ impl<T: Dispatch + HasObjectType> WlObject<T> {
         let result = unsafe {
             wl_proxy_add_dispatcher(
                 proxy.as_raw().as_ptr(),
-                dispatch_raw::<T>,
+                dispatch_raw::<T, T::State>,
                 ptr::null(),
                 dispatch_data_ptr.cast(),
             )
@@ -263,8 +271,11 @@ impl<T: Dispatch + HasObjectType> WlObject<T> {
         }
     }
 
-    pub fn write_storage_location(&mut self, mut storage: Pin<&mut WlObjectStorage>) {
-        let user_data_ptr = self.proxy().get_user_data().cast::<WlDispatchData<T>>();
+    pub fn write_storage_location(&mut self, mut storage: Pin<&mut WlObjectStorage<'_, T::State>>) {
+        let user_data_ptr = self
+            .proxy()
+            .get_user_data()
+            .cast::<WlDispatchData<T, T::State>>();
 
         // Safety: the `WlObject` always has valid user data being set
         let user_data = unsafe { user_data_ptr.as_mut().unwrap_unchecked() };
@@ -294,7 +305,7 @@ impl<T: Dispatch + HasObjectType> WlObject<T> {
     }
 }
 
-impl<T> Drop for WlObject<T> {
+impl<T: Dispatch> Drop for WlObject<T> {
     fn drop(&mut self) {
         let user_data = self.proxy.get_user_data();
 
@@ -302,11 +313,15 @@ impl<T> Drop for WlObject<T> {
         //
         // - `user_data` points to a valid instance of `WlDispatchData<T>`
         // - drop called once on a valid instance
-        unsafe { drop(Box::from_raw(user_data.cast::<WlDispatchData<T>>())) };
+        unsafe {
+            drop(Box::from_raw(
+                user_data.cast::<WlDispatchData<T, T::State>>(),
+            ))
+        };
     }
 }
 
-impl<T> Deref for WlObject<T> {
+impl<T: Dispatch> Deref for WlObject<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -315,7 +330,7 @@ impl<T> Deref for WlObject<T> {
         // Safety: `user_data` points to a valid instance of `WlDispatchData<T>`
         unsafe {
             &user_data
-                .cast::<WlDispatchData<T>>()
+                .cast::<WlDispatchData<T, T::State>>()
                 .as_ref()
                 .unwrap_unchecked()
                 .data
@@ -323,14 +338,14 @@ impl<T> Deref for WlObject<T> {
     }
 }
 
-impl<T> DerefMut for WlObject<T> {
+impl<T: Dispatch> DerefMut for WlObject<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         let user_data = self.proxy.get_user_data();
 
         // Safety: `user_data` points to a valid instance of `WlDispatchData<T>`
         unsafe {
             &mut user_data
-                .cast::<WlDispatchData<T>>()
+                .cast::<WlDispatchData<T, T::State>>()
                 .as_mut()
                 .unwrap_unchecked()
                 .data
@@ -338,7 +353,7 @@ impl<T> DerefMut for WlObject<T> {
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for WlObject<T> {
+impl<T: fmt::Debug + Dispatch> fmt::Debug for WlObject<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct(any::type_name::<Self>())
             .field("proxy", &self.proxy)

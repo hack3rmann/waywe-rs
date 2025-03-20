@@ -16,6 +16,7 @@ pub mod request {
     use super::*;
     use crate::interface::ObjectParent;
     use crate::object::{HasObjectType, WlObjectType};
+    use crate::sys::object::dispatch::State;
     use crate::sys::object_storage::WlObjectStorage;
     use crate::sys::wire::MessageBuffer;
 
@@ -44,10 +45,10 @@ pub mod request {
         const CODE: OpCode = 0;
         const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::ShmPool);
 
-        fn build_message<'m>(
+        fn build_message<'m, S: State>(
             self,
             buf: &'m mut impl MessageBuffer,
-            _: &'m WlObjectStorage,
+            _: &'m WlObjectStorage<'_, S>,
         ) -> WlMessage<'m>
         where
             's: 'm,
@@ -75,10 +76,10 @@ pub mod request {
     impl<'s> Request<'s> for Release {
         const CODE: OpCode = 1;
 
-        fn build_message<'m>(
+        fn build_message<'m, S: State>(
             self,
             buf: &'m mut impl MessageBuffer,
-            _: &'m WlObjectStorage,
+            _: &'m WlObjectStorage<'_, S>,
         ) -> WlMessage<'m>
         where
             's: 'm,

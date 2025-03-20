@@ -11,7 +11,7 @@ pub mod request {
     use crate::{
         interface::ObjectParent,
         object::{HasObjectType, WlObjectType},
-        sys::{object_storage::WlObjectStorage, wire::OpCode},
+        sys::{object::dispatch::State, object_storage::WlObjectStorage, wire::OpCode},
     };
 
     /// The sync request asks the server to emit the 'done' event
@@ -40,10 +40,10 @@ pub mod request {
         const CODE: OpCode = 0;
         const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::Callback);
 
-        fn build_message<'m>(
+        fn build_message<'m, S: State>(
             self,
             buf: &'m mut impl MessageBuffer,
-            _: &'m WlObjectStorage,
+            _: &'m WlObjectStorage<'_, S>,
         ) -> WlMessage<'m>
         where
             's: 'm,
@@ -76,10 +76,10 @@ pub mod request {
         const CODE: OpCode = 1;
         const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::Registry);
 
-        fn build_message<'m>(
+        fn build_message<'m, S: State>(
             self,
             buf: &'m mut impl MessageBuffer,
-            _: &'m WlObjectStorage,
+            _: &'m WlObjectStorage<'_, S>,
         ) -> WlMessage<'m>
         where
             's: 'm,

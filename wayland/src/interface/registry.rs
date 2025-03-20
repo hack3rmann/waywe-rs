@@ -30,7 +30,7 @@ pub mod request {
 
     use super::*;
     use crate::{object::{HasObjectType, InterfaceMessageArgument, WlObjectType}, sys::{
-        object::{registry::WlRegistry, WlObject},
+        object::{dispatch::State, registry::WlRegistry, WlObject},
         proxy::WlProxy,
         wire::OpCode,
     }};
@@ -73,9 +73,9 @@ pub mod request {
         ///
         /// - `parent` proxy should match the parent interface
         /// - resulting `WlProxy` object should be owned by `ObjectStorage` after call
-        pub unsafe fn send(
+        pub unsafe fn send<S: State>(
             self,
-            registry: &WlObject<WlRegistry>,
+            registry: &WlObject<WlRegistry<S>>,
             buf: &mut impl MessageBuffer,
         ) -> Option<WlProxy> {
             let message = self.build_message(buf, registry.name_of(T::OBJECT_TYPE)?);

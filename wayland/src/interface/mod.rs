@@ -13,9 +13,7 @@ pub mod viewporter;
 use crate::{
     object::{HasObjectType, WlObjectType},
     sys::{
-        object_storage::WlObjectStorage,
-        proxy::WlProxy,
-        wire::{MessageBuffer, OpCode, WlMessage},
+        object::dispatch::State, object_storage::WlObjectStorage, proxy::WlProxy, wire::{MessageBuffer, OpCode, WlMessage}
     },
 };
 use std::ptr::{self, NonNull};
@@ -82,10 +80,10 @@ pub trait Request<'s>: Sized + HasObjectType {
     const OUTGOING_INTERFACE: Option<WlObjectType> = None;
 
     /// Builds the message on the top of given message buffer
-    fn build_message<'m>(
+    fn build_message<'m, S: State>(
         self,
         buf: &'m mut impl MessageBuffer,
-        storage: &'m WlObjectStorage,
+        storage: &'m WlObjectStorage<'_, S>,
     ) -> WlMessage<'m>
     where
         's: 'm;
@@ -94,10 +92,10 @@ pub trait Request<'s>: Sized + HasObjectType {
     ///
     /// - `parent` proxy should match the parent interface
     /// - resulting `WlProxy` object should be owned
-    unsafe fn send(
+    unsafe fn send<S: State>(
         self,
         buf: &mut impl MessageBuffer,
-        storage: &WlObjectStorage,
+        storage: &WlObjectStorage<'_, S>,
         parent: &WlProxy,
     ) -> Option<WlProxy> {
         let message = self.build_message(buf, storage);

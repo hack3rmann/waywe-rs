@@ -1,6 +1,6 @@
 use super::{
     display::WlDisplay,
-    object::{dispatch::Dispatch, WlDynObject, WlObject, WlObjectHandle},
+    object::{dispatch::{Dispatch, State}, WlDynObject, WlObject, WlObjectHandle},
     proxy::WlProxy,
 };
 use crate::object::{HasObjectType, WlObjectId};
@@ -14,20 +14,20 @@ pub(crate) struct WlObjectStorageEntry {
 
 /// A storage for wayland's objects
 #[derive(Debug)]
-pub struct WlObjectStorage<'d> {
+pub struct WlObjectStorage<'d, S: State> {
     // NOTE(hack3rmann): this is a fast map as long as `ObjectId` hashes to itself
     objects: HashMap<WlObjectId, WlObjectStorageEntry>,
     acquired_object: Option<WlObjectId>,
-    _display: PhantomData<&'d WlDisplay>,
+    _display: PhantomData<&'d WlDisplay<S>>,
 }
 
 // Safety: empty drop implementation ensures that `WlObjectStorage` uses
 // `_display` reference
-impl Drop for WlObjectStorage<'_> {
+impl<S: State> Drop for WlObjectStorage<'_, S> {
     fn drop(&mut self) {}
 }
 
-impl WlObjectStorage<'_> {
+impl<S: State> WlObjectStorage<'_, S> {
     /// # Safety
     ///
     /// `WlObjectStorage` should be dropped before `WlDisplay`
@@ -53,7 +53,7 @@ impl WlObjectStorage<'_> {
     /// # Panic
     ///
     /// Panics if the storage already contains object with the same id.
-    pub fn insert<T: Dispatch + HasObjectType>(
+    pub fn insert<T: Dispatch<State = S> + HasObjectType>(
         mut self: Pin<&mut Self>,
         mut object: WlObject<T>,
     ) -> WlObjectHandle<T> {
@@ -83,7 +83,7 @@ impl WlObjectStorage<'_> {
     ///
     /// May return [`None`] if object does not contained by the storage or
     /// it had been acquired via a call to [`WlObjectStorage::with_object_data_acquired`]
-    pub fn get_object<T: Dispatch>(
+    pub fn get_object<T: Dispatch<State = S>>(
         &self,
         handle: WlObjectHandle<T>,
     ) -> Option<&WlObject<T>> {
@@ -100,7 +100,7 @@ impl WlObjectStorage<'_> {
     }
 
     /// The same as [`WlObjectStorage::get_object`] but unwraps for you.
-    pub fn object<T: Dispatch>(&self, handle: WlObjectHandle<T>) -> &WlObject<T> {
+    pub fn object<T: Dispatch<State = S>>(&self, handle: WlObjectHandle<T>) -> &WlObject<T> {
         self.get_object(handle).unwrap()
     }
 
@@ -110,7 +110,7 @@ impl WlObjectStorage<'_> {
     ///
     /// May return [`None`] if object does not contained by the storage or
     /// it had been acquired via a call to [`WlObjectStorage::with_object_data_acquired`]
-    pub fn get_object_mut<T: Dispatch>(
+    pub fn get_object_mut<T: Dispatch<State = S>>(
         &mut self,
         handle: WlObjectHandle<T>,
     ) -> Option<&mut WlObject<T>> {
@@ -127,7 +127,7 @@ impl WlObjectStorage<'_> {
     }
 
     /// The same as [`WlObjectStorage::get_object_mut`] but unwraps for you.
-    pub fn object_mut<T: Dispatch>(&mut self, handle: WlObjectHandle<T>) -> &WlObject<T> {
+    pub fn object_mut<T: Dispatch<State = S>>(&mut self, handle: WlObjectHandle<T>) -> &WlObject<T> {
         self.get_object_mut(handle).unwrap()
     }
 
@@ -146,7 +146,7 @@ impl WlObjectStorage<'_> {
     }
 
     /// Releases all resources assocciated with given `handle`
-    pub fn release<T: Dispatch>(
+    pub fn release<T: Dispatch<State = S>>(
         &mut self,
         handle: WlObjectHandle<T>,
     ) -> Result<(), NoEntryError<T>> {

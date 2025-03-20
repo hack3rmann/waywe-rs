@@ -1,4 +1,4 @@
-use super::{WlObject, WlObjectHandle};
+use super::{WlObject, WlObjectHandle, dispatch::NoState};
 use crate::{
     SmallVecMessageBuffer, WlObjectStorage,
     interface::{Event, WlLayerSurfaceAckConfigureRequest, WlLayerSurfaceConfigureEvent},
@@ -29,7 +29,9 @@ macro_rules! define_empty_dispatchers {
                     fn from_proxy(_: &$crate::sys::proxy::WlProxy) -> Self { Self }
                 }
 
-                impl $crate::sys::object::Dispatch for [< Wl $name >] {}
+                impl $crate::sys::object::dispatch::Dispatch for [< Wl $name >] {
+                    type State = $crate::sys::object::dispatch::NoState;
+                }
             }
         )*
     };
@@ -77,7 +79,14 @@ impl FromProxy for WlLayerSurface {
 }
 
 impl Dispatch for WlLayerSurface {
-    fn dispatch(&mut self, storage: Pin<&mut WlObjectStorage>, message: WlMessage<'_>) {
+    type State = NoState;
+
+    fn dispatch(
+        &mut self,
+        _: Pin<&mut Self::State>,
+        storage: Pin<&mut WlObjectStorage<'_, Self::State>>,
+        message: WlMessage<'_>,
+    ) {
         let Some(WlLayerSurfaceConfigureEvent { serial, .. }) =
             WlLayerSurfaceConfigureEvent::from_message(message)
         else {

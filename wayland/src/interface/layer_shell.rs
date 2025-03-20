@@ -8,10 +8,10 @@
 
 pub mod request {
     use super::wl_enum::Layer;
+    use crate::WlObjectId;
     use crate::interface::{ObjectParent, Request};
     use crate::object::{HasObjectType, WlObjectType};
-    use crate::sys::object::WlObjectHandle;
-    use crate::sys::object::default_impl::{WlOutput, WlSurface};
+    use crate::sys::object::dispatch::State;
     use crate::sys::object_storage::WlObjectStorage;
     use crate::sys::wire::{MessageBuffer, OpCode, WlMessage};
     use std::ffi::CStr;
@@ -39,8 +39,8 @@ pub mod request {
     /// surface.
     #[derive(Debug, Clone, Copy)]
     pub struct GetLayerSurface<'a> {
-        pub surface: WlObjectHandle<WlSurface>,
-        pub output: Option<WlObjectHandle<WlOutput>>,
+        pub surface: WlObjectId,
+        pub output: Option<WlObjectId>,
         pub layer: Layer,
         pub namespace: &'a CStr,
     }
@@ -57,10 +57,10 @@ pub mod request {
         const CODE: OpCode = 0;
         const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::LayerSurface);
 
-        fn build_message<'m>(
+        fn build_message<'m, S: State>(
             self,
             buf: &'m mut impl MessageBuffer,
-            storage: &'m WlObjectStorage,
+            storage: &'m WlObjectStorage<'_, S>,
         ) -> WlMessage<'m>
         where
             's: 'm,
@@ -68,8 +68,8 @@ pub mod request {
             WlMessage::builder(buf)
                 .opcode(Self::CODE)
                 .new_id()
-                .object(storage.object(self.surface).proxy())
-                .maybe_object(self.output.map(|h| storage.object(h).proxy()))
+                .object(storage.get_proxy(self.surface).unwrap())
+                .maybe_object(self.output.map(|h| storage.get_proxy(h).unwrap()))
                 .uint(self.layer.into())
                 .str(self.namespace)
                 .build()
@@ -89,10 +89,10 @@ pub mod request {
     impl<'s> Request<'s> for Destroy {
         const CODE: OpCode = 1;
 
-        fn build_message<'m>(
+        fn build_message<'m, S: State>(
             self,
             buf: &'m mut impl MessageBuffer,
-            _: &'m WlObjectStorage,
+            _: &'m WlObjectStorage<'_, S>,
         ) -> WlMessage<'m>
         where
             's: 'm,

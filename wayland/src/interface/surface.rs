@@ -48,16 +48,10 @@ use crate::sys::wire::{MessageBuffer, WlMessage};
 pub mod request {
     use super::*;
     use crate::{
+        WlObjectId,
         interface::{ObjectParent, Request},
         object::{HasObjectType, WlObjectType},
-        sys::{
-            object::{
-                WlObjectHandle,
-                default_impl::{WlBuffer, WlRegion},
-            },
-            object_storage::WlObjectStorage,
-            wire::OpCode,
-        },
+        sys::{object::dispatch::State, object_storage::WlObjectStorage, wire::OpCode},
     };
 
     /// Deletes the surface and invalidates its object ID.
@@ -71,10 +65,10 @@ pub mod request {
     impl<'s> Request<'s> for Destroy {
         const CODE: OpCode = 0;
 
-        fn build_message<'m>(
+        fn build_message<'m, S: State>(
             self,
             buf: &'m mut impl MessageBuffer,
-            _: &'m WlObjectStorage,
+            _: &'m WlObjectStorage<'_, S>,
         ) -> WlMessage<'m>
         where
             's: 'm,
@@ -150,7 +144,7 @@ pub mod request {
     #[derive(Clone, Copy, Default, Debug)]
     pub struct Attach {
         /// buffer of surface contents
-        pub buffer: Option<WlObjectHandle<WlBuffer>>,
+        pub buffer: Option<WlObjectId>,
         /// surface-local x coordinate
         pub x: i32,
         /// surface-local y coordinate
@@ -164,17 +158,17 @@ pub mod request {
     impl<'s> Request<'s> for Attach {
         const CODE: OpCode = 1;
 
-        fn build_message<'m>(
+        fn build_message<'m, S: State>(
             self,
             buf: &'m mut impl MessageBuffer,
-            storage: &'m WlObjectStorage,
+            storage: &'m WlObjectStorage<'_, S>,
         ) -> WlMessage<'m>
         where
             's: 'm,
         {
             WlMessage::builder(buf)
                 .opcode(Self::CODE)
-                .maybe_object(self.buffer.map(|h| storage.object(h).proxy()))
+                .maybe_object(self.buffer.map(|h| storage.get_proxy(h).unwrap()))
                 .int(self.x)
                 .int(self.x)
                 .build()
@@ -200,10 +194,10 @@ pub mod request {
     impl<'s> Request<'s> for Damage {
         const CODE: OpCode = 2;
 
-        fn build_message<'m>(
+        fn build_message<'m, S: State>(
             self,
             buf: &'m mut impl MessageBuffer,
-            _: &'m WlObjectStorage,
+            _: &'m WlObjectStorage<'_, S>,
         ) -> WlMessage<'m>
         where
             's: 'm,
@@ -265,10 +259,10 @@ pub mod request {
         const CODE: OpCode = 3;
         const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::Callback);
 
-        fn build_message<'m>(
+        fn build_message<'m, S: State>(
             self,
             buf: &'m mut impl MessageBuffer,
-            _: &'m WlObjectStorage,
+            _: &'m WlObjectStorage<'_, S>,
         ) -> WlMessage<'m>
         where
             's: 'm,
@@ -304,7 +298,7 @@ pub mod request {
     #[derive(Debug, Clone, Copy, Default)]
     pub struct SetOpaqueRegion {
         /// opaque region of the surface
-        pub region: Option<WlObjectHandle<WlRegion>>,
+        pub region: Option<WlObjectId>,
     }
 
     impl HasObjectType for SetOpaqueRegion {
@@ -314,17 +308,17 @@ pub mod request {
     impl<'s> Request<'s> for SetOpaqueRegion {
         const CODE: OpCode = 4;
 
-        fn build_message<'m>(
+        fn build_message<'m, S: State>(
             self,
             buf: &'m mut impl MessageBuffer,
-            storage: &'m WlObjectStorage,
+            storage: &'m WlObjectStorage<'_, S>,
         ) -> WlMessage<'m>
         where
             's: 'm,
         {
             WlMessage::builder(buf)
                 .opcode(Self::CODE)
-                .maybe_object(self.region.map(|h| storage.object(h).proxy()))
+                .maybe_object(self.region.map(|h| storage.get_proxy(h).unwrap()))
                 .build()
         }
     }
@@ -354,7 +348,7 @@ pub mod request {
     #[derive(Debug, Clone, Copy, Default)]
     pub struct SetInputRegion {
         /// input region of the surface
-        pub region: Option<WlObjectHandle<WlRegion>>,
+        pub region: Option<WlObjectId>,
     }
 
     impl HasObjectType for SetInputRegion {
@@ -364,17 +358,17 @@ pub mod request {
     impl<'s> Request<'s> for SetInputRegion {
         const CODE: OpCode = 5;
 
-        fn build_message<'m>(
+        fn build_message<'m, S: State>(
             self,
             buf: &'m mut impl MessageBuffer,
-            storage: &'m WlObjectStorage,
+            storage: &'m WlObjectStorage<'_, S>,
         ) -> WlMessage<'m>
         where
             's: 'm,
         {
             WlMessage::builder(buf)
                 .opcode(Self::CODE)
-                .maybe_object(self.region.map(|h| storage.object(h).proxy()))
+                .maybe_object(self.region.map(|h| storage.get_proxy(h).unwrap()))
                 .build()
         }
     }
@@ -408,10 +402,10 @@ pub mod request {
     impl<'s> Request<'s> for Commit {
         const CODE: OpCode = 6;
 
-        fn build_message<'m>(
+        fn build_message<'m, S: State>(
             self,
             buf: &'m mut impl MessageBuffer,
-            _: &'m WlObjectStorage,
+            _: &'m WlObjectStorage<'_, S>,
         ) -> WlMessage<'m>
         where
             's: 'm,
@@ -457,10 +451,10 @@ pub mod request {
     impl<'s> Request<'s> for SetBufferScale {
         const CODE: OpCode = 8;
 
-        fn build_message<'m>(
+        fn build_message<'m, S: State>(
             self,
             buf: &'m mut impl MessageBuffer,
-            _: &'m WlObjectStorage,
+            _: &'m WlObjectStorage<'_, S>,
         ) -> WlMessage<'m>
         where
             's: 'm,

@@ -6,8 +6,7 @@
 pub mod request {
     use crate::{
         interface::Request, object::{HasObjectType, WlObjectType}, sys::{
-            object_storage::WlObjectStorage,
-            wire::{WlMessage, MessageBuffer, OpCode},
+            object::dispatch::State, object_storage::WlObjectStorage, wire::{MessageBuffer, OpCode, WlMessage}
         }
     };
 
@@ -23,10 +22,10 @@ pub mod request {
         const CODE: OpCode = 0;
         const OUTGOING_INTERFACE: Option<WlObjectType> = None;
 
-        fn build_message<'m>(
+        fn build_message<'m, S: State>(
             self,
             buf: &'m mut impl MessageBuffer,
-            _: &'m WlObjectStorage,
+            _: &'m WlObjectStorage<'_, S>,
         ) -> WlMessage<'m>
         where
             's: 'm,

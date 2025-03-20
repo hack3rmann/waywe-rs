@@ -1,5 +1,5 @@
 use super::{
-    object::{WlObject, WlObjectHandle, registry::WlRegistry},
+    object::{WlObject, WlObjectHandle, dispatch::State, registry::WlRegistry},
     object_storage::WlObjectStorage,
     proxy::WlProxy,
     wire::MessageBuffer,
@@ -12,18 +12,21 @@ use crate::{
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, RawDisplayHandle, WaylandDisplayHandle,
 };
-use std::{any, fmt, mem::ManuallyDrop, os::fd::IntoRawFd, pin::Pin, ptr::NonNull};
+use std::{
+    any, fmt, marker::PhantomData, mem::ManuallyDrop, os::fd::IntoRawFd, pin::Pin, ptr::NonNull,
+};
 use thiserror::Error;
 use wayland_sys::{
     wl_display, wl_display_connect_to_fd, wl_display_disconnect, wl_display_roundtrip,
 };
 
 /// A handle to the libwayland backend
-pub struct WlDisplay {
+pub struct WlDisplay<S: State> {
     proxy: ManuallyDrop<WlProxy>,
+    _p: PhantomData<NonNull<S>>,
 }
 
-impl WlDisplay {
+impl<S: State> WlDisplay<S> {
     /// Connect to libwayland backend
     pub fn connect() -> Result<Self, DisplayConnectError> {
         let fd = unsafe { connect_wayland_socket()? };
@@ -42,7 +45,10 @@ impl WlDisplay {
         // Safety: `*mut wl_display` is compatible with `*mut wl_proxy`
         let proxy = ManuallyDrop::new(unsafe { WlProxy::from_raw(display.cast()) });
 
-        Ok(Self { proxy })
+        Ok(Self {
+            proxy,
+            _p: PhantomData,
+        })
     }
 
     /// Proxy corresponding to `wl_display` object
@@ -56,7 +62,7 @@ impl WlDisplay {
     }
 
     /// Creates a [`WlObjectStorage`] borrowing display for the lifetime of the storage
-    pub fn create_storage(&self) -> WlObjectStorage<'_> {
+    pub fn create_storage(&self) -> WlObjectStorage<'_, S> {
         // Safety: storage has captured the lifetime of `&self`
         // therefore it will be dropped before the `WlDisplay`
         unsafe { WlObjectStorage::new() }
@@ -66,8 +72,9 @@ impl WlDisplay {
     pub fn create_registry(
         &self,
         buf: &mut impl MessageBuffer,
-        storage: Pin<&mut WlObjectStorage<'_>>,
-    ) -> WlObjectHandle<WlRegistry> {
+        storage: Pin<&mut WlObjectStorage<'_, S>>,
+        state: Pin<&mut S>,
+    ) -> WlObjectHandle<WlRegistry<S>> {
         // Safety: parent interface matcher request's one
         let proxy = unsafe {
             WlDisplayGetRegistryRequest
@@ -75,7 +82,7 @@ impl WlDisplay {
                 .unwrap()
         };
 
-        storage.insert(WlObject::new(proxy, WlRegistry::default()))
+        storage.insert(WlObject::new(proxy, WlRegistry::default(), state))
     }
 
     /// Block until all pending requests are processed by the server.
@@ -83,7 +90,7 @@ impl WlDisplay {
     /// This function blocks until the server has processed all currently
     /// issued requests by sending a request to the display server
     /// and waiting for a reply before returning.
-    pub fn dispatch_all_pending(&self, _: Pin<&mut WlObjectStorage>) {
+    pub fn dispatch_all_pending(&self, _: Pin<&mut WlObjectStorage<'_, S>>, _: Pin<&mut S>) {
         // Safety: `self.as_raw_display_ptr()` is a valid display object
         assert_ne!(
             -1,
@@ -105,18 +112,18 @@ pub enum DisplayConnectError {
 #[error("failed to connect to wayland's socket")]
 pub struct DisplayConnectToFdError;
 
-impl HasObjectType for WlDisplay {
+impl<S: State> HasObjectType for WlDisplay<S> {
     const OBJECT_TYPE: WlObjectType = WlObjectType::Display;
 }
 
-impl Drop for WlDisplay {
+impl<S: State> Drop for WlDisplay<S> {
     fn drop(&mut self) {
         // Safety: `self.as_raw_display_ptr()` is a valid display object
         unsafe { wl_display_disconnect(self.as_raw_display_ptr().as_ptr()) };
     }
 }
 
-impl fmt::Debug for WlDisplay {
+impl<S: State> fmt::Debug for WlDisplay<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct(any::type_name::<Self>())
             .field("proxy", &*self.proxy)
@@ -124,7 +131,7 @@ impl fmt::Debug for WlDisplay {
     }
 }
 
-impl HasDisplayHandle for WlDisplay {
+impl<S: State> HasDisplayHandle for WlDisplay<S> {
     fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
         Ok(unsafe {
             DisplayHandle::borrow_raw(RawDisplayHandle::Wayland(WaylandDisplayHandle::new(

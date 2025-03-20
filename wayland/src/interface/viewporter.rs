@@ -7,10 +7,11 @@
 
 pub mod request {
     use crate::{
+        WlObjectId,
         interface::{ObjectParent, Request},
         object::{HasObjectType, WlObjectType},
         sys::{
-            object::{WlObjectHandle, default_impl::WlSurface},
+            object::dispatch::State,
             object_storage::WlObjectStorage,
             wire::{MessageBuffer, OpCode, WlMessage},
         },
@@ -23,7 +24,7 @@ pub mod request {
     #[derive(Debug, Clone, PartialEq, Copy, Hash)]
     pub struct GetViewport {
         /// The surface
-        pub surface: WlObjectHandle<WlSurface>,
+        pub surface: WlObjectId,
     }
 
     impl ObjectParent for GetViewport {
@@ -38,10 +39,10 @@ pub mod request {
         const CODE: OpCode = 1;
         const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::Viewport);
 
-        fn build_message<'m>(
+        fn build_message<'m, S: State>(
             self,
             buf: &'m mut impl MessageBuffer,
-            storage: &'m WlObjectStorage,
+            storage: &'m WlObjectStorage<'_, S>,
         ) -> WlMessage<'m>
         where
             's: 'm,
@@ -49,7 +50,7 @@ pub mod request {
             WlMessage::builder(buf)
                 .opcode(Self::CODE)
                 .new_id()
-                .object(storage.object(self.surface).proxy())
+                .object(storage.get_proxy(self.surface).unwrap())
                 .build()
         }
     }

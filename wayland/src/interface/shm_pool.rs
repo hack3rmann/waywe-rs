@@ -14,7 +14,7 @@ pub mod request {
     use crate::{
         interface::{ObjectParent, WlShmFormat},
         object::{HasObjectType, WlObjectType},
-        sys::object_storage::WlObjectStorage,
+        sys::{object::dispatch::State, object_storage::WlObjectStorage},
     };
 
     /// Create a wl_buffer object from the pool.
@@ -54,10 +54,10 @@ pub mod request {
         const CODE: OpCode = 0;
         const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::Buffer);
 
-        fn build_message<'m>(
+        fn build_message<'m, S: State>(
             self,
             buf: &'m mut impl MessageBuffer,
-            _: &'m WlObjectStorage,
+            _: &'m WlObjectStorage<'_, S>,
         ) -> WlMessage<'m>
         where
             's: 'm,
@@ -88,10 +88,10 @@ pub mod request {
     impl<'s> Request<'s> for Destroy {
         const CODE: OpCode = 1;
 
-        fn build_message<'m>(
+        fn build_message<'m, S: State>(
             self,
             buf: &'m mut impl MessageBuffer,
-            _: &'m WlObjectStorage,
+            _: &'m WlObjectStorage<'_, S>,
         ) -> WlMessage<'m>
         where
             's: 'm,
@@ -123,10 +123,10 @@ pub mod request {
     impl<'s> Request<'s> for Resize {
         const CODE: OpCode = 2;
 
-        fn build_message<'m>(
+        fn build_message<'m, S: State>(
             self,
             buf: &'m mut impl MessageBuffer,
-            _: &'m WlObjectStorage,
+            _: &'m WlObjectStorage<'_, S>,
         ) -> WlMessage<'m>
         where
             's: 'm,

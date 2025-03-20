@@ -2,33 +2,54 @@ use crate::{
     object::{HasObjectType, WlObjectId},
     sys::{
         object_storage::WlObjectStorage,
-        wire::{WlMessage, OpCode},
+        wire::{OpCode, WlMessage},
     },
 };
 use std::{
-    ffi::{c_int, c_void, CStr}, panic, pin::Pin, process, ptr::NonNull, slice
+    ffi::{CStr, c_int, c_void},
+    panic,
+    pin::Pin,
+    process,
+    ptr::NonNull,
+    slice,
 };
 use wayland_sys::{
     count_arguments_from_message_signature, wl_argument, wl_message, wl_proxy_get_id,
     wl_proxy_get_user_data,
 };
 
+pub trait State: Sized + 'static {}
+
+pub struct NoState;
+
+impl State for NoState {}
+
 /// Types capable of dispatching the incoming events.
 pub trait Dispatch: 'static {
-    fn dispatch(&mut self, _storage: Pin<&mut WlObjectStorage<'_>>, _message: WlMessage<'_>) {}
-}
-static_assertions::assert_obj_safe!(Dispatch);
+    type State: State;
 
-pub(crate) type WlDispatchFn<T> = fn(&mut T, Pin<&mut WlObjectStorage<'_>>, WlMessage<'_>);
+    fn dispatch(
+        &mut self,
+        _state: Pin<&mut Self::State>,
+        _storage: Pin<&mut WlObjectStorage<'_, Self::State>>,
+        _message: WlMessage<'_>,
+    ) {
+    }
+}
+static_assertions::assert_obj_safe!(Dispatch<State = ()>);
+
+pub(crate) type WlDispatchFn<T, S> =
+    fn(&mut T, Pin<&mut S>, Pin<&mut WlObjectStorage<'_, S>>, WlMessage<'_>);
 
 #[repr(C)]
-pub(crate) struct WlDispatchData<T> {
-    pub dispatch: WlDispatchFn<T>,
-    pub storage: Option<NonNull<WlObjectStorage<'static>>>,
+pub(crate) struct WlDispatchData<T, S: State> {
+    pub dispatch: WlDispatchFn<T, S>,
+    pub storage: Option<NonNull<WlObjectStorage<'static, S>>>,
+    pub state: NonNull<S>,
     pub data: T,
 }
 
-pub(crate) unsafe extern "C" fn dispatch_raw<T: HasObjectType>(
+pub(crate) unsafe extern "C" fn dispatch_raw<T: HasObjectType, S: State>(
     _impl: *const c_void,
     proxy: *mut c_void,
     opcode: u32,
@@ -48,7 +69,7 @@ pub(crate) unsafe extern "C" fn dispatch_raw<T: HasObjectType>(
     panic::catch_unwind(|| {
         // Safety: `proxy` in libwayland dispatcher is always valid
         let id = unsafe { WlObjectId::try_from(wl_proxy_get_id(proxy)).unwrap_unchecked() };
-        let data = unsafe { wl_proxy_get_user_data(proxy) }.cast::<WlDispatchData<T>>();
+        let data = unsafe { wl_proxy_get_user_data(proxy) }.cast::<WlDispatchData<T, S>>();
 
         // # Safety
         //
@@ -59,7 +80,7 @@ pub(crate) unsafe extern "C" fn dispatch_raw<T: HasObjectType>(
             return -1;
         };
 
-        let Some(mut storage_ptr) = data.storage.map(|p| p.cast::<WlObjectStorage>()) else {
+        let Some(mut storage_ptr) = data.storage.map(|p| p.cast::<WlObjectStorage<S>>()) else {
             tracing::error!("no pointer to `WlObjectStorage` is set");
             return -1;
         };
@@ -71,6 +92,9 @@ pub(crate) unsafe extern "C" fn dispatch_raw<T: HasObjectType>(
         // - here we have exclusive access to the storage
         //   (see `WlDisplay::dispatch(&self, _storage: Pin<&mut WlObjectStorage>)`)
         let storage = unsafe { Pin::new_unchecked(storage_ptr.as_mut()) };
+
+        // TODO(hack3rmann): add safety
+        let state = unsafe { Pin::new_unchecked(data.state.as_mut()) };
 
         // Safety: an opcode provided by the libwayland backend is always valid (often really small)
         let opcode = unsafe { u16::try_from(opcode).unwrap_unchecked() };
@@ -88,7 +112,7 @@ pub(crate) unsafe extern "C" fn dispatch_raw<T: HasObjectType>(
         let message = WlMessage { opcode, arguments };
 
         if let Err(err) = storage.with_object_data_acquired(id, |storage| {
-            (data.dispatch)(&mut data.data, storage, message);
+            (data.dispatch)(&mut data.data, state, storage, message);
         }) {
             tracing::error!("failed to acquire the object's data: {err}");
             return -1;

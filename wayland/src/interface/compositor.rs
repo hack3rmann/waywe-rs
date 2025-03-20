@@ -7,8 +7,7 @@ pub mod request {
         interface::{ObjectParent, Request},
         object::{HasObjectType, WlObjectType},
         sys::{
-            object_storage::WlObjectStorage,
-            wire::{MessageBuffer, OpCode, WlMessage},
+            object::dispatch::State, object_storage::WlObjectStorage, wire::{MessageBuffer, OpCode, WlMessage}
         },
     };
 
@@ -28,10 +27,10 @@ pub mod request {
         const CODE: OpCode = 0;
         const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::Surface);
 
-        fn build_message<'m>(
+        fn build_message<'m, S: State>(
             self,
             buf: &'m mut impl MessageBuffer,
-            _: &'m WlObjectStorage,
+            _: &'m WlObjectStorage<'_, S>,
         ) -> WlMessage<'m>
         where
             's: 'm,
@@ -56,10 +55,10 @@ pub mod request {
         const CODE: OpCode = 1;
         const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::Region);
 
-        fn build_message<'m>(
+        fn build_message<'m, S: State>(
             self,
             buf: &'m mut impl MessageBuffer,
-            _: &'m WlObjectStorage,
+            _: &'m WlObjectStorage<'_, S>,
         ) -> WlMessage<'m>
         where
             's: 'm,
