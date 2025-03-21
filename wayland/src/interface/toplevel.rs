@@ -1,3 +1,62 @@
+pub mod request {
+    use crate::{
+        HasObjectType, MessageBuffer, OpCode, WlObjectStorage, WlObjectType,
+        interface::Request,
+        sys::{object::dispatch::State, wire::WlMessage},
+    };
+    use std::ffi::CStr;
+
+    #[derive(Clone, Debug, Default, PartialEq, Copy, Eq, PartialOrd, Ord, Hash)]
+    pub struct SetTitle<'s>(pub &'s CStr);
+
+    impl HasObjectType for SetTitle<'_> {
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Toplevel;
+    }
+
+    impl<'s> Request<'s> for SetTitle<'s> {
+        const CODE: OpCode = 2;
+
+        fn build_message<'m, S: State>(
+            self,
+            buf: &'m mut impl MessageBuffer,
+            _: &'m WlObjectStorage<'_, S>,
+        ) -> WlMessage<'m>
+        where
+            's: 'm,
+        {
+            WlMessage::builder(buf)
+                .opcode(Self::CODE)
+                .str(self.0)
+                .build()
+        }
+    }
+
+    #[derive(Clone, Debug, Default, PartialEq, Copy, Eq, PartialOrd, Ord, Hash)]
+    pub struct SetAppId<'s>(pub &'s CStr);
+
+    impl HasObjectType for SetAppId<'_> {
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Toplevel;
+    }
+
+    impl<'s> Request<'s> for SetAppId<'s> {
+        const CODE: OpCode = 3;
+
+        fn build_message<'m, S: State>(
+            self,
+            buf: &'m mut impl MessageBuffer,
+            _: &'m WlObjectStorage<'_, S>,
+        ) -> WlMessage<'m>
+        where
+            's: 'm,
+        {
+            WlMessage::builder(buf)
+                .opcode(Self::CODE)
+                .str(self.0)
+                .build()
+        }
+    }
+}
+
 pub mod event {
     use super::wl_enum::State;
     use crate::{
@@ -31,6 +90,17 @@ pub mod event {
                 height,
                 states,
             })
+        }
+    }
+
+    #[derive(Clone, Debug, Default, PartialEq, Copy, Eq, PartialOrd, Ord, Hash)]
+    pub struct Close;
+
+    impl<'s> Event<'s> for Close {
+        const CODE: OpCode = 1;
+
+        fn from_message(message: WlMessage<'s>) -> Option<Self> {
+            (message.opcode == Self::CODE).then_some(Self)
         }
     }
 }

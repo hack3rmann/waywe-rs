@@ -1,5 +1,6 @@
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
-use std::mem;
+use std::time::Instant;
+use std::{mem, time::Duration};
 use std::pin::pin;
 use wayland::{
     WlObjectHandle,
@@ -15,6 +16,8 @@ use wayland::{
     },
 };
 use wgpu::util::DeviceExt as _;
+
+pub const TIMEOUT: Duration = Duration::from_millis(500);
 
 #[tokio::test]
 async fn use_wgpu_to_draw_anything() {
@@ -60,7 +63,7 @@ async fn use_wgpu_to_draw_anything() {
         .await
         .expect("failed to request adapter");
 
-    let (device, _queue) = adapter
+    let (device, queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
                 required_features: wgpu::Features::empty(),
@@ -73,8 +76,8 @@ async fn use_wgpu_to_draw_anything() {
         .await
         .unwrap();
 
-    const WIDTH: u32 = 1000;
-    const HEIGHT: u32 = WIDTH;
+    const WIDTH: u32 = 2520;
+    const HEIGHT: u32 = 1680;
     wgpu_surface.configure(
         &device,
         &wgpu_surface
@@ -168,29 +171,41 @@ async fn use_wgpu_to_draw_anything() {
         cache: None,
     });
 
-    let surface_texture = wgpu_surface.get_current_texture().unwrap();
-    let surface_view = surface_texture.texture.create_view(&Default::default());
-
-    let mut encoder = device.create_command_encoder(&Default::default());
+    let event_loop_start = Instant::now();
 
     loop {
-        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: None,
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &surface_view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
+        if Instant::now().duration_since(event_loop_start) >= TIMEOUT {
+            break;
+        }
 
-        pass.set_pipeline(&pipeline);
-        pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-        pass.draw(0..triangle.len() as u32, 0..1);
+        let surface_texture = wgpu_surface.get_current_texture().unwrap();
+        let surface_view = surface_texture.texture.create_view(&Default::default());
+
+        let mut encoder = device.create_command_encoder(&Default::default());
+
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &surface_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            pass.set_pipeline(&pipeline);
+            pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+            pass.draw(0..triangle.len() as u32, 0..1);
+        }
+
+        queue.submit([encoder.finish()]);
+
+        surface_texture.present();
     }
 }

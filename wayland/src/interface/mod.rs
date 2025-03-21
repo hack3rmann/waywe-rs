@@ -8,10 +8,10 @@ pub mod registry;
 pub mod shm;
 pub mod shm_pool;
 pub mod surface;
+pub mod toplevel;
 pub mod viewporter;
 pub mod wm_base;
 pub mod xdg_surface;
-pub mod toplevel;
 
 use crate::{
     object::{HasObjectType, WlObjectType},
@@ -71,6 +71,10 @@ pub use {
         },
         wl_enum::Error as WlSurfaceError,
     },
+    toplevel::{
+        event::{Configure as WlToplevelConfigureEvent, Close as WlToplevelCloseEvent},
+        request::{SetAppId as WlToplevelSetAppIdRequest, SetTitle as WlToplevelSetTitleRequest},
+    },
     viewporter::request::GetViewport as WlViewporterGetViewportRequest,
     wm_base::{
         event::Ping as WlWmBasePingEvent,
@@ -83,7 +87,6 @@ pub use {
             GetToplevel as WlXdgSurfaceGetToplevelRequest,
         },
     },
-    toplevel::event::Configure as WlToplevelConfigureEvent,
 };
 
 pub trait ObjectParent {
