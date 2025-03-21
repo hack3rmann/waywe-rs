@@ -119,6 +119,24 @@ impl Message<'_> {
 #[derive(Debug, PartialEq, Default, Clone, Copy, Eq, PartialOrd, Ord, Hash)]
 pub struct MaybeHexU32(pub u32);
 
+impl From<u32> for MaybeHexU32 {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+
+impl From<MaybeHexU32> for u32 {
+    fn from(value: MaybeHexU32) -> Self {
+        value.0
+    }
+}
+
+impl fmt::Display for MaybeHexU32 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        <u32 as fmt::Display>::fmt(&self.0, f)
+    }
+}
+
 impl Serialize for MaybeHexU32 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -195,6 +213,8 @@ pub struct EnumEntry<'s> {
 pub struct Enum<'s> {
     #[serde(rename = "$attr:name")]
     pub name: Cow<'s, str>,
+    #[serde(rename = "$attr:bitfield", default)]
+    pub is_bitfield: bool,
     #[serde(borrow)]
     pub description: Option<Description<'s>>,
     #[serde(default)]

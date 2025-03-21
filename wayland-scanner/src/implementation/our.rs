@@ -2,7 +2,7 @@ use super::protocol_from_str;
 use crate::xml::{ArgType, Enum, Interface, InterfaceEntry, Message};
 use convert_case::{Case, Casing as _};
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::quote;
+use quote::{format_ident, quote};
 use std::{fs, ops::Deref};
 use syn::{
     LitInt, LitStr, Result as ParseResult, Token, bracketed,
@@ -162,28 +162,40 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
     let struct_lifetime_decl = has_lifetime.then(|| quote! { <'s> }).into_iter();
     let struct_lifetime_impl = struct_lifetime_decl.clone();
 
-    let struct_fields = request.arg.iter().filter_map(|argument| {
-        let field_name = Ident::new(&argument.name, Span::call_site());
-        let field_type = match argument.ty {
-            ArgType::Int => quote! { i32 },
-            // TODO(hack3rmann): can be used as enum value => use enums
-            ArgType::Uint => quote! { u32 },
-            ArgType::NewId => return None,
-            ArgType::Object => {
-                if argument.allow_null {
-                    quote! { ::std::option::Option<crate::object::WlObjectId> }
-                } else {
-                    quote! { crate::object::WlObjectId }
+    let struct_fields = request
+        .arg
+        .iter()
+        .filter_map(|argument| {
+            let field_name = Ident::new(&argument.name, Span::call_site());
+            let field_type = match argument.ty {
+                ArgType::Int => quote! { i32 },
+                // TODO(hack3rmann): can be used as enum value => use enums
+                ArgType::Uint => quote! { u32 },
+                ArgType::NewId => return None,
+                ArgType::Object => {
+                    if argument.allow_null {
+                        quote! { ::std::option::Option<crate::object::WlObjectId> }
+                    } else {
+                        quote! { crate::object::WlObjectId }
+                    }
                 }
-            }
-            ArgType::String => quote! { &'s ::std::ffi::CStr },
-            ArgType::Fd => quote! { ::std::os::fd::BorrowedFd<'s> },
-            ArgType::Fixed => quote! { wayland_sys::WlFixed },
-            ArgType::Array => unimplemented!("array usage in reqeusts"),
-        };
+                ArgType::String => quote! { &'s ::std::ffi::CStr },
+                ArgType::Fd => quote! { ::std::os::fd::BorrowedFd<'s> },
+                ArgType::Fixed => quote! { wayland_sys::WlFixed },
+                ArgType::Array => unimplemented!("array usage in reqeusts"),
+            };
 
-        Some(quote! { #field_name : #field_type })
-    });
+            Some(quote! { #field_name : #field_type })
+        })
+        .collect::<Vec<_>>();
+
+    let struct_body = if struct_fields.is_empty() {
+        quote! { ; }
+    } else {
+        quote! {
+            { #( #struct_fields ),* }
+        }
+    };
 
     let request_builder_arguments = request.arg.iter().map(|argument| {
         let method = Ident::new(argument.ty.builder_str(), Span::call_site());
@@ -258,9 +270,7 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
 
     quote! {
         // TODO: derive anything
-        pub struct #request_struct_name #( #struct_lifetime_decl )* {
-            #( #struct_fields ),*
-        }
+        pub struct #request_struct_name #( #struct_lifetime_decl )* #struct_body
 
         #( #object_parent_impl )*
 
@@ -298,6 +308,173 @@ fn event_to_impl(_event: &Message) -> TokenStream {
     quote! {}
 }
 
-fn enum_to_impl(_enum: &Enum) -> TokenStream {
-    quote! {}
+fn enum_to_impl(enumeration: &Enum) -> TokenStream {
+    if enumeration.is_bitfield {
+        bitfield_enum_to_impl(enumeration)
+    } else {
+        regular_enum_to_impl(enumeration)
+    }
+}
+
+fn bitfield_enum_to_impl(enumeration: &Enum) -> TokenStream {
+    let enum_name = enumeration.name.to_case(Case::Pascal);
+    let enum_ident = Ident::new(&enum_name, Span::call_site());
+
+    let enum_entry_names = enumeration
+        .entry
+        .iter()
+        .map(|entry| {
+            let is_number = entry.name.chars().all(|c| c.is_ascii_digit());
+            let screaming_snake = entry.name.to_case(Case::UpperSnake);
+
+            if is_number {
+                format!("_{screaming_snake}")
+            } else {
+                screaming_snake
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let entries = enum_entry_names
+        .iter()
+        .zip(&enumeration.entry)
+        .map(|(name, entry)| {
+            let entry_ident = Ident::new(name, Span::call_site());
+            let entry_value_string = entry.value.to_string();
+            let entry_value_literal = LitInt::new(&entry_value_string, Span::call_site());
+
+            // FIXME(hack3rmann): format documentation into markdown
+            let _entry_docs = entry
+                .summary
+                .as_ref()
+                .or(entry
+                    .description
+                    .as_ref()
+                    .and_then(|desc| desc.summary.as_ref().or(desc.body.as_ref())))
+                .map(|desc| LitStr::new(desc, Span::call_site()))
+                .into_iter();
+
+            quote! {
+                const #entry_ident = #entry_value_literal;
+            }
+        });
+
+    // FIXME(hack3rmann): format documentation into markdown
+    let _enum_docs = enumeration
+        .description
+        .as_ref()
+        .and_then(|desc| desc.body.as_ref().or(desc.summary.as_ref()))
+        .map(|desc| LitStr::new(desc, Span::call_site()))
+        .into_iter();
+
+    quote! {
+        ::bitflags::bitflags! {
+            #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+            pub struct #enum_ident : u32 {
+                #( #entries )*
+            }
+        }
+    }
+}
+
+fn regular_enum_to_impl(enumeration: &Enum) -> TokenStream {
+    let enum_name = enumeration.name.to_case(Case::Pascal);
+    let enum_ident = Ident::new(&enum_name, Span::call_site());
+
+    let enum_entry_names = enumeration
+        .entry
+        .iter()
+        .map(|entry| {
+            let is_number = entry.name.chars().all(|c| c.is_ascii_digit());
+            let pascal = entry.name.to_case(Case::Pascal);
+
+            if is_number {
+                format!("_{pascal}")
+            } else {
+                pascal
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let entries = enum_entry_names
+        .iter()
+        .zip(&enumeration.entry)
+        .map(|(name, entry)| {
+            let entry_ident = Ident::new(name, Span::call_site());
+            let entry_value_literal = u32::from(entry.value);
+
+            // FIXME(hack3rmann): format documentation into markdown
+            let _entry_docs = entry
+                .summary
+                .as_ref()
+                .or(entry
+                    .description
+                    .as_ref()
+                    .and_then(|desc| desc.summary.as_ref().or(desc.body.as_ref())))
+                .map(|desc| LitStr::new(desc, Span::call_site()))
+                .into_iter();
+
+            quote! {
+                #entry_ident = #entry_value_literal
+            }
+        });
+
+    let try_from_error_ident = format_ident!("{}FromU32Error", enum_ident);
+
+    // FIXME(hack3rmann): format documentation into markdown
+    let _enum_docs = enumeration
+        .description
+        .as_ref()
+        .and_then(|desc| desc.body.as_ref().or(desc.summary.as_ref()))
+        .map(|desc| LitStr::new(desc, Span::call_site()))
+        .into_iter();
+
+    let try_from_match_entries = enum_entry_names
+        .iter()
+        .zip(&enumeration.entry)
+        .map(|(name, entry)| {
+            let entry_ident = Ident::new(name, Span::call_site());
+            let entry_value_literal = u32::from(entry.value);
+
+            quote! {
+                #entry_value_literal => Self:: #entry_ident,
+            }
+        });
+
+    let try_from_error_string = format!("failed to convert {{0}} to {enum_name}");
+
+    quote! {
+        #[repr(u32)]
+        #[derive(Clone, Debug, PartialEq, Copy, Eq, PartialOrd, Ord, Hash)]
+        pub enum #enum_ident {
+            #( #entries ),*
+        }
+
+        impl #enum_ident {
+            pub const unsafe fn from_u32_unchecked(value: u32) -> Self {
+                unsafe { ::std::mem::transmute::<u32, Self>(value) }
+            }
+        }
+
+        impl ::std::convert::From< #enum_ident > for u32 {
+            fn from(value: #enum_ident ) -> Self {
+                value as u32
+            }
+        }
+
+        #[derive(Debug, ::thiserror::Error)]
+        #[error( #try_from_error_string )]
+        pub struct #try_from_error_ident (pub u32);
+
+        impl ::std::convert::TryFrom<u32> for #enum_ident {
+            type Error = #try_from_error_ident ;
+
+            fn try_from(value: u32) -> ::std::result::Result<Self, Self::Error> {
+                Ok(match value {
+                    #( #try_from_match_entries )*
+                    _ => return Err( #try_from_error_ident (value)),
+                })
+            }
+        }
+    }
 }

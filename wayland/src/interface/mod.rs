@@ -27,7 +27,7 @@ use wayland_sys::wl_proxy_marshal_array_constructor;
 
 pub use {
     callback::event::Done as WlCallbackDoneEvent,
-    compositor::request::{
+    generated::wayland::compositor::request::{
         CreateRegion as WlCompositorCreateRegionRequest,
         CreateSurface as WlCompositorCreateSurfaceRequest,
     },
