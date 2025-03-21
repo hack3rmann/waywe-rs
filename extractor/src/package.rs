@@ -33,11 +33,10 @@
 //! - The files contents themselves. Files appear in the same order as
 //!   their meta earlier
 
+use safe_transmute::to_bytes::transmute_one_to_bytes_mut;
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
-
-use safe_transmute::to_bytes::transmute_one_to_bytes_mut;
 
 /// Error that may occur while working with `scene.pkg` file
 #[derive(thiserror::Error, Debug)]
@@ -83,16 +82,6 @@ impl FileMeta {
 pub struct PackageMeta {
     pub files: Vec<FileMeta>,
     pub version: String,
-}
-
-impl PackageMeta {
-    pub fn files(&self) -> &[FileMeta] {
-        &self.files
-    }
-
-    pub fn version(&self) -> &str {
-        &self.version
-    }
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

@@ -1,9 +1,10 @@
-//!Functions and structs for working the `.tex` files
+//! Functions and structs for working the `.tex` files
 //!
-//!A good starting point is the [`TexReader`] struct or [`extract_data`] function
-//!that does all the job done itself
+//! A good starting point is the [`TexReader`] struct or [`extract_data`] function
+//! that does all the job done itself
 //!
 //! # Example of extracting data via manual work with readers and storing it via png crate
+//!
 //! ```rust,ignore
 //! use extractor::texture::*;
 //!
@@ -47,8 +48,8 @@
 //! ```
 //!
 //! # Example of using [`extract_data`]
-//! ```rust,ignore
 //!
+//! ```rust,ignore
 //! use extractor::texture::*;
 //!
 //! let mut src = std::fs::File::open("asset.tex").unwrap();
@@ -78,18 +79,18 @@
 // TODO(ArnoDarkrose): add image cropping and rotating
 // TODO(ArnoDarkrose): maybe mipmap decompression should be parallelized
 
-use image::ImageBuffer;
-use std::ffi::CString;
-use std::io::Read;
-use tracing::{debug, instrument};
-use transmute_extra::{read_into_uninit, transmute_vec};
-
 pub mod enums;
 pub mod stages;
 
-pub use stages::*;
+use image::ImageBuffer;
+use std::ffi::CString;
+use std::io::Read;
+use thiserror::Error;
+use tracing::{debug, instrument};
+use transmute_extra::transmute_vec_u8_to_vec_u32;
 
 pub use enums::*;
+pub use stages::*;
 
 /// Information about the header of the `.tex` file
 #[derive(Default, Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
@@ -157,12 +158,16 @@ impl TexMipmap {
             MipmapFormat::CompressedDxt1 => dxt::DxtFormat::Dxt1,
             MipmapFormat::CompressedDxt3 => dxt::DxtFormat::Dxt3,
             MipmapFormat::CompressedDxt5 => dxt::DxtFormat::Dxt5,
-            _ => return Ok(DecompressedTexMipmap::from(self)),
+            _ => {
+                return Ok(
+                    DecompressedTexMipmap::try_from(self).expect("expecting decompressed mipmap")
+                )
+            }
         };
 
-        debug!("decompressing dxt texture: {dxt_format:?}");
+        debug!(?dxt_format, "decompressing dxt texture");
 
-        let data = transmute_vec(self.data)?;
+        let data = transmute_vec_u8_to_vec_u32(self.data)?;
         let data =
             dxt::decompress_image(self.width as usize, self.height as usize, &data, dxt_format);
 
@@ -175,7 +180,7 @@ impl TexMipmap {
                 ImageBuffer::from_raw(
                     self.width as u32,
                     self.height as u32,
-                    transmute_extra::transmute_to_bytes_vec(data),
+                    transmute_extra::transmute_vec_u32_to_vec_u8(data),
                 )
                 .ok_or(TexExtractError::Corrupt {
                     about: "width and height of the texture read from file are to big:\
@@ -189,7 +194,8 @@ impl TexMipmap {
     }
 }
 
-/// Contains decompressed, ready to use image data. This shoudl be constructed from [`TexMipmap`] via a call to [`TexMipmap::decompress`]
+/// Contains decompressed, ready to use image data.
+/// This should be constructed from [`TexMipmap`] via a call to [`TexMipmap::decompress`]
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct DecompressedTexMipmap {
     pub width: u32,
@@ -200,9 +206,15 @@ pub struct DecompressedTexMipmap {
     pub format: MipmapFormat,
 }
 
-impl From<TexMipmap> for DecompressedTexMipmap {
-    /// This function will panic if the passed mipmap is compressed
-    fn from(value: TexMipmap) -> Self {
+#[derive(Debug, Error)]
+#[error("trying to construct DecompressedMipmap from a compressed Mipmap")]
+pub struct DecompressedTexMipmapFromTexMipmapError;
+
+impl TryFrom<TexMipmap> for DecompressedTexMipmap {
+    type Error = DecompressedTexMipmapFromTexMipmapError;
+
+    /// This function will return [`Err`] if the passed mipmap is compressed
+    fn try_from(value: TexMipmap) -> Result<Self, Self::Error> {
         if value.lz4_compressed
             || matches!(
                 value.format,
@@ -211,7 +223,7 @@ impl From<TexMipmap> for DecompressedTexMipmap {
                     | MipmapFormat::CompressedDxt1
             )
         {
-            panic!("trying to construct DecompressedMipmap from a compressed Mipmap")
+            return Err(DecompressedTexMipmapFromTexMipmapError);
         };
 
         let data = match value.format {
@@ -227,13 +239,13 @@ impl From<TexMipmap> for DecompressedTexMipmap {
             _ => MipmapData::Raw(value.data),
         };
 
-        Self {
+        Ok(Self {
             width: value.width as u32,
             height: value.height as u32,
             condition_json: value.condition_json,
             data,
             format: value.format,
-        }
+        })
     }
 }
 
@@ -262,7 +274,7 @@ impl TexImage {
         let mipmaps = self
             .mipmaps
             .into_iter()
-            .map(|mipmap| mipmap.decompress())
+            .map(TexMipmap::decompress)
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(DecompressedTexImage { mipmaps })
@@ -313,12 +325,12 @@ pub fn extract_data(src: &mut impl Read) -> Result<TexExtractData, TexExtractErr
         .read_images()?;
 
     let images = reader
-        .images()
+        .take_images()
         .expect("this is the first acquisition of this field so it is some");
 
     let decompressed_images = images
         .into_iter()
-        .map(|image| image.decompress())
+        .map(TexImage::decompress)
         .collect::<Result<Vec<_>, _>>()?;
 
     if reader.contains_gif() {
@@ -327,11 +339,11 @@ pub fn extract_data(src: &mut impl Read) -> Result<TexExtractData, TexExtractErr
         Ok(TexExtractData::Gif {
             frames: decompressed_images,
             frames_meta: reader
-                .gif_frames_meta()
+                .take_gif_frames_meta()
                 .expect("this is the first acquisition of this field so it is some"),
         })
     } else if reader.contains_video() {
-        let first_image_bytes = &decompressed_images[0].mipmaps[0].data.as_bytes();
+        let first_image_bytes = decompressed_images[0].mipmaps[0].data.as_bytes();
         if first_image_bytes.len() < 12 {
             return Err(TexExtractError::Corrupt {
                 about:
@@ -356,45 +368,42 @@ pub fn extract_data(src: &mut impl Read) -> Result<TexExtractData, TexExtractErr
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use std::fs::File;
-
     use std::io::{BufReader, BufWriter};
 
-    use super::*;
-
     #[test]
-    #[ignore]
+    #[ignore = "no input files provided"]
     fn test_stages_up_to_images() {
         let mut fd = std::io::BufReader::new(std::fs::File::open("futaba.tex").unwrap());
 
         let reader = TexReader::new(&mut fd);
         let reader = reader.read_header().unwrap();
 
-        tracing::debug!("{reader:#?}");
+        tracing::debug!(?reader);
 
         let reader = reader.read_image_container_meta().unwrap();
 
-        tracing::debug!("{reader:#?}");
+        tracing::debug!(?reader);
 
         let mut reader = reader.read_images().unwrap();
 
-        tracing::debug!("{:#?}, {:#?}", reader.header(), reader.image_container());
+        tracing::debug!(header = ?reader.header(), container = ?reader.image_container());
 
-        let images = reader.images();
+        let images = reader.take_images();
 
         for image in images.unwrap() {
             let image = image.decompress().unwrap();
 
             for (i, mipmap) in image.mipmaps.iter().enumerate() {
                 tracing::debug!(
-                    "mipmap_width: {:#?}, mipmap_height: {:#?}, condition_json: {:#?}",
-                    mipmap.width,
-                    mipmap.height,
-                    mipmap.condition_json
+                    mipmap_width = mipmap.width,
+                    mipmap_height = mipmap.height,
+                    condition_json = ?mipmap.condition_json,
                 );
 
                 let fd = std::fs::File::create(format!("futaba{i}.png")).unwrap();
-                let mut encoder = png::Encoder::new(fd, mipmap.width as u32, mipmap.height as u32);
+                let mut encoder = png::Encoder::new(fd, mipmap.width, mipmap.height);
                 encoder.set_color(png::ColorType::Rgba);
 
                 let mut writer = encoder.write_header().unwrap();
@@ -404,7 +413,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "no input files provided"]
     fn test_dxt_image() {
         let mut src = BufReader::new(File::open("dxt_image.tex").unwrap());
         let mut reader = TexReader::new(&mut src)
@@ -415,7 +424,7 @@ mod tests {
             .read_images()
             .unwrap();
 
-        for image in reader.images().unwrap() {
+        for image in reader.take_images().unwrap() {
             let image = image.decompress().unwrap();
 
             for (i, mipmap) in image.mipmaps.into_iter().enumerate() {
@@ -431,7 +440,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "no input files provided"]
     fn test_gif() {
         let mut src = BufReader::new(File::open("kurukuru.tex").unwrap());
         let mut reader = TexReader::new(&mut src)
@@ -446,10 +455,10 @@ mod tests {
             .read_gif_frames_meta()
             .unwrap();
 
-        tracing::debug!("{:#?}", reader.image_container());
-        tracing::debug!("{:#?}", reader.gif_container());
+        tracing::debug!(container = ?reader.image_container());
+        tracing::debug!(container = ?reader.gif_container());
 
-        for image in reader.images().unwrap() {
+        for image in reader.take_images().unwrap() {
             let image = image.decompress().unwrap();
 
             for (i, mipmap) in image.mipmaps.into_iter().enumerate() {
@@ -465,53 +474,46 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "no input files provided"]
     fn test_extract_basic() {
         let mut src = BufReader::new(File::open("futaba.tex").unwrap());
         let data = extract_data(&mut src).unwrap();
 
-        match data {
-            TexExtractData::Image(data) => {
-                for image in data {
-                    for (i, mipmap) in image.mipmaps.into_iter().enumerate() {
-                        let out = BufWriter::new(File::create(format!("futaba2_{i}.png")).unwrap());
+        if let TexExtractData::Image(data) = data {
+            for image in data {
+                for (i, mipmap) in image.mipmaps.into_iter().enumerate() {
+                    let out = BufWriter::new(File::create(format!("futaba2_{i}.png")).unwrap());
 
-                        let mut encoder = png::Encoder::new(out, mipmap.width, mipmap.height);
-                        encoder.set_color(png::ColorType::Rgba);
+                    let mut encoder = png::Encoder::new(out, mipmap.width, mipmap.height);
+                    encoder.set_color(png::ColorType::Rgba);
 
-                        let mut writer = encoder.write_header().unwrap();
+                    let mut writer = encoder.write_header().unwrap();
 
-                        writer.write_image_data(mipmap.data.as_bytes()).unwrap();
-                    }
+                    writer.write_image_data(mipmap.data.as_bytes()).unwrap();
                 }
             }
-            _ => {}
         }
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "no input files provided"]
     fn test_extract_dxt() {
         let mut src = BufReader::new(File::open("dxt_image.tex").unwrap());
         let data = extract_data(&mut src).unwrap();
 
-        match data {
-            TexExtractData::Image(data) => {
-                for image in data {
-                    for (i, mipmap) in image.mipmaps.into_iter().enumerate() {
-                        let out =
-                            BufWriter::new(File::create(format!("dxt_image2_{i}.png")).unwrap());
+        if let TexExtractData::Image(data) = data {
+            for image in data {
+                for (i, mipmap) in image.mipmaps.into_iter().enumerate() {
+                    let out = BufWriter::new(File::create(format!("dxt_image2_{i}.png")).unwrap());
 
-                        let mut encoder = png::Encoder::new(out, mipmap.width, mipmap.height);
-                        encoder.set_color(png::ColorType::Rgba);
+                    let mut encoder = png::Encoder::new(out, mipmap.width, mipmap.height);
+                    encoder.set_color(png::ColorType::Rgba);
 
-                        let mut writer = encoder.write_header().unwrap();
+                    let mut writer = encoder.write_header().unwrap();
 
-                        writer.write_image_data(mipmap.data.as_bytes()).unwrap();
-                    }
+                    writer.write_image_data(mipmap.data.as_bytes()).unwrap();
                 }
             }
-            _ => {}
         }
     }
 }

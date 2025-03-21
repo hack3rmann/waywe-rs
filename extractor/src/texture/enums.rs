@@ -1,8 +1,7 @@
-use std::io;
-
-use image::EncodableLayout;
-
 use super::{DecompressedTexImage, TexGifFrameMeta};
+use image::EncodableLayout;
+use std::{io, str::FromStr};
+use thiserror::Error;
 
 /// Error that is returned by most of the functions that work with `.tex` files
 #[derive(Debug, thiserror::Error)]
@@ -30,9 +29,6 @@ pub enum TexExtractError {
 
     #[error(transparent)]
     Transmute(#[from] transmute_extra::TransmuteVecError),
-
-    #[error(transparent)]
-    FromVecWithNul(#[from] std::ffi::FromVecWithNulError),
 
     /// A function encountered some error while parsing input file
     #[error("corrupt data in the file: {about}")]
@@ -92,11 +88,29 @@ pub enum ImageContainerVersion {
     Texb0001,
 }
 
+impl FromStr for ImageContainerVersion {
+    type Err = ParseImageContainerVersionError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "TEXB0004" => Self::Texb0004,
+            "TEXB0003" => Self::Texb0003,
+            "TEXB0002" => Self::Texb0002,
+            "TEXB0001" => Self::Texb0001,
+            _ => return Err(ParseImageContainerVersionError),
+        })
+    }
+}
+
+#[derive(Debug, Error)]
+#[error("invalid string value for ImageContainerVersion")]
+pub struct ParseImageContainerVersionError;
+
 /// Format of the uncompresed image
 #[derive(Default, Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub enum FreeImageFormat {
     #[default]
-    Unknow = -1,
+    Unknown = -1,
     Bmp = 0,
     Ico = 1,
     Jpeg = 2,
@@ -177,7 +191,7 @@ impl From<i32> for FreeImageFormat {
             33 => FreeImageFormat::Pict,
             34 => FreeImageFormat::Raw,
             35 => FreeImageFormat::Mp4,
-            _ => FreeImageFormat::Unknow,
+            _ => FreeImageFormat::Unknown,
         }
     }
 }
@@ -237,8 +251,8 @@ impl MipmapFormat {
         tex_format: TexFormat,
     ) -> Self {
         if let Some(format) = image_format {
-            if format != FreeImageFormat::Unknow {
-                return Self::from(format);
+            if let Ok(format) = Self::try_from(format) {
+                return format;
             }
         }
 
@@ -246,12 +260,16 @@ impl MipmapFormat {
     }
 }
 
-impl From<FreeImageFormat> for MipmapFormat {
-    fn from(value: FreeImageFormat) -> Self {
-        match value {
-            FreeImageFormat::Unknow => {
-                panic!("unexpected ImageFormat::Unknown when coverting to MipmapFormat")
-            }
+#[derive(Debug, Error)]
+#[error("unexpected FreeImageFormat::Unknown when coverting to MipmapFormat")]
+pub struct MipmapFormatFromFreeImageFormatError;
+
+impl TryFrom<FreeImageFormat> for MipmapFormat {
+    type Error = MipmapFormatFromFreeImageFormatError;
+
+    fn try_from(value: FreeImageFormat) -> Result<Self, Self::Error> {
+        Ok(match value {
+            FreeImageFormat::Unknown => return Err(MipmapFormatFromFreeImageFormatError),
             FreeImageFormat::Bmp => MipmapFormat::ImageBmp,
             FreeImageFormat::Ico => MipmapFormat::ImageIco,
             FreeImageFormat::Jpeg => MipmapFormat::ImageJpeg,
@@ -289,7 +307,7 @@ impl From<FreeImageFormat> for MipmapFormat {
             FreeImageFormat::Mp4 => MipmapFormat::VideoMp4,
             FreeImageFormat::Lbm => MipmapFormat::ImageLbm,
             FreeImageFormat::Raw => MipmapFormat::ImageRaw,
-        }
+        })
     }
 }
 
@@ -312,6 +330,23 @@ pub enum GifContainerVersion {
     Texs0002,
     #[default]
     Texs0003,
+}
+
+#[derive(Debug, Error)]
+#[error("failed to parse GifContainerVersion")]
+pub struct ParseGifContainerVersionError;
+
+impl FromStr for GifContainerVersion {
+    type Err = ParseGifContainerVersionError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "TEXS0001" => GifContainerVersion::Texs0001,
+            "TEXS0002" => GifContainerVersion::Texs0002,
+            "TEXS0003" => GifContainerVersion::Texs0003,
+            _ => return Err(ParseGifContainerVersionError),
+        })
+    }
 }
 
 /// Resulting data of the decompressed mipmap

@@ -2,7 +2,6 @@
 
 use super::*;
 use std::{ffi::CString, io::Result as IoResult};
-
 use tracing::{debug, instrument};
 
 #[derive(Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
@@ -32,7 +31,7 @@ impl<T: Read> Reader<'_, T> {
     }
 
     fn read_pad_byte(&mut self) -> IoResult<()> {
-        self.read_byte()?;
+        _ = self.read_byte()?;
         Ok(())
     }
 
@@ -49,15 +48,18 @@ impl<T: Read> Reader<'_, T> {
 
         let mut character = self.read_byte()?;
 
-        // until reached null-terminator
+        // until reached nul-terminator
         while character != 0 {
             res.push(character);
 
             character = self.read_byte()?;
         }
+
+        // Safety: need to push nul-terminator
         res.push(0);
 
-        Ok(CString::from_vec_with_nul(res)?)
+        // Safety: vec has exactly one nul byte at the end
+        Ok(unsafe { CString::from_vec_with_nul_unchecked(res) })
     }
 }
 
@@ -102,10 +104,11 @@ impl<'a, T: Read> TexReader<'a, T> {
 
         let format = TexFormat::try_from(self.reader.read_int()?)?;
 
-        let flags = self.reader.read_int()?;
-        let flags = TexFlags::from_bits(flags as u8).ok_or(TexExtractError::InvalidTexFlags)?;
+        let flags =
+            u8::try_from(self.reader.read_int()?).map_err(|_| TexExtractError::InvalidTexFlags)?;
+        let flags = TexFlags::from_bits(flags).ok_or(TexExtractError::InvalidTexFlags)?;
 
-        debug!("extracting image with the following TexFormat: {format:?} and TexFlags:{flags:?}");
+        debug!(?format, ?flags, "extracting image");
 
         let texture_width = self.reader.read_int()?;
         let texture_height = self.reader.read_int()?;
@@ -150,17 +153,12 @@ impl<'a, T: Read> TexReaderWithHeader<'a, T> {
 
         let magic = std::str::from_utf8(&magic_buf)?;
 
-        let mut version = match magic {
-            "TEXB0004" => ImageContainerVersion::Texb0004,
-            "TEXB0003" => ImageContainerVersion::Texb0003,
-            "TEXB0002" => ImageContainerVersion::Texb0002,
-            "TEXB0001" => ImageContainerVersion::Texb0001,
-            _ => {
-                return Err(TexExtractError::UnknownMagic {
+        let mut version =
+            magic
+                .parse::<ImageContainerVersion>()
+                .map_err(|_| TexExtractError::UnknownMagic {
                     magic: magic.to_owned(),
-                })
-            }
-        };
+                })?;
 
         let image_count = self.reader.read_int()?;
 
@@ -180,7 +178,7 @@ impl<'a, T: Read> TexReaderWithHeader<'a, T> {
             is_video_mp4 = self.reader.read_int()? != 0;
 
             if image_format.expect("the version is 4, so the image format is present")
-                == FreeImageFormat::Unknow
+                == FreeImageFormat::Unknown
                 && is_video_mp4
             {
                 image_format = Some(FreeImageFormat::Mp4)
@@ -198,7 +196,7 @@ impl<'a, T: Read> TexReaderWithHeader<'a, T> {
             is_video_mp4,
         };
 
-        debug!("got image_container: {image_container:?}");
+        debug!(?image_container);
 
         Ok(TexReaderWithImageContainer {
             reader: self.reader,
@@ -255,7 +253,8 @@ impl<'a, T: Read> TexReaderWithImageContainer<'a, T> {
 
         let byte_count = self.reader.read_int()?;
 
-        let data = read_into_uninit(&mut self.reader.0, byte_count as usize)?;
+        let mut data = vec![0; byte_count as usize];
+        self.reader.0.read_exact(&mut data)?;
 
         Ok(TexMipmap {
             width,
@@ -314,16 +313,12 @@ impl<'a, T: Read> TexReaderWithImages<'a, T> {
 
         let magic = std::str::from_utf8(&magic_buf)?;
 
-        let version = match magic {
-            "TEXS0001" => GifContainerVersion::Texs0001,
-            "TEXS0002" => GifContainerVersion::Texs0002,
-            "TEXS0003" => GifContainerVersion::Texs0003,
-            _ => {
-                return Err(TexExtractError::UnknownMagic {
+        let version =
+            magic
+                .parse::<GifContainerVersion>()
+                .map_err(|_| TexExtractError::UnknownMagic {
                     magic: magic.to_owned(),
-                })
-            }
-        };
+                })?;
 
         let frame_count = self.reader.read_int()?;
 
@@ -332,7 +327,7 @@ impl<'a, T: Read> TexReaderWithImages<'a, T> {
             frame_count,
         };
 
-        debug!("got container_meta: {meta:?}");
+        debug!(?meta);
 
         Ok(TexReaderWithGifContainerMeta {
             reader: self.reader,
@@ -411,7 +406,7 @@ impl<'a, T: Read> TexReaderWithGifContainerMeta<'a, T> {
             frames_meta.push(self.read_frame_meta()?);
         }
 
-        debug!("got frames_meta: {frames_meta:?}");
+        debug!(?frames_meta);
 
         Ok(TexReaderWithGifFramesMeta {
             reader: self.reader,
@@ -444,15 +439,15 @@ impl<T: Read> TexReaderWithGifFramesMeta<'_, T> {
     /// Returns gif_frames_meta
     ///
     /// Returns `Some` if this is the first acquisition of the data and `None` otherwise
-    pub fn gif_frames_meta(&mut self) -> Option<Vec<TexGifFrameMeta>> {
+    pub fn take_gif_frames_meta(&mut self) -> Option<Vec<TexGifFrameMeta>> {
         self.gif_frames.take()
     }
 }
 
 macro_rules! impl_from_header {
-    ($($struct:ident),*) => {
+    ($($Struct:ident),* $(,)?) => {
         $(
-            impl<'a, T: Read> $struct<'a, T> {
+            impl<'a, T: Read> $Struct<'a, T> {
                 pub fn header(&self) -> HeaderMeta {
                     self.header
                 }
@@ -476,9 +471,9 @@ macro_rules! impl_from_header {
 }
 
 macro_rules! impl_from_image_cotainer {
-    ($($struct:ident),*) => {
+    ($($Struct:ident),* $(,)?) => {
         $(
-            impl<'a, T: Read> $struct<'a, T> {
+            impl<'a, T: Read> $Struct<'a, T> {
                 pub fn image_container(&self) -> TexImageContainerMeta {
                     self.image_container
                 }
@@ -488,13 +483,13 @@ macro_rules! impl_from_image_cotainer {
 }
 
 macro_rules! impl_from_images {
-    ($($struct:ident),*) => {
+    ($($Struct:ident),* $(,)?) => {
         $(
-            impl<'a, T: Read> $struct<'a, T> {
+            impl<'a, T: Read> $Struct<'a, T> {
                 /// Returns images
                 ///
                 /// Returns `Some` if this is the first acquisition of the data and `None` otherwise
-                pub fn images(&mut self) -> Option<Vec<TexImage>> {
+                pub fn take_images(&mut self) -> Option<Vec<TexImage>> {
                     self.images.take()
                 }
             }
@@ -503,9 +498,9 @@ macro_rules! impl_from_images {
 }
 
 macro_rules! impl_from_gif_container {
-    ($($struct:ident),*) => {
+    ($($Struct:ident),* $(,)?) => {
         $(
-            impl<'a, T: Read> $struct<'a, T> {
+            impl<'a, T: Read> $Struct<'a, T> {
                 pub fn gif_container(&self) -> TexGifContainerMeta {
                     self.gif_container
                 }
@@ -514,7 +509,28 @@ macro_rules! impl_from_gif_container {
     };
 }
 
-impl_from_header! {TexReaderWithHeader, TexReaderWithImageContainer, TexReaderWithImages, TexReaderWithGifContainerMeta, TexReaderWithGifFramesMeta}
-impl_from_image_cotainer! {TexReaderWithImageContainer, TexReaderWithImages, TexReaderWithGifContainerMeta, TexReaderWithGifFramesMeta}
-impl_from_images! {TexReaderWithImages, TexReaderWithGifContainerMeta, TexReaderWithGifFramesMeta}
-impl_from_gif_container! {TexReaderWithGifContainerMeta, TexReaderWithGifFramesMeta}
+impl_from_header! {
+    TexReaderWithHeader,
+    TexReaderWithImageContainer,
+    TexReaderWithImages,
+    TexReaderWithGifContainerMeta,
+    TexReaderWithGifFramesMeta,
+}
+
+impl_from_image_cotainer! {
+    TexReaderWithImageContainer,
+    TexReaderWithImages,
+    TexReaderWithGifContainerMeta,
+    TexReaderWithGifFramesMeta,
+}
+
+impl_from_images! {
+    TexReaderWithImages,
+    TexReaderWithGifContainerMeta,
+    TexReaderWithGifFramesMeta,
+}
+
+impl_from_gif_container! {
+    TexReaderWithGifContainerMeta,
+    TexReaderWithGifFramesMeta,
+}
