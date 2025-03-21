@@ -184,14 +184,14 @@ fn simple_wayland_client() {
     let compositor =
         WlRegistry::bind::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
 
-    let _wm_base = WlRegistry::bind::<WlWmBase>(&mut buf, storage.as_mut(), registry).unwrap();
+    let wm_base = WlRegistry::bind::<WlWmBase>(&mut buf, storage.as_mut(), registry).unwrap();
 
     display.dispatch_all_pending(storage.as_mut(), client_state.as_mut());
 
     let surface: WlObjectHandle<WlSurface> =
         compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurfaceRequest);
 
-    let xdg_surface: WlObjectHandle<WlXdgSurface> = compositor.create_object(
+    let xdg_surface: WlObjectHandle<WlXdgSurface> = wm_base.create_object(
         &mut buf,
         storage.as_mut(),
         WlWmBaseGetXdgSurfaceRequest {
