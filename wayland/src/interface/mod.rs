@@ -14,7 +14,7 @@ pub mod wm_base;
 pub mod xdg_surface;
 
 use crate::{
-    object::{HasObjectType, WlObjectType},
+    object::HasObjectType,
     sys::{
         object::dispatch::State,
         object_storage::WlObjectStorage,
@@ -72,7 +72,7 @@ pub use {
         wl_enum::Error as WlSurfaceError,
     },
     toplevel::{
-        event::{Configure as WlToplevelConfigureEvent, Close as WlToplevelCloseEvent},
+        event::{Close as WlToplevelCloseEvent, Configure as WlToplevelConfigureEvent},
         request::{SetAppId as WlToplevelSetAppIdRequest, SetTitle as WlToplevelSetTitleRequest},
     },
     viewporter::request::GetViewport as WlViewporterGetViewportRequest,
@@ -89,8 +89,17 @@ pub use {
     },
 };
 
+pub mod generated {
+    wayland_scanner::include_interfaces!([
+        "wayland-protocols/wayland.xml",
+        "wayland-protocols/stable/xdg-shell/xdg-shell.xml",
+        "wayland-protocols/stable/viewporter/viewporter.xml",
+        "wayland-protocols/wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml",
+    ]);
+}
+
 pub trait ObjectParent {
-    const CHILD_TYPE: WlObjectType;
+    const CHILD_TYPE: generated::WlObjectType;
 }
 
 /// Represents requests on Wayland's interfaces
@@ -99,7 +108,7 @@ pub trait Request<'s>: Sized + HasObjectType {
     const CODE: OpCode;
 
     /// The type of an interface object of which will be created by libwayland
-    const OUTGOING_INTERFACE: Option<WlObjectType> = None;
+    const OUTGOING_INTERFACE: Option<generated::WlObjectType> = None;
 
     /// Builds the message on the top of given message buffer
     fn build_message<'m, S: State>(

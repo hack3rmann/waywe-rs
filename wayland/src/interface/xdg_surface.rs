@@ -20,7 +20,7 @@ pub mod request {
     }
 
     impl ObjectParent for GetToplevel {
-        const CHILD_TYPE: WlObjectType = WlObjectType::Toplevel;
+        const CHILD_TYPE: WlObjectType = WlObjectType::XdgToplevel;
     }
 
     impl<'s> Request<'s> for GetToplevel {

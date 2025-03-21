@@ -28,8 +28,8 @@ use wayland::{
         display::WlDisplay,
         object::{
             default_impl::{
-                WlBuffer, WlCompositor, WlLayerShell, WlLayerSurface, WlOutput, WlRegion, WlShm,
-                WlShmPool, WlSurface, WlViewport, WlViewporter,
+                WlBuffer, WlCompositor, ZwlrLayerShellV1, WlLayerSurface, WlOutput, WlRegion, WlShm,
+                WlShmPool, WlSurface, WpViewport, WpViewporter,
             },
             dispatch::NoState,
             registry::WlRegistry,
@@ -58,7 +58,7 @@ fn get_registry() {
         storage
             .object(registry)
             .interfaces()
-            .contains_key(&WlObjectType::Compositor)
+            .contains_key(&WlObjectType::WlCompositor)
     );
 }
 
@@ -97,7 +97,7 @@ fn bind_wlr_shell() {
     display.dispatch_all_pending(storage.as_mut(), state.as_mut());
 
     let _layer_shell =
-        WlRegistry::bind::<WlLayerShell>(&mut buf, storage.as_mut(), registry).unwrap();
+        WlRegistry::bind::<ZwlrLayerShellV1>(&mut buf, storage.as_mut(), registry).unwrap();
 
     display.dispatch_all_pending(storage.as_mut(), state.as_mut());
 }
@@ -135,7 +135,7 @@ fn white_rect() {
     let shm = WlRegistry::bind::<WlShm>(&mut buf, storage.as_mut(), registry).unwrap();
 
     let viewporter =
-        WlRegistry::bind::<WlViewporter>(&mut buf, storage.as_mut(), registry).unwrap();
+        WlRegistry::bind::<WpViewporter>(&mut buf, storage.as_mut(), registry).unwrap();
 
     let compositor =
         WlRegistry::bind::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
@@ -143,7 +143,7 @@ fn white_rect() {
     let surface: WlObjectHandle<WlSurface> =
         compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurfaceRequest);
 
-    let _viewport: WlObjectHandle<WlViewport> = viewporter.create_object(
+    let _viewport: WlObjectHandle<WpViewport> = viewporter.create_object(
         &mut buf,
         storage.as_mut(),
         WlViewporterGetViewportRequest {
@@ -168,7 +168,7 @@ fn white_rect() {
     let output = WlRegistry::bind::<WlOutput>(&mut buf, storage.as_mut(), registry).unwrap();
 
     let layer_shell =
-        WlRegistry::bind::<WlLayerShell>(&mut buf, storage.as_mut(), registry).unwrap();
+        WlRegistry::bind::<ZwlrLayerShellV1>(&mut buf, storage.as_mut(), registry).unwrap();
 
     let layer_surface: WlObjectHandle<WlLayerSurface> = layer_shell.create_object(
         &mut buf,

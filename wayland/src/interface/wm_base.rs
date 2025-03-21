@@ -36,7 +36,7 @@ pub mod request {
     }
 
     impl HasObjectType for GetXdgSurface {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WmBase;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::XdgWmBase;
     }
 
     impl ObjectParent for GetXdgSurface {
@@ -73,7 +73,7 @@ pub mod request {
     }
 
     impl HasObjectType for Pong {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WmBase;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::XdgWmBase;
     }
 
     impl<'s> Request<'s> for Pong {

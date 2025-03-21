@@ -12,6 +12,7 @@ syn = "2.0.99"
 xml_serde = "1.4.1"
 thiserror.workspace = true
 wayland-sys.workspace = true
+convert_case = "0.8.0"
 
 [dev-dependencies]
 paste.workspace = true

@@ -49,7 +49,7 @@ impl FromProxy for WlCompositor {
 }
 
 impl HasObjectType for WlCompositor {
-    const OBJECT_TYPE: WlObjectType = WlObjectType::Compositor;
+    const OBJECT_TYPE: WlObjectType = WlObjectType::WlCompositor;
 }
 
 pub struct WlWmBase {
@@ -85,7 +85,7 @@ impl FromProxy for WlWmBase {
 }
 
 impl HasObjectType for WlWmBase {
-    const OBJECT_TYPE: WlObjectType = WlObjectType::WmBase;
+    const OBJECT_TYPE: WlObjectType = WlObjectType::XdgWmBase;
 }
 
 pub struct WlSurface;
@@ -95,7 +95,7 @@ impl Dispatch for WlSurface {
 }
 
 impl HasObjectType for WlSurface {
-    const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
+    const OBJECT_TYPE: WlObjectType = WlObjectType::WlSurface;
 }
 
 impl FromProxy for WlSurface {
@@ -178,7 +178,7 @@ impl Dispatch for WlToplevel {
 }
 
 impl HasObjectType for WlToplevel {
-    const OBJECT_TYPE: WlObjectType = WlObjectType::Toplevel;
+    const OBJECT_TYPE: WlObjectType = WlObjectType::XdgToplevel;
 }
 
 impl FromProxy for WlToplevel {

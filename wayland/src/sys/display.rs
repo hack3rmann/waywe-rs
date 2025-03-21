@@ -152,7 +152,7 @@ pub enum DisplayConnectError {
 pub struct DisplayConnectToFdError;
 
 impl<S: State> HasObjectType for WlDisplay<S> {
-    const OBJECT_TYPE: WlObjectType = WlObjectType::Display;
+    const OBJECT_TYPE: WlObjectType = WlObjectType::WlDisplay;
 }
 
 impl<S: State> Drop for WlDisplay<S> {

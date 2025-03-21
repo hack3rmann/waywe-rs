@@ -15,40 +15,38 @@ use raw_window_handle::{
 use std::pin::Pin;
 
 macro_rules! define_empty_dispatchers {
-    ( $( $name:ident ),* $(,)? ) => {
+    ( $( $Name:ident ),* $(,)? ) => {
         $(
-            ::paste::paste! {
-                #[derive(Debug, Default)]
-                pub struct [< Wl $name >];
+            #[derive(Debug, Default)]
+            pub struct $Name;
 
-                impl $crate::object::HasObjectType for [< Wl $name >] {
-                    const OBJECT_TYPE: $crate::object::WlObjectType = $crate::object::WlObjectType:: $name;
-                }
+            impl $crate::object::HasObjectType for $Name {
+                const OBJECT_TYPE: $crate::object::WlObjectType = $crate::object::WlObjectType:: $Name;
+            }
 
-                impl $crate::sys::object::FromProxy for [< Wl $name >] {
-                    fn from_proxy(_: &$crate::sys::proxy::WlProxy) -> Self { Self }
-                }
+            impl $crate::sys::object::FromProxy for $Name {
+                fn from_proxy(_: &$crate::sys::proxy::WlProxy) -> Self { Self }
+            }
 
-                impl $crate::sys::object::dispatch::Dispatch for [< Wl $name >] {
-                    type State = $crate::sys::object::dispatch::NoState;
-                }
+            impl $crate::sys::object::dispatch::Dispatch for $Name {
+                type State = $crate::sys::object::dispatch::NoState;
             }
         )*
     };
 }
 
 define_empty_dispatchers! {
-    Buffer,
-    Callback,
-    Compositor,
-    Output,
-    Region,
-    Shm,
-    ShmPool,
-    Surface,
-    Viewport,
-    Viewporter,
-    LayerShell,
+    WlBuffer,
+    WlCallback,
+    WlCompositor,
+    WlOutput,
+    WlRegion,
+    WlShm,
+    WlShmPool,
+    WlSurface,
+    WpViewport,
+    WpViewporter,
+    ZwlrLayerShellV1,
 }
 
 impl HasWindowHandle for WlObject<WlSurface> {
@@ -67,7 +65,7 @@ pub struct WlLayerSurface {
 }
 
 impl HasObjectType for WlLayerSurface {
-    const OBJECT_TYPE: WlObjectType = WlObjectType::LayerSurface;
+    const OBJECT_TYPE: WlObjectType = WlObjectType::ZwlrLayerSurfaceV1;
 }
 
 impl FromProxy for WlLayerSurface {

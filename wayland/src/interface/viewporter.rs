@@ -28,16 +28,16 @@ pub mod request {
     }
 
     impl ObjectParent for GetViewport {
-        const CHILD_TYPE: WlObjectType = WlObjectType::Viewport;
+        const CHILD_TYPE: WlObjectType = WlObjectType::WpViewport;
     }
 
     impl HasObjectType for GetViewport {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::Viewporter;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::WpViewporter;
     }
 
     impl<'s> Request<'s> for GetViewport {
         const CODE: OpCode = 1;
-        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::Viewport);
+        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::WpViewport);
 
         fn build_message<'m, S: State>(
             self,

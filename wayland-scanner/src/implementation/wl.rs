@@ -1,70 +1,9 @@
-use crate::xml::{Arg, ArgType, Interface, InterfaceEntry, Message, Protocol, ProtocolFile};
+use super::protocol_from_str;
+use crate::xml::{Interface, InterfaceEntry, Message};
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use smallvec::smallvec;
-use std::{borrow::Cow, ffi::CString, fs, path::PathBuf};
+use std::{ffi::CString, fs, path::PathBuf};
 use syn::{Ident, LitCStr, LitInt, LitStr, parse2};
-
-pub fn registry_bind_message<'s>() -> Message<'s> {
-    Message {
-        name: Cow::Borrowed("bind"),
-        since: None,
-        description: None,
-        arg: smallvec![
-            Arg {
-                name: Cow::Borrowed("name"),
-                ty: ArgType::Uint,
-                summary: Some(Cow::Borrowed("unique numeric name of the object")),
-                interface: None,
-                allow_null: false,
-            },
-            Arg {
-                name: Cow::Borrowed("interface"),
-                ty: ArgType::String,
-                summary: Some(Cow::Borrowed("interface of the object")),
-                interface: None,
-                allow_null: false,
-            },
-            Arg {
-                name: Cow::Borrowed("version"),
-                ty: ArgType::Uint,
-                summary: Some(Cow::Borrowed("version of the object's interface")),
-                interface: None,
-                allow_null: false,
-            },
-            Arg {
-                name: Cow::Borrowed("id"),
-                ty: ArgType::NewId,
-                summary: Some(Cow::Borrowed("bounded object")),
-                interface: None,
-                allow_null: false,
-            },
-        ],
-    }
-}
-
-pub fn protocol_from_str(source: &str) -> Result<Protocol<'_>, xml_serde::Error> {
-    let mut protocol = xml_serde::from_str::<ProtocolFile>(source)?;
-
-    // replace arguments for wl_registry::bind
-    for interface in &mut protocol.protocol.interface {
-        if interface.name != "wl_registry" {
-            continue;
-        }
-
-        for entry in &mut interface.entries {
-            let InterfaceEntry::Request(message) = entry else {
-                continue;
-            };
-
-            if message.name == "bind" {
-                *message = registry_bind_message();
-            }
-        }
-    }
-
-    Ok(protocol.protocol)
-}
 
 pub fn include_wl_interfaces(token_stream: TokenStream) -> TokenStream {
     let str_lit = parse2::<LitStr>(token_stream).expect("expecting string literal");

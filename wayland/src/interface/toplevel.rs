@@ -10,7 +10,7 @@ pub mod request {
     pub struct SetTitle<'s>(pub &'s CStr);
 
     impl HasObjectType for SetTitle<'_> {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::Toplevel;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::XdgToplevel;
     }
 
     impl<'s> Request<'s> for SetTitle<'s> {
@@ -35,7 +35,7 @@ pub mod request {
     pub struct SetAppId<'s>(pub &'s CStr);
 
     impl HasObjectType for SetAppId<'_> {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::Toplevel;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::XdgToplevel;
     }
 
     impl<'s> Request<'s> for SetAppId<'s> {

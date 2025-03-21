@@ -40,6 +40,20 @@ impl ArgType {
             Self::Array => b'a',
         }
     }
+
+    pub const fn builder_str(self) -> &'static str {
+        match self {
+            Self::Int => "int",
+            Self::Uint => "uint",
+            Self::NewId => "new_id",
+            Self::Object => "maybe_object",
+            Self::String => "str",
+            Self::Fd => "fd",
+            Self::Fixed => "fixed",
+            // TODO(hack3rmann): add array to sys.wire
+            Self::Array => "array",
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]

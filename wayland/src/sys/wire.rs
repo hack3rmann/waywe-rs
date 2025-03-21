@@ -7,7 +7,7 @@ use std::{
     os::fd::{AsRawFd, BorrowedFd, FromRawFd as _, OwnedFd},
     ptr, slice,
 };
-use wayland_sys::{WlArgument, wl_fixed_t, wl_object, wl_proxy};
+use wayland_sys::{wl_fixed_t, wl_object, wl_proxy, WlArgument, WlFixed};
 
 /// The code of the performing operation on the interface
 pub type OpCode = u16;
@@ -164,14 +164,14 @@ pub struct WlMessage<'s> {
 }
 
 impl<'s> WlMessage<'s> {
-    /// Returns the builder for the message
+    /// Returns a builder for the message
     pub fn builder<Buffer: MessageBuffer>(
         buf: &'s mut Buffer,
     ) -> MessageBuilderHeaderless<'s, Buffer> {
         MessageBuilderHeaderless::new(buf)
     }
 
-    /// Returns the reader for this message
+    /// Returns a reader for this message
     pub fn reader(&self) -> MessageReader<'s> {
         MessageReader::new(self.arguments)
     }
@@ -229,6 +229,11 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
         self
     }
 
+    pub fn fixed(self, value: WlFixed) -> Self {
+        self.buf.push(WlArgument::fixed(value));
+        self
+    }
+
     /// Writes [`str`] to the message
     pub fn str<'str: 's>(self, value: &'str CStr) -> Self {
         if value.is_empty() {
@@ -240,6 +245,7 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
         self
     }
 
+    /// Writes object to the message or leaves this field empty
     pub fn maybe_object(self, value: Option<&'s WlProxy>) -> Self {
         self.buf.push(WlArgument::object(
             value
