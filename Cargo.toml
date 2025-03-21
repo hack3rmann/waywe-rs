@@ -1,6 +1,14 @@
 [workspace]
 resolver = "3"
-members = ["daemon", "wayland-scanner", "wayland", "wayland-sys"]
+members = [
+    "daemon",
+    "extractor",
+    "dxt",
+    "transmute-extra",
+    "wayland-scanner",
+    "wayland",
+    "wayland-sys",
+]
 
 [workspace.package]
 version = "0.0.1"
@@ -14,3 +22,6 @@ thiserror = "2.0.11"
 static_assertions = "1.1.0"
 tracing-test = "0.2.5"
 paste = "1.0.15"
+safe-transmute = "0.11.3"
+rayon = "1.10.0"
+bitflags = "2.9.0"
