@@ -17,6 +17,7 @@ pub fn registry_bind_message<'s>() -> Message<'s> {
                 summary: Some(Cow::Borrowed("unique numeric name of the object")),
                 interface: None,
                 allow_null: false,
+                enumeration: None,
             },
             Arg {
                 name: Cow::Borrowed("interface"),
@@ -24,6 +25,7 @@ pub fn registry_bind_message<'s>() -> Message<'s> {
                 summary: Some(Cow::Borrowed("interface of the object")),
                 interface: None,
                 allow_null: false,
+                enumeration: None,
             },
             Arg {
                 name: Cow::Borrowed("version"),
@@ -31,6 +33,7 @@ pub fn registry_bind_message<'s>() -> Message<'s> {
                 summary: Some(Cow::Borrowed("version of the object's interface")),
                 interface: None,
                 allow_null: false,
+                enumeration: None,
             },
             Arg {
                 name: Cow::Borrowed("id"),
@@ -38,6 +41,7 @@ pub fn registry_bind_message<'s>() -> Message<'s> {
                 summary: Some(Cow::Borrowed("bounded object")),
                 interface: None,
                 allow_null: false,
+                enumeration: None,
             },
         ],
     }

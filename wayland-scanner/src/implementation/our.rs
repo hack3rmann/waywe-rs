@@ -141,6 +141,23 @@ pub fn strip_interface_name(name: &str) -> &str {
     }
 }
 
+fn enum_reference_to_path(name: &str) -> TokenStream {
+    if let Some((interface_name, enum_name)) = name.split_once('.') {
+        let interface_module_ident =
+            Ident::new(strip_interface_name(interface_name), Span::call_site());
+
+        let enum_name_pascal = enum_name.to_case(Case::Pascal);
+        let enum_ident = Ident::new(&enum_name_pascal, Span::call_site());
+
+        quote! { super::super:: #interface_module_ident ::wl_enum:: #enum_ident }
+    } else {
+        let enum_name_pascal = name.to_case(Case::Pascal);
+        let enum_ident = Ident::new(&enum_name_pascal, Span::call_site());
+
+        quote! { super::wl_enum:: #enum_ident }
+    }
+}
+
 fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> TokenStream {
     let interface_name = strip_interface_name(&interface.name);
     let interface_name_pascal_case = interface_name.to_case(Case::Pascal);
@@ -169,8 +186,10 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
             let field_name = Ident::new(&argument.name, Span::call_site());
             let field_type = match argument.ty {
                 ArgType::Int => quote! { i32 },
-                // TODO(hack3rmann): can be used as enum value => use enums
-                ArgType::Uint => quote! { u32 },
+                ArgType::Uint => match &argument.enumeration {
+                    Some(name) => enum_reference_to_path(name),
+                    None => quote! { u32 },
+                },
                 ArgType::NewId => return None,
                 ArgType::Object => {
                     if argument.allow_null {
@@ -216,6 +235,9 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
                 }
             }
             ArgType::NewId => quote! {},
+            ArgType::Uint if argument.enumeration.is_some() => {
+                quote! { self. #argument_name .into() }
+            }
             ArgType::Int | ArgType::Uint | ArgType::String | ArgType::Fd | ArgType::Fixed => {
                 quote! { self. #argument_name }
             }
@@ -374,6 +396,12 @@ fn bitfield_enum_to_impl(enumeration: &Enum) -> TokenStream {
                 #( #entries )*
             }
         }
+
+        impl ::std::convert::From< #enum_ident > for u32 {
+            fn from(value: #enum_ident ) -> Self {
+                value.bits()
+            }
+        }
     }
 }
 
@@ -429,17 +457,18 @@ fn regular_enum_to_impl(enumeration: &Enum) -> TokenStream {
         .map(|desc| LitStr::new(desc, Span::call_site()))
         .into_iter();
 
-    let try_from_match_entries = enum_entry_names
-        .iter()
-        .zip(&enumeration.entry)
-        .map(|(name, entry)| {
-            let entry_ident = Ident::new(name, Span::call_site());
-            let entry_value_literal = u32::from(entry.value);
+    let try_from_match_entries =
+        enum_entry_names
+            .iter()
+            .zip(&enumeration.entry)
+            .map(|(name, entry)| {
+                let entry_ident = Ident::new(name, Span::call_site());
+                let entry_value_literal = u32::from(entry.value);
 
-            quote! {
-                #entry_value_literal => Self:: #entry_ident,
-            }
-        });
+                quote! {
+                    #entry_value_literal => Self:: #entry_ident,
+                }
+            });
 
     let try_from_error_string = format!("failed to convert {{0}} to {enum_name}");
 

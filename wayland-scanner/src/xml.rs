@@ -68,6 +68,8 @@ pub struct Arg<'s> {
     pub interface: Option<Cow<'s, str>>,
     #[serde(rename = "$attr:allow-null", default)]
     pub allow_null: bool,
+    #[serde(rename = "$attr:enum")]
+    pub enumeration: Option<Cow<'s, str>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -304,6 +306,7 @@ mod tests {
                                     summary: Some("first argument".into()),
                                     interface: Some("wl_registry".into()),
                                     allow_null: false,
+                                    enumeration: None,
                                 },
                                 Arg {
                                     name: "arg2".into(),
@@ -311,6 +314,7 @@ mod tests {
                                     summary: Some("second argument".into()),
                                     interface: Some("wl_registry".into()),
                                     allow_null: false,
+                                    enumeration: None,
                                 }
                             ],
                         })],
@@ -335,6 +339,7 @@ mod tests {
                                 summary: Some("first argument".into()),
                                 interface: Some("wl_registry".into()),
                                 allow_null: false,
+                                enumeration: None,
                             }],
                         })],
                     },
