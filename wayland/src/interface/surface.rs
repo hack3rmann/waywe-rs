@@ -59,7 +59,7 @@ pub mod request {
     pub struct Destroy;
 
     impl HasObjectType for Destroy {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlSurface;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
     }
 
     impl<'s> Request<'s> for Destroy {
@@ -152,7 +152,7 @@ pub mod request {
     }
 
     impl HasObjectType for Attach {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlSurface;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
     }
 
     impl<'s> Request<'s> for Attach {
@@ -188,7 +188,7 @@ pub mod request {
     }
 
     impl HasObjectType for Damage {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlSurface;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
     }
 
     impl<'s> Request<'s> for Damage {
@@ -248,16 +248,16 @@ pub mod request {
     pub struct Frame;
 
     impl ObjectParent for Frame {
-        const CHILD_TYPE: WlObjectType = WlObjectType::WlCallback;
+        const CHILD_TYPE: WlObjectType = WlObjectType::Callback;
     }
 
     impl HasObjectType for Frame {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlSurface;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
     }
 
     impl<'s> Request<'s> for Frame {
         const CODE: OpCode = 3;
-        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::WlCallback);
+        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::Callback);
 
         fn build_message<'m, S: State>(
             self,
@@ -302,7 +302,7 @@ pub mod request {
     }
 
     impl HasObjectType for SetOpaqueRegion {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlSurface;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
     }
 
     impl<'s> Request<'s> for SetOpaqueRegion {
@@ -352,7 +352,7 @@ pub mod request {
     }
 
     impl HasObjectType for SetInputRegion {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlSurface;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
     }
 
     impl<'s> Request<'s> for SetInputRegion {
@@ -396,7 +396,7 @@ pub mod request {
     pub struct Commit;
 
     impl HasObjectType for Commit {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlSurface;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
     }
 
     impl<'s> Request<'s> for Commit {
@@ -445,7 +445,7 @@ pub mod request {
     }
 
     impl HasObjectType for SetBufferScale {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlSurface;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
     }
 
     impl<'s> Request<'s> for SetBufferScale {

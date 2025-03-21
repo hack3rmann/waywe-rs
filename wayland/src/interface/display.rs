@@ -29,16 +29,16 @@ pub mod request {
     pub struct Sync;
 
     impl ObjectParent for Sync {
-        const CHILD_TYPE: WlObjectType = WlObjectType::WlCallback;
+        const CHILD_TYPE: WlObjectType = WlObjectType::Callback;
     }
 
     impl HasObjectType for Sync {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlDisplay;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Display;
     }
 
     impl<'s> Request<'s> for Sync {
         const CODE: OpCode = 0;
-        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::WlCallback);
+        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::Callback);
 
         fn build_message<'m, S: State>(
             self,
@@ -65,16 +65,16 @@ pub mod request {
     pub struct GetRegistry;
 
     impl ObjectParent for GetRegistry {
-        const CHILD_TYPE: WlObjectType = WlObjectType::WlRegistry;
+        const CHILD_TYPE: WlObjectType = WlObjectType::Registry;
     }
 
     impl HasObjectType for GetRegistry {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlRegistry;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Registry;
     }
 
     impl<'s> Request<'s> for GetRegistry {
         const CODE: OpCode = 1;
-        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::WlRegistry);
+        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::Registry);
 
         fn build_message<'m, S: State>(
             self,

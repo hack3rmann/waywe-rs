@@ -96,7 +96,7 @@ impl<S: State> FromProxy for WlRegistry<S> {
 }
 
 impl<S> HasObjectType for WlRegistry<S> {
-    const OBJECT_TYPE: WlObjectType = WlObjectType::WlRegistry;
+    const OBJECT_TYPE: WlObjectType = WlObjectType::Registry;
 }
 
 impl<S: State> Dispatch for WlRegistry<S> {

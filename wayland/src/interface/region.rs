@@ -15,7 +15,7 @@ pub mod request {
     pub struct Destroy;
 
     impl HasObjectType for Destroy {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlRegion;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Region;
     }
 
     impl<'s> Request<'s> for Destroy {

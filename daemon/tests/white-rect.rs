@@ -8,7 +8,7 @@ use wayland::{
     sys::{
         display::WlDisplay,
         object::{
-            default_impl::{WlCompositor, WlSurface},
+            default_impl::{Compositor, Surface},
             dispatch::NoState,
             registry::WlRegistry,
         },
@@ -31,9 +31,9 @@ async fn use_wgpu_to_draw_anything() {
     display.dispatch_all_pending(storage.as_mut(), state.as_mut());
 
     let compositor =
-        WlRegistry::bind::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
+        WlRegistry::bind::<Compositor>(&mut buf, storage.as_mut(), registry).unwrap();
 
-    let surface: WlObjectHandle<WlSurface> =
+    let surface: WlObjectHandle<Surface> =
         compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurfaceRequest);
 
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {

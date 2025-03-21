@@ -36,20 +36,20 @@ macro_rules! define_empty_dispatchers {
 }
 
 define_empty_dispatchers! {
-    WlBuffer,
-    WlCallback,
-    WlCompositor,
-    WlOutput,
-    WlRegion,
-    WlShm,
-    WlShmPool,
-    WlSurface,
+    Buffer,
+    Callback,
+    Compositor,
+    Output,
+    Region,
+    Shm,
+    ShmPool,
+    Surface,
     WpViewport,
     WpViewporter,
-    ZwlrLayerShellV1,
+    LayerShell,
 }
 
-impl HasWindowHandle for WlObject<WlSurface> {
+impl HasWindowHandle for WlObject<Surface> {
     fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
         Ok(unsafe {
             WindowHandle::borrow_raw(RawWindowHandle::Wayland(WaylandWindowHandle::new(
@@ -65,7 +65,7 @@ pub struct WlLayerSurface {
 }
 
 impl HasObjectType for WlLayerSurface {
-    const OBJECT_TYPE: WlObjectType = WlObjectType::ZwlrLayerSurfaceV1;
+    const OBJECT_TYPE: WlObjectType = WlObjectType::LayerSurface;
 }
 
 impl FromProxy for WlLayerSurface {

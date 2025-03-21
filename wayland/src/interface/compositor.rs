@@ -16,16 +16,16 @@ pub mod request {
     pub struct CreateSurface;
 
     impl ObjectParent for CreateSurface {
-        const CHILD_TYPE: WlObjectType = WlObjectType::WlSurface;
+        const CHILD_TYPE: WlObjectType = WlObjectType::Surface;
     }
 
     impl HasObjectType for CreateSurface {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlCompositor;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Compositor;
     }
 
     impl<'s> Request<'s> for CreateSurface {
         const CODE: OpCode = 0;
-        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::WlSurface);
+        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::Surface);
 
         fn build_message<'m, S: State>(
             self,
@@ -44,16 +44,16 @@ pub mod request {
     pub struct CreateRegion;
 
     impl ObjectParent for CreateRegion {
-        const CHILD_TYPE: WlObjectType = WlObjectType::WlRegion;
+        const CHILD_TYPE: WlObjectType = WlObjectType::Region;
     }
 
     impl HasObjectType for CreateRegion {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlCompositor;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Compositor;
     }
 
     impl<'s> Request<'s> for CreateRegion {
         const CODE: OpCode = 1;
-        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::WlRegion);
+        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::Region);
 
         fn build_message<'m, S: State>(
             self,

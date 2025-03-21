@@ -34,16 +34,16 @@ pub mod request {
     }
 
     impl ObjectParent for CreatePool<'_> {
-        const CHILD_TYPE: WlObjectType = WlObjectType::WlShmPool;
+        const CHILD_TYPE: WlObjectType = WlObjectType::ShmPool;
     }
 
     impl HasObjectType for CreatePool<'_> {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlShm;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Shm;
     }
 
     impl<'s> Request<'s> for CreatePool<'s> {
         const CODE: OpCode = 0;
-        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::WlShmPool);
+        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::ShmPool);
 
         fn build_message<'m, S: State>(
             self,
@@ -70,7 +70,7 @@ pub mod request {
     pub struct Release;
 
     impl HasObjectType for Release {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlShm;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Shm;
     }
 
     impl<'s> Request<'s> for Release {

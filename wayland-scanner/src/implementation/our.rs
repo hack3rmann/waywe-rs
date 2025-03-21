@@ -3,7 +3,7 @@ use crate::xml::{ArgType, Enum, Interface, InterfaceEntry, Message};
 use convert_case::{Case, Casing as _};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
-use std::{fs, ops::Deref, path::PathBuf};
+use std::{fs, ops::Deref};
 use syn::{
     LitInt, LitStr, Result as ParseResult, Token, bracketed,
     parse::{Parse, ParseStream},
@@ -36,10 +36,8 @@ pub fn include_interfaces(token_stream: TokenStream) -> TokenStream {
         .string_literals
         .iter()
         .map(|str_lit| {
-            let path = PathBuf::from(str_lit.value());
-
-            fs::read_to_string(&path)
-                .unwrap_or_else(|err| panic!("failed to read file '{}': {err}", path.display()))
+            fs::read_to_string(str_lit.value())
+                .unwrap_or_else(|err| panic!("failed to read file '{}': {err}", str_lit.value()))
         })
         .collect::<Vec<_>>();
 
@@ -54,7 +52,7 @@ pub fn include_interfaces(token_stream: TokenStream) -> TokenStream {
             protocol
                 .interface
                 .iter()
-                .map(|interface| interface.name.as_ref().to_case(Case::Pascal))
+                .map(|interface| strip_interface_name(&interface.name).to_case(Case::Pascal))
         })
         .collect::<Vec<_>>();
 
@@ -67,6 +65,7 @@ pub fn include_interfaces(token_stream: TokenStream) -> TokenStream {
         let modules = protocol.interface.iter().map(interface_to_module);
 
         quote! {
+            // TODO(hack3rmann): add docs + format docs
             pub mod #protocol_module_name {
                 #( #modules )*
             }
@@ -85,7 +84,7 @@ pub fn include_interfaces(token_stream: TokenStream) -> TokenStream {
 }
 
 fn interface_to_module(interface: &Interface) -> TokenStream {
-    let module_name = Ident::new(&interface.name, Span::call_site());
+    let module_name = Ident::new(strip_interface_name(&interface.name), Span::call_site());
 
     let requests = interface
         .entries
@@ -132,8 +131,19 @@ fn interface_to_module(interface: &Interface) -> TokenStream {
     }
 }
 
+pub fn strip_interface_name(name: &str) -> &str {
+    if name.starts_with("wl_") {
+        unsafe { name.get_unchecked(3..) }
+    } else if name.starts_with("zwlr_") && name.ends_with("_v1") {
+        unsafe { name.get_unchecked(4..name.len() - 3) }
+    } else {
+        name
+    }
+}
+
 fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> TokenStream {
-    let interface_name_pascal_case = interface.name.to_case(Case::Pascal);
+    let interface_name = strip_interface_name(&interface.name);
+    let interface_name_pascal_case = interface_name.to_case(Case::Pascal);
     let interface_name_ident = Ident::new(&interface_name_pascal_case, Span::call_site());
 
     let request_name_pascal_case = request.name.to_case(Case::Pascal);
@@ -147,15 +157,16 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
         .iter()
         .any(|argument| matches!(argument.ty, ArgType::String | ArgType::Fd | ArgType::Array));
 
-    let struct_lifetime_decl = has_lifetime.then(|| quote! { <'s> }).into_iter();
     let struct_elided_lifetime_has_type = has_lifetime.then(|| quote! { <'_> }).into_iter();
-    let struct_elided_lifetime_object_parent = has_lifetime.then(|| quote! { <'_> }).into_iter();
+    let struct_elided_lifetime_object_parent = struct_elided_lifetime_has_type.clone();
+    let struct_lifetime_decl = has_lifetime.then(|| quote! { <'s> }).into_iter();
     let struct_lifetime_impl = struct_lifetime_decl.clone();
 
     let struct_fields = request.arg.iter().filter_map(|argument| {
         let field_name = Ident::new(&argument.name, Span::call_site());
         let field_type = match argument.ty {
             ArgType::Int => quote! { i32 },
+            // TODO(hack3rmann): can be used as enum value => use enums
             ArgType::Uint => quote! { u32 },
             ArgType::NewId => return None,
             ArgType::Object => {
@@ -168,7 +179,7 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
             ArgType::String => quote! { &'s ::std::ffi::CStr },
             ArgType::Fd => quote! { ::std::os::fd::BorrowedFd<'s> },
             ArgType::Fixed => quote! { wayland_sys::WlFixed },
-            ArgType::Array => unimplemented!(),
+            ArgType::Array => unimplemented!("array usage in reqeusts"),
         };
 
         Some(quote! { #field_name : #field_type })
@@ -196,7 +207,7 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
             ArgType::Int | ArgType::Uint | ArgType::String | ArgType::Fd | ArgType::Fixed => {
                 quote! { self. #argument_name }
             }
-            ArgType::Array => unimplemented!(),
+            ArgType::Array => unimplemented!("array usage in requests"),
         };
 
         quote! { . #method ( #method_arg ) }
@@ -207,7 +218,7 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
         .iter()
         .filter_map(|argument| {
             if let (ArgType::NewId, Some(name)) = (argument.ty, &argument.interface) {
-                Some(name.to_case(Case::Pascal))
+                Some(strip_interface_name(name).to_case(Case::Pascal))
             } else {
                 None
             }
@@ -268,6 +279,7 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
             fn build_message<'m, S: crate::sys::object::dispatch::State>(
                 self,
                 buf: &'m mut impl crate::sys::wire::MessageBuffer,
+                #[allow(dead_code)]
                 storage: &'m crate::sys::object_storage::WlObjectStorage<'_, S>,
             ) -> crate::sys::wire::WlMessage<'m>
             where

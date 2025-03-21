@@ -43,16 +43,16 @@ pub mod request {
     }
 
     impl ObjectParent for CreateBuffer {
-        const CHILD_TYPE: WlObjectType = WlObjectType::WlBuffer;
+        const CHILD_TYPE: WlObjectType = WlObjectType::Buffer;
     }
 
     impl HasObjectType for CreateBuffer {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlShmPool;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::ShmPool;
     }
 
     impl<'s> Request<'s> for CreateBuffer {
         const CODE: OpCode = 0;
-        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::WlBuffer);
+        const OUTGOING_INTERFACE: Option<WlObjectType> = Some(WlObjectType::Buffer);
 
         fn build_message<'m, S: State>(
             self,
@@ -82,7 +82,7 @@ pub mod request {
     pub struct Destroy;
 
     impl HasObjectType for Destroy {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlShmPool;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::ShmPool;
     }
 
     impl<'s> Request<'s> for Destroy {
@@ -117,7 +117,7 @@ pub mod request {
     }
 
     impl HasObjectType for Resize {
-        const OBJECT_TYPE: WlObjectType = WlObjectType::WlShmPool;
+        const OBJECT_TYPE: WlObjectType = WlObjectType::ShmPool;
     }
 
     impl<'s> Request<'s> for Resize {

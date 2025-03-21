@@ -28,8 +28,8 @@ use wayland::{
         display::WlDisplay,
         object::{
             default_impl::{
-                WlBuffer, WlCompositor, ZwlrLayerShellV1, WlLayerSurface, WlOutput, WlRegion, WlShm,
-                WlShmPool, WlSurface, WpViewport, WpViewporter,
+                Buffer, Compositor, LayerShell, WlLayerSurface, Output, Region, Shm,
+                ShmPool, Surface, WpViewport, WpViewporter,
             },
             dispatch::NoState,
             registry::WlRegistry,
@@ -58,7 +58,7 @@ fn get_registry() {
         storage
             .object(registry)
             .interfaces()
-            .contains_key(&WlObjectType::WlCompositor)
+            .contains_key(&WlObjectType::Compositor)
     );
 }
 
@@ -74,9 +74,9 @@ fn create_surface() {
     display.dispatch_all_pending(storage.as_mut(), state.as_mut());
 
     let compositor =
-        WlRegistry::bind::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
+        WlRegistry::bind::<Compositor>(&mut buf, storage.as_mut(), registry).unwrap();
 
-    let surface: WlObjectHandle<WlSurface> =
+    let surface: WlObjectHandle<Surface> =
         compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurfaceRequest);
 
     assert_eq!(
@@ -97,7 +97,7 @@ fn bind_wlr_shell() {
     display.dispatch_all_pending(storage.as_mut(), state.as_mut());
 
     let _layer_shell =
-        WlRegistry::bind::<ZwlrLayerShellV1>(&mut buf, storage.as_mut(), registry).unwrap();
+        WlRegistry::bind::<LayerShell>(&mut buf, storage.as_mut(), registry).unwrap();
 
     display.dispatch_all_pending(storage.as_mut(), state.as_mut());
 }
@@ -132,15 +132,15 @@ fn white_rect() {
 
     display.dispatch_all_pending(storage.as_mut(), state.as_mut());
 
-    let shm = WlRegistry::bind::<WlShm>(&mut buf, storage.as_mut(), registry).unwrap();
+    let shm = WlRegistry::bind::<Shm>(&mut buf, storage.as_mut(), registry).unwrap();
 
     let viewporter =
         WlRegistry::bind::<WpViewporter>(&mut buf, storage.as_mut(), registry).unwrap();
 
     let compositor =
-        WlRegistry::bind::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
+        WlRegistry::bind::<Compositor>(&mut buf, storage.as_mut(), registry).unwrap();
 
-    let surface: WlObjectHandle<WlSurface> =
+    let surface: WlObjectHandle<Surface> =
         compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurfaceRequest);
 
     let _viewport: WlObjectHandle<WpViewport> = viewporter.create_object(
@@ -151,7 +151,7 @@ fn white_rect() {
         },
     );
 
-    let region: WlObjectHandle<WlRegion> =
+    let region: WlObjectHandle<Region> =
         compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateRegionRequest);
 
     surface.request(
@@ -165,10 +165,10 @@ fn white_rect() {
     region.request(&mut buf, &storage, WlRegionDestroyRequest);
     storage.release(region).unwrap();
 
-    let output = WlRegistry::bind::<WlOutput>(&mut buf, storage.as_mut(), registry).unwrap();
+    let output = WlRegistry::bind::<Output>(&mut buf, storage.as_mut(), registry).unwrap();
 
     let layer_shell =
-        WlRegistry::bind::<ZwlrLayerShellV1>(&mut buf, storage.as_mut(), registry).unwrap();
+        WlRegistry::bind::<LayerShell>(&mut buf, storage.as_mut(), registry).unwrap();
 
     let layer_surface: WlObjectHandle<WlLayerSurface> = layer_shell.create_object(
         &mut buf,
@@ -250,7 +250,7 @@ fn white_rect() {
 
     let _buffer = unsafe { slice::from_raw_parts_mut(shm_ptr.cast::<u32>(), BUFFER_SIZE_PIXELS) };
 
-    let shm_pool: WlObjectHandle<WlShmPool> = shm.create_object(
+    let shm_pool: WlObjectHandle<ShmPool> = shm.create_object(
         &mut buf,
         storage.as_mut(),
         WlShmCreatePoolRequest {
@@ -259,7 +259,7 @@ fn white_rect() {
         },
     );
 
-    let buffer: WlObjectHandle<WlBuffer> = shm_pool.create_object(
+    let buffer: WlObjectHandle<Buffer> = shm_pool.create_object(
         &mut buf,
         storage.as_mut(),
         WlShmPoolCreateBufferRequest {
