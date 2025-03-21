@@ -1,0 +1,18 @@
+[package]
+name = "extractor"
+version.workspace = true
+edition.workspace = true
+
+[dev-dependencies]
+png = "0.17.16"
+
+
+[dependencies]
+safe-transmute.workspace = true
+thiserror.workspace = true
+bitflags.workspace = true
+transmute-extra = {path = "../transmute-extra"}
+dxt = {path = "../dxt"}
+lz4 = "1.28.1"
+image = "0.25.5"
+tracing.workspace = true
