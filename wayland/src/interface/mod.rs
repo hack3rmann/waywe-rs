@@ -1,17 +1,12 @@
-pub mod callback;
-pub mod compositor;
-pub mod display;
-pub mod layer_shell;
-pub mod layer_surface;
-pub mod region;
 pub mod registry;
-pub mod shm;
-pub mod shm_pool;
-pub mod surface;
-pub mod toplevel;
-pub mod viewporter;
-pub mod wm_base;
-pub mod xdg_surface;
+pub mod generated {
+    wayland_scanner::include_interfaces!([
+        "wayland-protocols/wayland.xml",
+        "wayland-protocols/stable/xdg-shell/xdg-shell.xml",
+        "wayland-protocols/stable/viewporter/viewporter.xml",
+        "wayland-protocols/wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml",
+    ]);
+}
 
 use crate::{
     object::HasObjectType,
@@ -22,82 +17,13 @@ use crate::{
         wire::{MessageBuffer, OpCode, WlMessage},
     },
 };
-use ::std::option::Option;
 use std::ptr::{self, NonNull};
 use wayland_sys::wl_proxy_marshal_array_constructor;
 
-pub use {
-    callback::event::Done as WlCallbackDoneEvent,
-    display::{
-        event::{DeleteId as WlDisplayDeleteIdEvent, Error as WlDisplayErrorEvent},
-        request::{GetRegistry as WlDisplayGetRegistryRequest, Sync as WlDisplaySyncRequest},
-        wl_enum::Error as WlDisplayErrorEnum,
-    },
-    generated::wayland::compositor::request::{
-        CreateRegion as WlCompositorCreateRegionRequest,
-        CreateSurface as WlCompositorCreateSurfaceRequest,
-    },
-    layer_shell::{
-        request::{
-            Destroy as WlLayerShellDestroyRequest,
-            GetLayerSurface as WlLayerShellGetLayerSurfaceRequest,
-        },
-        wl_enum::Layer as WlLayerShellLayer,
-    },
-    layer_surface::{
-        event::Configure as WlLayerSurfaceConfigureEvent,
-        request::{
-            AckConfigure as WlLayerSurfaceAckConfigureRequest,
-            SetAnchor as WlLayerSurfaceSetAnchorRequest,
-            SetExclusiveZone as WlLayerSurfaceSetExclusiveZoneRequest,
-            SetKeyboardInteractivity as WlLayerSurfaceSetKeyboardInteractivityRequest,
-            SetMargin as WlLayerSurfaceSetMarginRequest, SetSize as WlLayerSurfaceSetSizeRequest,
-        },
-    },
-    region::request::Destroy as WlRegionDestroyRequest,
-    registry::{
-        event::{Global as WlRegistryGlobalEvent, GlobalRemove as WlRegistryGlobalRemoveEvent},
-        request::Bind as WlRegistryBindRequest,
-    },
-    shm::{request::CreatePool as WlShmCreatePoolRequest, wl_enum::Format as WlShmFormat},
-    shm_pool::request::CreateBuffer as WlShmPoolCreateBufferRequest,
-    surface::{
-        event::{Enter as WlSurfaceEnterEvent, Leave as WlSurfaceLeaveEvent},
-        request::{
-            Attach as WlSurfaceAttachRequest, Commit as WlSurfaceCommitRequest,
-            Damage as WlSurfaceDamageRequest, Destroy as WlSurfaceDestroyRequest,
-            Frame as WlSurfaceFrameRequest, SetBufferScale as WlSurfaceSetBufferScaleRequest,
-            SetInputRegion as WlSurfaceSetInputRegionRequest,
-            SetOpaqueRegion as WlSurfaceSetOpaqueRegionRequest,
-        },
-        wl_enum::Error as WlSurfaceError,
-    },
-    toplevel::{
-        event::{Close as WlToplevelCloseEvent, Configure as WlToplevelConfigureEvent},
-        request::{SetAppId as WlToplevelSetAppIdRequest, SetTitle as WlToplevelSetTitleRequest},
-    },
-    viewporter::request::GetViewport as WlViewporterGetViewportRequest,
-    wm_base::{
-        event::Ping as WlWmBasePingEvent,
-        request::{GetXdgSurface as WlWmBaseGetXdgSurfaceRequest, Pong as WlWmBasePongRequest},
-    },
-    xdg_surface::{
-        event::Configure as WlXdgSurfaceConfigureEvent,
-        request::{
-            AckConfigure as WlXdgSurfaceAckConfigureRequest,
-            GetToplevel as WlXdgSurfaceGetToplevelRequest,
-        },
-    },
+pub use generated::prelude::*;
+pub use registry::{
+    event::Global as WlRegistryGlobalEvent, request::Bind as WlRegistryBindRequest,
 };
-
-pub mod generated {
-    wayland_scanner::include_interfaces!([
-        "wayland-protocols/wayland.xml",
-        "wayland-protocols/stable/xdg-shell/xdg-shell.xml",
-        "wayland-protocols/stable/viewporter/viewporter.xml",
-        "wayland-protocols/wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml",
-    ]);
-}
 
 impl WlObjectType {
     /// The name of this interface

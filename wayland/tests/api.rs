@@ -14,22 +14,22 @@ use tracing_test::traced_test;
 use wayland::{
     StackMessageBuffer, WlObjectHandle,
     interface::{
-        WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlLayerShellGetLayerSurfaceRequest,
-        WlLayerShellLayer, WlLayerSurfaceSetAnchorRequest, WlLayerSurfaceSetExclusiveZoneRequest,
-        WlLayerSurfaceSetKeyboardInteractivityRequest, WlLayerSurfaceSetMarginRequest,
-        WlLayerSurfaceSetSizeRequest, WlRegionDestroyRequest, WlShmCreatePoolRequest, WlShmFormat,
-        WlShmPoolCreateBufferRequest, WlSurfaceAttachRequest, WlSurfaceCommitRequest,
-        WlSurfaceDamageRequest, WlSurfaceSetBufferScaleRequest, WlSurfaceSetInputRegionRequest,
-        WlViewporterGetViewportRequest,
-        layer_surface::wl_enum::{Anchor, KeyboardInteractivity},
+        WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlRegionDestroyRequest,
+        WlShmCreatePoolRequest, WlShmFormat, WlShmPoolCreateBufferRequest, WlSurfaceAttachRequest,
+        WlSurfaceCommitRequest, WlSurfaceDamageRequest, WlSurfaceSetBufferScaleRequest,
+        WlSurfaceSetInputRegionRequest, WpViewporterGetViewportRequest,
+        ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellLayer, ZwlrLayerSurfaceAnchor,
+        ZwlrLayerSurfaceKeyboardInteractivity, ZwlrLayerSurfaceSetAnchorRequest,
+        ZwlrLayerSurfaceSetExclusiveZoneRequest, ZwlrLayerSurfaceSetKeyboardInteractivityRequest,
+        ZwlrLayerSurfaceSetMarginRequest, ZwlrLayerSurfaceSetSizeRequest,
     },
     object::WlObjectType,
     sys::{
         display::WlDisplay,
         object::{
             default_impl::{
-                Buffer, Compositor, LayerShell, WlLayerSurface, Output, Region, Shm,
-                ShmPool, Surface, WpViewport, WpViewporter,
+                Buffer, Compositor, LayerShell, Output, Region, Shm, ShmPool, Surface,
+                WlLayerSurface, WpViewport, WpViewporter,
             },
             dispatch::NoState,
             registry::WlRegistry,
@@ -73,8 +73,7 @@ fn create_surface() {
 
     display.dispatch_all_pending(storage.as_mut(), state.as_mut());
 
-    let compositor =
-        WlRegistry::bind::<Compositor>(&mut buf, storage.as_mut(), registry).unwrap();
+    let compositor = WlRegistry::bind::<Compositor>(&mut buf, storage.as_mut(), registry).unwrap();
 
     let surface: WlObjectHandle<Surface> =
         compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurfaceRequest);
@@ -137,8 +136,7 @@ fn white_rect() {
     let viewporter =
         WlRegistry::bind::<WpViewporter>(&mut buf, storage.as_mut(), registry).unwrap();
 
-    let compositor =
-        WlRegistry::bind::<Compositor>(&mut buf, storage.as_mut(), registry).unwrap();
+    let compositor = WlRegistry::bind::<Compositor>(&mut buf, storage.as_mut(), registry).unwrap();
 
     let surface: WlObjectHandle<Surface> =
         compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurfaceRequest);
@@ -146,7 +144,7 @@ fn white_rect() {
     let _viewport: WlObjectHandle<WpViewport> = viewporter.create_object(
         &mut buf,
         storage.as_mut(),
-        WlViewporterGetViewportRequest {
+        WpViewporterGetViewportRequest {
             surface: surface.id(),
         },
     );
@@ -167,16 +165,15 @@ fn white_rect() {
 
     let output = WlRegistry::bind::<Output>(&mut buf, storage.as_mut(), registry).unwrap();
 
-    let layer_shell =
-        WlRegistry::bind::<LayerShell>(&mut buf, storage.as_mut(), registry).unwrap();
+    let layer_shell = WlRegistry::bind::<LayerShell>(&mut buf, storage.as_mut(), registry).unwrap();
 
     let layer_surface: WlObjectHandle<WlLayerSurface> = layer_shell.create_object(
         &mut buf,
         storage.as_mut(),
-        WlLayerShellGetLayerSurfaceRequest {
+        ZwlrLayerShellGetLayerSurfaceRequest {
             surface: surface.id(),
             output: Some(output.id()),
-            layer: WlLayerShellLayer::Background,
+            layer: ZwlrLayerShellLayer::Background,
             namespace: c"wallpaper-engine",
         },
     );
@@ -184,31 +181,40 @@ fn white_rect() {
     layer_surface.request(
         &mut buf,
         &storage,
-        WlLayerSurfaceSetAnchorRequest {
-            anchor: Anchor::all(),
+        ZwlrLayerSurfaceSetAnchorRequest {
+            anchor: ZwlrLayerSurfaceAnchor::all(),
         },
     );
 
     layer_surface.request(
         &mut buf,
         &storage,
-        WlLayerSurfaceSetExclusiveZoneRequest { zone: -1 },
+        ZwlrLayerSurfaceSetExclusiveZoneRequest { zone: -1 },
     );
-
-    layer_surface.request(&mut buf, &storage, WlLayerSurfaceSetMarginRequest::zero());
 
     layer_surface.request(
         &mut buf,
         &storage,
-        WlLayerSurfaceSetKeyboardInteractivityRequest {
-            keyboard_interactivity: KeyboardInteractivity::None,
+        ZwlrLayerSurfaceSetMarginRequest {
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
         },
     );
 
     layer_surface.request(
         &mut buf,
         &storage,
-        WlLayerSurfaceSetSizeRequest {
+        ZwlrLayerSurfaceSetKeyboardInteractivityRequest {
+            keyboard_interactivity: ZwlrLayerSurfaceKeyboardInteractivity::None,
+        },
+    );
+
+    layer_surface.request(
+        &mut buf,
+        &storage,
+        ZwlrLayerSurfaceSetSizeRequest {
             width: BUFFER_WIDTH_PIXELS as u32,
             height: BUFFER_HEIGHT_PIXELS as u32,
         },

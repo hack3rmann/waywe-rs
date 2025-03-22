@@ -1,7 +1,7 @@
 use super::{WlObject, WlObjectHandle, dispatch::NoState};
 use crate::{
     SmallVecMessageBuffer, WlObjectStorage,
-    interface::{Event, WlLayerSurfaceAckConfigureRequest, WlLayerSurfaceConfigureEvent},
+    interface::{Event, ZwlrLayerSurfaceAckConfigureRequest, ZwlrLayerSurfaceConfigureEvent},
     object::{HasObjectType, WlObjectType},
     sys::{
         object::{Dispatch, FromProxy},
@@ -85,8 +85,8 @@ impl Dispatch for WlLayerSurface {
         storage: Pin<&mut WlObjectStorage<'_, Self::State>>,
         message: WlMessage<'_>,
     ) {
-        let Some(WlLayerSurfaceConfigureEvent { serial, .. }) =
-            WlLayerSurfaceConfigureEvent::from_message(message)
+        let Some(ZwlrLayerSurfaceConfigureEvent { serial, .. }) =
+            ZwlrLayerSurfaceConfigureEvent::from_message(message)
         else {
             return;
         };
@@ -96,7 +96,7 @@ impl Dispatch for WlLayerSurface {
         self.handle.request(
             &mut buf,
             storage.as_ref().get_ref(),
-            WlLayerSurfaceAckConfigureRequest { serial },
+            ZwlrLayerSurfaceAckConfigureRequest { serial },
         );
     }
 }

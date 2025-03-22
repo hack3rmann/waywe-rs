@@ -103,6 +103,52 @@ pub fn include_interfaces(token_stream: TokenStream) -> TokenStream {
             quote! { Self:: #enum_entry_ident => &crate::sys::protocol:: #interface_ident ::WL_INTERFACE , }
         });
 
+    let pub_uses = protocols.iter().map(|protocol| {
+        let protocol_module = Ident::new(&protocol.name, Span::call_site());
+
+        let interfaces = protocol.interface.iter().map(|interface| {
+            let interface_module =
+                Ident::new(strip_interface_name(&interface.name), Span::call_site());
+            let interface_prefix = strip_v1_suffix(&interface.name).to_case(Case::Pascal);
+
+            let interface_items = interface.entries.iter().map(|entry| match entry {
+                InterfaceEntry::Request(request) => {
+                    let name = request.name.to_case(Case::Pascal);
+                    let ident = Ident::new(&name, Span::call_site());
+                    let short_ident = format_ident!("{interface_prefix}{name}Request");
+
+                    quote! { request:: #ident as #short_ident }
+                }
+                InterfaceEntry::Event(event) => {
+                    let name = event.name.to_case(Case::Pascal);
+                    let ident = Ident::new(&name, Span::call_site());
+                    let short_ident = format_ident!("{interface_prefix}{name}Event");
+
+                    quote! { event:: #ident as #short_ident }
+                }
+                InterfaceEntry::Enum(en) => {
+                    let name = en.name.to_case(Case::Pascal);
+                    let ident = Ident::new(&name, Span::call_site());
+                    let short_ident = format_ident!("{interface_prefix}{name}");
+
+                    quote! { wl_enum:: #ident as #short_ident }
+                }
+            });
+
+            quote! {
+                #interface_module ::{
+                    #( #interface_items ),*
+                }
+            }
+        });
+
+        quote! {
+            #protocol_module ::{
+                #( #interfaces ),*
+            }
+        }
+    });
+
     quote! {
         #[derive(Debug, PartialEq, Default, Clone, Copy, Eq, PartialOrd, Ord, Hash)]
         pub enum WlObjectType {
@@ -136,6 +182,10 @@ pub fn include_interfaces(token_stream: TokenStream) -> TokenStream {
         }
 
         #( #protocol_modules )*
+
+        pub mod prelude {
+            pub use super::{ #( #pub_uses ),* };
+        }
     }
 }
 
@@ -192,7 +242,15 @@ pub fn strip_interface_name(name: &str) -> &str {
     if name.starts_with("wl_") {
         unsafe { name.get_unchecked(3..) }
     } else if name.starts_with("zwlr_") && name.ends_with("_v1") {
-        unsafe { name.get_unchecked(4..name.len() - 3) }
+        unsafe { name.get_unchecked(5..name.len() - 3) }
+    } else {
+        name
+    }
+}
+
+pub fn strip_v1_suffix(name: &str) -> &str {
+    if name.ends_with("_v1") {
+        unsafe { name.get_unchecked(..name.len() - 3) }
     } else {
         name
     }
@@ -274,7 +332,7 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
                 ArgType::Array => unimplemented!("array usage in reqeusts"),
             };
 
-            Some(quote! { #field_name : #field_type })
+            Some(quote! { pub #field_name : #field_type })
         })
         .collect::<Vec<_>>();
 
@@ -442,7 +500,7 @@ fn event_to_impl(interface: &Interface, event: &Message, index: usize) -> TokenS
             let field_name = Ident::new(&argument.name, Span::call_site());
             let field_type = argument_type(argument, true)?;
 
-            Some(quote! { #field_name : #field_type })
+            Some(quote! { pub #field_name : #field_type })
         })
         .collect::<Vec<_>>();
 

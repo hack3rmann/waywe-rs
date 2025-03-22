@@ -9,11 +9,11 @@ use wayland::{
     Dispatch, HasObjectType, SmallVecMessageBuffer, StackMessageBuffer, WlDisplay, WlObject,
     WlObjectHandle, WlObjectType, WlProxy, WlRegistry,
     interface::{
-        Event, WlCompositorCreateSurfaceRequest, WlSurfaceCommitRequest, WlToplevelCloseEvent,
-        WlToplevelConfigureEvent, WlToplevelSetAppIdRequest, WlToplevelSetTitleRequest,
-        WlWmBaseGetXdgSurfaceRequest, WlWmBasePingEvent, WlWmBasePongRequest,
-        WlXdgSurfaceAckConfigureRequest, WlXdgSurfaceConfigureEvent,
-        WlXdgSurfaceGetToplevelRequest,
+        Event, WlCompositorCreateSurfaceRequest, WlSurfaceCommitRequest,
+        XdgSurfaceAckConfigureRequest, XdgSurfaceConfigureEvent, XdgSurfaceGetToplevelRequest,
+        XdgToplevelCloseEvent, XdgToplevelConfigureEvent, XdgToplevelSetAppIdRequest,
+        XdgToplevelSetTitleRequest, XdgWmBaseGetXdgSurfaceRequest, XdgWmBasePingEvent,
+        XdgWmBasePongRequest,
     },
     sys::{
         object::{FromProxy, dispatch::State},
@@ -65,14 +65,14 @@ impl Dispatch for WlWmBase {
         storage: Pin<&mut wayland::WlObjectStorage<'_, Self::State>>,
         message: WlMessage<'_>,
     ) {
-        let Some(WlWmBasePingEvent { serial }) = message.as_event() else {
+        let Some(XdgWmBasePingEvent { serial }) = message.as_event() else {
             return;
         };
 
         let mut buf = SmallVecMessageBuffer::<1>::new();
 
         self.handle
-            .request(&mut buf, &storage, WlWmBasePongRequest { serial });
+            .request(&mut buf, &storage, XdgWmBasePongRequest { serial });
     }
 }
 
@@ -117,7 +117,7 @@ impl Dispatch for WlXdgSurface {
         storage: Pin<&mut wayland::WlObjectStorage<'_, Self::State>>,
         message: WlMessage<'_>,
     ) {
-        let Some(WlXdgSurfaceConfigureEvent { serial }) = message.as_event() else {
+        let Some(XdgSurfaceConfigureEvent { serial }) = message.as_event() else {
             return;
         };
 
@@ -126,7 +126,7 @@ impl Dispatch for WlXdgSurface {
         self.handle.request(
             &mut buf,
             &storage,
-            WlXdgSurfaceAckConfigureRequest { serial },
+            XdgSurfaceAckConfigureRequest { serial },
         );
 
         if state.should_resize {
@@ -160,16 +160,16 @@ impl Dispatch for WlToplevel {
         message: WlMessage<'_>,
     ) {
         match message.opcode {
-            WlToplevelConfigureEvent::CODE => {
-                let WlToplevelConfigureEvent { width, height, .. } = message.as_event().unwrap();
+            XdgToplevelConfigureEvent::CODE => {
+                let XdgToplevelConfigureEvent { width, height, .. } = message.as_event().unwrap();
 
                 if width != 0 && height != 0 {
                     state.should_resize = true;
-                    state.next_width = width;
-                    state.next_height = height;
+                    state.next_width = width as u32;
+                    state.next_height = height as u32;
                 }
             }
-            WlToplevelCloseEvent::CODE => {
+            XdgToplevelCloseEvent::CODE => {
                 state.should_close = true;
             }
             _ => {}
@@ -288,16 +288,16 @@ fn simple_wayland_client() {
     let xdg_surface: WlObjectHandle<WlXdgSurface> = wm_base.create_object(
         &mut buf,
         storage.as_mut(),
-        WlWmBaseGetXdgSurfaceRequest {
+        XdgWmBaseGetXdgSurfaceRequest {
             surface: surface.id(),
         },
     );
 
     let toplevel: WlObjectHandle<WlToplevel> =
-        xdg_surface.create_object(&mut buf, storage.as_mut(), WlXdgSurfaceGetToplevelRequest);
+        xdg_surface.create_object(&mut buf, storage.as_mut(), XdgSurfaceGetToplevelRequest);
 
-    toplevel.request(&mut buf, &storage, WlToplevelSetTitleRequest(APP_NAME));
-    toplevel.request(&mut buf, &storage, WlToplevelSetAppIdRequest(APP_NAME));
+    toplevel.request(&mut buf, &storage, XdgToplevelSetTitleRequest { title: APP_NAME });
+    toplevel.request(&mut buf, &storage, XdgToplevelSetAppIdRequest { app_id: APP_NAME });
 
     surface.request(&mut buf, &storage, WlSurfaceCommitRequest);
     display.dispatch_all_pending(storage.as_mut(), client_state.as_mut());
