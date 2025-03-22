@@ -290,6 +290,9 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Default, Eq, PartialOrd, Ord, Hash)]
+pub struct NewId;
+
 /// Provides a coversion function from [`WlArgument`]
 pub trait FromWlArgument<'s>: Sized {
     /// # Safety
@@ -345,6 +348,19 @@ impl<'s, T> FromWlArgument<'s> for &'s [T] {
     unsafe fn from_argument(value: WlArgument) -> Self {
         let raw = unsafe { value.a.read() };
         unsafe { slice::from_raw_parts(raw.data.cast(), raw.size / mem::size_of::<T>()) }
+    }
+}
+
+impl FromWlArgument<'_> for NewId {
+    unsafe fn from_argument(_: WlArgument) -> Self {
+        Self
+    }
+}
+
+impl<'s> FromWlArgument<'s> for BorrowedFd<'s> {
+    unsafe fn from_argument(value: WlArgument) -> Self {
+        let raw = unsafe { value.h };
+        unsafe { BorrowedFd::borrow_raw(raw) }
     }
 }
 

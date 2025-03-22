@@ -1,5 +1,5 @@
 use super::protocol_from_str;
-use crate::xml::{ArgType, Enum, Interface, InterfaceEntry, Message};
+use crate::xml::{Arg, ArgType, Enum, Interface, InterfaceEntry, Message};
 use convert_case::{Case, Casing as _};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
@@ -103,7 +103,8 @@ fn interface_to_module(interface: &Interface) -> TokenStream {
             InterfaceEntry::Event(r) => Some(r),
             _ => None,
         })
-        .map(event_to_impl);
+        .enumerate()
+        .map(|(i, e)| event_to_impl(interface, e, i));
 
     let enums = interface
         .entries
@@ -158,6 +159,18 @@ fn enum_reference_to_path(name: &str) -> TokenStream {
     }
 }
 
+fn array_element_type_name(interface_name: &str, message_name: &str) -> TokenStream {
+    match (interface_name, message_name) {
+        // scancodes for pressed keys
+        ("wl_keyboard", "enter") => quote! { u32 },
+        ("xdg_toplevel", "configure") => quote! { super::super::xdg_toplevel::wl_enum::State },
+        ("xdg_toplevel", "wm_capabilities") => {
+            quote! { super::super::xdg_toplevel::wl_enum::WmCapabilities }
+        }
+        _ => panic!("unknown array type in {interface_name}.{message_name}"),
+    }
+}
+
 fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> TokenStream {
     let interface_name = strip_interface_name(&interface.name);
     let interface_name_pascal_case = interface_name.to_case(Case::Pascal);
@@ -174,10 +187,8 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
         .iter()
         .any(|argument| matches!(argument.ty, ArgType::String | ArgType::Fd | ArgType::Array));
 
-    let struct_elided_lifetime_has_type = has_lifetime.then(|| quote! { <'_> }).into_iter();
-    let struct_elided_lifetime_object_parent = struct_elided_lifetime_has_type.clone();
-    let struct_lifetime_decl = has_lifetime.then(|| quote! { <'s> }).into_iter();
-    let struct_lifetime_impl = struct_lifetime_decl.clone();
+    let struct_elided_lifetime = has_lifetime.then(|| quote! { <'_> });
+    let struct_lifetime = has_lifetime.then(|| quote! { <'s> });
 
     let struct_fields = request
         .arg
@@ -185,7 +196,10 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
         .filter_map(|argument| {
             let field_name = Ident::new(&argument.name, Span::call_site());
             let field_type = match argument.ty {
-                ArgType::Int => quote! { i32 },
+                ArgType::Int => match &argument.enumeration {
+                    Some(name) => enum_reference_to_path(name),
+                    None => quote! { i32 },
+                },
                 ArgType::Uint => match &argument.enumeration {
                     Some(name) => enum_reference_to_path(name),
                     None => quote! { u32 },
@@ -238,6 +252,9 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
             ArgType::Uint if argument.enumeration.is_some() => {
                 quote! { self. #argument_name .into() }
             }
+            ArgType::Int if argument.enumeration.is_some() => {
+                quote! { u32::from(self. #argument_name ) as i32 }
+            }
             ArgType::Int | ArgType::Uint | ArgType::String | ArgType::Fd | ArgType::Fixed => {
                 quote! { self. #argument_name }
             }
@@ -269,7 +286,7 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
 
             quote! {
                 impl crate::interface::ObjectParent for
-                    #request_struct_name #( #struct_elided_lifetime_object_parent )*
+                    #request_struct_name #struct_elided_lifetime
                 {
                     const CHILD_TYPE: super::super::super::WlObjectType
                          = super::super::super::WlObjectType:: #name ;
@@ -292,18 +309,18 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
 
     quote! {
         // TODO: derive anything
-        pub struct #request_struct_name #( #struct_lifetime_decl )* #struct_body
+        pub struct #request_struct_name #struct_lifetime #struct_body
 
         #( #object_parent_impl )*
 
         impl crate::object::HasObjectType for
-            #request_struct_name #( #struct_elided_lifetime_has_type )*
+            #request_struct_name #struct_elided_lifetime
         {
             const OBJECT_TYPE: super::super::super::WlObjectType
                  = super::super::super::WlObjectType:: #interface_name_ident;
         }
 
-        impl<'s> crate::interface::Request<'s> for #request_struct_name #( #struct_lifetime_impl )* {
+        impl<'s> crate::interface::Request<'s> for #request_struct_name #struct_lifetime {
             const CODE: crate::sys::wire::OpCode = #opcode_literal ;
             const OUTGOING_INTERFACE: ::std::option::Option<super::super::super::WlObjectType>
                 = #outgoing_interface_value ;
@@ -326,8 +343,112 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
     }
 }
 
-fn event_to_impl(_event: &Message) -> TokenStream {
-    quote! {}
+fn event_to_impl(interface: &Interface, event: &Message, index: usize) -> TokenStream {
+    let event_name_pascal = event.name.to_case(Case::Pascal);
+    let event_ident = Ident::new(&event_name_pascal, Span::call_site());
+
+    let has_lifetime = event
+        .arg
+        .iter()
+        .any(|argument| matches!(argument.ty, ArgType::String | ArgType::Fd | ArgType::Array));
+
+    let event_lifetime = has_lifetime.then(|| quote! { <'s> });
+
+    let argument_type = |argument: &Arg<'_>, add_lifetime: bool| -> Option<TokenStream> {
+        let lifetime = add_lifetime.then(|| quote! { 's });
+        let angle_braced_lifetime = add_lifetime.then(|| quote! { <'s> });
+
+        Some(match argument.ty {
+            ArgType::Int => match &argument.enumeration {
+                Some(name) => enum_reference_to_path(name),
+                None => quote! { i32 },
+            },
+            ArgType::Uint => match &argument.enumeration {
+                Some(name) => enum_reference_to_path(name),
+                None => quote! { u32 },
+            },
+            ArgType::NewId => return None,
+            ArgType::Object => quote! { crate::sys::proxy::WlProxyQuery },
+            ArgType::String => quote! { & #lifetime ::std::ffi::CStr },
+            ArgType::Fd => quote! { ::std::os::fd::BorrowedFd #angle_braced_lifetime },
+            ArgType::Fixed => quote! { ::wayland_sys::WlFixed },
+            ArgType::Array => {
+                let array_element_type = array_element_type_name(&interface.name, &event.name);
+                quote! { & #lifetime [ #array_element_type ] }
+            }
+        })
+    };
+
+    let event_body_arguments = event
+        .arg
+        .iter()
+        .filter_map(|argument| {
+            let field_name = Ident::new(&argument.name, Span::call_site());
+            let field_type = argument_type(argument, true)?;
+
+            Some(quote! { #field_name : #field_type })
+        })
+        .collect::<Vec<_>>();
+
+    let event_body = if event_body_arguments.is_empty() {
+        quote! { ; }
+    } else {
+        quote! { { #( #event_body_arguments ),* } }
+    };
+
+    let opcode_string = index.to_string();
+    let opcode_literal = LitInt::new(&opcode_string, Span::call_site());
+
+    let read_statements = event.arg.iter().filter_map(|argument| {
+        let argument_ident = Ident::new(&argument.name, Span::call_site());
+        let argument_type = argument_type(argument, false)?;
+
+        Some(if argument.enumeration.is_none() {
+            quote! {
+                let #argument_ident = unsafe { reader.read::< #argument_type >()? };
+            }
+        } else {
+            quote! {
+                let #argument_ident = unsafe {
+                    #argument_type ::from_u32_unchecked(reader.read::<u32>()?)
+                };
+            }
+        })
+    });
+
+    let field_names = event
+        .arg
+        .iter()
+        .filter_map(|argument| {
+            if matches!(argument.ty, ArgType::NewId) {
+                return None;
+            }
+
+            Some(Ident::new(&argument.name, Span::call_site()))
+        });
+
+    quote! {
+        // TODO(hack3rmann): derive anything
+        pub struct #event_ident #event_lifetime #event_body
+
+        impl<'s> crate::interface::Event<'s> for #event_ident #event_lifetime {
+            const CODE: crate::sys::wire::OpCode = #opcode_literal ;
+
+            fn from_message(message: crate::sys::wire::WlMessage<'s>)
+                -> ::std::option::Option<Self>
+            {
+                if message.opcode != Self::CODE {
+                    return None;
+                }
+
+                let mut reader = message.reader();
+
+                #( #read_statements )*
+
+                Some(Self { #( #field_names ),* })
+            }
+        }
+    }
 }
 
 fn enum_to_impl(enumeration: &Enum) -> TokenStream {
@@ -394,6 +515,12 @@ fn bitfield_enum_to_impl(enumeration: &Enum) -> TokenStream {
             #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
             pub struct #enum_ident : u32 {
                 #( #entries )*
+            }
+        }
+
+        impl #enum_ident {
+            pub const unsafe fn from_u32_unchecked(value: u32) -> Self {
+                unsafe { ::std::mem::transmute::<u32, Self>(value) }
             }
         }
 
