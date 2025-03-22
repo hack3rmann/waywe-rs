@@ -1,5 +1,8 @@
 use super::protocol_from_str;
-use crate::xml::{Arg, ArgType, Enum, Interface, InterfaceEntry, Message};
+use crate::{
+    fmt::{DocDescription, format_doc_string, remove_offsets},
+    xml::{Arg, ArgType, Enum, Interface, InterfaceEntry, Message},
+};
 use convert_case::{Case, Casing as _};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
@@ -69,8 +72,14 @@ pub fn include_interfaces(token_stream: TokenStream) -> TokenStream {
         let protocol_module_name = Ident::new(&protocol.name, Span::call_site());
         let modules = protocol.interface.iter().map(interface_to_module);
 
+        let docs = format!(
+            "# Protocol `{}`\n\n## Copyright\n\n{}",
+            protocol.name,
+            remove_offsets(&protocol.copyright),
+        );
+
         quote! {
-            // TODO(hack3rmann): add docs + format docs
+            #[doc = #docs ]
             pub mod #protocol_module_name {
                 #( #modules )*
             }
@@ -190,6 +199,8 @@ pub fn include_interfaces(token_stream: TokenStream) -> TokenStream {
 }
 
 fn interface_to_module(interface: &Interface) -> TokenStream {
+    let docs = format_doc_string(DocDescription::from_outer(interface.description.as_ref()));
+
     let module_name = Ident::new(strip_interface_name(&interface.name), Span::call_site());
 
     let requests = interface
@@ -222,6 +233,7 @@ fn interface_to_module(interface: &Interface) -> TokenStream {
         .map(enum_to_impl);
 
     quote! {
+        #[doc = #docs ]
         pub mod #module_name {
             pub mod request {
                 #( #requests )*
@@ -286,6 +298,8 @@ fn array_element_type_name(interface_name: &str, message_name: &str) -> TokenStr
 }
 
 fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> TokenStream {
+    let docs = format_doc_string(DocDescription::from_outer(request.description.as_ref()));
+
     let interface_name = strip_interface_name(&interface.name);
     let interface_name_pascal_case = interface_name.to_case(Case::Pascal);
     let interface_name_ident = Ident::new(&interface_name_pascal_case, Span::call_site());
@@ -332,7 +346,12 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
                 ArgType::Array => unimplemented!("array usage in reqeusts"),
             };
 
-            Some(quote! { pub #field_name : #field_type })
+            let docs = format_doc_string(DocDescription::from_inner(argument.summary.as_deref()));
+
+            Some(quote! {
+                #[doc = #docs ]
+                pub #field_name : #field_type
+            })
         })
         .collect::<Vec<_>>();
 
@@ -423,6 +442,7 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
 
     quote! {
         // TODO: derive anything
+        #[doc = #docs ]
         pub struct #request_struct_name #struct_lifetime #struct_body
 
         #( #object_parent_impl )*
@@ -458,6 +478,8 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
 }
 
 fn event_to_impl(interface: &Interface, event: &Message, index: usize) -> TokenStream {
+    let docs = format_doc_string(DocDescription::from_outer(event.description.as_ref()));
+
     let event_name_pascal = event.name.to_case(Case::Pascal);
     let event_ident = Ident::new(&event_name_pascal, Span::call_site());
 
@@ -500,7 +522,12 @@ fn event_to_impl(interface: &Interface, event: &Message, index: usize) -> TokenS
             let field_name = Ident::new(&argument.name, Span::call_site());
             let field_type = argument_type(argument, true)?;
 
-            Some(quote! { pub #field_name : #field_type })
+            let docs = format_doc_string(DocDescription::from_inner(argument.summary.as_deref()));
+
+            Some(quote! {
+                #[doc = #docs ]
+                pub #field_name : #field_type
+            })
         })
         .collect::<Vec<_>>();
 
@@ -540,6 +567,7 @@ fn event_to_impl(interface: &Interface, event: &Message, index: usize) -> TokenS
 
     quote! {
         // TODO(hack3rmann): derive anything
+        #[doc = #docs ]
         pub struct #event_ident #event_lifetime #event_body
 
         impl<'s> crate::interface::Event<'s> for #event_ident #event_lifetime {
@@ -571,6 +599,8 @@ fn enum_to_impl(enumeration: &Enum) -> TokenStream {
 }
 
 fn bitfield_enum_to_impl(enumeration: &Enum) -> TokenStream {
+    let docs = format_doc_string(DocDescription::from_outer(enumeration.description.as_ref()));
+
     let enum_name = enumeration.name.to_case(Case::Pascal);
     let enum_ident = Ident::new(&enum_name, Span::call_site());
 
@@ -597,32 +627,20 @@ fn bitfield_enum_to_impl(enumeration: &Enum) -> TokenStream {
             let entry_value_string = entry.value.to_string();
             let entry_value_literal = LitInt::new(&entry_value_string, Span::call_site());
 
-            // FIXME(hack3rmann): format documentation into markdown
-            let _entry_docs = entry
-                .summary
-                .as_ref()
-                .or(entry
-                    .description
-                    .as_ref()
-                    .and_then(|desc| desc.summary.as_ref().or(desc.body.as_ref())))
-                .map(|desc| LitStr::new(desc, Span::call_site()))
-                .into_iter();
+            let docs = format_doc_string(DocDescription::from_inner_and_outer(
+                entry.summary.as_deref(),
+                entry.description.as_ref(),
+            ));
 
             quote! {
+                #[doc = #docs ]
                 const #entry_ident = #entry_value_literal;
             }
         });
 
-    // FIXME(hack3rmann): format documentation into markdown
-    let _enum_docs = enumeration
-        .description
-        .as_ref()
-        .and_then(|desc| desc.body.as_ref().or(desc.summary.as_ref()))
-        .map(|desc| LitStr::new(desc, Span::call_site()))
-        .into_iter();
-
     quote! {
         ::bitflags::bitflags! {
+            #[doc = #docs ]
             #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
             pub struct #enum_ident : u32 {
                 #( #entries )*
@@ -644,6 +662,8 @@ fn bitfield_enum_to_impl(enumeration: &Enum) -> TokenStream {
 }
 
 fn regular_enum_to_impl(enumeration: &Enum) -> TokenStream {
+    let docs = format_doc_string(DocDescription::from_outer(enumeration.description.as_ref()));
+
     let enum_name = enumeration.name.to_case(Case::Pascal);
     let enum_ident = Ident::new(&enum_name, Span::call_site());
 
@@ -669,31 +689,18 @@ fn regular_enum_to_impl(enumeration: &Enum) -> TokenStream {
             let entry_ident = Ident::new(name, Span::call_site());
             let entry_value_literal = u32::from(entry.value);
 
-            // FIXME(hack3rmann): format documentation into markdown
-            let _entry_docs = entry
-                .summary
-                .as_ref()
-                .or(entry
-                    .description
-                    .as_ref()
-                    .and_then(|desc| desc.summary.as_ref().or(desc.body.as_ref())))
-                .map(|desc| LitStr::new(desc, Span::call_site()))
-                .into_iter();
+            let docs = format_doc_string(DocDescription::from_inner_and_outer(
+                entry.summary.as_deref(),
+                entry.description.as_ref(),
+            ));
 
             quote! {
+                #[doc = #docs ]
                 #entry_ident = #entry_value_literal
             }
         });
 
     let try_from_error_ident = format_ident!("{}FromU32Error", enum_ident);
-
-    // FIXME(hack3rmann): format documentation into markdown
-    let _enum_docs = enumeration
-        .description
-        .as_ref()
-        .and_then(|desc| desc.body.as_ref().or(desc.summary.as_ref()))
-        .map(|desc| LitStr::new(desc, Span::call_site()))
-        .into_iter();
 
     let try_from_match_entries =
         enum_entry_names
@@ -711,6 +718,7 @@ fn regular_enum_to_impl(enumeration: &Enum) -> TokenStream {
     let try_from_error_string = format!("failed to convert {{0}} to {enum_name}");
 
     quote! {
+        #[doc = #docs ]
         #[repr(u32)]
         #[derive(Clone, Debug, PartialEq, Copy, Eq, PartialOrd, Ord, Hash)]
         pub enum #enum_ident {

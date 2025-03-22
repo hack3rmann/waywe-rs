@@ -1,3 +1,4 @@
+mod fmt;
 mod implementation;
 mod xml;
 
