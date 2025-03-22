@@ -20,7 +20,7 @@ pub type WlFixed = wl_fixed_t;
 pub struct wl_fixed_t(pub(crate) c_int);
 
 impl wl_fixed_t {
-    pub const fn into_double(self) -> f64 {
+    pub const fn to_double(self) -> f64 {
         // see <https://chromium.googlesource.com/external/wayland/wayland/+/refs/heads/master/src/wayland-util.h#235>
         let x = ((1023_i64 + 44_i64) << 52) + (1_i64 << 51) + self.0 as i64;
         f64::from_bits(x as u64) - (3_i64 << 43) as f64
@@ -32,7 +32,7 @@ impl wl_fixed_t {
         Self(shifted.to_bits() as i64 as c_int)
     }
 
-    pub const fn into_int(self) -> i32 {
+    pub const fn to_int(self) -> i32 {
         self.0 / 256
     }
 
@@ -44,7 +44,7 @@ impl wl_fixed_t {
         Self(value)
     }
 
-    pub const fn into_raw(self) -> c_int {
+    pub const fn to_raw(self) -> c_int {
         self.0
     }
 }
@@ -57,7 +57,7 @@ impl From<f64> for wl_fixed_t {
 
 impl From<wl_fixed_t> for f64 {
     fn from(value: wl_fixed_t) -> Self {
-        value.into_double()
+        value.to_double()
     }
 }
 
@@ -69,7 +69,7 @@ impl From<i32> for wl_fixed_t {
 
 impl From<wl_fixed_t> for i32 {
     fn from(value: wl_fixed_t) -> Self {
-        value.into_int()
+        value.to_int()
     }
 }
 
