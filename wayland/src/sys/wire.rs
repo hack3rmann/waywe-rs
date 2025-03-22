@@ -256,7 +256,7 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
         self
     }
 
-    /// Writes [`WlObject`] to the message
+    /// Writes [`WlProxy`] to the message
     pub fn object(self, value: &'s WlProxy) -> Self {
         self.maybe_object(Some(value))
     }

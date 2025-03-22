@@ -235,7 +235,6 @@ pub struct WlObject<T: Dispatch> {
 }
 
 impl<T: Dispatch + HasObjectType> WlObject<T> {
-    // TODO(hack3rmann): add state pointer here
     pub fn new(proxy: WlProxy, data: T) -> Self {
         let dispatch_data = Box::new(WlDispatchData::<T, T::State> {
             dispatch: T::dispatch,

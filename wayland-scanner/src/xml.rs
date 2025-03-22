@@ -50,7 +50,6 @@ impl ArgType {
             Self::String => "str",
             Self::Fd => "fd",
             Self::Fixed => "fixed",
-            // TODO(hack3rmann): add array to sys.wire
             Self::Array => "array",
         }
     }

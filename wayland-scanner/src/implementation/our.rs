@@ -440,8 +440,10 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
         None => quote! { ::std::option::Option::None },
     };
 
+    let derive_call = derive_call_from_args(&request.arg);
+
     quote! {
-        // TODO: derive anything
+        #derive_call
         #[doc = #docs ]
         pub struct #request_struct_name #struct_lifetime #struct_body
 
@@ -474,6 +476,16 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
                     .build()
             }
         }
+    }
+}
+
+fn derive_call_from_args(args: &[Arg<'_>]) -> TokenStream {
+    let has_fd_in_args = args.iter().any(|arg| matches!(arg.ty, ArgType::Fd));
+
+    if has_fd_in_args {
+        quote! { #[derive(Clone, Debug)] }
+    } else {
+        quote! { #[derive(Clone, Debug, PartialEq, PartialOrd, Ord, Eq, Hash)] }
     }
 }
 
@@ -565,8 +577,10 @@ fn event_to_impl(interface: &Interface, event: &Message, index: usize) -> TokenS
         Some(Ident::new(&argument.name, Span::call_site()))
     });
 
+    let derive_call = derive_call_from_args(&event.arg);
+
     quote! {
-        // TODO(hack3rmann): derive anything
+        #derive_call
         #[doc = #docs ]
         pub struct #event_ident #event_lifetime #event_body
 

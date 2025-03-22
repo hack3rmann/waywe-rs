@@ -1,14 +1,10 @@
 use crate::object::WlObjectId;
 use core::fmt;
 use std::{
-    ffi::{CStr, c_void},
-    mem,
-    ptr::NonNull,
-    slice,
-    sync::atomic::{
+    cmp::Ordering, ffi::{c_void, CStr}, hash, mem, ptr::NonNull, slice, sync::atomic::{
         AtomicUsize,
         Ordering::{Acquire, Release},
-    },
+    }
 };
 use wayland_sys::{
     wl_proxy, wl_proxy_destroy, wl_proxy_get_class, wl_proxy_get_id, wl_proxy_get_user_data,
@@ -120,7 +116,7 @@ impl fmt::Debug for WlProxy {
 }
 
 // TODO(hack3rmann): missing docs
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy)]
 pub struct WlProxyQuery {
     // TODO(hack3rmann): determine a nice API for object querying
     raw: *const wl_proxy,
@@ -140,11 +136,45 @@ impl WlProxyQuery {
     pub const fn to_raw(self) -> *const wl_proxy {
         self.raw
     }
+
+    pub fn id(self) -> Option<WlObjectId> {
+        NonNull::new(self.raw.cast_mut()).and_then(|ptr| {
+            // Safety: if `ptr` is nonnull then this `wl_proxy` should be valid
+            let raw_id = unsafe { wl_proxy_get_id(ptr.as_ptr()) };
+            WlObjectId::try_from(raw_id).ok()
+        })
+    }
 }
 
 impl fmt::Debug for WlProxyQuery {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct(std::any::type_name::<Self>())
             .finish_non_exhaustive()
+    }
+}
+
+impl PartialEq for WlProxyQuery {
+    fn eq(&self, other: &Self) -> bool {
+        self.id() == other.id()
+    }
+}
+
+impl Eq for WlProxyQuery {}
+
+impl PartialOrd for WlProxyQuery {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for WlProxyQuery {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.id().cmp(&other.id())
+    }
+}
+
+impl hash::Hash for WlProxyQuery {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        hash::Hash::hash(&self.id(), state);
     }
 }
