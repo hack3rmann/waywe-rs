@@ -22,19 +22,20 @@ use crate::{
         wire::{MessageBuffer, OpCode, WlMessage},
     },
 };
+use ::std::option::Option;
 use std::ptr::{self, NonNull};
 use wayland_sys::wl_proxy_marshal_array_constructor;
 
 pub use {
     callback::event::Done as WlCallbackDoneEvent,
-    generated::wayland::compositor::request::{
-        CreateRegion as WlCompositorCreateRegionRequest,
-        CreateSurface as WlCompositorCreateSurfaceRequest,
-    },
     display::{
         event::{DeleteId as WlDisplayDeleteIdEvent, Error as WlDisplayErrorEvent},
         request::{GetRegistry as WlDisplayGetRegistryRequest, Sync as WlDisplaySyncRequest},
         wl_enum::Error as WlDisplayErrorEnum,
+    },
+    generated::wayland::compositor::request::{
+        CreateRegion as WlCompositorCreateRegionRequest,
+        CreateSurface as WlCompositorCreateSurfaceRequest,
     },
     layer_shell::{
         request::{
@@ -98,8 +99,49 @@ pub mod generated {
     ]);
 }
 
+impl WlObjectType {
+    /// The name of this interface
+    pub const fn interface_name(self) -> &'static str {
+        unsafe { self.interface().name_str_unchecked() }
+    }
+
+    /// The for the particular request in this interface
+    ///
+    /// # Error
+    ///
+    /// Will return [`None`] if there is no request for this `opcode`
+    pub const fn request_name(self, opcode: OpCode) -> Option<&'static str> {
+        let index = opcode as usize;
+
+        // HACK(const-fn): should be slice.get(index)
+        if index >= self.interface().methods.len() {
+            return None;
+        }
+
+        Some(unsafe { self.interface().methods[index].name_str_unchecked() })
+    }
+
+    /// The for the particular event in this interface
+    ///
+    /// # Error
+    ///
+    /// Will return [`None`] if there is no event for this `opcode`
+    pub const fn event_name(self, opcode: OpCode) -> Option<&'static str> {
+        let index = opcode as usize;
+
+        // HACK(const-fn): should be slice.get(index)
+        if index >= self.interface().methods.len() {
+            return None;
+        }
+
+        Some(unsafe { self.interface().events[opcode as usize].name_str_unchecked() })
+    }
+}
+
+pub use generated::WlObjectType;
+
 pub trait ObjectParent {
-    const CHILD_TYPE: generated::WlObjectType;
+    const CHILD_TYPE: WlObjectType;
 }
 
 /// Represents requests on Wayland's interfaces
@@ -108,7 +150,7 @@ pub trait Request<'s>: Sized + HasObjectType {
     const CODE: OpCode;
 
     /// The type of an interface object of which will be created by libwayland
-    const OUTGOING_INTERFACE: Option<generated::WlObjectType> = None;
+    const OUTGOING_INTERFACE: Option<WlObjectType> = None;
 
     /// Builds the message on the top of given message buffer
     fn build_message<'m, S: State>(
