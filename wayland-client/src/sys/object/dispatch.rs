@@ -6,10 +6,11 @@ use crate::{
     },
 };
 use std::{
+    any::Any,
+    cell::RefCell,
     ffi::{CStr, c_int, c_void},
     panic,
     pin::Pin,
-    process,
     ptr::NonNull,
     slice,
 };
@@ -49,6 +50,17 @@ pub(crate) struct WlDispatchData<T, S: State> {
     pub data: T,
 }
 
+thread_local! {
+    pub(crate) static DISPATCHER_PANIC_CAUSE: RefCell<Option<Box<dyn Any + Send>>> = const { RefCell::new(None) };
+}
+
+pub fn handle_dispatch_raw_panic() {
+    if let Some(error) = DISPATCHER_PANIC_CAUSE.with_borrow_mut(Option::take) {
+        // continue stack unwind
+        std::panic::panic_any(error);
+    }
+}
+
 pub(crate) unsafe extern "C" fn dispatch_raw<T: HasObjectType, S: State>(
     _impl: *const c_void,
     proxy: *mut c_void,
@@ -61,12 +73,17 @@ pub(crate) unsafe extern "C" fn dispatch_raw<T: HasObjectType, S: State>(
         T::OBJECT_TYPE.interface_name(),
         T::OBJECT_TYPE
             .event_name(opcode as OpCode)
-            .unwrap_or("invalid-event"),
+            .unwrap_or("invalid_event"),
     );
 
     // NOTE(hack3rmann): to use `extern "Rust"` functions inside `extern "C"`
     // catching unwind is important to prevent UB from calling `panic()` in `extern "C"`
+    // and continuing stack unwind outside of `extern "C"` context
     panic::catch_unwind(|| {
+        if DISPATCHER_PANIC_CAUSE.with_borrow(Option::is_some) {
+            return -1;
+        }
+
         // Safety: `proxy` in libwayland dispatcher is always valid
         let id = unsafe { WlObjectId::try_from(wl_proxy_get_id(proxy)).unwrap_unchecked() };
         let data = unsafe { wl_proxy_get_user_data(proxy) }.cast::<WlDispatchData<T, S>>();
@@ -86,7 +103,7 @@ pub(crate) unsafe extern "C" fn dispatch_raw<T: HasObjectType, S: State>(
         };
 
         let Some(mut state_ptr) = data.state else {
-            tracing::error!("no pointer to `WlObjectStorage` is set");
+            tracing::error!("no pointer to state is set");
             return -1;
         };
 
@@ -130,9 +147,9 @@ pub(crate) unsafe extern "C" fn dispatch_raw<T: HasObjectType, S: State>(
 
         0
     })
-    .unwrap_or_else(|_| {
-        tracing::error!("panic in wl_dispatcher_func_t");
-        // TODO(hack3rmann): process error in another way
-        process::abort();
+    .unwrap_or_else(|cause| {
+        tracing::error!("panic in {}::dispatch_raw(..)", module_path!());
+        DISPATCHER_PANIC_CAUSE.with_borrow_mut(|e| _ = e.insert(cause));
+        -1
     })
 }

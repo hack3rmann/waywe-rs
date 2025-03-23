@@ -5,9 +5,10 @@ use super::{
     wire::MessageBuffer,
 };
 use crate::{
-    init::{connect_wayland_socket, GetSocketPathError},
+    init::{GetSocketPathError, connect_wayland_socket},
     interface::{Request, WlDisplayGetRegistryRequest, WlObjectType},
     object::HasObjectType,
+    sys::object::dispatch::handle_dispatch_raw_panic,
 };
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, RawDisplayHandle, WaylandDisplayHandle,
@@ -125,12 +126,14 @@ impl<S: State> WlDisplay<S> {
             self.storage.load(Relaxed).cast_const().cast()
         );
 
+        let n_events_dispatched = unsafe { self.roundtrip_unchecked() };
+
+        handle_dispatch_raw_panic();
+
         // Safety: `self.as_raw_display_ptr()` is a valid display object
-        assert_ne!(
-            -1,
-            unsafe { self.roundtrip_unchecked() },
-            "wl_display_roundtrip failed",
-        );
+        assert_ne!(-1, n_events_dispatched, "wl_display_roundtrip failed",);
+
+        tracing::info!("WlDisplay::roundtrip has dispatched {n_events_dispatched} events");
     }
 }
 
