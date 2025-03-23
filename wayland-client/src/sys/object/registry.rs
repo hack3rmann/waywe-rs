@@ -1,7 +1,10 @@
 use super::{Dispatch, FromProxy, WlObject, WlObjectHandle, dispatch::State};
 use crate::{
-    interface::{Event as _, WlRegistryBindRequest, WlRegistryGlobalEvent},
-    object::{HasObjectType, WlObjectId, WlObjectType},
+    interface::{
+        Event, WlObjectType, WlRegistryBindRequest, WlRegistryGlobalEvent,
+        WlRegistryGlobalRemoveEvent,
+    },
+    object::{HasObjectType, WlObjectId},
     sys::{
         object_storage::WlObjectStorage,
         proxy::WlProxy,
@@ -81,6 +84,37 @@ impl<S: State> WlRegistry<S> {
     pub fn name_of(&self, object_type: WlObjectType) -> Option<WlObjectId> {
         self.interfaces.get(&object_type).map(|global| global.name)
     }
+
+    /// # Safety
+    ///
+    /// `event.interface` should be a valid utf-8 string.
+    pub(crate) unsafe fn handle_global_event(&mut self, event: WlRegistryGlobalEvent<'_>) {
+        let interface = unsafe { std::str::from_utf8_unchecked(event.interface.to_bytes()) };
+
+        let Some(ty) = WlObjectType::from_interface_name(interface) else {
+            return;
+        };
+
+        self.interfaces.insert(
+            ty,
+            WlRegistryGlobalInfo {
+                name: unsafe { WlObjectId::try_from(event.name).unwrap_unchecked() },
+                version: event.version,
+            },
+        );
+    }
+
+    pub(crate) fn handle_global_remove_event(&mut self, event: WlRegistryGlobalRemoveEvent) {
+        let Some(ty) = self
+            .interfaces
+            .iter()
+            .find_map(|(&ty, &entry)| (event.name == entry.name.into()).then_some(ty))
+        else {
+            return;
+        };
+
+        self.interfaces.remove(&ty);
+    }
 }
 
 impl<S: State> Default for WlRegistry<S> {
@@ -102,30 +136,32 @@ impl<S> HasObjectType for WlRegistry<S> {
 impl<S: State> Dispatch for WlRegistry<S> {
     type State = S;
 
-    // TODO(hack3rmann): handle all events
     fn dispatch(
         &mut self,
-        _state: Pin<&mut Self::State>,
-        _storage: Pin<&mut WlObjectStorage<'_, Self::State>>,
+        _: Pin<&mut Self::State>,
+        _: Pin<&mut WlObjectStorage<'_, Self::State>>,
         message: WlMessage<'_>,
     ) {
-        let Some(event) = WlRegistryGlobalEvent::from_message(message) else {
-            return;
-        };
-
-        let name = event
-            .interface
-            .to_str()
-            .expect("interface name expected to be a valid utf-8 string");
-
-        if let Some(ty) = WlObjectType::from_interface_name(name) {
-            self.interfaces.insert(
-                ty,
-                WlRegistryGlobalInfo {
-                    name: event.name,
-                    version: event.version,
-                },
-            );
+        match message.opcode {
+            WlRegistryGlobalEvent::CODE => {
+                let event = unsafe {
+                    message
+                        .as_event::<WlRegistryGlobalEvent>()
+                        .unwrap_unchecked()
+                };
+                // Safety: `event.interface` is a valid utf-8 string,
+                // it contains only valid ascii characters
+                unsafe { self.handle_global_event(event) };
+            }
+            WlRegistryGlobalRemoveEvent::CODE => {
+                let event = unsafe {
+                    message
+                        .as_event::<WlRegistryGlobalRemoveEvent>()
+                        .unwrap_unchecked()
+                };
+                self.handle_global_remove_event(event);
+            }
+            _ => {}
         }
     }
 }

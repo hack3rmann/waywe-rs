@@ -4,7 +4,8 @@ pub mod object;
 pub mod sys;
 
 pub use {
-    object::{HasObjectType, WlObjectId, WlObjectType},
+    interface::WlObjectType,
+    object::{HasObjectType, WlObjectId},
     sys::{
         display::{DisplayConnectError, DisplayConnectToFdError, WlDisplay},
         object::{

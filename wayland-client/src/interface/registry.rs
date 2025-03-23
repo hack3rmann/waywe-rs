@@ -20,7 +20,6 @@
 //! the object.
 
 use crate::{
-    interface::Event,
     object::WlObjectId,
     sys::wire::{WlMessage, MessageBuffer},
 };
@@ -96,75 +95,5 @@ pub mod request {
 }
 
 pub mod event {
-    use super::*;
-    use crate::sys::wire::OpCode;
-    use std::ffi::CStr;
-
-    /// Notify the client of global objects.
-    ///
-    /// The event notifies the client that a global object with
-    /// the given name is now available, and it implements the
-    /// given version of the given interface.
-    #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
-    pub struct Global<'s> {
-        /// Numeric name of the global object
-        pub name: WlObjectId,
-        /// Interface implemented by the object
-        pub interface: &'s CStr,
-        /// Interface version
-        pub version: u32,
-    }
-
-    impl<'s> Event<'s> for Global<'s> {
-        const CODE: OpCode = 0;
-
-        fn from_message(message: WlMessage<'s>) -> Option<Self> {
-            if message.opcode != Self::CODE {
-                return None;
-            }
-
-            let mut reader = message.reader();
-
-            let name = WlObjectId::try_from(unsafe { reader.read::<u32>()? }).ok()?;
-            let interface = unsafe { reader.read::<&CStr>()? };
-            let version = unsafe { reader.read::<u32>()? };
-
-            Some(Self {
-                name,
-                interface,
-                version,
-            })
-        }
-    }
-
-    /// Notify the client of removed global objects.
-    ///
-    /// This event notifies the client that the global identified
-    /// by name is no longer available.  If the client bound to
-    /// the global using the bind request, the client should now
-    /// destroy that object.
-    ///
-    /// The object remains valid and requests to the object will be
-    /// ignored until the client destroys it, to avoid races between
-    /// the global going away and a client sending a request to it.
-    #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
-    pub struct GlobalRemove {
-        /// Numeric name of the global object
-        pub name: WlObjectId,
-    }
-
-    impl<'s> Event<'s> for GlobalRemove {
-        const CODE: OpCode = 1;
-
-        fn from_message(message: WlMessage<'s>) -> Option<Self> {
-            if message.opcode != Self::CODE {
-                return None;
-            }
-
-            let mut reader = message.reader();
-            let name = WlObjectId::try_from(unsafe { reader.read::<u32>()? }).ok()?;
-
-            Some(Self { name })
-        }
-    }
+    pub use super::super::generated::wayland::registry::event::*;
 }

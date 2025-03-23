@@ -52,7 +52,7 @@ fn get_registry() {
     let mut storage = pin!(display.create_storage());
     let registry = display.create_registry(&mut buf, storage.as_mut());
 
-    display.dispatch_all_pending(storage.as_mut(), state.as_mut());
+    display.roundtrip(storage.as_mut(), state.as_mut());
 
     assert!(
         storage
@@ -71,7 +71,7 @@ fn create_surface() {
     let mut storage = pin!(display.create_storage());
     let registry = display.create_registry(&mut buf, storage.as_mut());
 
-    display.dispatch_all_pending(storage.as_mut(), state.as_mut());
+    display.roundtrip(storage.as_mut(), state.as_mut());
 
     let compositor = WlRegistry::bind::<Compositor>(&mut buf, storage.as_mut(), registry).unwrap();
 
@@ -93,12 +93,12 @@ fn bind_wlr_shell() {
     let mut storage = pin!(display.create_storage());
     let registry = display.create_registry(&mut buf, storage.as_mut());
 
-    display.dispatch_all_pending(storage.as_mut(), state.as_mut());
+    display.roundtrip(storage.as_mut(), state.as_mut());
 
     let _layer_shell =
         WlRegistry::bind::<LayerShell>(&mut buf, storage.as_mut(), registry).unwrap();
 
-    display.dispatch_all_pending(storage.as_mut(), state.as_mut());
+    display.roundtrip(storage.as_mut(), state.as_mut());
 }
 
 fn open_shm() -> Result<(OwnedFd, String), rustix::io::Errno> {
@@ -129,7 +129,7 @@ fn white_rect() {
     let mut storage = pin!(display.create_storage());
     let registry = display.create_registry(&mut buf, storage.as_mut());
 
-    display.dispatch_all_pending(storage.as_mut(), state.as_mut());
+    display.roundtrip(storage.as_mut(), state.as_mut());
 
     let shm = WlRegistry::bind::<Shm>(&mut buf, storage.as_mut(), registry).unwrap();
 
@@ -222,7 +222,7 @@ fn white_rect() {
 
     surface.request(&mut buf, &storage, WlSurfaceCommitRequest);
 
-    display.dispatch_all_pending(storage.as_mut(), state.as_mut());
+    display.roundtrip(storage.as_mut(), state.as_mut());
 
     let (shm_fd, shm_path) = open_shm().unwrap();
 
@@ -306,7 +306,7 @@ fn white_rect() {
 
     surface.request(&mut buf, &storage, WlSurfaceCommitRequest);
 
-    display.dispatch_all_pending(storage.as_mut(), state.as_mut());
+    display.roundtrip(storage.as_mut(), state.as_mut());
 
     thread::sleep(Duration::from_millis(200));
 }

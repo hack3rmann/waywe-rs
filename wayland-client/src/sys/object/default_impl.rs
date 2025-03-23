@@ -1,8 +1,8 @@
 use super::{WlObject, WlObjectHandle, dispatch::NoState};
 use crate::{
     SmallVecMessageBuffer, WlObjectStorage,
-    interface::{Event, ZwlrLayerSurfaceAckConfigureRequest, ZwlrLayerSurfaceConfigureEvent},
-    object::{HasObjectType, WlObjectType},
+    interface::{WlObjectType, Event, ZwlrLayerSurfaceAckConfigureRequest, ZwlrLayerSurfaceConfigureEvent},
+    object::HasObjectType,
     sys::{
         object::{Dispatch, FromProxy},
         proxy::WlProxy,

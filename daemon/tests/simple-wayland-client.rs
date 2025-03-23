@@ -270,14 +270,14 @@ fn simple_wayland_client() {
 
     let registry = display.create_registry(&mut buf, storage.as_mut());
 
-    display.dispatch_all_pending(storage.as_mut(), client_state.as_mut());
+    display.roundtrip(storage.as_mut(), client_state.as_mut());
 
     let compositor =
         WlRegistry::bind::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
 
     let wm_base = WlRegistry::bind::<WlWmBase>(&mut buf, storage.as_mut(), registry).unwrap();
 
-    display.dispatch_all_pending(storage.as_mut(), client_state.as_mut());
+    display.roundtrip(storage.as_mut(), client_state.as_mut());
 
     let surface: WlObjectHandle<WlSurface> =
         compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurfaceRequest);
@@ -297,7 +297,7 @@ fn simple_wayland_client() {
     toplevel.request(&mut buf, &storage, XdgToplevelSetAppIdRequest { app_id: APP_NAME });
 
     surface.request(&mut buf, &storage, WlSurfaceCommitRequest);
-    display.dispatch_all_pending(storage.as_mut(), client_state.as_mut());
+    display.roundtrip(storage.as_mut(), client_state.as_mut());
     surface.request(&mut buf, &storage, WlSurfaceCommitRequest);
 
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -464,6 +464,6 @@ fn simple_wayland_client() {
 
         surface_texture.present();
 
-        display.dispatch_all_pending(storage.as_mut(), client_state.as_mut());
+        display.roundtrip(storage.as_mut(), client_state.as_mut());
     }
 }

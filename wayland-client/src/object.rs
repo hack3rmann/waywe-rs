@@ -56,7 +56,7 @@ impl fmt::Display for WlObjectType {
 
 /// Assocciated `ObjectType`
 pub trait HasObjectType {
-    const OBJECT_TYPE: crate::interface::generated::WlObjectType;
+    const OBJECT_TYPE: WlObjectType;
 }
 
 /// The type and the integer name for the global object.

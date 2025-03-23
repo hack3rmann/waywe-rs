@@ -36,7 +36,7 @@ pub trait Dispatch: 'static {
     ) {
     }
 }
-static_assertions::assert_obj_safe!(Dispatch<State = ()>);
+static_assertions::assert_obj_safe!(Dispatch<State = NoState>);
 
 pub(crate) type WlDispatchFn<T, S> =
     fn(&mut T, Pin<&mut S>, Pin<&mut WlObjectStorage<'_, S>>, WlMessage<'_>);
@@ -132,6 +132,7 @@ pub(crate) unsafe extern "C" fn dispatch_raw<T: HasObjectType, S: State>(
     })
     .unwrap_or_else(|_| {
         tracing::error!("panic in wl_dispatcher_func_t");
+        // TODO(hack3rmann): process error in another way
         process::abort();
     })
 }

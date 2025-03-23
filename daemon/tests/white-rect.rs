@@ -28,7 +28,7 @@ async fn use_wgpu_to_draw_anything() {
     let mut storage = pin!(display.create_storage());
     let registry = display.create_registry(&mut buf, storage.as_mut());
 
-    display.dispatch_all_pending(storage.as_mut(), state.as_mut());
+    display.roundtrip(storage.as_mut(), state.as_mut());
 
     let compositor =
         WlRegistry::bind::<Compositor>(&mut buf, storage.as_mut(), registry).unwrap();

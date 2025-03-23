@@ -6,8 +6,8 @@ use super::{
 };
 use crate::{
     init::{connect_wayland_socket, GetSocketPathError},
-    interface::{Request, WlDisplayGetRegistryRequest},
-    object::{HasObjectType, WlObjectType},
+    interface::{Request, WlDisplayGetRegistryRequest, WlObjectType},
+    object::HasObjectType,
 };
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, RawDisplayHandle, WaylandDisplayHandle,
@@ -18,7 +18,10 @@ use std::{
     os::fd::IntoRawFd,
     pin::Pin,
     ptr::{self, NonNull},
-    sync::atomic::{AtomicPtr, Ordering::{Acquire, Relaxed, Release}},
+    sync::atomic::{
+        AtomicPtr,
+        Ordering::{Acquire, Relaxed, Release},
+    },
 };
 use thiserror::Error;
 use wayland_sys::{
@@ -79,22 +82,18 @@ impl<S: State> WlDisplay<S> {
         unsafe { WlObjectStorage::new(self.state) }
     }
 
-    pub fn write_storage_location(&self, storage: Pin<&mut WlObjectStorage<'_, S>>) {
-        self.storage
-            .store((&raw const *storage).cast_mut().cast(), Release);
-    }
-
     /// Creates `wl_registry` object and stores it in the storage
     pub fn create_registry(
         &self,
         buf: &mut impl MessageBuffer,
-        mut storage: Pin<&mut WlObjectStorage<'_, S>>,
+        storage: Pin<&mut WlObjectStorage<'_, S>>,
     ) -> WlObjectHandle<WlRegistry<S>> {
         if !self.storage.load(Acquire).is_null() {
             panic!("error creating registry twice");
         }
 
-        self.write_storage_location(storage.as_mut());
+        self.storage
+            .store((&raw const *storage).cast_mut().cast(), Release);
 
         // Safety: parent interface matcher request's one
         let proxy = unsafe {
@@ -110,7 +109,7 @@ impl<S: State> WlDisplay<S> {
     ///
     /// - no one should access the object storage during this call
     /// - no one should access the state during this call
-    pub unsafe fn dispatch_all_pending_unchecked(&self) -> i32 {
+    pub unsafe fn roundtrip_unchecked(&self) -> i32 {
         unsafe { wl_display_roundtrip(self.as_raw_display_ptr().as_ptr()) }
     }
 
@@ -119,11 +118,7 @@ impl<S: State> WlDisplay<S> {
     /// This function blocks until the server has processed all currently
     /// issued requests by sending a request to the display server
     /// and waiting for a reply before returning.
-    pub fn dispatch_all_pending(
-        &self,
-        storage: Pin<&mut WlObjectStorage<'_, S>>,
-        state: Pin<&mut S>,
-    ) {
+    pub fn roundtrip(&self, storage: Pin<&mut WlObjectStorage<'_, S>>, state: Pin<&mut S>) {
         assert_eq!(&raw const *state, self.state.as_ptr().cast_const());
         assert_eq!(
             &raw const *storage,
@@ -133,7 +128,7 @@ impl<S: State> WlDisplay<S> {
         // Safety: `self.as_raw_display_ptr()` is a valid display object
         assert_ne!(
             -1,
-            unsafe { self.dispatch_all_pending_unchecked() },
+            unsafe { self.roundtrip_unchecked() },
             "wl_display_roundtrip failed",
         );
     }
