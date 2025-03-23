@@ -16,7 +16,7 @@ use raw_window_handle::{
 use std::{
     any, fmt,
     mem::ManuallyDrop,
-    os::fd::IntoRawFd,
+    os::fd::{BorrowedFd, IntoRawFd, RawFd},
     pin::Pin,
     ptr::{self, NonNull},
     sync::atomic::{
@@ -34,6 +34,7 @@ pub struct WlDisplay<S: State> {
     proxy: ManuallyDrop<WlProxy>,
     state: NonNull<S>,
     storage: AtomicPtr<()>,
+    raw_fd: RawFd,
 }
 
 impl<S: State> WlDisplay<S> {
@@ -60,10 +61,16 @@ impl<S: State> WlDisplay<S> {
 
         Ok(Self {
             proxy,
+            raw_fd,
             // Safety: constructing NonNull from pinned pointer is safe
             state: NonNull::from(unsafe { state.get_unchecked_mut() }),
             storage: AtomicPtr::new(ptr::null_mut()),
         })
+    }
+
+    /// File descriptor associated with the display
+    pub fn fd(&self) -> BorrowedFd<'_> {
+        unsafe { BorrowedFd::borrow_raw(self.raw_fd) }
     }
 
     /// Proxy corresponding to `wl_display` object

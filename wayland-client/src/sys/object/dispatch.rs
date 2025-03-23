@@ -58,7 +58,7 @@ thread_local! {
         = const { RefCell::new(None) };
 }
 
-pub fn handle_dispatch_raw_panic() {
+pub(crate) fn handle_dispatch_raw_panic() {
     if let Some(error) = DISPATCHER_PANIC_CAUSE.with_borrow_mut(Option::take) {
         std::panic::resume_unwind(error);
     }

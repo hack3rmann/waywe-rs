@@ -2,7 +2,11 @@
 
 use libc::{free, malloc, realloc};
 use std::{
-    ffi::{c_char, c_int, c_void, CStr}, mem::offset_of, num::NonZeroU32, os::fd::RawFd, ptr
+    ffi::{CStr, c_char, c_int, c_void},
+    mem::offset_of,
+    num::NonZeroU32,
+    os::fd::RawFd,
+    ptr,
 };
 use thiserror::Error;
 
@@ -11,6 +15,7 @@ pub type wl_registry = c_void;
 pub type wl_surface = c_void;
 pub type wl_compositor = c_void;
 pub type wl_proxy = c_void;
+pub type wl_event_queue = c_void;
 
 /// Represents fixed point number from libwayland backend
 pub type WlFixed = wl_fixed_t;
@@ -654,6 +659,63 @@ unsafe extern "C" {
     /// - `wl_display_dispatch_queue()`
     /// - `wl_display_read_events()`
     pub fn wl_display_dispatch(display: *mut wl_display) -> c_int;
+
+    /// Create a new event queue for this display
+    ///
+    /// # Parameters
+    ///
+    /// display The display context object
+    ///
+    /// # Returns
+    ///
+    /// A new event queue associated with this display or NULL on failure.
+    pub fn wl_display_create_queue(display: *mut wl_display) -> *mut wl_event_queue;
+
+    /// Create a new event queue for this display and give it a name
+    ///
+    /// # Parameters
+    ///
+    /// display The display context object
+    /// name A human readable queue name
+    ///
+    /// # Returns
+    ///
+    /// A new event queue associated with this display or NULL on failure.
+    pub fn wl_display_create_queue_with_name(
+        display: *mut wl_display,
+        name: *const c_char,
+    ) -> *mut wl_event_queue;
+
+    /// Retrieve the last error that occurred on a display
+    ///
+    /// # Parameters
+    ///
+    /// - `display` - The display context object
+    ///
+    /// # Returns
+    ///
+    /// The last error that occurred on display or 0 if no error occurred
+    ///
+    /// Return the last error that occurred on the display. This may be an error sent
+    /// by the server or caused by the local client.
+    ///
+    /// # Note
+    ///
+    /// Errors are fatal. If this function returns non-zero the display
+    /// can no longer be used.
+    pub fn wl_display_get_error(display: *mut wl_display) -> c_int;
+
+    /// Destroy an event queue
+    ///
+    /// # Parameters
+    ///
+    /// queue The event queue to be destroyed
+    ///
+    /// Destroy the given event queue. Any pending event on that queue is discarded.
+    ///
+    /// The wl_display object used to create the queue should not be destroyed until
+    /// all event queues created with it are destroyed with this function.
+    pub fn wl_event_queue_destroy(queue: *mut wl_event_queue);
 
     /// Get the protocol object version of a proxy object.
     ///
