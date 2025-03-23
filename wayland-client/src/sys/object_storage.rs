@@ -6,7 +6,7 @@ use super::{
     },
     proxy::WlProxy,
 };
-use crate::object::{HasObjectType, WlObjectId};
+use crate::object::WlObjectId;
 use std::{collections::HashMap, marker::PhantomData, pin::Pin, ptr::NonNull};
 use thiserror::Error;
 
@@ -58,7 +58,7 @@ impl<S: State> WlObjectStorage<'_, S> {
     /// # Panic
     ///
     /// Panics if the storage already contains object with the same id.
-    pub fn insert<T: Dispatch<State = S> + HasObjectType>(
+    pub fn insert<T: Dispatch<State = S>>(
         mut self: Pin<&mut Self>,
         mut object: WlObject<T>,
     ) -> WlObjectHandle<T> {

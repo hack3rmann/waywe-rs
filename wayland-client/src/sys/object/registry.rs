@@ -45,7 +45,7 @@ impl<S: State> WlRegistry<S> {
         object: T,
     ) -> Option<WlObjectHandle<T>>
     where
-        T: HasObjectType + Dispatch<State = S>,
+        T: Dispatch<State = S>,
     {
         Self::bind_from_fn(buf, storage, registry, |_, _, _| object)
     }
@@ -56,7 +56,7 @@ impl<S: State> WlRegistry<S> {
         registry: WlObjectHandle<WlRegistry<S>>,
     ) -> Option<WlObjectHandle<T>>
     where
-        T: HasObjectType + Dispatch<State = S> + FromProxy,
+        T: Dispatch<State = S> + FromProxy,
     {
         Self::bind_from_fn(buf, storage, registry, |_, _, proxy| T::from_proxy(proxy))
     }
@@ -69,7 +69,7 @@ impl<S: State> WlRegistry<S> {
     ) -> Option<WlObjectHandle<T>>
     where
         B: MessageBuffer,
-        T: HasObjectType + Dispatch<State = S>,
+        T: Dispatch<State = S>,
         F: FnOnce(&mut B, Pin<&mut WlObjectStorage<'_, S>>, &WlProxy) -> T,
     {
         // Safety: `WlRegistry` is the parent for this request

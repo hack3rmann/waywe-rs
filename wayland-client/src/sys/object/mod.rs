@@ -55,7 +55,7 @@ impl<T> WlObjectHandle<T> {
         storage: &WlObjectStorage<'_, T::State>,
         request: R,
     ) where
-        T: Dispatch + HasObjectType,
+        T: Dispatch,
         R: Request<'r>,
     {
         const {
@@ -88,7 +88,7 @@ impl<T> WlObjectHandle<T> {
     where
         R: Request<'r> + ObjectParent,
         T: HasObjectType,
-        D: Dispatch + HasObjectType + FromProxy,
+        D: Dispatch + FromProxy,
     {
         const {
             assert!(
@@ -234,7 +234,7 @@ pub struct WlObject<T: Dispatch> {
     pub(crate) _p: PhantomData<(T, NonNull<T::State>)>,
 }
 
-impl<T: Dispatch + HasObjectType> WlObject<T> {
+impl<T: Dispatch> WlObject<T> {
     pub fn new(proxy: WlProxy, data: T) -> Self {
         let dispatch_data = Box::new(WlDispatchData::<T, T::State> {
             dispatch: T::dispatch,

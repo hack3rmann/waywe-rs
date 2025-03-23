@@ -19,14 +19,18 @@ use wayland_sys::{
     wl_proxy_get_user_data,
 };
 
+/// # Note
+///
+/// State has to be sized because pointer to the state has to be thin.
 pub trait State: Sized + 'static {}
 
+/// An empty state.
 pub struct NoState;
 
 impl State for NoState {}
 
 /// Types capable of dispatching the incoming events.
-pub trait Dispatch: 'static {
+pub trait Dispatch: HasObjectType + 'static {
     type State: State;
 
     fn dispatch(
@@ -37,7 +41,6 @@ pub trait Dispatch: 'static {
     ) {
     }
 }
-static_assertions::assert_obj_safe!(Dispatch<State = NoState>);
 
 pub(crate) type WlDispatchFn<T, S> =
     fn(&mut T, Pin<&mut S>, Pin<&mut WlObjectStorage<'_, S>>, WlMessage<'_>);
@@ -51,12 +54,12 @@ pub(crate) struct WlDispatchData<T, S: State> {
 }
 
 thread_local! {
-    pub(crate) static DISPATCHER_PANIC_CAUSE: RefCell<Option<Box<dyn Any + Send>>> = const { RefCell::new(None) };
+    pub(crate) static DISPATCHER_PANIC_CAUSE: RefCell<Option<Box<dyn Any + Send>>>
+        = const { RefCell::new(None) };
 }
 
 pub fn handle_dispatch_raw_panic() {
     if let Some(error) = DISPATCHER_PANIC_CAUSE.with_borrow_mut(Option::take) {
-        // continue stack unwind
         std::panic::resume_unwind(error);
     }
 }
@@ -69,17 +72,18 @@ pub(crate) unsafe extern "C" fn dispatch_raw<T: HasObjectType, S: State>(
     arguments: *mut wl_argument,
 ) -> c_int {
     tracing::trace!(
-        "libwayland event dispatch: {}::{}",
-        T::OBJECT_TYPE.interface_name(),
-        T::OBJECT_TYPE
-            .event_name(opcode as OpCode)
-            .unwrap_or("invalid_event"),
+        interface = T::OBJECT_TYPE.interface_name(),
+        event = T::OBJECT_TYPE.event_name(opcode as OpCode).unwrap_or("invalid_event"),
+        "dispatch_raw",
     );
 
     // NOTE(hack3rmann): to use `extern "Rust"` functions inside `extern "C"`
     // catching unwind is important to prevent UB from calling `panic()` in `extern "C"`
     // and continuing stack unwind outside of `extern "C"` context
     panic::catch_unwind(|| {
+        // All code below relies on the fact that in previous dispatch
+        // invocation the object storage has released object data being used
+        // in this dispatcher.
         if DISPATCHER_PANIC_CAUSE.with_borrow(Option::is_some) {
             return -1;
         }
