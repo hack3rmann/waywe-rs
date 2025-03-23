@@ -57,7 +57,7 @@ thread_local! {
 pub fn handle_dispatch_raw_panic() {
     if let Some(error) = DISPATCHER_PANIC_CAUSE.with_borrow_mut(Option::take) {
         // continue stack unwind
-        std::panic::panic_any(error);
+        std::panic::resume_unwind(error);
     }
 }
 
