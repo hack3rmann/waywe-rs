@@ -2,7 +2,7 @@ use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use std::time::Instant;
 use std::{mem, time::Duration};
 use std::pin::pin;
-use wayland::{
+use wayland_client::{
     WlObjectHandle,
     interface::WlCompositorCreateSurfaceRequest,
     sys::{

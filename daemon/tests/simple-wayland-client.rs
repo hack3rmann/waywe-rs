@@ -5,20 +5,17 @@ use std::{
     pin::{Pin, pin},
     time::{Duration, Instant},
 };
-use wayland::{
-    Dispatch, HasObjectType, SmallVecMessageBuffer, StackMessageBuffer, WlDisplay, WlObject,
-    WlObjectHandle, WlObjectType, WlProxy, WlRegistry,
+use wayland_client::{
     interface::{
         Event, WlCompositorCreateSurfaceRequest, WlSurfaceCommitRequest,
         XdgSurfaceAckConfigureRequest, XdgSurfaceConfigureEvent, XdgSurfaceGetToplevelRequest,
         XdgToplevelCloseEvent, XdgToplevelConfigureEvent, XdgToplevelSetAppIdRequest,
         XdgToplevelSetTitleRequest, XdgWmBaseGetXdgSurfaceRequest, XdgWmBasePingEvent,
         XdgWmBasePongRequest,
-    },
-    sys::{
-        object::{FromProxy, dispatch::State},
+    }, sys::{
+        object::{dispatch::State, FromProxy},
         wire::WlMessage,
-    },
+    }, Dispatch, HasObjectType, SmallVecMessageBuffer, StackMessageBuffer, WlDisplay, WlObject, WlObjectHandle, WlObjectStorage, WlObjectType, WlProxy, WlRegistry
 };
 use wgpu::util::DeviceExt as _;
 
@@ -62,7 +59,7 @@ impl Dispatch for WlWmBase {
     fn dispatch(
         &mut self,
         _state: Pin<&mut Self::State>,
-        storage: Pin<&mut wayland::WlObjectStorage<'_, Self::State>>,
+        storage: Pin<&mut WlObjectStorage<'_, Self::State>>,
         message: WlMessage<'_>,
     ) {
         let Some(XdgWmBasePingEvent { serial }) = message.as_event() else {
@@ -114,7 +111,7 @@ impl Dispatch for WlXdgSurface {
     fn dispatch(
         &mut self,
         mut state: Pin<&mut Self::State>,
-        storage: Pin<&mut wayland::WlObjectStorage<'_, Self::State>>,
+        storage: Pin<&mut WlObjectStorage<'_, Self::State>>,
         message: WlMessage<'_>,
     ) {
         let Some(XdgSurfaceConfigureEvent { serial }) = message.as_event() else {
@@ -156,7 +153,7 @@ impl Dispatch for WlToplevel {
     fn dispatch(
         &mut self,
         mut state: Pin<&mut Self::State>,
-        _storage: Pin<&mut wayland::WlObjectStorage<'_, Self::State>>,
+        _storage: Pin<&mut WlObjectStorage<'_, Self::State>>,
         message: WlMessage<'_>,
     ) {
         match message.opcode {

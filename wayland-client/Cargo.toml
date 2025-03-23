@@ -1,5 +1,5 @@
 [package]
-name = "wayland"
+name = "wayland-client"
 version.workspace = true
 edition.workspace = true
 

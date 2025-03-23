@@ -6,7 +6,7 @@ members = [
     "dxt",
     "transmute-extra",
     "wayland-scanner",
-    "wayland",
+    "wayland-client",
     "wayland-sys",
 ]
 
@@ -15,7 +15,7 @@ version = "0.0.1"
 edition = "2024"
 
 [workspace.dependencies]
-wayland = { path = "wayland" }
+wayland-client = { path = "wayland-client" }
 wayland-sys = { path = "wayland-sys" }
 tracing = "0.1.41"
 thiserror = "2.0.11"

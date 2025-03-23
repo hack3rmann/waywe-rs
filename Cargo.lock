@@ -368,7 +368,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "wayland",
+ "wayland-client",
  "wgpu",
 ]
 
@@ -2066,7 +2066,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "wayland"
+name = "wayland-client"
 version = "0.0.1"
 dependencies = [
  "bitflags 2.9.0",

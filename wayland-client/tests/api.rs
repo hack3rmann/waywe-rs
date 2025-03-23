@@ -11,7 +11,7 @@ use std::{
     time::Duration,
 };
 use tracing_test::traced_test;
-use wayland::{
+use wayland_client::{
     StackMessageBuffer, WlObjectHandle,
     interface::{
         WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlRegionDestroyRequest,
