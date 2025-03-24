@@ -7,7 +7,8 @@ use crate::{
     interface::{ObjectParent, Request},
     object::{HasObjectType, WlObjectId},
 };
-use dispatch::{Dispatch, NoState, WlDispatchData, dispatch_raw};
+use dispatch::{dispatch_raw, is_empty_dispatch_data_allowed, Dispatch, NoState, WlDispatchData};
+use thiserror::Error;
 use std::{
     any::{self, TypeId},
     fmt, hash,
@@ -115,8 +116,14 @@ impl<T> WlObjectHandle<T> {
                 .unwrap()
         };
 
-        let data = D::from_proxy(&proxy);
-        storage.insert(WlObject::new(proxy, data))
+        let object = if is_empty_dispatch_data_allowed::<D>() {
+            WlObject::new_empty(proxy)
+        } else {
+            let data = D::from_proxy(&proxy);
+            WlObject::new(proxy, data)
+        };
+
+        storage.insert(object)
     }
 }
 
@@ -235,6 +242,13 @@ pub struct WlObject<T: Dispatch> {
 }
 
 impl<T: Dispatch> WlObject<T> {
+    pub fn new_empty(proxy: WlProxy) -> Self {
+        Self {
+            proxy,
+            _p: PhantomData,
+        }
+    }
+
     pub fn new(proxy: WlProxy, data: T) -> Self {
         let dispatch_data = Box::new(WlDispatchData::<T, T::State> {
             dispatch: T::dispatch,
@@ -276,9 +290,11 @@ impl<T: Dispatch> WlObject<T> {
 
         // # Safety
         //
-        // - the `WlObject` always has valid user data being set
+        // - the `WlObject` always has valid user data being set if it was non-null
         // - we have exclusive access to the proxy object
-        let user_data = unsafe { user_data_ptr.as_mut().unwrap_unchecked() };
+        let Some(user_data) = (unsafe { user_data_ptr.as_mut() }) else {
+            return;
+        };
 
         user_data.storage = Some(NonNull::from(unsafe { storage.get_unchecked_mut() }).cast());
     }
@@ -291,9 +307,11 @@ impl<T: Dispatch> WlObject<T> {
 
         // # Safety
         //
-        // - the `WlObject` always has valid user data being set
+        // - the `WlObject` always has valid user data being set if it was non-null
         // - we have exclusive access to the proxy object
-        let user_data = unsafe { user_data_ptr.as_mut().unwrap_unchecked() };
+        let Some(user_data) = (unsafe { user_data_ptr.as_mut() }) else {
+            return;
+        };
 
         user_data.state = Some(NonNull::from(unsafe { state.get_unchecked_mut() }));
     }
@@ -318,11 +336,51 @@ impl<T: Dispatch> WlObject<T> {
             type_info: TypeInfo::of::<T>(),
         }
     }
+
+    /// Data assocciated with this object
+    ///
+    /// # Error
+    ///
+    /// Returns [`Err`] if no data was set and T is not ZST.
+    pub fn data(&self) -> Result<&T, NonZstError> {
+        let Some(user_data) = NonNull::new(self.proxy.get_user_data()) else {
+            return zst_mut().map(|t| &*t);
+        };
+
+        // Safety: non-null `user_data` points to a valid instance of `WlDispatchData<T>`
+        Ok(unsafe {
+            &user_data
+                .cast::<WlDispatchData<T, T::State>>()
+                .as_ref()
+                .data
+        })
+    }
+
+    /// Data assocciated with this object
+    ///
+    /// # Error
+    ///
+    /// Returns [`Err`] if no data was set and T is not ZST.
+    pub fn data_mut(&mut self) -> Result<&mut T, NonZstError> {
+        let Some(user_data) = NonNull::new(self.proxy.get_user_data()) else {
+            return zst_mut();
+        };
+
+        // Safety: non-null `user_data` points to a valid instance of `WlDispatchData<T>`
+        Ok(unsafe {
+            &mut user_data
+                .cast::<WlDispatchData<T, T::State>>()
+                .as_mut()
+                .data
+        })
+    }
 }
 
 impl<T: Dispatch> Drop for WlObject<T> {
     fn drop(&mut self) {
-        let user_data = self.proxy.get_user_data();
+        let Some(user_data) = NonNull::new(self.proxy.get_user_data()) else {
+            return;
+        };
 
         // # Safety
         //
@@ -330,41 +388,37 @@ impl<T: Dispatch> Drop for WlObject<T> {
         // - drop called once on a valid instance
         unsafe {
             drop(Box::from_raw(
-                user_data.cast::<WlDispatchData<T, T::State>>(),
+                user_data.as_ptr().cast::<WlDispatchData<T, T::State>>(),
             ))
         };
     }
 }
 
+/// Constructs mut reference to ZST type 'from a thin air'
+fn zst_mut<T>() -> Result<&'static mut T, NonZstError> {
+    if mem::size_of::<T>() == 0 {
+        // Safety: any non-null reference is a valid reference to some ZST
+        Ok(unsafe { NonNull::dangling().as_mut() })
+    } else {
+        Err(NonZstError)
+    }
+}
+
+#[derive(Debug, Error)]
+#[error("failed to construct reference to non-ZST value from nothing")]
+pub struct NonZstError;
+
 impl<T: Dispatch> Deref for WlObject<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        let user_data = self.proxy.get_user_data();
-
-        // Safety: `user_data` points to a valid instance of `WlDispatchData<T>`
-        unsafe {
-            &user_data
-                .cast::<WlDispatchData<T, T::State>>()
-                .as_ref()
-                .unwrap_unchecked()
-                .data
-        }
+        self.data().unwrap()
     }
 }
 
 impl<T: Dispatch> DerefMut for WlObject<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        let user_data = self.proxy.get_user_data();
-
-        // Safety: `user_data` points to a valid instance of `WlDispatchData<T>`
-        unsafe {
-            &mut user_data
-                .cast::<WlDispatchData<T, T::State>>()
-                .as_mut()
-                .unwrap_unchecked()
-                .data
-        }
+        self.data_mut().unwrap()
     }
 }
 
@@ -372,7 +426,7 @@ impl<T: fmt::Debug + Dispatch> fmt::Debug for WlObject<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct(any::type_name::<Self>())
             .field("proxy", &self.proxy)
-            .field("data", self.deref())
+            .field("data", &self.data())
             .finish()
     }
 }

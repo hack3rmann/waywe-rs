@@ -9,7 +9,7 @@ use std::{
     any::Any,
     cell::RefCell,
     ffi::{CStr, c_int, c_void},
-    panic,
+    mem, panic,
     pin::Pin,
     ptr::NonNull,
     slice,
@@ -33,13 +33,33 @@ impl State for NoState {}
 pub trait Dispatch: HasObjectType + 'static {
     type State: State;
 
+    /// A small optimization for dispatch handlers.
+    ///
+    /// A hint to [`wayland_client`](crate) implementation about
+    /// dispatcher implementation. If some contraints on `Self`
+    /// have met it will remove memory allocation associated
+    /// with creation of [`WlObject`](super::WlObject) and usage of `Self`
+    /// entierly. Also, it will ignore almost all checks being performed on
+    /// this data in the raw dispatcher.
+    const ALLOW_EMPTY_DISPATCH: bool = false;
+
     fn dispatch(
         &mut self,
         _state: Pin<&mut Self::State>,
         _storage: Pin<&mut WlObjectStorage<'_, Self::State>>,
         _message: WlMessage<'_>,
     ) {
+        // do nothing
     }
+}
+
+pub const fn is_empty_dispatch_data_allowed<T: Dispatch>() -> bool {
+    // NOTE(hack3rmann):
+    // - empty dispatcher should be allowed
+    // - `T` should be ZST to allow `WlObject` create references to it
+    // - dropping `T` should has no side effects, because constructing
+    //   `WlObject` may drop one inconsistently
+    T::ALLOW_EMPTY_DISPATCH && mem::size_of::<T>() == 0 && !mem::needs_drop::<T>()
 }
 
 pub(crate) type WlDispatchFn<T, S> =
@@ -87,6 +107,18 @@ where
     // catching unwind is important to prevent UB from calling `panic()` in `extern "C"`
     // and continuing stack unwind outside of `extern "C"` context
     panic::catch_unwind(|| {
+        // Safety: `proxy` in libwayland dispatcher is always valid
+        let data = unsafe { wl_proxy_get_user_data(proxy) }.cast::<WlDispatchData<T, S>>();
+
+        // # Safety
+        //
+        // - `data` points to a valid box-allocated instance of `WlDispatchData`
+        // - `data` only being used in dispatcher, libwayland provides exclusive access to the data
+        let Some(data) = (unsafe { data.as_mut() }) else {
+            tracing::error!("no data pointer is set");
+            return -1;
+        };
+
         // All code below relies on the fact that in previous dispatch
         // invocation the object storage has released object data being used
         // in this dispatcher.
@@ -96,16 +128,6 @@ where
 
         // Safety: `proxy` in libwayland dispatcher is always valid
         let id = unsafe { WlObjectId::try_from(wl_proxy_get_id(proxy)).unwrap_unchecked() };
-        let data = unsafe { wl_proxy_get_user_data(proxy) }.cast::<WlDispatchData<T, S>>();
-
-        // # Safety
-        //
-        // - `data` points to a valid box-allocated instance of `WlDispatchData`
-        // - `data` only being used in dispatcher, libwayland provides exclusive access to the data
-        let Some(data) = (unsafe { data.as_mut() }) else {
-            tracing::error!("no user data is set");
-            return -1;
-        };
 
         let Some(mut storage_ptr) = data.storage.map(|p| p.cast::<WlObjectStorage<S>>()) else {
             tracing::error!("no pointer to `WlObjectStorage` is set");

@@ -37,6 +37,7 @@ pub struct WlCompositor;
 
 impl Dispatch for WlCompositor {
     type State = ClientState;
+    const ALLOW_EMPTY_DISPATCH: bool = true;
 }
 
 impl FromProxy for WlCompositor {
@@ -89,6 +90,7 @@ pub struct WlSurface;
 
 impl Dispatch for WlSurface {
     type State = ClientState;
+    const ALLOW_EMPTY_DISPATCH: bool = true;
 }
 
 impl HasObjectType for WlSurface {

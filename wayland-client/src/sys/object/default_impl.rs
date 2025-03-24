@@ -30,6 +30,17 @@ macro_rules! define_empty_dispatchers {
 
             impl $crate::sys::object::dispatch::Dispatch for $Name {
                 type State = $crate::sys::object::dispatch::NoState;
+
+                const ALLOW_EMPTY_DISPATCH: bool = true;
+
+                fn dispatch(
+                    &mut self,
+                    _state: Pin<&mut Self::State>,
+                    _storage: Pin<&mut WlObjectStorage<'_, Self::State>>,
+                    _message: WlMessage<'_>,
+                ) {
+                    unreachable!()
+                }
             }
         )*
     };
