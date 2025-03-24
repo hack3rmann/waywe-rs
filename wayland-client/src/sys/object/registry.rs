@@ -1,4 +1,4 @@
-use super::{dispatch::{is_empty_dispatch_data_allowed, State}, Dispatch, FromProxy, WlObject, WlObjectHandle};
+use super::{Dispatch, FromProxy, WlObject, WlObjectHandle, dispatch::State};
 use crate::{
     interface::{
         Event, WlObjectType, WlRegistryBindRequest, WlRegistryGlobalEvent,
@@ -76,14 +76,9 @@ impl<S: State> WlRegistry<S> {
         let proxy =
             unsafe { WlRegistryBindRequest::<T>::new().send(storage.get_object(registry)?, buf)? };
 
-        let object = if is_empty_dispatch_data_allowed::<T>() {
-            WlObject::new_empty(proxy)
-        } else {
-            let data = make_data(buf, storage.as_mut(), &proxy);
-            WlObject::new(proxy, data)
-        };
+        let data = make_data(buf, storage.as_mut(), &proxy);
 
-        Some(storage.insert(object))
+        Some(storage.insert(WlObject::new(proxy, data)))
     }
 
     pub fn name_of(&self, object_type: WlObjectType) -> Option<WlObjectId> {

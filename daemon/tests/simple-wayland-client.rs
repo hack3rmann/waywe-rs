@@ -37,7 +37,17 @@ pub struct WlCompositor;
 
 impl Dispatch for WlCompositor {
     type State = ClientState;
+
     const ALLOW_EMPTY_DISPATCH: bool = true;
+
+    fn dispatch(
+        &mut self,
+        _state: Pin<&mut Self::State>,
+        _storage: Pin<&mut WlObjectStorage<'_, Self::State>>,
+        _message: WlMessage<'_>,
+    ) {
+        unreachable!()
+    }
 }
 
 impl FromProxy for WlCompositor {
@@ -90,7 +100,17 @@ pub struct WlSurface;
 
 impl Dispatch for WlSurface {
     type State = ClientState;
+
     const ALLOW_EMPTY_DISPATCH: bool = true;
+
+    fn dispatch(
+        &mut self,
+        _state: Pin<&mut Self::State>,
+        _storage: Pin<&mut WlObjectStorage<'_, Self::State>>,
+        _message: WlMessage<'_>,
+    ) {
+        unreachable!()
+    }
 }
 
 impl HasObjectType for WlSurface {

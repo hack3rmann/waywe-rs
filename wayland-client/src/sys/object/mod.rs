@@ -116,14 +116,9 @@ impl<T> WlObjectHandle<T> {
                 .unwrap()
         };
 
-        let object = if is_empty_dispatch_data_allowed::<D>() {
-            WlObject::new_empty(proxy)
-        } else {
-            let data = D::from_proxy(&proxy);
-            WlObject::new(proxy, data)
-        };
+        let data = D::from_proxy(&proxy);
 
-        storage.insert(object)
+        storage.insert(WlObject::new(proxy, data))
     }
 }
 
@@ -250,6 +245,10 @@ impl<T: Dispatch> WlObject<T> {
     }
 
     pub fn new(proxy: WlProxy, data: T) -> Self {
+        if is_empty_dispatch_data_allowed::<T>() {
+            return Self::new_empty(proxy);
+        }
+
         let dispatch_data = Box::new(WlDispatchData::<T, T::State> {
             dispatch: T::dispatch,
             storage: None,
