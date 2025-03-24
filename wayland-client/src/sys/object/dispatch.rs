@@ -64,16 +64,22 @@ pub(crate) fn handle_dispatch_raw_panic() {
     }
 }
 
-pub(crate) unsafe extern "C" fn dispatch_raw<T: HasObjectType, S: State>(
+pub(crate) unsafe extern "C" fn dispatch_raw<T, S>(
     _impl: *const c_void,
     proxy: *mut c_void,
     opcode: u32,
     message: *const wl_message,
     arguments: *mut wl_argument,
-) -> c_int {
+) -> c_int
+where
+    T: HasObjectType,
+    S: State,
+{
     tracing::trace!(
         interface = T::OBJECT_TYPE.interface_name(),
-        event = T::OBJECT_TYPE.event_name(opcode as OpCode).unwrap_or("invalid_event"),
+        event = T::OBJECT_TYPE
+            .event_name(opcode as OpCode)
+            .unwrap_or("invalid_event"),
         "dispatch_raw",
     );
 
