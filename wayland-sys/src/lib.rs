@@ -1,6 +1,6 @@
 #![allow(non_camel_case_types)]
 
-use libc::{free, malloc, realloc};
+use libc::{c_uint, free, malloc, realloc};
 use std::{
     ffi::{CStr, c_char, c_int, c_void},
     mem::{self, offset_of},
@@ -1142,6 +1142,47 @@ unsafe extern "C" {
     /// Errors are fatal. If this function returns non-zero the display
     /// can no longer be used.
     pub fn wl_display_get_error(display: *mut wl_display) -> c_int;
+
+    /// Retrieves the information about a protocol error:
+    ///
+    /// # Parameters
+    ///
+    /// - `display` - The Wayland display
+    /// - `interface` - if not NULL, stores the interface where the error
+    ///   occurred, or NULL, if unknown.
+    /// - `id` - if not NULL, stores the object id that generated the error,
+    ///   or 0, if the object id is unknown. There's no guarantee the object
+    ///   is still valid; the client must know if it deleted the object.
+    ///
+    /// # Returns
+    ///
+    /// The error code as defined in the interface specification.
+    pub fn wl_display_get_protocol_error(
+        display: *mut wl_display,
+        interface: *mut *const wl_interface,
+        id: *mut u32,
+    ) -> c_uint;
+
+    /// Send all buffered requests on the display to the server
+    ///
+    /// # Parameters
+    ///
+    /// - `display` - The display context object
+    ///
+    /// # Returns
+    ///
+    /// The number of bytes sent on success or -1 on failure
+    ///
+    /// Send all buffered data on the client side to the server. Clients
+    /// should always call this function before blocking on input from the
+    /// display fd. On success, the number of bytes sent to the server is
+    /// returned. On failure, this function returns -1 and errno is set appropriately.
+    ///
+    /// `wl_display_flush()` never blocks. It will write as much data as
+    /// possible, but if all data could not be written, errno will be set
+    /// to EAGAIN and -1 returned. In that case, use poll on the display
+    /// file descriptor to wait for it to become writable again.
+    pub fn wl_display_flush(display: *mut wl_display) -> c_int;
 
     /// Destroy an event queue
     ///
