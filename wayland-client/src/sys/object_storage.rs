@@ -14,6 +14,7 @@ use thiserror::Error;
 pub(crate) struct WlObjectStorageEntry {
     pub(crate) object: WlDynObject,
 }
+static_assertions::assert_impl_all!(WlObjectStorageEntry: Send, Sync);
 
 /// A storage for wayland's objects
 #[derive(Debug)]

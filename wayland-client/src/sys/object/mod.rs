@@ -30,6 +30,7 @@ pub struct WlObjectHandle<T> {
     id: WlObjectId,
     _p: PhantomData<T>,
 }
+static_assertions::assert_impl_all!(WlObjectHandle<()>: Send, Sync);
 
 impl<T> WlObjectHandle<T> {
     /// Creates a handle to [`WlObject<T>`]
@@ -235,6 +236,9 @@ pub struct WlObject<T: Dispatch> {
     pub(crate) proxy: WlProxy,
     pub(crate) _p: PhantomData<(T, NonNull<T::State>)>,
 }
+
+unsafe impl<T: Dispatch + Send> Send for WlObject<T> {}
+unsafe impl<T: Dispatch + Sync> Sync for WlObject<T> {}
 
 impl<T: Dispatch> WlObject<T> {
     pub fn new_empty(proxy: WlProxy) -> Self {

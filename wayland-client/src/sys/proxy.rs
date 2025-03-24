@@ -17,6 +17,15 @@ pub struct WlProxy {
     interface_name_length: AtomicUsize,
 }
 
+// # Safety
+//
+// - `WlProxy` does not provide interior mutability
+// - `WlProxy` itself is a reference
+unsafe impl Send for WlProxy {}
+
+// Safety: `WlProxy` does not provide interior mutability
+unsafe impl Sync for WlProxy {}
+
 impl WlProxy {
     /// # Safety
     ///
@@ -82,6 +91,9 @@ impl WlProxy {
         unsafe { wl_proxy_get_user_data(self.as_raw().as_ptr()) }
     }
 
+    // NOTE(hack3rmann): this function should take exclusive reference to
+    // self, because (in libwayland by google) it does not use atomic stores.
+    //
     /// Sets user data pointer for this [`wl_proxy`]
     ///
     /// # Safety

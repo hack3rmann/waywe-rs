@@ -30,50 +30,75 @@ static_assertions::assert_obj_safe!(MessageBuffer);
 
 unsafe impl MessageBuffer for VecMessageBuffer {
     fn clear(&mut self) {
-        Vec::clear(self);
+        Vec::clear(&mut self.0);
     }
 
     fn push(&mut self, argument: WlArgument) {
-        Vec::push(self, argument)
+        Vec::push(&mut self.0, argument)
     }
 
     fn len(&self) -> usize {
-        Vec::len(self)
+        Vec::len(&self.0)
     }
 
     fn is_empty(&self) -> bool {
-        Vec::is_empty(self)
+        Vec::is_empty(&self.0)
     }
 
     fn as_slice(&self) -> &[WlArgument] {
-        self
+        &self.0
     }
 }
 
 unsafe impl<const N: usize> MessageBuffer for SmallVecMessageBuffer<N> {
     fn clear(&mut self) {
-        SmallVec::clear(self)
+        SmallVec::clear(&mut self.0)
     }
 
     fn push(&mut self, argument: WlArgument) {
-        SmallVec::push(self, argument)
+        SmallVec::push(&mut self.0, argument)
     }
 
     fn len(&self) -> usize {
-        SmallVec::len(self)
+        SmallVec::len(&self.0)
     }
 
     fn is_empty(&self) -> bool {
-        SmallVec::is_empty(self)
+        SmallVec::is_empty(&self.0)
     }
 
     fn as_slice(&self) -> &[WlArgument] {
-        self
+        &self.0
     }
 }
 
-pub type VecMessageBuffer = Vec<WlArgument>;
-pub type SmallVecMessageBuffer<const N: usize> = SmallVec<[WlArgument; N]>;
+#[derive(Clone, Default)]
+pub struct VecMessageBuffer(pub(crate) Vec<WlArgument>);
+
+unsafe impl Send for VecMessageBuffer {}
+
+// Safety: no interior mutability
+unsafe impl Sync for VecMessageBuffer {}
+
+impl VecMessageBuffer {
+    pub const fn new() -> Self {
+        Self(Vec::new())
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct SmallVecMessageBuffer<const N: usize>(pub(crate) SmallVec<[WlArgument; N]>);
+
+unsafe impl<const N: usize> Send for SmallVecMessageBuffer<N> {}
+
+// Safety: no interior mutability
+unsafe impl<const N: usize> Sync for SmallVecMessageBuffer<N> {}
+
+impl<const N: usize> SmallVecMessageBuffer<N> {
+    pub const fn new() -> Self {
+        Self(SmallVec::new_const())
+    }
+}
 
 /// Message buffer constrained to the stack.
 #[derive(Clone)]
@@ -81,6 +106,11 @@ pub struct StackMessageBuffer {
     len: usize,
     buf: [MaybeUninit<WlArgument>; StackMessageBuffer::CAPACITY],
 }
+
+unsafe impl Send for StackMessageBuffer {}
+
+// Safety: no interior mutability
+unsafe impl Sync for StackMessageBuffer {}
 
 impl StackMessageBuffer {
     pub const CAPACITY: usize = 20;
@@ -162,6 +192,11 @@ pub struct WlMessage<'s> {
     /// Additional arguments for the request/event
     pub arguments: &'s [WlArgument],
 }
+
+unsafe impl Send for WlMessage<'_> {}
+
+// Safety: no interior mutability
+unsafe impl Sync for WlMessage<'_> {}
 
 impl<'s> WlMessage<'s> {
     /// Returns a builder for the message
@@ -290,9 +325,6 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Default, Eq, PartialOrd, Ord, Hash)]
-pub struct NewId;
-
 /// Provides a coversion function from [`WlArgument`]
 pub trait FromWlArgument<'s>: Sized {
     /// # Safety
@@ -348,12 +380,6 @@ impl<'s, T> FromWlArgument<'s> for &'s [T] {
     unsafe fn from_argument(value: WlArgument) -> Self {
         let raw = unsafe { value.a.read() };
         unsafe { slice::from_raw_parts(raw.data.cast(), raw.size / mem::size_of::<T>()) }
-    }
-}
-
-impl FromWlArgument<'_> for NewId {
-    unsafe fn from_argument(_: WlArgument) -> Self {
-        Self
     }
 }
 

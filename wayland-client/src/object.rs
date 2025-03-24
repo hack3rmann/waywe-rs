@@ -6,6 +6,7 @@ pub use crate::interface::generated::WlObjectType;
 /// Ids and names for Wayland objects
 #[derive(Clone, Debug, PartialEq, Eq, Copy, PartialOrd, Ord)]
 pub struct WlObjectId(pub NonZeroU32);
+static_assertions::assert_impl_all!(WlObjectId: Send, Sync);
 
 impl WlObjectId {
     /// Makes new id from `u32`
@@ -65,6 +66,7 @@ pub struct InterfaceMessageArgument {
     pub object_type: WlObjectType,
     pub name: WlObjectId,
 }
+static_assertions::assert_impl_all!(InterfaceMessageArgument: Send, Sync);
 
 impl InterfaceMessageArgument {
     /// Interface name

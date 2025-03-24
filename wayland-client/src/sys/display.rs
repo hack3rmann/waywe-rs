@@ -37,6 +37,13 @@ pub struct WlDisplay<S: State> {
     raw_fd: RawFd,
 }
 
+// TODO(hack3rmann): maybe `Send`ness depends on `State`
+// TODO(hack3rmann): safety
+unsafe impl<S: State> Send for WlDisplay<S> {}
+
+// Safety: this type is `Sync` ensured by libwayland
+unsafe impl<S: State> Sync for WlDisplay<S> {}
+
 impl<S: State> WlDisplay<S> {
     /// Connect to libwayland backend
     pub fn connect(state: Pin<&mut S>) -> Result<Self, DisplayConnectError> {

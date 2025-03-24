@@ -19,12 +19,16 @@ pub struct WlRegistryGlobalInfo {
     pub name: WlObjectId,
     pub version: u32,
 }
+static_assertions::assert_impl_all!(WlRegistryGlobalInfo: Send, Sync);
 
 #[derive(Debug)]
 pub struct WlRegistry<S> {
     pub(crate) interfaces: FxHashMap<WlObjectType, WlRegistryGlobalInfo>,
     pub(crate) _p: PhantomData<*const S>,
 }
+
+unsafe impl<S> Send for WlRegistry<S> {}
+unsafe impl<S> Sync for WlRegistry<S> {}
 
 impl<S: State> WlRegistry<S> {
     pub fn new() -> Self {
