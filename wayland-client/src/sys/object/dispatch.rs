@@ -8,14 +8,14 @@ use crate::{
 use std::{
     any::Any,
     cell::RefCell,
-    ffi::{CStr, c_int, c_void},
+    ffi::{c_int, c_void},
     mem, panic,
     pin::Pin,
     ptr::NonNull,
     slice,
 };
 use wayland_sys::{
-    count_arguments_from_message_signature, wl_argument, wl_message, wl_proxy_get_id,
+    count_arguments_from_message_signature_raw, wl_argument, wl_message, wl_proxy_get_id,
     wl_proxy_get_user_data,
 };
 
@@ -162,8 +162,8 @@ where
         //
         // - `message` points to a valid instance of `wl_message` (provided by libwayland)
         // - `message->signature` is a valid C-String (provided by libwayland)
-        let signature = unsafe { CStr::from_ptr((*message).signature) };
-        let n_arguments = count_arguments_from_message_signature(signature);
+        let n_arguments =
+            unsafe { count_arguments_from_message_signature_raw((*message).signature) };
 
         // Safety: libwayland provides all arguments according to the signature of the event
         let arguments = unsafe { slice::from_raw_parts(arguments, n_arguments) };

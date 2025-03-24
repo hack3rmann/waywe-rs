@@ -556,12 +556,26 @@ impl<'s> InterfaceMessage<'s> {
     }
 }
 
-pub fn count_arguments_from_message_signature(signature: &CStr) -> usize {
-    signature
-        .to_bytes()
-        .iter()
-        .filter(|&&byte| byte != b'?' && !byte.is_ascii_digit())
+pub fn count_arguments_from_bytes(bytes: impl IntoIterator<Item = u8>) -> usize {
+    bytes
+        .into_iter()
+        .filter(|&byte| byte != b'?' && !byte.is_ascii_digit())
         .count()
+}
+
+pub fn count_arguments_from_message_signature(signature: &CStr) -> usize {
+    count_arguments_from_bytes(signature.to_bytes().iter().copied())
+}
+
+/// # Safety
+///
+/// - `signature` should be non-null
+/// - `signature` should point to a valid c-string.
+pub unsafe fn count_arguments_from_message_signature_raw(signature: *const c_char) -> usize {
+    count_arguments_from_bytes((0_usize..).map_while(|i| {
+        let byte = unsafe { signature.wrapping_add(i).read() as u8 };
+        (byte != 0).then_some(byte)
+    }))
 }
 
 pub const WL_REGISTRY_BIND: u32 = 0;
