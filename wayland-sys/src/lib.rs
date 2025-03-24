@@ -3,7 +3,7 @@
 use libc::{free, malloc, realloc};
 use std::{
     ffi::{CStr, c_char, c_int, c_void},
-    mem::offset_of,
+    mem::{self, offset_of},
     num::NonZeroU32,
     os::fd::RawFd,
     ptr,
@@ -578,272 +578,432 @@ pub unsafe fn count_arguments_from_message_signature_raw(signature: *const c_cha
     }))
 }
 
-pub mod display_error {
+#[repr(i32)]
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Copy, Hash)]
+pub enum DisplayErrorCode {
     /// Operation not permitted
-    pub const EPERM: i32 = 1;
+    Eperm = 1,
     /// No such file or directory
-    pub const ENOENT: i32 = 2;
+    Enoent = 2,
     /// No such process
-    pub const ESRCH: i32 = 3;
+    Esrch = 3,
     /// Interrupted system call
-    pub const EINTR: i32 = 4;
+    Eintr = 4,
     /// I/O error
-    pub const EIO: i32 = 5;
+    Eio = 5,
     /// No such device or address
-    pub const ENXIO: i32 = 6;
+    Enxio = 6,
     /// Argument list too long
-    pub const E2BIG: i32 = 7;
+    E2big = 7,
     /// Exec format error
-    pub const ENOEXEC: i32 = 8;
+    Enoexec = 8,
     /// Bad file number
-    pub const EBADF: i32 = 9;
+    Ebadf = 9,
     /// No child processes
-    pub const ECHILD: i32 = 10;
+    Echild = 10,
     /// Try again
-    pub const EAGAIN: i32 = 11;
+    Eagain = 11,
     /// Out of memory
-    pub const ENOMEM: i32 = 12;
+    Enomem = 12,
     /// Permission denied
-    pub const EACCES: i32 = 13;
+    Eacces = 13,
     /// Bad address
-    pub const EFAULT: i32 = 14;
+    Efault = 14,
     /// Block device required
-    pub const ENOTBLK: i32 = 15;
+    Enotblk = 15,
     /// Device or resource busy
-    pub const EBUSY: i32 = 16;
+    Ebusy = 16,
     /// File exists
-    pub const EEXIST: i32 = 17;
+    Eexist = 17,
     /// Cross-device link
-    pub const EXDEV: i32 = 18;
+    Exdev = 18,
     /// No such device
-    pub const ENODEV: i32 = 19;
+    Enodev = 19,
     /// Not a directory
-    pub const ENOTDIR: i32 = 20;
+    Enotdir = 20,
     /// Is a directory
-    pub const EISDIR: i32 = 21;
+    Eisdir = 21,
     /// Invalid argument
-    pub const EINVAL: i32 = 22;
+    Einval = 22,
     /// File table overflow
-    pub const ENFILE: i32 = 23;
+    Enfile = 23,
     /// Too many open files
-    pub const EMFILE: i32 = 24;
+    Emfile = 24,
     /// Not a typewriter
-    pub const ENOTTY: i32 = 25;
+    Enotty = 25,
     /// Text file busy
-    pub const ETXTBSY: i32 = 26;
+    Etxtbsy = 26,
     /// File too large
-    pub const EFBIG: i32 = 27;
+    Efbig = 27,
     /// No space left on device
-    pub const ENOSPC: i32 = 28;
+    Enospc = 28,
     /// Illegal seek
-    pub const ESPIPE: i32 = 29;
+    Espipe = 29,
     /// Read-only file system
-    pub const EROFS: i32 = 30;
+    Erofs = 30,
     /// Too many links
-    pub const EMLINK: i32 = 31;
+    Emlink = 31,
     /// Broken pipe
-    pub const EPIPE: i32 = 32;
+    Epipe = 32,
     /// Math argument out of domain of func
-    pub const EDOM: i32 = 33;
+    Edom = 33,
     /// Math result not representable
-    pub const ERANGE: i32 = 34;
+    Erange = 34,
     /// Resource deadlock would occur
-    pub const EDEADLK: i32 = 35;
+    Edeadlk = 35,
     /// File name too long
-    pub const ENAMETOOLONG: i32 = 36;
+    Enametoolong = 36,
     /// No record locks available
-    pub const ENOLCK: i32 = 37;
+    Enolck = 37,
     /// Invalid system call number
-    pub const ENOSYS: i32 = 38;
+    Enosys = 38,
     /// Directory not empty
-    pub const ENOTEMPTY: i32 = 39;
+    Enotempty = 39,
     /// Too many symbolic links encountered
-    pub const ELOOP: i32 = 40;
-    /// Operation would block
-    pub const EWOULDBLOCK: i32 = EAGAIN;
+    Eloop = 40,
     /// No message of desired type
-    pub const ENOMSG: i32 = 42;
+    Enomsg = 42,
     /// Identifier removed
-    pub const EIDRM: i32 = 43;
+    Eidrm = 43,
     /// Channel number out of range
-    pub const ECHRNG: i32 = 44;
+    Echrng = 44,
     /// Level 2 not synchronized
-    pub const EL2NSYNC: i32 = 45;
+    El2nsync = 45,
     /// Level 3 halted
-    pub const EL3HLT: i32 = 46;
+    El3hlt = 46,
     /// Level 3 reset
-    pub const EL3RST: i32 = 47;
+    El3rst = 47,
     /// Link number out of range
-    pub const ELNRNG: i32 = 48;
+    Elnrng = 48,
     /// Protocol driver not attached
-    pub const EUNATCH: i32 = 49;
+    Eunatch = 49,
     /// No CSI structure available
-    pub const ENOCSI: i32 = 50;
+    Enocsi = 50,
     /// Level 2 halted
-    pub const EL2HLT: i32 = 51;
+    El2hlt = 51,
     /// Invalid exchange
-    pub const EBADE: i32 = 52;
+    Ebade = 52,
     /// Invalid request descriptor
-    pub const EBADR: i32 = 53;
+    Ebadr = 53,
     /// Exchange full
-    pub const EXFULL: i32 = 54;
+    Exfull = 54,
     /// No anode
-    pub const ENOANO: i32 = 55;
+    Enoano = 55,
     /// Invalid request code
-    pub const EBADRQC: i32 = 56;
+    Ebadrqc = 56,
     /// Invalid slot
-    pub const EBADSLT: i32 = 57;
-    pub const EDEADLOCK: i32 = EDEADLK;
+    Ebadslt = 57,
     /// Bad font file format
-    pub const EBFONT: i32 = 59;
+    Ebfont = 59,
     /// Device not a stream
-    pub const ENOSTR: i32 = 60;
+    Enostr = 60,
     /// No data available
-    pub const ENODATA: i32 = 61;
+    Enodata = 61,
     /// Timer expired
-    pub const ETIME: i32 = 62;
+    Etime = 62,
     /// Out of streams resources
-    pub const ENOSR: i32 = 63;
+    Enosr = 63,
     /// Machine is not on the network
-    pub const ENONET: i32 = 64;
+    Enonet = 64,
     /// Package not installed
-    pub const ENOPKG: i32 = 65;
+    Enopkg = 65,
     /// Object is remote
-    pub const EREMOTE: i32 = 66;
+    Eremote = 66,
     /// Link has been severed
-    pub const ENOLINK: i32 = 67;
+    Enolink = 67,
     /// Advertise error
-    pub const EADV: i32 = 68;
+    Eadv = 68,
     /// Srmount error
-    pub const ESRMNT: i32 = 69;
+    Esrmnt = 69,
     /// Communication error on send
-    pub const ECOMM: i32 = 70;
+    Ecomm = 70,
     /// Protocol error
-    pub const EPROTO: i32 = 71;
+    Eproto = 71,
     /// Multihop attempted
-    pub const EMULTIHOP: i32 = 72;
+    Emultihop = 72,
     /// RFS specific error
-    pub const EDOTDOT: i32 = 73;
+    Edotdot = 73,
     /// Not a data message
-    pub const EBADMSG: i32 = 74;
+    Ebadmsg = 74,
     /// Value too large for defined data type
-    pub const EOVERFLOW: i32 = 75;
+    Eoverflow = 75,
     /// Name not unique on network
-    pub const ENOTUNIQ: i32 = 76;
+    Enotuniq = 76,
     /// File descriptor in bad state
-    pub const EBADFD: i32 = 77;
+    Ebadfd = 77,
     /// Remote address changed
-    pub const EREMCHG: i32 = 78;
+    Eremchg = 78,
     /// Can not access a needed shared library
-    pub const ELIBACC: i32 = 79;
+    Elibacc = 79,
     /// Accessing a corrupted shared library
-    pub const ELIBBAD: i32 = 80;
+    Elibbad = 80,
     /// .lib section in a.out corrupted
-    pub const ELIBSCN: i32 = 81;
+    Elibscn = 81,
     /// Attempting to link in too many shared libraries
-    pub const ELIBMAX: i32 = 82;
+    Elibmax = 82,
     /// Cannot exec a shared library directly
-    pub const ELIBEXEC: i32 = 83;
+    Elibexec = 83,
     /// Illegal byte sequence
-    pub const EILSEQ: i32 = 84;
+    Eilseq = 84,
     /// Interrupted system call should be restarted
-    pub const ERESTART: i32 = 85;
+    Erestart = 85,
     /// Streams pipe error
-    pub const ESTRPIPE: i32 = 86;
+    Estrpipe = 86,
     /// Too many users
-    pub const EUSERS: i32 = 87;
+    Eusers = 87,
     /// Socket operation on non-socket
-    pub const ENOTSOCK: i32 = 88;
+    Enotsock = 88,
     /// Destination address required
-    pub const EDESTADDRREQ: i32 = 89;
+    Edestaddrreq = 89,
     /// Message too long
-    pub const EMSGSIZE: i32 = 90;
+    Emsgsize = 90,
     /// Protocol wrong type for socket
-    pub const EPROTOTYPE: i32 = 91;
+    Eprototype = 91,
     /// Protocol not available
-    pub const ENOPROTOOPT: i32 = 92;
+    Enoprotoopt = 92,
     /// Protocol not supported
-    pub const EPROTONOSUPPORT: i32 = 93;
+    Eprotonosupport = 93,
     /// Socket type not supported
-    pub const ESOCKTNOSUPPORT: i32 = 94;
+    Esocktnosupport = 94,
     /// Operation not supported on transport endpoint
-    pub const EOPNOTSUPP: i32 = 95;
+    Eopnotsupp = 95,
     /// Protocol family not supported
-    pub const EPFNOSUPPORT: i32 = 96;
+    Epfnosupport = 96,
     /// Address family not supported by protocol
-    pub const EAFNOSUPPORT: i32 = 97;
+    Eafnosupport = 97,
     /// Address already in use
-    pub const EADDRINUSE: i32 = 98;
+    Eaddrinuse = 98,
     /// Cannot assign requested address
-    pub const EADDRNOTAVAIL: i32 = 99;
+    Eaddrnotavail = 99,
     /// Network is down
-    pub const ENETDOWN: i32 = 100;
+    Enetdown = 100,
     /// Network is unreachable
-    pub const ENETUNREACH: i32 = 101;
+    Enetunreach = 101,
     /// Network dropped connection because of reset
-    pub const ENETRESET: i32 = 102;
+    Enetreset = 102,
     /// Software caused connection abort
-    pub const ECONNABORTED: i32 = 103;
+    Econnaborted = 103,
     /// Connection reset by peer
-    pub const ECONNRESET: i32 = 104;
+    Econnreset = 104,
     /// No buffer space available
-    pub const ENOBUFS: i32 = 105;
+    Enobufs = 105,
     /// Transport endpoint is already connected
-    pub const EISCONN: i32 = 106;
+    Eisconn = 106,
     /// Transport endpoint is not connected
-    pub const ENOTCONN: i32 = 107;
+    Enotconn = 107,
     /// Cannot send after transport endpoint shutdown
-    pub const ESHUTDOWN: i32 = 108;
+    Eshutdown = 108,
     /// Too many references: cannot splice
-    pub const ETOOMANYREFS: i32 = 109;
+    Etoomanyrefs = 109,
     /// Connection timed out
-    pub const ETIMEDOUT: i32 = 110;
+    Etimedout = 110,
     /// Connection refused
-    pub const ECONNREFUSED: i32 = 111;
+    Econnrefused = 111,
     /// Host is down
-    pub const EHOSTDOWN: i32 = 112;
+    Ehostdown = 112,
     /// No route to host
-    pub const EHOSTUNREACH: i32 = 113;
+    Ehostunreach = 113,
     /// Operation already in progress
-    pub const EALREADY: i32 = 114;
+    Ealready = 114,
     /// Operation now in progress
-    pub const EINPROGRESS: i32 = 115;
+    Einprogress = 115,
     /// Stale file handle
-    pub const ESTALE: i32 = 116;
+    Estale = 116,
     /// Structure needs cleaning
-    pub const EUCLEAN: i32 = 117;
+    Euclean = 117,
     /// Not a XENIX named type file
-    pub const ENOTNAM: i32 = 118;
+    Enotnam = 118,
     /// No XENIX semaphores available
-    pub const ENAVAIL: i32 = 119;
+    Enavail = 119,
     /// Is a named type file
-    pub const EISNAM: i32 = 120;
+    Eisnam = 120,
     /// Remote I/O error
-    pub const EREMOTEIO: i32 = 121;
+    Eremoteio = 121,
     /// Quota exceeded
-    pub const EDQUOT: i32 = 122;
+    Edquot = 122,
     /// No medium found
-    pub const ENOMEDIUM: i32 = 123;
+    Enomedium = 123,
     /// Wrong medium type
-    pub const EMEDIUMTYPE: i32 = 124;
+    Emediumtype = 124,
     /// Operation Canceled
-    pub const ECANCELED: i32 = 125;
+    Ecanceled = 125,
     /// Required key not available
-    pub const ENOKEY: i32 = 126;
+    Enokey = 126,
     /// Key has expired
-    pub const EKEYEXPIRED: i32 = 127;
+    Ekeyexpired = 127,
     /// Key has been revoked
-    pub const EKEYREVOKED: i32 = 128;
+    Ekeyrevoked = 128,
     /// Key was rejected by service
-    pub const EKEYREJECTED: i32 = 129;
+    Ekeyrejected = 129,
     /// Owner died
-    pub const EOWNERDEAD: i32 = 130;
+    Eownerdead = 130,
     /// State not recoverable
-    pub const ENOTRECOVERABLE: i32 = 131;
+    Enotrecoverable = 131,
     /// Operation not possible due to RF-kill
-    pub const ERFKILL: i32 = 132;
+    Erfkill = 132,
     /// Memory page has hardware error
-    pub const EHWPOISON: i32 = 133;
+    Ehwpoison = 133,
+}
+
+impl DisplayErrorCode {
+    /// # Safety
+    ///
+    /// `value` should be a valid display error code presented in this enum.
+    pub const unsafe fn from_i32_unchecked(value: i32) -> Self {
+        unsafe { mem::transmute::<i32, Self>(value) }
+    }
+}
+
+impl From<DisplayErrorCode> for i32 {
+    fn from(value: DisplayErrorCode) -> Self {
+        value as i32
+    }
+}
+
+#[derive(Debug, Error)]
+#[error("invalid display error code {0}")]
+pub struct DisplayErrorCodeFromI32Error(pub i32);
+
+impl TryFrom<i32> for DisplayErrorCode {
+    type Error = DisplayErrorCodeFromI32Error;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        Ok(match value {
+            1 => Self::Eperm,
+            2 => Self::Enoent,
+            3 => Self::Esrch,
+            4 => Self::Eintr,
+            5 => Self::Eio,
+            6 => Self::Enxio,
+            7 => Self::E2big,
+            8 => Self::Enoexec,
+            9 => Self::Ebadf,
+            10 => Self::Echild,
+            11 => Self::Eagain,
+            12 => Self::Enomem,
+            13 => Self::Eacces,
+            14 => Self::Efault,
+            15 => Self::Enotblk,
+            16 => Self::Ebusy,
+            17 => Self::Eexist,
+            18 => Self::Exdev,
+            19 => Self::Enodev,
+            20 => Self::Enotdir,
+            21 => Self::Eisdir,
+            22 => Self::Einval,
+            23 => Self::Enfile,
+            24 => Self::Emfile,
+            25 => Self::Enotty,
+            26 => Self::Etxtbsy,
+            27 => Self::Efbig,
+            28 => Self::Enospc,
+            29 => Self::Espipe,
+            30 => Self::Erofs,
+            31 => Self::Emlink,
+            32 => Self::Epipe,
+            33 => Self::Edom,
+            34 => Self::Erange,
+            35 => Self::Edeadlk,
+            36 => Self::Enametoolong,
+            37 => Self::Enolck,
+            38 => Self::Enosys,
+            39 => Self::Enotempty,
+            40 => Self::Eloop,
+            42 => Self::Enomsg,
+            43 => Self::Eidrm,
+            44 => Self::Echrng,
+            45 => Self::El2nsync,
+            46 => Self::El3hlt,
+            47 => Self::El3rst,
+            48 => Self::Elnrng,
+            49 => Self::Eunatch,
+            50 => Self::Enocsi,
+            51 => Self::El2hlt,
+            52 => Self::Ebade,
+            53 => Self::Ebadr,
+            54 => Self::Exfull,
+            55 => Self::Enoano,
+            56 => Self::Ebadrqc,
+            57 => Self::Ebadslt,
+            59 => Self::Ebfont,
+            60 => Self::Enostr,
+            61 => Self::Enodata,
+            62 => Self::Etime,
+            63 => Self::Enosr,
+            64 => Self::Enonet,
+            65 => Self::Enopkg,
+            66 => Self::Eremote,
+            67 => Self::Enolink,
+            68 => Self::Eadv,
+            69 => Self::Esrmnt,
+            70 => Self::Ecomm,
+            71 => Self::Eproto,
+            72 => Self::Emultihop,
+            73 => Self::Edotdot,
+            74 => Self::Ebadmsg,
+            75 => Self::Eoverflow,
+            76 => Self::Enotuniq,
+            77 => Self::Ebadfd,
+            78 => Self::Eremchg,
+            79 => Self::Elibacc,
+            80 => Self::Elibbad,
+            81 => Self::Elibscn,
+            82 => Self::Elibmax,
+            83 => Self::Elibexec,
+            84 => Self::Eilseq,
+            85 => Self::Erestart,
+            86 => Self::Estrpipe,
+            87 => Self::Eusers,
+            88 => Self::Enotsock,
+            89 => Self::Edestaddrreq,
+            90 => Self::Emsgsize,
+            91 => Self::Eprototype,
+            92 => Self::Enoprotoopt,
+            93 => Self::Eprotonosupport,
+            94 => Self::Esocktnosupport,
+            95 => Self::Eopnotsupp,
+            96 => Self::Epfnosupport,
+            97 => Self::Eafnosupport,
+            98 => Self::Eaddrinuse,
+            99 => Self::Eaddrnotavail,
+            100 => Self::Enetdown,
+            101 => Self::Enetunreach,
+            102 => Self::Enetreset,
+            103 => Self::Econnaborted,
+            104 => Self::Econnreset,
+            105 => Self::Enobufs,
+            106 => Self::Eisconn,
+            107 => Self::Enotconn,
+            108 => Self::Eshutdown,
+            109 => Self::Etoomanyrefs,
+            110 => Self::Etimedout,
+            111 => Self::Econnrefused,
+            112 => Self::Ehostdown,
+            113 => Self::Ehostunreach,
+            114 => Self::Ealready,
+            115 => Self::Einprogress,
+            116 => Self::Estale,
+            117 => Self::Euclean,
+            118 => Self::Enotnam,
+            119 => Self::Enavail,
+            120 => Self::Eisnam,
+            121 => Self::Eremoteio,
+            122 => Self::Edquot,
+            123 => Self::Enomedium,
+            124 => Self::Emediumtype,
+            125 => Self::Ecanceled,
+            126 => Self::Enokey,
+            127 => Self::Ekeyexpired,
+            128 => Self::Ekeyrevoked,
+            129 => Self::Ekeyrejected,
+            130 => Self::Eownerdead,
+            131 => Self::Enotrecoverable,
+            132 => Self::Erfkill,
+            133 => Self::Ehwpoison,
+            _ => return Err(DisplayErrorCodeFromI32Error(value)),
+        })
+    }
 }
 
 #[link(name = "wayland-client")]
