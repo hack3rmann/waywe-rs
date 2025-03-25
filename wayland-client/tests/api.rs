@@ -12,7 +12,7 @@ use std::{
 };
 use tracing_test::traced_test;
 use wayland_client::{
-    StackMessageBuffer, WlObjectHandle,
+    Dispatch, HasObjectType, StackMessageBuffer, WlObjectHandle, WlProxy,
     interface::{
         WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlRegionDestroyRequest,
         WlShmCreatePoolRequest, WlShmFormat, WlShmPoolCreateBufferRequest, WlSurfaceAttachRequest,
@@ -27,6 +27,7 @@ use wayland_client::{
     sys::{
         display::WlDisplay,
         object::{
+            FromProxy,
             default_impl::{
                 Buffer, Compositor, LayerShell, Output, Region, Shm, ShmPool, Surface,
                 WlLayerSurface, WpViewport, WpViewporter,
@@ -41,6 +42,47 @@ use wayland_client::{
 fn just_connect_display() {
     let mut state = pin!(NoState);
     WlDisplay::connect(state.as_mut()).unwrap();
+}
+
+#[test]
+#[should_panic]
+fn get_protocol_error() {
+    let mut buf = StackMessageBuffer::new();
+
+    let mut state = pin!(NoState);
+    let display = WlDisplay::connect(state.as_mut()).unwrap();
+    let mut storage = pin!(display.create_storage());
+    let registry = display.create_registry(&mut buf, storage.as_mut());
+
+    pub struct WrongGlobal;
+
+    impl HasObjectType for WrongGlobal {
+        const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
+    }
+
+    impl Dispatch for WrongGlobal {
+        type State = NoState;
+        const ALLOW_EMPTY_DISPATCH: bool = true;
+    }
+
+    impl FromProxy for WrongGlobal {
+        fn from_proxy(_: &WlProxy) -> Self {
+            Self
+        }
+    }
+
+    // TODO(hack3rmann): replace with different request
+    let _wrong_global: WlObjectHandle<WrongGlobal> =
+        WlRegistry::bind(&mut buf, storage.as_mut(), registry).unwrap();
+
+    display.roundtrip(storage.as_mut(), state.as_mut());
+
+    assert!(
+        storage
+            .object(registry)
+            .interfaces()
+            .contains_key(&WlObjectType::Compositor)
+    );
 }
 
 #[test]

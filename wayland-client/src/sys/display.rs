@@ -26,7 +26,8 @@ use std::{
 };
 use thiserror::Error;
 use wayland_sys::{
-    wl_display, wl_display_connect_to_fd, wl_display_disconnect, wl_display_roundtrip,
+    DisplayErrorCode, DisplayErrorCodeFromI32Error, wl_display, wl_display_connect_to_fd,
+    wl_display_disconnect, wl_display_get_error, wl_display_roundtrip,
 };
 
 /// A handle to the libwayland backend
@@ -128,6 +129,11 @@ impl<S: State> WlDisplay<S> {
         unsafe { wl_display_roundtrip(self.as_raw_display_ptr().as_ptr()) }
     }
 
+    pub(crate) fn get_error_code(&self) -> Result<DisplayErrorCode, DisplayErrorCodeFromI32Error> {
+        let raw_code = unsafe { wl_display_get_error(self.as_raw_display_ptr().as_ptr()) };
+        DisplayErrorCode::try_from(raw_code)
+    }
+
     /// Block until all pending requests are processed by the server.
     ///
     /// This function blocks until the server has processed all currently
@@ -144,8 +150,10 @@ impl<S: State> WlDisplay<S> {
 
         handle_dispatch_raw_panic();
 
-        // Safety: `self.as_raw_display_ptr()` is a valid display object
-        assert_ne!(-1, n_events_dispatched, "wl_display_roundtrip failed",);
+        if n_events_dispatched == -1 {
+            let error_code = self.get_error_code().unwrap();
+            panic!("wl_display_roundtrip failed: {error_code:?}");
+        }
 
         tracing::info!("WlDisplay::roundtrip has dispatched {n_events_dispatched} events");
     }
