@@ -1059,6 +1059,37 @@ unsafe extern "C" {
     /// This function may dispatch other events being received on the default queue.
     pub fn wl_display_roundtrip(display: *mut wl_display) -> c_int;
 
+    /// Block until all pending request are processed by the server
+    ///
+    /// # Parameters
+    ///
+    /// - `display` - The display context object
+    /// - `queue` - The queue on which to run the roundtrip
+    ///
+    /// # Returns
+    ///
+    /// The number of dispatched events on success or -1 on failure
+    ///
+    /// This function blocks until the server has processed all currently
+    /// issued requests by sending a request to the display server and waiting
+    /// for a reply before returning.
+    ///
+    /// This function uses wl_display_dispatch_queue() internally. It is not
+    /// allowed to call this function while the thread is being prepared for
+    /// reading events, and doing so will cause a dead lock.
+    ///
+    /// # Note
+    ///
+    /// This function may dispatch other events being received on the given queue.
+    ///
+    /// # See also
+    ///
+    /// [`wl_display_roundtrip`]
+    pub fn wl_display_roundtrip_queue(
+        display: *mut wl_display,
+        queue: *mut wl_event_queue,
+    ) -> c_int;
+
     /// Process incoming events
     /// Dispatch events on the default event queue.
     ///
@@ -1097,6 +1128,57 @@ unsafe extern "C" {
     /// - `wl_display_dispatch_queue()`
     /// - `wl_display_read_events()`
     pub fn wl_display_dispatch(display: *mut wl_display) -> c_int;
+
+    /// Dispatch events in an event queue
+    ///
+    /// # Parameters
+    ///
+    /// display The display context object
+    /// queue The event queue to dispatch
+    ///
+    /// # Returns
+    ///
+    /// The number of dispatched events on success or -1 on failure
+    ///
+    /// Dispatch events on the given event queue.
+    ///
+    /// If the given event queue is empty, this function blocks until
+    /// there are events to be read from the display fd. Events are
+    /// read and queued on the appropriate event queues. Finally, events
+    /// on given event queue are dispatched. On failure -1 is returned
+    /// and errno set appropriately.
+    ///
+    /// In a multi threaded environment, do not manually wait using poll()
+    /// (or equivalent) before calling this function, as doing so might
+    /// cause a dead lock. If external reliance on poll() (or equivalent)
+    /// is required, see wl_display_prepare_read_queue() of how to do so.
+    ///
+    /// This function is thread safe as long as it dispatches the right
+    /// queue on the right thread. It is also compatible with the multi
+    /// thread event reading preparation API (see wl_display_prepare_read_queue()),
+    /// and uses the equivalent functionality internally. It is not
+    /// allowed to call this function while the thread is being prepared
+    /// for reading events, and doing so will cause a dead lock.
+    ///
+    /// It can be used as a helper function to ease the procedure of
+    /// reading and dispatching events.
+    ///
+    /// # Note
+    ///
+    /// Since Wayland 1.5 the display has an extra queue for its own
+    /// events (i. e. delete_id). This queue is dispatched always, no
+    /// matter what queue we passed as an argument to this function.
+    /// That means that this function can return non-0 value even when
+    /// it haven't dispatched any event for the given queue.
+    ///
+    /// # See also
+    ///
+    /// - `wl_display_dispatch()`
+    /// - `wl_display_dispatch_pending()`
+    /// - `wl_display_dispatch_queue_pending()`
+    /// - `wl_display_prepare_read_queue()`
+    pub fn wl_display_dispatch_queue(display: *mut wl_display, queue: *mut wl_event_queue)
+    -> c_int;
 
     /// Create a new event queue for this display
     ///
@@ -1336,6 +1418,39 @@ unsafe extern "C" {
         implementation: *const c_void,
         data: *mut c_void,
     ) -> c_int;
+
+    /// Assign a proxy to an event queue
+    ///
+    /// # Parameters
+    ///
+    /// - `proxy` - The proxy object
+    /// - `queue` - The event queue that will handle this proxy or NULL
+    ///
+    /// Assign proxy to event queue. Events coming from proxy will be
+    /// queued in queue from now. If queue is NULL, then the display's
+    /// default queue is set to the proxy.
+    ///
+    /// In order to guarantee proper handing of all events which were
+    /// queued before the queue change takes effect, it is required to
+    /// dispatch the proxy's old event queue after setting a new event queue.
+    ///
+    /// This is particularly important for multi-threaded setups, where
+    /// it is possible for events to be queued to the proxy's old queue
+    /// from a different thread during the invocation of this function.
+    ///
+    /// To ensure that all events for a newly created proxy are dispatched
+    /// on a particular queue, it is necessary to use a proxy wrapper if
+    /// events are read and dispatched on more than one thread.
+    /// See wl_proxy_create_wrapper() for more details.
+    ///
+    /// # Note
+    ///
+    /// By default, the queue set in proxy is the one inherited from parent.
+    ///
+    /// # See also
+    ///
+    /// [`wl_display_dispatch_queue`]
+    pub fn wl_proxy_set_queue(proxy: *mut wl_proxy, queue: *mut wl_event_queue);
 
     /// Get the id of a proxy object.
     pub fn wl_proxy_get_id(proxy: *mut wl_proxy) -> u32;
