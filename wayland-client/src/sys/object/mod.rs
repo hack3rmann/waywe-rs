@@ -1,6 +1,7 @@
 pub mod default_impl;
 pub mod dispatch;
 pub mod registry;
+pub mod event_queue;
 
 use super::{object_storage::WlObjectStorage, proxy::WlProxy, wire::MessageBuffer};
 use crate::{

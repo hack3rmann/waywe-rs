@@ -1,5 +1,10 @@
 use super::{
-    object::{WlObject, WlObjectHandle, dispatch::State, registry::WlRegistry},
+    object::{
+        WlObject, WlObjectHandle,
+        dispatch::State,
+        event_queue::{EventQueueCreateError, WlEventQueue},
+        registry::WlRegistry,
+    },
     object_storage::WlObjectStorage,
     proxy::WlProxy,
     wire::MessageBuffer,
@@ -27,7 +32,7 @@ use std::{
 use thiserror::Error;
 use wayland_sys::{
     DisplayErrorCode, DisplayErrorCodeFromI32Error, wl_display, wl_display_connect_to_fd,
-    wl_display_disconnect, wl_display_get_error, wl_display_roundtrip,
+    wl_display_disconnect, wl_display_get_error, wl_display_roundtrip, wl_display_roundtrip_queue,
 };
 
 /// A handle to the libwayland backend
@@ -121,12 +126,25 @@ impl<S: State> WlDisplay<S> {
         storage.insert(WlObject::new(proxy, WlRegistry::default()))
     }
 
+    pub fn create_queue(&self) -> Result<WlEventQueue<'static, '_, S>, EventQueueCreateError> {
+        unsafe { WlEventQueue::new(self) }
+    }
+
     /// # Safety
     ///
     /// - no one should access the object storage during this call
     /// - no one should access the state during this call
     pub unsafe fn roundtrip_unchecked(&self) -> i32 {
         unsafe { wl_display_roundtrip(self.as_raw_display_ptr().as_ptr()) }
+    }
+
+    /// # Safety
+    ///
+    /// TODO(hack3rmann): safety
+    pub unsafe fn roundtrip_queue_unchecked<'d>(&'d self, queue: &WlEventQueue<'_, 'd, S>) -> i32 {
+        unsafe {
+            wl_display_roundtrip_queue(self.as_raw_display_ptr().as_ptr(), queue.as_raw().as_ptr())
+        }
     }
 
     pub(crate) fn get_error_code(&self) -> Result<DisplayErrorCode, DisplayErrorCodeFromI32Error> {
@@ -156,6 +174,16 @@ impl<S: State> WlDisplay<S> {
         }
 
         tracing::info!("WlDisplay::roundtrip has dispatched {n_events_dispatched} events");
+    }
+
+    pub fn roundtrip_queue<'d>(
+        &'d self,
+        _storage: Pin<&mut WlObjectStorage<'_, S>>,
+        _state: Pin<&mut S>,
+        // TODO(hack3rmann): maybe object storage is the same as event queue?
+        _queue: &WlEventQueue<'_, 'd, S>,
+    ) {
+        todo!()
     }
 }
 

@@ -1,14 +1,19 @@
 use crate::object::WlObjectId;
 use core::fmt;
 use std::{
-    cmp::Ordering, ffi::{c_void, CStr}, hash, mem, ptr::NonNull, slice, sync::atomic::{
+    cmp::Ordering,
+    ffi::{CStr, c_void},
+    hash, mem,
+    ptr::NonNull,
+    slice,
+    sync::atomic::{
         AtomicUsize,
         Ordering::{Acquire, Release},
-    }
+    },
 };
 use wayland_sys::{
-    wl_proxy, wl_proxy_destroy, wl_proxy_get_class, wl_proxy_get_id, wl_proxy_get_user_data,
-    wl_proxy_set_user_data,
+    wl_event_queue, wl_proxy, wl_proxy_destroy, wl_proxy_get_class, wl_proxy_get_id,
+    wl_proxy_get_user_data, wl_proxy_set_queue, wl_proxy_set_user_data,
 };
 
 /// Represents a proxy object created on the libwayland backend
@@ -103,6 +108,17 @@ impl WlProxy {
     pub unsafe fn set_user_data(&mut self, data: *mut c_void) {
         // Safety: calling this on a valid object is safe
         unsafe { wl_proxy_set_user_data(self.as_raw().as_ptr(), data) };
+    }
+
+    /// # Safety
+    ///
+    /// TODO(hack3rmann): safety
+    pub unsafe fn set_queue_raw(&mut self, queue_ptr: *mut wl_event_queue) {
+        // # Safety
+        //
+        // - setting a variable requires `&mut self`
+        // - calling this on a valid object is safe
+        unsafe { wl_proxy_set_queue(self.as_raw().as_ptr(), queue_ptr) };
     }
 }
 
