@@ -1,7 +1,7 @@
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+use std::pin::pin;
 use std::time::Instant;
 use std::{mem, time::Duration};
-use std::pin::pin;
 use wayland_client::{
     WlObjectHandle,
     interface::WlCompositorCreateSurfaceRequest,
@@ -25,16 +25,19 @@ async fn use_wgpu_to_draw_anything() {
 
     let mut state = pin!(NoState);
     let display = WlDisplay::connect(state.as_mut()).unwrap();
-    let mut storage = pin!(display.create_storage());
-    let registry = display.create_registry(&mut buf, storage.as_mut());
+    let mut queue = pin!(display.take_main_queue());
+    let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 
-    display.roundtrip(storage.as_mut(), state.as_mut());
+    display.roundtrip(queue.as_mut(), state.as_mut());
 
     let compositor =
-        WlRegistry::bind::<Compositor>(&mut buf, storage.as_mut(), registry).unwrap();
+        WlRegistry::bind::<Compositor>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
 
-    let surface: WlObjectHandle<Surface> =
-        compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurfaceRequest);
+    let surface: WlObjectHandle<Surface> = compositor.create_object(
+        &mut buf,
+        queue.as_mut().storage_mut(),
+        WlCompositorCreateSurfaceRequest,
+    );
 
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
         backends: wgpu::Backends::VULKAN,
@@ -43,7 +46,13 @@ async fn use_wgpu_to_draw_anything() {
     });
 
     let raw_display_handle = display.display_handle().unwrap().as_raw();
-    let raw_window_handle = storage.object(surface).window_handle().unwrap().as_raw();
+    let raw_window_handle = queue
+        .as_ref()
+        .storage()
+        .object(surface)
+        .window_handle()
+        .unwrap()
+        .as_raw();
 
     let wgpu_surface = unsafe {
         instance
@@ -63,7 +72,7 @@ async fn use_wgpu_to_draw_anything() {
         .await
         .expect("failed to request adapter");
 
-    let (device, queue) = adapter
+    let (device, wgpu_queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
                 required_features: wgpu::Features::empty(),
@@ -204,7 +213,7 @@ async fn use_wgpu_to_draw_anything() {
             pass.draw(0..triangle.len() as u32, 0..1);
         }
 
-        queue.submit([encoder.finish()]);
+        wgpu_queue.submit([encoder.finish()]);
 
         surface_texture.present();
     }

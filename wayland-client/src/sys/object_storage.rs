@@ -7,8 +7,14 @@ use super::{
     proxy::WlProxy,
 };
 use crate::object::WlObjectId;
-use std::{collections::HashMap, marker::PhantomData, pin::Pin, ptr::NonNull};
+use std::{
+    collections::HashMap,
+    marker::PhantomData,
+    pin::Pin,
+    ptr::{self, NonNull},
+};
 use thiserror::Error;
+use wayland_sys::wl_event_queue;
 
 #[derive(Debug)]
 pub(crate) struct WlObjectStorageEntry {
@@ -23,6 +29,7 @@ pub struct WlObjectStorage<'d, S: State> {
     objects: HashMap<WlObjectId, WlObjectStorageEntry>,
     acquired_object: Option<WlObjectId>,
     state: NonNull<S>,
+    queue: Option<NonNull<wl_event_queue>>,
     _display: PhantomData<&'d WlDisplay<S>>,
 }
 
@@ -45,8 +52,13 @@ impl<S: State> WlObjectStorage<'_, S> {
             objects: HashMap::new(),
             acquired_object: None,
             state,
+            queue: None,
             _display: PhantomData,
         }
+    }
+
+    pub(crate) unsafe fn set_raw_queue(&mut self, raw_queue: NonNull<wl_event_queue>) {
+        self.queue = Some(raw_queue);
     }
 
     /// Inserts a new object into the storage.
@@ -65,6 +77,11 @@ impl<S: State> WlObjectStorage<'_, S> {
     ) -> WlObjectHandle<T> {
         let id = object.proxy().id();
 
+        if let Some(queue) = self.queue {
+            // Safety: queue is valid
+            unsafe { object.proxy_mut().set_queue_raw(queue.as_ptr()) };
+        }
+
         object.write_storage_location(self.as_mut());
         object.write_state_location(unsafe { Pin::new_unchecked(self.state.as_mut()) });
 
@@ -82,6 +99,25 @@ impl<S: State> WlObjectStorage<'_, S> {
         }
 
         WlObjectHandle::new(id)
+    }
+
+    pub fn move_object<T: Dispatch<State = S>>(
+        &mut self,
+        mut target: Pin<&mut Self>,
+        handle: WlObjectHandle<T>,
+    ) {
+        let WlObjectStorageEntry { mut object } = self.objects.remove(&handle.id()).unwrap();
+
+        let queue_ptr = self.queue.map(NonNull::as_ptr).unwrap_or(ptr::null_mut());
+
+        // Safety: queue is valid
+        unsafe { object.proxy.set_queue_raw(queue_ptr) };
+
+        object.write_storage_location((&raw const *target.as_ref().get_ref()).cast_mut().cast());
+
+        target
+            .objects
+            .insert(object.proxy.id(), WlObjectStorageEntry { object });
     }
 
     /// Searches an object in the storage by its handle.
@@ -176,15 +212,15 @@ impl<S: State> WlObjectStorage<'_, S> {
     /// - this object had been acquired already.
     /// - acquired object id has corrupted after the `f` call.
     pub fn with_object_data_acquired(
-        mut self: Pin<&mut Self>,
+        &mut self,
         id: WlObjectId,
-        f: impl FnOnce(Pin<&mut Self>),
+        f: impl FnOnce(&mut Self),
     ) -> Result<(), ObjectDataAcquireError> {
         if self.acquired_object.replace(id).is_some() {
             return Err(ObjectDataAcquireError::AcquiredTwice);
         }
 
-        f(self.as_mut());
+        f(self);
 
         if self.acquired_object.take() != Some(id) {
             return Err(ObjectDataAcquireError::AcquiredIdCorruped);

@@ -2,20 +2,23 @@ use raw_window_handle::{HasDisplayHandle as _, RawWindowHandle, WaylandWindowHan
 use std::{
     ffi::CStr,
     mem,
-    pin::{Pin, pin},
+    pin::pin,
     time::{Duration, Instant},
 };
 use wayland_client::{
+    Dispatch, HasObjectType, SmallVecMessageBuffer, StackMessageBuffer, WlDisplay, WlObject,
+    WlObjectHandle, WlObjectStorage, WlObjectType, WlProxy, WlRegistry,
     interface::{
         Event, WlCompositorCreateSurfaceRequest, WlSurfaceCommitRequest,
         XdgSurfaceAckConfigureRequest, XdgSurfaceConfigureEvent, XdgSurfaceGetToplevelRequest,
         XdgToplevelCloseEvent, XdgToplevelConfigureEvent, XdgToplevelSetAppIdRequest,
         XdgToplevelSetTitleRequest, XdgWmBaseGetXdgSurfaceRequest, XdgWmBasePingEvent,
         XdgWmBasePongRequest,
-    }, sys::{
-        object::{dispatch::State, FromProxy},
+    },
+    sys::{
+        object::{FromProxy, dispatch::State},
         wire::WlMessage,
-    }, Dispatch, HasObjectType, SmallVecMessageBuffer, StackMessageBuffer, WlDisplay, WlObject, WlObjectHandle, WlObjectStorage, WlObjectType, WlProxy, WlRegistry
+    },
 };
 use wgpu::util::DeviceExt as _;
 
@@ -42,8 +45,8 @@ impl Dispatch for WlCompositor {
 
     fn dispatch(
         &mut self,
-        _state: Pin<&mut Self::State>,
-        _storage: Pin<&mut WlObjectStorage<'_, Self::State>>,
+        _state: &mut Self::State,
+        _storage: &mut WlObjectStorage<'_, Self::State>,
         _message: WlMessage<'_>,
     ) {
         unreachable!()
@@ -69,8 +72,8 @@ impl Dispatch for WlWmBase {
 
     fn dispatch(
         &mut self,
-        _state: Pin<&mut Self::State>,
-        storage: Pin<&mut WlObjectStorage<'_, Self::State>>,
+        _state: &mut Self::State,
+        storage: &mut WlObjectStorage<'_, Self::State>,
         message: WlMessage<'_>,
     ) {
         let Some(XdgWmBasePingEvent { serial }) = message.as_event() else {
@@ -80,7 +83,7 @@ impl Dispatch for WlWmBase {
         let mut buf = SmallVecMessageBuffer::<1>::new();
 
         self.handle
-            .request(&mut buf, &storage, XdgWmBasePongRequest { serial });
+            .request(&mut buf, storage, XdgWmBasePongRequest { serial });
     }
 }
 
@@ -105,8 +108,8 @@ impl Dispatch for WlSurface {
 
     fn dispatch(
         &mut self,
-        _state: Pin<&mut Self::State>,
-        _storage: Pin<&mut WlObjectStorage<'_, Self::State>>,
+        _state: &mut Self::State,
+        _storage: &mut WlObjectStorage<'_, Self::State>,
         _message: WlMessage<'_>,
     ) {
         unreachable!()
@@ -132,8 +135,8 @@ impl Dispatch for WlXdgSurface {
 
     fn dispatch(
         &mut self,
-        mut state: Pin<&mut Self::State>,
-        storage: Pin<&mut WlObjectStorage<'_, Self::State>>,
+        state: &mut Self::State,
+        storage: &mut WlObjectStorage<'_, Self::State>,
         message: WlMessage<'_>,
     ) {
         let Some(XdgSurfaceConfigureEvent { serial }) = message.as_event() else {
@@ -142,11 +145,8 @@ impl Dispatch for WlXdgSurface {
 
         let mut buf = SmallVecMessageBuffer::<1>::new();
 
-        self.handle.request(
-            &mut buf,
-            &storage,
-            XdgSurfaceAckConfigureRequest { serial },
-        );
+        self.handle
+            .request(&mut buf, storage, XdgSurfaceAckConfigureRequest { serial });
 
         if state.should_resize {
             state.ready_to_resize = true;
@@ -174,8 +174,8 @@ impl Dispatch for WlToplevel {
 
     fn dispatch(
         &mut self,
-        mut state: Pin<&mut Self::State>,
-        _storage: Pin<&mut WlObjectStorage<'_, Self::State>>,
+        state: &mut Self::State,
+        _storage: &mut WlObjectStorage<'_, Self::State>,
         message: WlMessage<'_>,
     ) {
         match message.opcode {
@@ -288,39 +288,54 @@ fn simple_wayland_client() {
     let display = WlDisplay::connect(client_state.as_mut()).unwrap();
 
     let mut buf = StackMessageBuffer::new();
-    let mut storage = pin!(display.create_storage());
+    let mut queue = pin!(display.take_main_queue());
 
-    let registry = display.create_registry(&mut buf, storage.as_mut());
+    let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 
-    display.roundtrip(storage.as_mut(), client_state.as_mut());
+    display.roundtrip(queue.as_mut(), client_state.as_mut());
 
     let compositor =
-        WlRegistry::bind::<WlCompositor>(&mut buf, storage.as_mut(), registry).unwrap();
+        WlRegistry::bind::<WlCompositor>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
 
-    let wm_base = WlRegistry::bind::<WlWmBase>(&mut buf, storage.as_mut(), registry).unwrap();
+    let wm_base =
+        WlRegistry::bind::<WlWmBase>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
 
-    display.roundtrip(storage.as_mut(), client_state.as_mut());
+    display.roundtrip(queue.as_mut(), client_state.as_mut());
 
-    let surface: WlObjectHandle<WlSurface> =
-        compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurfaceRequest);
+    let surface: WlObjectHandle<WlSurface> = compositor.create_object(
+        &mut buf,
+        queue.as_mut().storage_mut(),
+        WlCompositorCreateSurfaceRequest,
+    );
 
     let xdg_surface: WlObjectHandle<WlXdgSurface> = wm_base.create_object(
         &mut buf,
-        storage.as_mut(),
+        queue.as_mut().storage_mut(),
         XdgWmBaseGetXdgSurfaceRequest {
             surface: surface.id(),
         },
     );
 
-    let toplevel: WlObjectHandle<WlToplevel> =
-        xdg_surface.create_object(&mut buf, storage.as_mut(), XdgSurfaceGetToplevelRequest);
+    let toplevel: WlObjectHandle<WlToplevel> = xdg_surface.create_object(
+        &mut buf,
+        queue.as_mut().storage_mut(),
+        XdgSurfaceGetToplevelRequest,
+    );
 
-    toplevel.request(&mut buf, &storage, XdgToplevelSetTitleRequest { title: APP_NAME });
-    toplevel.request(&mut buf, &storage, XdgToplevelSetAppIdRequest { app_id: APP_NAME });
+    toplevel.request(
+        &mut buf,
+        &queue.as_ref().storage(),
+        XdgToplevelSetTitleRequest { title: APP_NAME },
+    );
+    toplevel.request(
+        &mut buf,
+        &queue.as_ref().storage(),
+        XdgToplevelSetAppIdRequest { app_id: APP_NAME },
+    );
 
-    surface.request(&mut buf, &storage, WlSurfaceCommitRequest);
-    display.roundtrip(storage.as_mut(), client_state.as_mut());
-    surface.request(&mut buf, &storage, WlSurfaceCommitRequest);
+    surface.request(&mut buf, &queue.as_ref().storage(), WlSurfaceCommitRequest);
+    display.roundtrip(queue.as_mut(), client_state.as_mut());
+    surface.request(&mut buf, &queue.as_ref().storage(), WlSurfaceCommitRequest);
 
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
         backends: wgpu::Backends::VULKAN,
@@ -329,7 +344,8 @@ fn simple_wayland_client() {
     });
 
     let raw_display_handle = display.display_handle().unwrap().as_raw();
-    let raw_window_handle = get_window_handle_from_surface(storage.object(surface));
+    let raw_window_handle =
+        get_window_handle_from_surface(queue.as_ref().storage().object(surface));
 
     let wgpu_surface = unsafe {
         instance
@@ -356,7 +372,7 @@ fn simple_wayland_client() {
             .expect("failed to request adapter")
     });
 
-    let (device, queue) = runtime.block_on(async {
+    let (device, wgpu_queue) = runtime.block_on(async {
         adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
@@ -444,7 +460,7 @@ fn simple_wayland_client() {
                     .unwrap(),
             );
 
-            surface.request(&mut buf, &storage, WlSurfaceCommitRequest);
+            surface.request(&mut buf, &queue.as_ref().storage(), WlSurfaceCommitRequest);
 
             swapchain = Swapchain::new(
                 &device,
@@ -482,10 +498,10 @@ fn simple_wayland_client() {
             pass.draw(0..triangle.len() as u32, 0..1);
         }
 
-        _ = queue.submit([encoder.finish()]);
+        _ = wgpu_queue.submit([encoder.finish()]);
 
         surface_texture.present();
 
-        display.roundtrip(storage.as_mut(), client_state.as_mut());
+        display.roundtrip(queue.as_mut(), client_state.as_mut());
     }
 }

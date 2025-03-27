@@ -2,7 +2,7 @@ use super::{
     object::{
         WlObject, WlObjectHandle,
         dispatch::State,
-        event_queue::{EventQueueCreateError, WlEventQueue},
+        event_queue::{CreateQueueError, WlEventQueue},
         registry::WlRegistry,
     },
     object_storage::WlObjectStorage,
@@ -31,8 +31,7 @@ use std::{
 };
 use thiserror::Error;
 use wayland_sys::{
-    DisplayErrorCode, DisplayErrorCodeFromI32Error, wl_display, wl_display_connect_to_fd,
-    wl_display_disconnect, wl_display_get_error, wl_display_roundtrip, wl_display_roundtrip_queue,
+    wl_display, wl_display_connect_to_fd, wl_display_create_queue, wl_display_disconnect, wl_display_get_error, wl_display_roundtrip, wl_display_roundtrip_queue, wl_event_queue, DisplayErrorCode, DisplayErrorCodeFromI32Error
 };
 
 /// A handle to the libwayland backend
@@ -92,7 +91,7 @@ impl<S: State> WlDisplay<S> {
     }
 
     /// Raw display pointer
-    pub fn as_raw_display_ptr(&self) -> NonNull<wl_display> {
+    pub fn as_raw(&self) -> NonNull<wl_display> {
         self.proxy.as_raw().cast()
     }
 
@@ -103,11 +102,19 @@ impl<S: State> WlDisplay<S> {
         unsafe { WlObjectStorage::new(self.state) }
     }
 
+    pub fn take_main_queue(&self) -> WlEventQueue<'_, S> {
+        unsafe { WlEventQueue::main_from_display(self) }.unwrap()
+    }
+
+    pub fn create_event_queue(&self) -> Result<WlEventQueue<'_, S>, CreateQueueError> {
+        unsafe { WlEventQueue::from_display(self) }
+    }
+
     /// Creates `wl_registry` object and stores it in the storage
-    pub fn create_registry(
-        &self,
+    pub fn create_registry<'d>(
+        &'d self,
         buf: &mut impl MessageBuffer,
-        storage: Pin<&mut WlObjectStorage<'_, S>>,
+        storage: Pin<&mut WlObjectStorage<'d, S>>,
     ) -> WlObjectHandle<WlRegistry<S>> {
         if !self.storage.load(Acquire).is_null() {
             panic!("error creating registry twice");
@@ -126,29 +133,31 @@ impl<S: State> WlDisplay<S> {
         storage.insert(WlObject::new(proxy, WlRegistry::default()))
     }
 
-    pub fn create_queue(&self) -> Result<WlEventQueue<'static, '_, S>, EventQueueCreateError> {
-        unsafe { WlEventQueue::new(self) }
+    pub(crate) fn create_event_queue_unchecked(&self) -> *mut wl_event_queue {
+        // Safety: display is valid
+        unsafe { wl_display_create_queue(self.as_raw().as_ptr()) }
     }
 
     /// # Safety
     ///
     /// - no one should access the object storage during this call
     /// - no one should access the state during this call
-    pub unsafe fn roundtrip_unchecked(&self) -> i32 {
-        unsafe { wl_display_roundtrip(self.as_raw_display_ptr().as_ptr()) }
+    pub(crate) unsafe fn roundtrip_unchecked(&self) -> i32 {
+        unsafe { wl_display_roundtrip(self.as_raw().as_ptr()) }
     }
 
-    /// # Safety
-    ///
-    /// TODO(hack3rmann): safety
-    pub unsafe fn roundtrip_queue_unchecked<'d>(&'d self, queue: &WlEventQueue<'_, 'd, S>) -> i32 {
-        unsafe {
-            wl_display_roundtrip_queue(self.as_raw_display_ptr().as_ptr(), queue.as_raw().as_ptr())
+    pub(crate) unsafe fn roundtrip_queue_unchecked<'d>(&'d self, queue: &WlEventQueue<'d, S>) -> i32 {
+        if let Some(queue_ptr) = queue.as_raw() {
+            unsafe {
+                wl_display_roundtrip_queue(self.as_raw().as_ptr(), queue_ptr.as_ptr())
+            }
+        } else {
+            unsafe { self.roundtrip_unchecked() }
         }
     }
 
     pub(crate) fn get_error_code(&self) -> Result<DisplayErrorCode, DisplayErrorCodeFromI32Error> {
-        let raw_code = unsafe { wl_display_get_error(self.as_raw_display_ptr().as_ptr()) };
+        let raw_code = unsafe { wl_display_get_error(self.as_raw().as_ptr()) };
         DisplayErrorCode::try_from(raw_code)
     }
 
@@ -157,33 +166,26 @@ impl<S: State> WlDisplay<S> {
     /// This function blocks until the server has processed all currently
     /// issued requests by sending a request to the display server
     /// and waiting for a reply before returning.
-    pub fn roundtrip(&self, storage: Pin<&mut WlObjectStorage<'_, S>>, state: Pin<&mut S>) {
+    pub fn roundtrip<'d>(&'d self, queue: Pin<&mut WlEventQueue<'d, S>>, state: Pin<&mut S>) {
         assert_eq!(&raw const *state, self.state.as_ptr().cast_const());
-        assert_eq!(
-            &raw const *storage,
-            self.storage.load(Relaxed).cast_const().cast()
-        );
 
-        let n_events_dispatched = unsafe { self.roundtrip_unchecked() };
+        if queue.is_main() {
+            assert_eq!(
+                &raw const *queue.as_ref().storage(),
+                self.storage.load(Relaxed).cast_const().cast()
+            );
+        }
+
+        let n_events_dispatched = unsafe { self.roundtrip_queue_unchecked(&queue) };
 
         handle_dispatch_raw_panic();
 
         if n_events_dispatched == -1 {
             let error_code = self.get_error_code().unwrap();
-            panic!("wl_display_roundtrip failed: {error_code:?}");
+            panic!("WlDisplay::roundtrip_queue failed: {error_code:?}");
         }
 
-        tracing::info!("WlDisplay::roundtrip has dispatched {n_events_dispatched} events");
-    }
-
-    pub fn roundtrip_queue<'d>(
-        &'d self,
-        _storage: Pin<&mut WlObjectStorage<'_, S>>,
-        _state: Pin<&mut S>,
-        // TODO(hack3rmann): maybe object storage is the same as event queue?
-        _queue: &WlEventQueue<'_, 'd, S>,
-    ) {
-        todo!()
+        tracing::debug!("WlDisplay::roundtrip dispatched {n_events_dispatched} events");
     }
 }
 
@@ -206,7 +208,7 @@ impl<S: State> HasObjectType for WlDisplay<S> {
 impl<S: State> Drop for WlDisplay<S> {
     fn drop(&mut self) {
         // Safety: `self.as_raw_display_ptr()` is a valid display object
-        unsafe { wl_display_disconnect(self.as_raw_display_ptr().as_ptr()) };
+        unsafe { wl_display_disconnect(self.as_raw().as_ptr()) };
     }
 }
 
@@ -222,7 +224,7 @@ impl<S: State> HasDisplayHandle for WlDisplay<S> {
     fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
         Ok(unsafe {
             DisplayHandle::borrow_raw(RawDisplayHandle::Wayland(WaylandDisplayHandle::new(
-                self.as_raw_display_ptr(),
+                self.as_raw(),
             )))
         })
     }

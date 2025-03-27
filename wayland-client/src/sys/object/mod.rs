@@ -1,15 +1,14 @@
 pub mod default_impl;
 pub mod dispatch;
-pub mod registry;
 pub mod event_queue;
+pub mod registry;
 
 use super::{object_storage::WlObjectStorage, proxy::WlProxy, wire::MessageBuffer};
 use crate::{
     interface::{ObjectParent, Request},
     object::{HasObjectType, WlObjectId},
 };
-use dispatch::{dispatch_raw, is_empty_dispatch_data_allowed, Dispatch, NoState, WlDispatchData};
-use thiserror::Error;
+use dispatch::{Dispatch, NoState, WlDispatchData, dispatch_raw, is_empty_dispatch_data_allowed};
 use std::{
     any::{self, TypeId},
     fmt, hash,
@@ -19,6 +18,7 @@ use std::{
     pin::Pin,
     ptr::{self, NonNull},
 };
+use thiserror::Error;
 use wayland_sys::wl_proxy_add_dispatcher;
 
 /// A trait used to construct newly created object.
@@ -205,6 +205,24 @@ impl WlDynObject {
         (self.type_info.id == TypeId::of::<T>())
             .then_some(unsafe { mem::transmute::<&mut WlDynObject, &mut WlObject<T>>(self) })
     }
+
+    pub fn write_storage_location(&mut self, storage: *mut ()) {
+        let user_data_ptr = self
+            .proxy
+            .get_user_data()
+            .cast::<WlDispatchData<(), NoState>>();
+
+        // # Safety
+        //
+        // - the `WlObject` always has valid user data being set if it was non-null
+        // - we have exclusive access to the proxy object
+        unsafe {
+            user_data_ptr
+                .wrapping_byte_add(offset_of!(WlDispatchData::<(), NoState>, storage))
+                .cast::<*mut ()>()
+                .write(storage)
+        };
+    }
 }
 
 impl Drop for WlDynObject {
@@ -235,7 +253,7 @@ impl fmt::Debug for WlDynObject {
 #[repr(C)]
 pub struct WlObject<T: Dispatch> {
     pub(crate) proxy: WlProxy,
-    pub(crate) _p: PhantomData<(T, NonNull<T::State>)>,
+    pub(crate) _p: PhantomData<T>,
 }
 
 unsafe impl<T: Dispatch + Send> Send for WlObject<T> {}
@@ -324,6 +342,10 @@ impl<T: Dispatch> WlObject<T> {
         &self.proxy
     }
 
+    pub fn proxy_mut(&mut self) -> &mut WlProxy {
+        &mut self.proxy
+    }
+
     pub(crate) fn upcast(self) -> WlDynObject {
         // NOTE(hack3rmann): we can use `MaybeUninit` to
         // move out of `Self` which implements the `Drop` trait
@@ -399,7 +421,7 @@ impl<T: Dispatch> Drop for WlObject<T> {
 }
 
 /// Constructs mut reference to ZST type 'from a thin air'
-fn zst_mut<T>() -> Result<&'static mut T, NonZstError> {
+const fn zst_mut<T>() -> Result<&'static mut T, NonZstError> {
     if mem::size_of::<T>() == 0 {
         // Safety: any non-null reference is a valid reference to some ZST
         Ok(unsafe { NonNull::dangling().as_mut() })

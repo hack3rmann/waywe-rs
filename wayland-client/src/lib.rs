@@ -1,3 +1,6 @@
+// FIXME(hack3rmann): warn missing safety
+#![allow(clippy::missing_safety_doc)]
+
 pub mod init;
 pub mod interface;
 pub mod object;

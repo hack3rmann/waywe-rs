@@ -24,7 +24,7 @@ static_assertions::assert_impl_all!(WlRegistryGlobalInfo: Send, Sync);
 #[derive(Debug)]
 pub struct WlRegistry<S> {
     pub(crate) interfaces: FxHashMap<WlObjectType, WlRegistryGlobalInfo>,
-    pub(crate) _p: PhantomData<*const S>,
+    pub(crate) _p: PhantomData<fn() -> S>,
 }
 
 unsafe impl<S> Send for WlRegistry<S> {}
@@ -142,8 +142,8 @@ impl<S: State> Dispatch for WlRegistry<S> {
 
     fn dispatch(
         &mut self,
-        _: Pin<&mut Self::State>,
-        _: Pin<&mut WlObjectStorage<'_, Self::State>>,
+        _: &mut Self::State,
+        _: &mut WlObjectStorage<'_, Self::State>,
         message: WlMessage<'_>,
     ) {
         match message.opcode {

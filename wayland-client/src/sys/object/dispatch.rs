@@ -22,7 +22,7 @@ use wayland_sys::{
 /// # Note
 ///
 /// State has to be sized because pointer to the state has to be thin.
-pub trait State: Sized + 'static {}
+pub trait State: Sync + Sized + 'static {}
 
 /// An empty state.
 pub struct NoState;
@@ -45,8 +45,10 @@ pub trait Dispatch: HasObjectType + 'static {
 
     fn dispatch(
         &mut self,
-        _state: Pin<&mut Self::State>,
-        _storage: Pin<&mut WlObjectStorage<'_, Self::State>>,
+        // TODO(hack3rmann): change to `Pin<&Self::State>`, because it can be accessed from
+        // multiple threads
+        _state: &mut Self::State,
+        _storage: &mut WlObjectStorage<'_, Self::State>,
         _message: WlMessage<'_>,
     ) {
         // do nothing
@@ -62,8 +64,7 @@ pub const fn is_empty_dispatch_data_allowed<T: Dispatch>() -> bool {
     T::ALLOW_EMPTY_DISPATCH && mem::size_of::<T>() == 0 && !mem::needs_drop::<T>()
 }
 
-pub(crate) type WlDispatchFn<T, S> =
-    fn(&mut T, Pin<&mut S>, Pin<&mut WlObjectStorage<'_, S>>, WlMessage<'_>);
+pub(crate) type WlDispatchFn<T, S> = fn(&mut T, &mut S, &mut WlObjectStorage<'_, S>, WlMessage<'_>);
 
 #[repr(C)]
 pub(crate) struct WlDispatchData<T, S: State> {
@@ -141,19 +142,15 @@ where
 
         // # Safety
         //
-        // - the storage pointer is pinned
-        //   (see `WlObjectStorage::insert<T>(self: Pin<&mut Self>, object: WlObject<T>)`)
         // - here we have exclusive access to the storage
         //   (see `WlDisplay::dispatch`)
-        let storage = unsafe { Pin::new_unchecked(storage_ptr.as_mut()) };
+        let mut storage = unsafe { Pin::new_unchecked(storage_ptr.as_mut()) };
 
         // # Safety
         //
-        // - the state pointer is pinned
-        //   (see `WlObjectStorage::insert<T>(self: Pin<&mut Self>, object: WlObject<T>)`)
         // - here we have exclusive access to the state
         //   (see `WlDisplay::dispatch`)
-        let state = unsafe { Pin::new_unchecked(state_ptr.as_mut()) };
+        let state = unsafe { state_ptr.as_mut() };
 
         // Safety: an opcode provided by the libwayland backend is always valid (often really small)
         let opcode = unsafe { u16::try_from(opcode).unwrap_unchecked() };

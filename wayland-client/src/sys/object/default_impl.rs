@@ -1,7 +1,9 @@
 use super::{WlObject, WlObjectHandle, dispatch::NoState};
 use crate::{
     SmallVecMessageBuffer, WlObjectStorage,
-    interface::{WlObjectType, Event, ZwlrLayerSurfaceAckConfigureRequest, ZwlrLayerSurfaceConfigureEvent},
+    interface::{
+        Event, WlObjectType, ZwlrLayerSurfaceAckConfigureRequest, ZwlrLayerSurfaceConfigureEvent,
+    },
     object::HasObjectType,
     sys::{
         object::{Dispatch, FromProxy},
@@ -12,7 +14,6 @@ use crate::{
 use raw_window_handle::{
     HandleError, HasWindowHandle, RawWindowHandle, WaylandWindowHandle, WindowHandle,
 };
-use std::pin::Pin;
 
 macro_rules! define_empty_dispatchers {
     ( $( $Name:ident ),* $(,)? ) => {
@@ -35,8 +36,8 @@ macro_rules! define_empty_dispatchers {
 
                 fn dispatch(
                     &mut self,
-                    _state: Pin<&mut Self::State>,
-                    _storage: Pin<&mut WlObjectStorage<'_, Self::State>>,
+                    _state: &mut Self::State,
+                    _storage: &mut WlObjectStorage<'_, Self::State>,
                     _message: WlMessage<'_>,
                 ) {
                     unreachable!()
@@ -92,8 +93,8 @@ impl Dispatch for WlLayerSurface {
 
     fn dispatch(
         &mut self,
-        _: Pin<&mut Self::State>,
-        storage: Pin<&mut WlObjectStorage<'_, Self::State>>,
+        _: &mut Self::State,
+        storage: &mut WlObjectStorage<'_, Self::State>,
         message: WlMessage<'_>,
     ) {
         let Some(ZwlrLayerSurfaceConfigureEvent { serial, .. }) =
@@ -106,7 +107,7 @@ impl Dispatch for WlLayerSurface {
 
         self.handle.request(
             &mut buf,
-            storage.as_ref().get_ref(),
+            storage,
             ZwlrLayerSurfaceAckConfigureRequest { serial },
         );
     }

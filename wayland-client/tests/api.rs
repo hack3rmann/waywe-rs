@@ -51,8 +51,8 @@ fn get_protocol_error() {
 
     let mut state = pin!(NoState);
     let display = WlDisplay::connect(state.as_mut()).unwrap();
-    let mut storage = pin!(display.create_storage());
-    let registry = display.create_registry(&mut buf, storage.as_mut());
+    let mut queue = pin!(display.take_main_queue());
+    let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 
     pub struct WrongGlobal;
 
@@ -73,12 +73,14 @@ fn get_protocol_error() {
 
     // TODO(hack3rmann): replace with different request
     let _wrong_global: WlObjectHandle<WrongGlobal> =
-        WlRegistry::bind(&mut buf, storage.as_mut(), registry).unwrap();
+        WlRegistry::bind(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
 
-    display.roundtrip(storage.as_mut(), state.as_mut());
+    display.roundtrip(queue.as_mut(), state.as_mut());
 
     assert!(
-        storage
+        queue
+            .as_ref()
+            .storage()
             .object(registry)
             .interfaces()
             .contains_key(&WlObjectType::Compositor)
@@ -91,13 +93,15 @@ fn get_registry() {
 
     let mut state = pin!(NoState);
     let display = WlDisplay::connect(state.as_mut()).unwrap();
-    let mut storage = pin!(display.create_storage());
-    let registry = display.create_registry(&mut buf, storage.as_mut());
+    let mut queue = pin!(display.take_main_queue());
+    let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 
-    display.roundtrip(storage.as_mut(), state.as_mut());
+    display.roundtrip(queue.as_mut(), state.as_mut());
 
     assert!(
-        storage
+        queue
+            .as_ref()
+            .storage()
             .object(registry)
             .interfaces()
             .contains_key(&WlObjectType::Compositor)
@@ -110,18 +114,27 @@ fn create_surface() {
 
     let mut state = pin!(NoState);
     let display = WlDisplay::connect(state.as_mut()).unwrap();
-    let mut storage = pin!(display.create_storage());
-    let registry = display.create_registry(&mut buf, storage.as_mut());
+    let mut queue = pin!(display.take_main_queue());
+    let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 
-    display.roundtrip(storage.as_mut(), state.as_mut());
+    display.roundtrip(queue.as_mut(), state.as_mut());
 
-    let compositor = WlRegistry::bind::<Compositor>(&mut buf, storage.as_mut(), registry).unwrap();
+    let compositor =
+        WlRegistry::bind::<Compositor>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
 
-    let surface: WlObjectHandle<Surface> =
-        compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurfaceRequest);
+    let surface: WlObjectHandle<Surface> = compositor.create_object(
+        &mut buf,
+        queue.as_mut().storage_mut(),
+        WlCompositorCreateSurfaceRequest,
+    );
 
     assert_eq!(
-        storage.object(surface).proxy().interface_name(),
+        queue
+            .as_ref()
+            .storage()
+            .object(surface)
+            .proxy()
+            .interface_name(),
         "wl_surface",
     );
 }
@@ -132,15 +145,15 @@ fn bind_wlr_shell() {
 
     let mut state = pin!(NoState);
     let display = WlDisplay::connect(state.as_mut()).unwrap();
-    let mut storage = pin!(display.create_storage());
-    let registry = display.create_registry(&mut buf, storage.as_mut());
+    let mut queue = pin!(display.take_main_queue());
+    let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 
-    display.roundtrip(storage.as_mut(), state.as_mut());
+    display.roundtrip(queue.as_mut(), state.as_mut());
 
     let _layer_shell =
-        WlRegistry::bind::<LayerShell>(&mut buf, storage.as_mut(), registry).unwrap();
+        WlRegistry::bind::<LayerShell>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
 
-    display.roundtrip(storage.as_mut(), state.as_mut());
+    display.roundtrip(queue.as_mut(), state.as_mut());
 }
 
 fn open_shm() -> Result<(OwnedFd, String), rustix::io::Errno> {
@@ -168,50 +181,59 @@ fn white_rect() {
 
     let mut state = pin!(NoState);
     let display = WlDisplay::connect(state.as_mut()).unwrap();
-    let mut storage = pin!(display.create_storage());
-    let registry = display.create_registry(&mut buf, storage.as_mut());
+    let mut queue = pin!(display.take_main_queue());
+    let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 
-    display.roundtrip(storage.as_mut(), state.as_mut());
+    display.roundtrip(queue.as_mut(), state.as_mut());
 
-    let shm = WlRegistry::bind::<Shm>(&mut buf, storage.as_mut(), registry).unwrap();
+    let shm = WlRegistry::bind::<Shm>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
 
     let viewporter =
-        WlRegistry::bind::<WpViewporter>(&mut buf, storage.as_mut(), registry).unwrap();
+        WlRegistry::bind::<WpViewporter>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
 
-    let compositor = WlRegistry::bind::<Compositor>(&mut buf, storage.as_mut(), registry).unwrap();
+    let compositor =
+        WlRegistry::bind::<Compositor>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
 
-    let surface: WlObjectHandle<Surface> =
-        compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateSurfaceRequest);
+    let surface: WlObjectHandle<Surface> = compositor.create_object(
+        &mut buf,
+        queue.as_mut().storage_mut(),
+        WlCompositorCreateSurfaceRequest,
+    );
 
     let _viewport: WlObjectHandle<WpViewport> = viewporter.create_object(
         &mut buf,
-        storage.as_mut(),
+        queue.as_mut().storage_mut(),
         WpViewporterGetViewportRequest {
             surface: surface.id(),
         },
     );
 
-    let region: WlObjectHandle<Region> =
-        compositor.create_object(&mut buf, storage.as_mut(), WlCompositorCreateRegionRequest);
+    let region: WlObjectHandle<Region> = compositor.create_object(
+        &mut buf,
+        queue.as_mut().storage_mut(),
+        WlCompositorCreateRegionRequest,
+    );
 
     surface.request(
         &mut buf,
-        &storage,
+        &queue.as_ref().storage(),
         WlSurfaceSetInputRegionRequest {
             region: Some(region.id()),
         },
     );
 
-    region.request(&mut buf, &storage, WlRegionDestroyRequest);
-    storage.release(region).unwrap();
+    region.request(&mut buf, &queue.as_ref().storage(), WlRegionDestroyRequest);
+    queue.as_mut().storage_mut().release(region).unwrap();
 
-    let output = WlRegistry::bind::<Output>(&mut buf, storage.as_mut(), registry).unwrap();
+    let output =
+        WlRegistry::bind::<Output>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
 
-    let layer_shell = WlRegistry::bind::<LayerShell>(&mut buf, storage.as_mut(), registry).unwrap();
+    let layer_shell =
+        WlRegistry::bind::<LayerShell>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
 
     let layer_surface: WlObjectHandle<WlLayerSurface> = layer_shell.create_object(
         &mut buf,
-        storage.as_mut(),
+        queue.as_mut().storage_mut(),
         ZwlrLayerShellGetLayerSurfaceRequest {
             surface: surface.id(),
             output: Some(output.id()),
@@ -222,7 +244,7 @@ fn white_rect() {
 
     layer_surface.request(
         &mut buf,
-        &storage,
+        &queue.as_ref().storage(),
         ZwlrLayerSurfaceSetAnchorRequest {
             anchor: ZwlrLayerSurfaceAnchor::all(),
         },
@@ -230,13 +252,13 @@ fn white_rect() {
 
     layer_surface.request(
         &mut buf,
-        &storage,
+        &queue.as_ref().storage(),
         ZwlrLayerSurfaceSetExclusiveZoneRequest { zone: -1 },
     );
 
     layer_surface.request(
         &mut buf,
-        &storage,
+        &queue.as_ref().storage(),
         ZwlrLayerSurfaceSetMarginRequest {
             top: 0,
             right: 0,
@@ -247,7 +269,7 @@ fn white_rect() {
 
     layer_surface.request(
         &mut buf,
-        &storage,
+        &queue.as_ref().storage(),
         ZwlrLayerSurfaceSetKeyboardInteractivityRequest {
             keyboard_interactivity: ZwlrLayerSurfaceKeyboardInteractivity::None,
         },
@@ -255,16 +277,16 @@ fn white_rect() {
 
     layer_surface.request(
         &mut buf,
-        &storage,
+        &queue.as_ref().storage(),
         ZwlrLayerSurfaceSetSizeRequest {
             width: BUFFER_WIDTH_PIXELS as u32,
             height: BUFFER_HEIGHT_PIXELS as u32,
         },
     );
 
-    surface.request(&mut buf, &storage, WlSurfaceCommitRequest);
+    surface.request(&mut buf, &queue.as_ref().storage(), WlSurfaceCommitRequest);
 
-    display.roundtrip(storage.as_mut(), state.as_mut());
+    display.roundtrip(queue.as_mut(), state.as_mut());
 
     let (shm_fd, shm_path) = open_shm().unwrap();
 
@@ -300,7 +322,7 @@ fn white_rect() {
 
     let shm_pool: WlObjectHandle<ShmPool> = shm.create_object(
         &mut buf,
-        storage.as_mut(),
+        queue.as_mut().storage_mut(),
         WlShmCreatePoolRequest {
             fd: shm_fd.as_fd(),
             size: BUFFER_SIZE_BYTES as i32,
@@ -309,7 +331,7 @@ fn white_rect() {
 
     let buffer: WlObjectHandle<Buffer> = shm_pool.create_object(
         &mut buf,
-        storage.as_mut(),
+        queue.as_mut().storage_mut(),
         WlShmPoolCreateBufferRequest {
             offset: 0,
             width: BUFFER_WIDTH_PIXELS as i32,
@@ -321,13 +343,13 @@ fn white_rect() {
 
     surface.request(
         &mut buf,
-        &storage,
+        &queue.as_ref().storage(),
         WlSurfaceSetBufferScaleRequest { scale: 1 },
     );
 
     surface.request(
         &mut buf,
-        &storage,
+        &queue.as_ref().storage(),
         WlSurfaceAttachRequest {
             buffer: Some(buffer.id()),
             x: 0,
@@ -337,7 +359,7 @@ fn white_rect() {
 
     surface.request(
         &mut buf,
-        &storage,
+        &queue.as_ref().storage(),
         WlSurfaceDamageRequest {
             x: 0,
             y: 0,
@@ -346,9 +368,9 @@ fn white_rect() {
         },
     );
 
-    surface.request(&mut buf, &storage, WlSurfaceCommitRequest);
+    surface.request(&mut buf, &queue.as_ref().storage(), WlSurfaceCommitRequest);
 
-    display.roundtrip(storage.as_mut(), state.as_mut());
+    display.roundtrip(queue.as_mut(), state.as_mut());
 
     thread::sleep(Duration::from_millis(200));
 }

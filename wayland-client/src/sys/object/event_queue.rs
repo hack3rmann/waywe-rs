@@ -1,78 +1,61 @@
-use super::dispatch::{NoState, State};
-use crate::{WlDisplay, WlProxy};
-use std::{
-    borrow::Cow,
-    ffi::CStr,
-    marker::PhantomData,
-    ops::Deref,
-    ptr::{self, NonNull},
-};
+use super::dispatch::State;
+use crate::{WlDisplay, WlObjectStorage};
+use std::{pin::Pin, ptr::NonNull};
 use thiserror::Error;
-use wayland_sys::{wl_display_create_queue_with_name, wl_event_queue};
+use wayland_sys::{wl_event_queue, wl_event_queue_destroy};
 
-pub struct WlEventQueue<'s, 'd, S: State> {
-    raw: NonNull<wl_event_queue>,
-    // HACK(hack3rmann): maybe name will be unused
-    _name: Option<Cow<'s, CStr>>,
-    _p: PhantomData<(*const S, &'d WlDisplay<S>)>,
+pub struct WlEventQueue<'d, S: State> {
+    /// `None` for main event queue, `Some` for different event queue
+    raw: Option<NonNull<wl_event_queue>>,
+    storage: WlObjectStorage<'d, S>,
 }
 
-impl<'s, S: State> WlEventQueue<'s, '_, S> {
-    /// # Safety
-    ///
-    /// Expected to be created by the [`WlDisplay`]
-    pub unsafe fn new(display: &WlDisplay<S>) -> Result<Self, EventQueueCreateError> {
-        unsafe { Self::new_with_name(display, None::<&'static CStr>) }
+impl<'d, S: State> WlEventQueue<'d, S> {
+    pub unsafe fn from_display(display: &'d WlDisplay<S>) -> Result<Self, CreateQueueError> {
+        let raw = NonNull::new(display.create_event_queue_unchecked()).ok_or(CreateQueueError)?;
+
+        let mut storage = display.create_storage();
+
+        unsafe { storage.set_raw_queue(raw) };
+
+        Ok(Self {
+            raw: Some(raw),
+            storage,
+        })
     }
 
-    pub fn as_raw(&self) -> NonNull<wl_event_queue> {
+    pub unsafe fn main_from_display(display: &'d WlDisplay<S>) -> Result<Self, CreateQueueError> {
+        Ok(Self {
+            raw: None,
+            storage: display.create_storage(),
+        })
+    }
+
+    pub fn as_raw(&self) -> Option<NonNull<wl_event_queue>> {
         self.raw
     }
 
-    /// # Safety
-    ///
-    /// Expected to be created by the [`WlDisplay`]
-    pub unsafe fn new_with_name(
-        display: &WlDisplay<S>,
-        name: Option<impl Into<Cow<'s, CStr>>>,
-    ) -> Result<Self, EventQueueCreateError> {
-        let name = name.map(Into::<Cow<CStr>>::into);
-        let name_ptr = name.as_ref().map(|n| n.as_ptr()).unwrap_or(ptr::null());
-
-        let raw = NonNull::new(unsafe {
-            wl_display_create_queue_with_name(display.as_raw_display_ptr().as_ptr(), name_ptr)
-        })
-        .ok_or(EventQueueCreateError)?;
-
-        Ok(Self {
-            _name: name,
-            raw,
-            _p: PhantomData,
-        })
+    pub fn is_main(&self) -> bool {
+        self.raw.is_none()
     }
 
-    // TODO(hack3rmann): determine if it should use `mut` or not
-    pub fn add_proxy(&mut self, proxy: WlProxy) -> WlEqueuedProxy<'_> {
-        WlEqueuedProxy {
-            inner: proxy,
-            _p: PhantomData,
+    pub fn storage(self: Pin<&Self>) -> Pin<&WlObjectStorage<'d, S>> {
+        unsafe { Pin::map_unchecked(self, |this| &this.storage) }
+    }
+
+    pub fn storage_mut(self: Pin<&mut Self>) -> Pin<&mut WlObjectStorage<'d, S>> {
+        unsafe { Pin::map_unchecked_mut(self, |this| &mut this.storage) }
+    }
+}
+
+impl<S: State> Drop for WlEventQueue<'_, S> {
+    fn drop(&mut self) {
+        if let Some(raw_queue) = self.raw {
+            unsafe { wl_event_queue_destroy(raw_queue.as_ptr()) };
         }
     }
 }
 
 #[derive(Debug, Error)]
-#[error("failed to create event queue")]
-pub struct EventQueueCreateError;
-
-pub struct WlEqueuedProxy<'q> {
-    inner: WlProxy,
-    _p: PhantomData<&'q WlEventQueue<'static, 'static, NoState>>,
-}
-
-impl Deref for WlEqueuedProxy<'_> {
-    type Target = WlProxy;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
+#[error("`wl_display_create_queue` failed")]
+pub struct CreateQueueError;
