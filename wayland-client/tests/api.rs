@@ -75,7 +75,7 @@ fn get_protocol_error() {
     let _wrong_global: WlObjectHandle<WrongGlobal> =
         WlRegistry::bind(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
 
-    display.roundtrip(queue.as_mut(), state.as_mut());
+    display.roundtrip(queue.as_mut(), state.as_ref());
 
     assert!(
         queue
@@ -96,7 +96,7 @@ fn get_registry() {
     let mut queue = pin!(display.take_main_queue());
     let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 
-    display.roundtrip(queue.as_mut(), state.as_mut());
+    display.roundtrip(queue.as_mut(), state.as_ref());
 
     assert!(
         queue
@@ -117,7 +117,7 @@ fn create_surface() {
     let mut queue = pin!(display.take_main_queue());
     let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 
-    display.roundtrip(queue.as_mut(), state.as_mut());
+    display.roundtrip(queue.as_mut(), state.as_ref());
 
     let compositor =
         WlRegistry::bind::<Compositor>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
@@ -148,12 +148,12 @@ fn bind_wlr_shell() {
     let mut queue = pin!(display.take_main_queue());
     let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 
-    display.roundtrip(queue.as_mut(), state.as_mut());
+    display.roundtrip(queue.as_mut(), state.as_ref());
 
     let _layer_shell =
         WlRegistry::bind::<LayerShell>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
 
-    display.roundtrip(queue.as_mut(), state.as_mut());
+    display.roundtrip(queue.as_mut(), state.as_ref());
 }
 
 fn open_shm() -> Result<(OwnedFd, String), rustix::io::Errno> {
@@ -184,7 +184,7 @@ fn white_rect() {
     let mut queue = pin!(display.take_main_queue());
     let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 
-    display.roundtrip(queue.as_mut(), state.as_mut());
+    display.roundtrip(queue.as_mut(), state.as_ref());
 
     let shm = WlRegistry::bind::<Shm>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
 
@@ -286,7 +286,7 @@ fn white_rect() {
 
     surface.request(&mut buf, &queue.as_ref().storage(), WlSurfaceCommitRequest);
 
-    display.roundtrip(queue.as_mut(), state.as_mut());
+    display.roundtrip(queue.as_mut(), state.as_ref());
 
     let (shm_fd, shm_path) = open_shm().unwrap();
 
@@ -370,7 +370,7 @@ fn white_rect() {
 
     surface.request(&mut buf, &queue.as_ref().storage(), WlSurfaceCommitRequest);
 
-    display.roundtrip(queue.as_mut(), state.as_mut());
+    display.roundtrip(queue.as_mut(), state.as_ref());
 
     thread::sleep(Duration::from_millis(200));
 }

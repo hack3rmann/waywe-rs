@@ -36,7 +36,7 @@ macro_rules! define_empty_dispatchers {
 
                 fn dispatch(
                     &mut self,
-                    _state: &mut Self::State,
+                    _state: &Self::State,
                     _storage: &mut WlObjectStorage<'_, Self::State>,
                     _message: WlMessage<'_>,
                 ) {
@@ -93,7 +93,7 @@ impl Dispatch for WlLayerSurface {
 
     fn dispatch(
         &mut self,
-        _: &mut Self::State,
+        _: &Self::State,
         storage: &mut WlObjectStorage<'_, Self::State>,
         message: WlMessage<'_>,
     ) {

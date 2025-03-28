@@ -3,6 +3,7 @@ use std::{
     ffi::CStr,
     mem,
     pin::pin,
+    sync::atomic::{AtomicBool, AtomicU32, Ordering::*},
     time::{Duration, Instant},
 };
 use wayland_client::{
@@ -25,13 +26,13 @@ use wgpu::util::DeviceExt as _;
 pub const APP_NAME: &CStr = c"simple_wayland_client";
 pub const TIMEOUT: Duration = Duration::from_millis(500);
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct ClientState {
-    pub should_resize: bool,
-    pub ready_to_resize: bool,
-    pub should_close: bool,
-    pub next_width: u32,
-    pub next_height: u32,
+    pub should_resize: AtomicBool,
+    pub ready_to_resize: AtomicBool,
+    pub should_close: AtomicBool,
+    pub next_width: AtomicU32,
+    pub next_height: AtomicU32,
 }
 
 impl State for ClientState {}
@@ -45,7 +46,7 @@ impl Dispatch for WlCompositor {
 
     fn dispatch(
         &mut self,
-        _state: &mut Self::State,
+        _state: &Self::State,
         _storage: &mut WlObjectStorage<'_, Self::State>,
         _message: WlMessage<'_>,
     ) {
@@ -72,7 +73,7 @@ impl Dispatch for WlWmBase {
 
     fn dispatch(
         &mut self,
-        _state: &mut Self::State,
+        _state: &Self::State,
         storage: &mut WlObjectStorage<'_, Self::State>,
         message: WlMessage<'_>,
     ) {
@@ -108,7 +109,7 @@ impl Dispatch for WlSurface {
 
     fn dispatch(
         &mut self,
-        _state: &mut Self::State,
+        _state: &Self::State,
         _storage: &mut WlObjectStorage<'_, Self::State>,
         _message: WlMessage<'_>,
     ) {
@@ -135,7 +136,7 @@ impl Dispatch for WlXdgSurface {
 
     fn dispatch(
         &mut self,
-        state: &mut Self::State,
+        state: &Self::State,
         storage: &mut WlObjectStorage<'_, Self::State>,
         message: WlMessage<'_>,
     ) {
@@ -148,8 +149,8 @@ impl Dispatch for WlXdgSurface {
         self.handle
             .request(&mut buf, storage, XdgSurfaceAckConfigureRequest { serial });
 
-        if state.should_resize {
-            state.ready_to_resize = true;
+        if state.should_resize.load(Relaxed) {
+            state.ready_to_resize.store(true, Relaxed);
         }
     }
 }
@@ -174,7 +175,7 @@ impl Dispatch for WlToplevel {
 
     fn dispatch(
         &mut self,
-        state: &mut Self::State,
+        state: &Self::State,
         _storage: &mut WlObjectStorage<'_, Self::State>,
         message: WlMessage<'_>,
     ) {
@@ -183,13 +184,13 @@ impl Dispatch for WlToplevel {
                 let XdgToplevelConfigureEvent { width, height, .. } = message.as_event().unwrap();
 
                 if width != 0 && height != 0 {
-                    state.should_resize = true;
-                    state.next_width = width as u32;
-                    state.next_height = height as u32;
+                    state.should_resize.store(true, Relaxed);
+                    state.next_width.store(width as u32, Relaxed);
+                    state.next_height.store(height as u32, Relaxed);
                 }
             }
             XdgToplevelCloseEvent::CODE => {
-                state.should_close = true;
+                state.should_close.store(true, Release);
             }
             _ => {}
         }
@@ -292,7 +293,7 @@ fn simple_wayland_client() {
 
     let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 
-    display.roundtrip(queue.as_mut(), client_state.as_mut());
+    display.roundtrip(queue.as_mut(), client_state.as_ref());
 
     let compositor =
         WlRegistry::bind::<WlCompositor>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
@@ -300,7 +301,7 @@ fn simple_wayland_client() {
     let wm_base =
         WlRegistry::bind::<WlWmBase>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
 
-    display.roundtrip(queue.as_mut(), client_state.as_mut());
+    display.roundtrip(queue.as_mut(), client_state.as_ref());
 
     let surface: WlObjectHandle<WlSurface> = compositor.create_object(
         &mut buf,
@@ -334,7 +335,7 @@ fn simple_wayland_client() {
     );
 
     surface.request(&mut buf, &queue.as_ref().storage(), WlSurfaceCommitRequest);
-    display.roundtrip(queue.as_mut(), client_state.as_mut());
+    display.roundtrip(queue.as_mut(), client_state.as_ref());
     surface.request(&mut buf, &queue.as_ref().storage(), WlSurfaceCommitRequest);
 
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -387,13 +388,16 @@ fn simple_wayland_client() {
             .unwrap()
     });
 
-    assert_ne!(client_state.next_width, 0);
-    assert_ne!(client_state.next_height, 0);
+    let initial_width = client_state.next_width.load(Relaxed);
+    let initial_height = client_state.next_height.load(Relaxed);
+
+    assert_ne!(initial_width, 0);
+    assert_ne!(initial_height, 0);
 
     wgpu_surface.configure(
         &device,
         &wgpu_surface
-            .get_default_config(&adapter, client_state.next_width, client_state.next_height)
+            .get_default_config(&adapter, initial_width, initial_height)
             .unwrap(),
     );
 
@@ -444,19 +448,25 @@ fn simple_wayland_client() {
     let event_loop_start = Instant::now();
 
     loop {
-        if client_state.should_close || Instant::now().duration_since(event_loop_start) >= TIMEOUT {
-            client_state.should_close = false;
+        if client_state.should_close.load(Relaxed)
+            || Instant::now().duration_since(event_loop_start) >= TIMEOUT
+        {
+            client_state.should_close.store(false, Relaxed);
             break;
         }
 
-        if client_state.should_resize && client_state.ready_to_resize {
-            client_state.should_resize = false;
-            client_state.ready_to_resize = false;
+        if client_state.should_resize.load(Relaxed) && client_state.ready_to_resize.load(Relaxed) {
+            client_state.should_resize.store(false, Relaxed);
+            client_state.ready_to_resize.store(false, Relaxed);
 
             wgpu_surface.configure(
                 &device,
                 &wgpu_surface
-                    .get_default_config(&adapter, client_state.next_width, client_state.next_height)
+                    .get_default_config(
+                        &adapter,
+                        client_state.next_width.load(Relaxed),
+                        client_state.next_height.load(Relaxed),
+                    )
                     .unwrap(),
             );
 
@@ -502,6 +512,6 @@ fn simple_wayland_client() {
 
         surface_texture.present();
 
-        display.roundtrip(queue.as_mut(), client_state.as_mut());
+        display.roundtrip(queue.as_mut(), client_state.as_ref());
     }
 }

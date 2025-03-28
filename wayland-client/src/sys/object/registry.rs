@@ -54,6 +54,7 @@ impl<S: State> WlRegistry<S> {
         Self::bind_from_fn(buf, storage, registry, |_, _, _| object)
     }
 
+    // TODO(hack3rmann): make this function a free standing
     pub fn bind<T>(
         buf: &mut impl MessageBuffer,
         storage: Pin<&mut WlObjectStorage<'_, S>>,
@@ -142,7 +143,7 @@ impl<S: State> Dispatch for WlRegistry<S> {
 
     fn dispatch(
         &mut self,
-        _: &mut Self::State,
+        _: &Self::State,
         _: &mut WlObjectStorage<'_, Self::State>,
         message: WlMessage<'_>,
     ) {

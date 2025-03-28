@@ -45,9 +45,7 @@ pub trait Dispatch: HasObjectType + 'static {
 
     fn dispatch(
         &mut self,
-        // TODO(hack3rmann): change to `Pin<&Self::State>`, because it can be accessed from
-        // multiple threads
-        _state: &mut Self::State,
+        _state: &Self::State,
         _storage: &mut WlObjectStorage<'_, Self::State>,
         _message: WlMessage<'_>,
     ) {
@@ -64,7 +62,7 @@ pub const fn is_empty_dispatch_data_allowed<T: Dispatch>() -> bool {
     T::ALLOW_EMPTY_DISPATCH && mem::size_of::<T>() == 0 && !mem::needs_drop::<T>()
 }
 
-pub(crate) type WlDispatchFn<T, S> = fn(&mut T, &mut S, &mut WlObjectStorage<'_, S>, WlMessage<'_>);
+pub(crate) type WlDispatchFn<T, S> = fn(&mut T, &S, &mut WlObjectStorage<'_, S>, WlMessage<'_>);
 
 #[repr(C)]
 pub(crate) struct WlDispatchData<T, S: State> {

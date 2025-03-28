@@ -166,7 +166,7 @@ impl<S: State> WlDisplay<S> {
     /// This function blocks until the server has processed all currently
     /// issued requests by sending a request to the display server
     /// and waiting for a reply before returning.
-    pub fn roundtrip<'d>(&'d self, queue: Pin<&mut WlEventQueue<'d, S>>, state: Pin<&mut S>) {
+    pub fn roundtrip<'d>(&'d self, queue: Pin<&mut WlEventQueue<'d, S>>, state: Pin<&S>) {
         assert_eq!(&raw const *state, self.state.as_ptr().cast_const());
 
         if queue.is_main() {
