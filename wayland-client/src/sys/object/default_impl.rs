@@ -43,6 +43,8 @@ macro_rules! define_empty_dispatchers {
                     unreachable!()
                 }
             }
+
+            $crate::assert_dispatch_is_empty!( $Name );
         )*
     };
 }

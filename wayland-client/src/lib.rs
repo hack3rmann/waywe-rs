@@ -1,6 +1,3 @@
-// FIXME(hack3rmann): warn missing safety
-#![allow(clippy::missing_safety_doc)]
-
 pub mod init;
 pub mod interface;
 pub mod object;
@@ -12,7 +9,8 @@ pub use {
     sys::{
         display::{DisplayConnectError, DisplayConnectToFdError, WlDisplay},
         object::{
-            dispatch::Dispatch,
+            FromProxy,
+            dispatch::{Dispatch, NoState, State},
             registry::WlRegistry,
             {WlObject, WlObjectHandle},
         },
@@ -21,6 +19,7 @@ pub use {
         proxy::WlProxy,
         wire::{
             MessageBuffer, OpCode, SmallVecMessageBuffer, StackMessageBuffer, VecMessageBuffer,
+            WlMessage,
         },
     },
 };

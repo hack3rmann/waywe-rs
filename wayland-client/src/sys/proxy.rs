@@ -96,23 +96,24 @@ impl WlProxy {
         unsafe { wl_proxy_get_user_data(self.as_raw().as_ptr()) }
     }
 
-    // NOTE(hack3rmann): this function should take exclusive reference to
-    // self, because (in libwayland by google) it does not use atomic stores.
-    //
     /// Sets user data pointer for this [`wl_proxy`]
     ///
-    /// # Safety
+    /// # Note
     ///
-    /// The caller should uphold all the invariants for the previous value
-    /// written to this pointer before.
-    pub unsafe fn set_user_data(&mut self, data: *mut c_void) {
-        // Safety: calling this on a valid object is safe
+    /// This function is safe, because it will not dereference the `data`.
+    /// It means that any pointer can be written here
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
+    pub fn set_user_data(&mut self, data: *mut c_void) {
+        // # Safety
+        //
+        // - calling this on a valid object is safe
+        // - it will not dereference this pointer
         unsafe { wl_proxy_set_user_data(self.as_raw().as_ptr(), data) };
     }
 
     /// # Safety
     ///
-    /// TODO(hack3rmann): safety
+    /// `queue_ptr` should be a valid queue created by calling `wl_display_create_queue`
     pub unsafe fn set_queue_raw(&mut self, queue_ptr: *mut wl_event_queue) {
         // # Safety
         //

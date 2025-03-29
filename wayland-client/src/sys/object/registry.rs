@@ -54,7 +54,7 @@ impl<S: State> WlRegistry<S> {
         Self::bind_from_fn(buf, storage, registry, |_, _, _| object)
     }
 
-    // TODO(hack3rmann): make this function a free standing
+    // TODO(hack3rmann): make this function free standing
     pub fn bind<T>(
         buf: &mut impl MessageBuffer,
         storage: Pin<&mut WlObjectStorage<'_, S>>,

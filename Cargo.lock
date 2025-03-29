@@ -369,6 +369,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "tracing-test",
  "wayland-client",
  "wgpu",
 ]

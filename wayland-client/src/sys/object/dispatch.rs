@@ -52,6 +52,56 @@ pub trait Dispatch: HasObjectType + 'static {
     }
 }
 
+/// Failes compilation if dispatch implementation for `T` is not empty
+///
+/// # Example
+///
+/// ```rust
+/// # use wayland_client::{
+/// #     HasObjectType, WlProxy, FromProxy, Dispatch,
+/// #     NoState, WlObjectType, WlMessage, WlObjectStorage,
+/// #     assert_dispatch_is_empty,
+/// # };
+/// #[derive(Debug, Default)]
+/// pub struct WlSurface;
+///
+/// # impl HasObjectType for WlSurface {
+/// #     const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
+/// # }
+///
+/// # impl FromProxy for WlSurface {
+/// #     fn from_proxy(_: &WlProxy) -> Self { Self }
+/// # }
+///
+/// impl Dispatch for WlSurface {
+///     type State = NoState;
+///     const ALLOW_EMPTY_DISPATCH: bool = true;
+///
+///     fn dispatch(
+///         &mut self,
+///         _: &Self::State,
+///         _: &mut WlObjectStorage<'_, Self::State>,
+///         _: WlMessage<'_>,
+///     ) {
+///         unreachable!()
+///     }
+/// }
+///
+/// assert_dispatch_is_empty!(WlSurface);
+/// ```
+#[macro_export]
+macro_rules! assert_dispatch_is_empty {
+    ( $T:ty ) => {
+        const _: () = const {
+            assert!(
+                $crate::sys::object::dispatch::is_empty_dispatch_data_allowed::<$T>(),
+                "dispatch is not empty",
+            );
+        };
+    };
+}
+
+/// Checks that dispatch implementation for `T` is empty
 pub const fn is_empty_dispatch_data_allowed<T: Dispatch>() -> bool {
     // NOTE(hack3rmann):
     // - empty dispatcher should be allowed

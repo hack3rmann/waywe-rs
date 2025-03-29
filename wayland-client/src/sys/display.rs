@@ -24,29 +24,25 @@ use std::{
     os::fd::{BorrowedFd, IntoRawFd, RawFd},
     pin::Pin,
     ptr::{self, NonNull},
-    sync::atomic::{
-        AtomicPtr,
-        Ordering::{Acquire, Relaxed, Release},
-    },
+    sync::atomic::{AtomicBool, AtomicPtr, Ordering::*},
 };
 use thiserror::Error;
 use wayland_sys::{
-    wl_display, wl_display_connect_to_fd, wl_display_create_queue, wl_display_disconnect, wl_display_get_error, wl_display_roundtrip, wl_display_roundtrip_queue, wl_event_queue, DisplayErrorCode, DisplayErrorCodeFromI32Error
+    DisplayErrorCode, DisplayErrorCodeFromI32Error, wl_display, wl_display_connect_to_fd,
+    wl_display_create_queue, wl_display_disconnect, wl_display_get_error, wl_display_roundtrip,
+    wl_display_roundtrip_queue, wl_event_queue,
 };
 
 /// A handle to the libwayland backend
 pub struct WlDisplay<S: State> {
     proxy: ManuallyDrop<WlProxy>,
     state: NonNull<S>,
-    storage: AtomicPtr<()>,
+    main_storage: AtomicPtr<()>,
+    main_queue_taken: AtomicBool,
     raw_fd: RawFd,
 }
 
-// TODO(hack3rmann): maybe `Send`ness depends on `State`
-// TODO(hack3rmann): safety
 unsafe impl<S: State> Send for WlDisplay<S> {}
-
-// Safety: this type is `Sync` ensured by libwayland
 unsafe impl<S: State> Sync for WlDisplay<S> {}
 
 impl<S: State> WlDisplay<S> {
@@ -76,12 +72,14 @@ impl<S: State> WlDisplay<S> {
             raw_fd,
             // Safety: constructing NonNull from pinned pointer is safe
             state: NonNull::from(unsafe { state.get_unchecked_mut() }),
-            storage: AtomicPtr::new(ptr::null_mut()),
+            main_storage: AtomicPtr::new(ptr::null_mut()),
+            main_queue_taken: AtomicBool::new(false),
         })
     }
 
     /// File descriptor associated with the display
     pub fn fd(&self) -> BorrowedFd<'_> {
+        // display's file descriptor is valid
         unsafe { BorrowedFd::borrow_raw(self.raw_fd) }
     }
 
@@ -102,12 +100,23 @@ impl<S: State> WlDisplay<S> {
         unsafe { WlObjectStorage::new(self.state) }
     }
 
-    pub fn take_main_queue(&self) -> WlEventQueue<'_, S> {
-        unsafe { WlEventQueue::main_from_display(self) }.unwrap()
+    /// Takes the main event queue from this display
+    ///
+    /// # Error
+    ///
+    /// Returns [`Err`] with [`CreateQueueError::MainTakenTwice`] if called twice
+    pub fn take_main_queue(&self) -> Result<WlEventQueue<'_, S>, CreateQueueError> {
+        if !self.main_queue_taken.fetch_or(true, Relaxed) {
+            // Safety: we can ensure main queue is created once using `main_queue_taken` flag
+            Ok(unsafe { WlEventQueue::main_from_display(self) })
+        } else {
+            Err(CreateQueueError::MainTakenTwice)
+        }
     }
 
-    pub fn create_event_queue(&self) -> Result<WlEventQueue<'_, S>, CreateQueueError> {
-        unsafe { WlEventQueue::from_display(self) }
+    /// Creates event queue
+    pub fn create_queue(&self) -> Result<WlEventQueue<'_, S>, CreateQueueError> {
+        WlEventQueue::side_from_display(self)
     }
 
     /// Creates `wl_registry` object and stores it in the storage
@@ -116,12 +125,13 @@ impl<S: State> WlDisplay<S> {
         buf: &mut impl MessageBuffer,
         storage: Pin<&mut WlObjectStorage<'d, S>>,
     ) -> WlObjectHandle<WlRegistry<S>> {
-        if !self.storage.load(Acquire).is_null() {
-            panic!("error creating registry twice");
-        }
-
-        self.storage
-            .store((&raw const *storage).cast_mut().cast(), Release);
+        // FIXME(hack3rmann): it should not assume that `storage` belongs to the main queue
+        assert!(
+            self.main_storage
+                .swap((&raw const *storage).cast_mut().cast(), AcqRel)
+                .is_null(),
+            "error creating registry twice",
+        );
 
         // Safety: parent interface matcher request's one
         let proxy = unsafe {
@@ -133,7 +143,8 @@ impl<S: State> WlDisplay<S> {
         storage.insert(WlObject::new(proxy, WlRegistry::default()))
     }
 
-    pub(crate) fn create_event_queue_unchecked(&self) -> *mut wl_event_queue {
+    /// Creates raw event queue
+    pub(crate) fn create_event_queue_raw(&self) -> *mut wl_event_queue {
         // Safety: display is valid
         unsafe { wl_display_create_queue(self.as_raw().as_ptr()) }
     }
@@ -146,11 +157,16 @@ impl<S: State> WlDisplay<S> {
         unsafe { wl_display_roundtrip(self.as_raw().as_ptr()) }
     }
 
-    pub(crate) unsafe fn roundtrip_queue_unchecked<'d>(&'d self, queue: &WlEventQueue<'d, S>) -> i32 {
+    /// # Safety
+    ///
+    /// - no one should access the object storage during this call
+    /// - no one should access the state during this call
+    pub(crate) unsafe fn roundtrip_queue_unchecked<'d>(
+        &'d self,
+        queue: &WlEventQueue<'d, S>,
+    ) -> i32 {
         if let Some(queue_ptr) = queue.as_raw() {
-            unsafe {
-                wl_display_roundtrip_queue(self.as_raw().as_ptr(), queue_ptr.as_ptr())
-            }
+            unsafe { wl_display_roundtrip_queue(self.as_raw().as_ptr(), queue_ptr.as_ptr()) }
         } else {
             unsafe { self.roundtrip_unchecked() }
         }
@@ -172,7 +188,7 @@ impl<S: State> WlDisplay<S> {
         if queue.is_main() {
             assert_eq!(
                 &raw const *queue.as_ref().storage(),
-                self.storage.load(Relaxed).cast_const().cast()
+                self.main_storage.load(Relaxed).cast_const().cast()
             );
         }
 

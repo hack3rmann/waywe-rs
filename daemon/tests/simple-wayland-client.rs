@@ -7,19 +7,16 @@ use std::{
     time::{Duration, Instant},
 };
 use wayland_client::{
-    Dispatch, HasObjectType, SmallVecMessageBuffer, StackMessageBuffer, WlDisplay, WlObject,
-    WlObjectHandle, WlObjectStorage, WlObjectType, WlProxy, WlRegistry,
-    interface::{
+    assert_dispatch_is_empty, interface::{
         Event, WlCompositorCreateSurfaceRequest, WlSurfaceCommitRequest,
         XdgSurfaceAckConfigureRequest, XdgSurfaceConfigureEvent, XdgSurfaceGetToplevelRequest,
         XdgToplevelCloseEvent, XdgToplevelConfigureEvent, XdgToplevelSetAppIdRequest,
         XdgToplevelSetTitleRequest, XdgWmBaseGetXdgSurfaceRequest, XdgWmBasePingEvent,
         XdgWmBasePongRequest,
-    },
-    sys::{
-        object::{FromProxy, dispatch::State},
+    }, sys::{
+        object::{dispatch::State, FromProxy},
         wire::WlMessage,
-    },
+    }, Dispatch, HasObjectType, SmallVecMessageBuffer, StackMessageBuffer, WlDisplay, WlObject, WlObjectHandle, WlObjectStorage, WlObjectType, WlProxy, WlRegistry
 };
 use wgpu::util::DeviceExt as _;
 
@@ -53,6 +50,8 @@ impl Dispatch for WlCompositor {
         unreachable!()
     }
 }
+
+assert_dispatch_is_empty!(WlCompositor);
 
 impl FromProxy for WlCompositor {
     fn from_proxy(_: &WlProxy) -> Self {
@@ -116,6 +115,8 @@ impl Dispatch for WlSurface {
         unreachable!()
     }
 }
+
+assert_dispatch_is_empty!(WlSurface);
 
 impl HasObjectType for WlSurface {
     const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
@@ -282,14 +283,12 @@ impl Swapchain {
 
 #[test]
 fn simple_wayland_client() {
-    tracing_subscriber::fmt::init();
-
     let mut client_state = pin!(ClientState::default());
 
     let display = WlDisplay::connect(client_state.as_mut()).unwrap();
 
     let mut buf = StackMessageBuffer::new();
-    let mut queue = pin!(display.take_main_queue());
+    let mut queue = pin!(display.take_main_queue().unwrap());
 
     let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 
@@ -533,15 +532,13 @@ unsafe fn wait_for_segv() {
 
 #[test]
 fn multithread_client() {
-    tracing_subscriber::fmt::init();
-
     let mut client_state = pin!(ClientState::default());
     let mut buf = StackMessageBuffer::new();
 
     let display = WlDisplay::connect(client_state.as_mut()).unwrap();
 
-    let mut main_queue = pin!(display.take_main_queue());
-    let mut side_queue = pin!(display.create_event_queue().unwrap());
+    let mut main_queue = pin!(display.take_main_queue().unwrap());
+    let mut side_queue = pin!(display.create_queue().unwrap());
 
     let registry = display.create_registry(&mut buf, main_queue.as_mut().storage_mut());
 
@@ -554,7 +551,8 @@ fn multithread_client() {
     main_queue
         .as_mut()
         .storage_mut()
-        .move_object(side_queue.as_mut().storage_mut(), compositor);
+        .move_object(side_queue.as_mut().storage_mut(), compositor)
+        .unwrap();
 
     let wm_base =
         WlRegistry::bind::<WlWmBase>(&mut buf, main_queue.as_mut().storage_mut(), registry)
@@ -563,7 +561,8 @@ fn multithread_client() {
     main_queue
         .as_mut()
         .storage_mut()
-        .move_object(side_queue.as_mut().storage_mut(), wm_base);
+        .move_object(side_queue.as_mut().storage_mut(), wm_base)
+        .unwrap();
 
     std::thread::scope(|scope| {
         let display = &display;

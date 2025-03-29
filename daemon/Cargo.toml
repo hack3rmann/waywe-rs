@@ -16,3 +16,4 @@ tracing.workspace = true
 
 [dev-dependencies]
 libc = "0.2.171"
+tracing-test.workspace = true

@@ -32,6 +32,9 @@ pub struct WlObjectStorage<'d, S: State> {
     _display: PhantomData<&'d WlDisplay<S>>,
 }
 
+unsafe impl<S: State> Send for WlObjectStorage<'_, S> {}
+unsafe impl<S: State> Sync for WlObjectStorage<'_, S> {}
+
 // Safety: empty drop implementation ensures that `WlObjectStorage` uses
 // `_display` reference
 impl<S: State> Drop for WlObjectStorage<'_, S> {
@@ -56,6 +59,11 @@ impl<S: State> WlObjectStorage<'_, S> {
         }
     }
 
+    /// Sets raw event queue this storage belongs to
+    ///
+    /// # Safety
+    ///
+    /// `raw_queue` should uniquely point to a valid event queue
     pub(crate) unsafe fn set_raw_queue(&mut self, raw_queue: NonNull<wl_event_queue>) {
         self.queue = Some(raw_queue);
     }
@@ -100,12 +108,23 @@ impl<S: State> WlObjectStorage<'_, S> {
         WlObjectHandle::new(id)
     }
 
+    /// Moves an object from this storage to another.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Err`] if
+    ///
+    /// - source storage does not contain object corresponding to given `handle`
+    /// - destination storage already contains this object
     pub fn move_object<T: Dispatch<State = S>>(
         &mut self,
         mut target: Pin<&mut Self>,
         handle: WlObjectHandle<T>,
-    ) {
-        let WlObjectStorageEntry { mut object } = self.objects.remove(&handle.id()).unwrap();
+    ) -> Result<(), MoveObjectError> {
+        let WlObjectStorageEntry { mut object } = self
+            .objects
+            .remove(&handle.id())
+            .ok_or(MoveObjectError::NoObject(handle.id()))?;
 
         let queue_ptr = self.queue.map(NonNull::as_ptr).unwrap_or(ptr::null_mut());
 
@@ -114,9 +133,15 @@ impl<S: State> WlObjectStorage<'_, S> {
 
         object.write_storage_location((&raw const *target.as_ref().get_ref()).cast_mut().cast());
 
-        target
+        if target
             .objects
-            .insert(object.proxy.id(), WlObjectStorageEntry { object });
+            .insert(object.proxy.id(), WlObjectStorageEntry { object })
+            .is_some()
+        {
+            return Err(MoveObjectError::AlreadyPresent(handle.id()));
+        }
+
+        Ok(())
     }
 
     /// Searches an object in the storage by its handle.
@@ -235,6 +260,14 @@ pub enum ObjectDataAcquireError {
     AcquiredTwice,
     #[error("acquired object id was corrupted")]
     AcquiredIdCorruped,
+}
+
+#[derive(Debug, Error)]
+pub enum MoveObjectError {
+    #[error("no object with {0:?} is in the source storage")]
+    NoObject(WlObjectId),
+    #[error("object with {0:?} was already present in the destinations storage")]
+    AlreadyPresent(WlObjectId),
 }
 
 #[derive(Debug, Error)]
