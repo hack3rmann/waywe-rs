@@ -279,7 +279,7 @@ mod tests {
     fn serialize() {
         use smallvec::smallvec;
 
-        let proto = ProtocolFile {
+        let _proto = ProtocolFile {
             protocol: Protocol {
                 name: Cow::from("wayland"),
                 copyright: Cow::from("some copyright string"),
@@ -345,24 +345,11 @@ mod tests {
                 ],
             },
         };
-
-        eprintln!(
-            "{}",
-            xml_serde::to_string_custom(
-                &proto,
-                xml_serde::Options {
-                    include_schema_location: false
-                }
-            )
-            .unwrap()
-        );
     }
 
     #[test]
     fn deserialize_wayland_xml() {
         let proto_string = fs::read_to_string("../wayland-protocols/wayland.xml").unwrap();
-        let proto = xml_serde::from_str::<ProtocolFile>(&proto_string).unwrap();
-
-        dbg!(&proto);
+        let _proto = xml_serde::from_str::<ProtocolFile>(&proto_string).unwrap();
     }
 }

@@ -283,6 +283,8 @@ impl Swapchain {
 
 #[test]
 fn simple_wayland_client() {
+    _ = tracing_subscriber::fmt::try_init();
+
     let mut client_state = pin!(ClientState::default());
 
     let display = WlDisplay::connect(client_state.as_mut()).unwrap();
@@ -532,6 +534,8 @@ unsafe fn wait_for_segv() {
 
 #[test]
 fn multithread_client() {
+    _ = tracing_subscriber::fmt::try_init();
+
     let mut client_state = pin!(ClientState::default());
     let mut buf = StackMessageBuffer::new();
 

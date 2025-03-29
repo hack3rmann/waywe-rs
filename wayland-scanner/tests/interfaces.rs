@@ -1,4 +1,5 @@
 use std::{ffi::CStr, slice};
+use tracing::debug;
 use wayland_sys::{count_arguments_from_message_signature, wl_interface, wl_message};
 
 mod protocols {
@@ -102,7 +103,7 @@ unsafe fn check_wl_interfaces_are_the_same(
     assert_eq!(lhs.version, rhs.version, "same versions");
 
     if let CheckDepth::Deep = depth {
-        eprintln!("checking requests are the same in {left_name:?} interface");
+        debug!(?left_name, "checking requests are the same");
 
         unsafe {
             check_wl_messages_arrays_are_the_same(
@@ -113,7 +114,7 @@ unsafe fn check_wl_interfaces_are_the_same(
             )
         };
 
-        eprintln!("checking events are the same in {left_name:?} interface");
+        debug!(?left_name, "checking events are the same");
 
         unsafe {
             check_wl_messages_arrays_are_the_same(
@@ -132,6 +133,8 @@ macro_rules! define_interface_tests {
             ::paste::paste! {
                 #[test]
                 fn [< $interface _the_same >] () {
+                    _ = tracing_subscriber::fmt::try_init();
+
                     let external = unsafe { &::wayland_sys:: [< $interface _interface >] };
                     let internal = & $crate ::protocols:: $interface ::WL_INTERFACE;
 

@@ -31,6 +31,8 @@ use wayland_client::{
 
 #[test]
 fn just_connect_display() {
+    _ = tracing_subscriber::fmt::try_init();
+
     let mut state = pin!(NoState);
     WlDisplay::connect(state.as_mut()).unwrap();
 }
@@ -38,6 +40,8 @@ fn just_connect_display() {
 #[test]
 #[should_panic]
 fn get_protocol_error() {
+    _ = tracing_subscriber::fmt::try_init();
+
     let mut buf = StackMessageBuffer::new();
 
     let mut state = pin!(NoState);
@@ -80,6 +84,8 @@ fn get_protocol_error() {
 
 #[test]
 fn get_registry() {
+    _ = tracing_subscriber::fmt::try_init();
+
     let mut buf = StackMessageBuffer::new();
 
     let mut state = pin!(NoState);
@@ -101,6 +107,8 @@ fn get_registry() {
 
 #[test]
 fn create_surface() {
+    _ = tracing_subscriber::fmt::try_init();
+
     let mut buf = StackMessageBuffer::new();
 
     let mut state = pin!(NoState);
@@ -132,6 +140,8 @@ fn create_surface() {
 
 #[test]
 fn bind_wlr_shell() {
+    _ = tracing_subscriber::fmt::try_init();
+
     let mut buf = StackMessageBuffer::new();
 
     let mut state = pin!(NoState);
@@ -167,6 +177,8 @@ fn open_shm() -> Result<(OwnedFd, String), rustix::io::Errno> {
 
 #[test]
 fn white_rect() {
+    _ = tracing_subscriber::fmt::try_init();
+
     let mut buf = StackMessageBuffer::new();
 
     let mut state = pin!(NoState);

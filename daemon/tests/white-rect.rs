@@ -13,6 +13,8 @@ pub const TIMEOUT: Duration = Duration::from_millis(500);
 
 #[tokio::test]
 async fn use_wgpu_to_draw_anything() {
+    _ = tracing_subscriber::fmt::try_init();
+
     let mut buf = SmallVecMessageBuffer::<8>::new();
 
     let mut state = pin!(NoState);

@@ -2089,6 +2089,7 @@ dependencies = [
  "static_assertions",
  "thiserror 2.0.12",
  "tracing",
+ "tracing-subscriber",
  "tracing-test",
  "va_list",
  "wayland-scanner",
@@ -2107,6 +2108,8 @@ dependencies = [
  "smallvec",
  "syn",
  "thiserror 2.0.12",
+ "tracing",
+ "tracing-subscriber",
  "wayland-sys",
  "xml_serde",
 ]

@@ -2,7 +2,6 @@ use std::{
     cell::UnsafeCell,
     ffi::{CStr, c_char, c_int},
     slice, str,
-    sync::atomic::{AtomicBool, Ordering::Relaxed},
 };
 use va_list::VaList;
 use wayland_sys::wl_log_set_handler_client;
@@ -65,25 +64,8 @@ fn trim_last_linebreak(source: &str) -> &str {
 }
 
 /// Setup wayland client logger
-///
-/// # Safety
-///
-/// Potentially thread-unsafe.
-pub(crate) unsafe fn setup_unchecked() {
-    unsafe { wl_log_set_handler_client(wl_log_raw) };
-}
-
-/// Setup waylannd client logger in a thread-safe way.
-///
-/// # Note
-///
-/// The first thread called this function will set the logger
 pub(crate) fn setup() {
-    static DONE: AtomicBool = AtomicBool::new(false);
-
-    if !DONE.fetch_or(true, Relaxed) {
-        unsafe { setup_unchecked() };
-    }
+    unsafe { wl_log_set_handler_client(wl_log_raw) };
 }
 
 // NOTE(hack3rmann): the crate `libc` does not provide this function se we do.
