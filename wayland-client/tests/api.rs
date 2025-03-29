@@ -12,7 +12,8 @@ use std::{
 };
 use tracing_test::traced_test;
 use wayland_client::{
-    Dispatch, HasObjectType, StackMessageBuffer, WlObjectHandle, WlProxy,
+    Dispatch, FromProxy, HasObjectType, NoState, StackMessageBuffer, WlDisplay, WlObjectHandle,
+    WlObjectType, WlProxy, WlRegistry,
     interface::{
         WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlRegionDestroyRequest,
         WlShmCreatePoolRequest, WlShmFormat, WlShmPoolCreateBufferRequest, WlSurfaceAttachRequest,
@@ -23,18 +24,9 @@ use wayland_client::{
         ZwlrLayerSurfaceSetExclusiveZoneRequest, ZwlrLayerSurfaceSetKeyboardInteractivityRequest,
         ZwlrLayerSurfaceSetMarginRequest, ZwlrLayerSurfaceSetSizeRequest,
     },
-    object::WlObjectType,
-    sys::{
-        display::WlDisplay,
-        object::{
-            FromProxy,
-            default_impl::{
-                Buffer, Compositor, LayerShell, Output, Region, Shm, ShmPool, Surface,
-                WlLayerSurface, WpViewport, WpViewporter,
-            },
-            dispatch::NoState,
-            registry::WlRegistry,
-        },
+    sys::object::default_impl::{
+        Buffer, Compositor, LayerShell, Output, Region, Shm, ShmPool, Surface, WlLayerSurface,
+        WpViewport, WpViewporter,
     },
 };
 

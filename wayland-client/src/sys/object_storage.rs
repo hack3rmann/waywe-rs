@@ -131,7 +131,10 @@ impl<S: State> WlObjectStorage<'_, S> {
         // Safety: queue is valid
         unsafe { object.proxy.set_queue_raw(queue_ptr) };
 
-        object.write_storage_location((&raw const *target.as_ref().get_ref()).cast_mut().cast());
+        // Safety: this pointer points to a valid storage with the right state `S`
+        unsafe {
+            object.write_storage_location((&raw const *target.as_ref().get_ref()).cast_mut().cast())
+        };
 
         if target
             .objects

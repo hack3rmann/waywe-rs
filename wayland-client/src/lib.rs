@@ -11,8 +11,9 @@ pub use {
         object::{
             FromProxy,
             dispatch::{Dispatch, NoState, State},
+            event_queue::{CreateQueueError, WlEventQueue},
             registry::WlRegistry,
-            {WlObject, WlObjectHandle},
+            {NonZstError, WlObject, WlObjectHandle},
         },
         object_storage::{NoEntryError, ObjectDataAcquireError, WlObjectStorage},
         protocol,
@@ -22,4 +23,5 @@ pub use {
             WlMessage,
         },
     },
+    wayland_sys as ffi,
 };

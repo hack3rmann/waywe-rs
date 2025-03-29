@@ -126,9 +126,10 @@ impl<S: State> WlDisplay<S> {
         storage: Pin<&mut WlObjectStorage<'d, S>>,
     ) -> WlObjectHandle<WlRegistry<S>> {
         // FIXME(hack3rmann): it should not assume that `storage` belongs to the main queue
+        // FIXME(hack3rmann): it should allow creating registry twice and more
         assert!(
             self.main_storage
-                .swap((&raw const *storage).cast_mut().cast(), AcqRel)
+                .swap((&raw const *storage).cast_mut().cast(), Relaxed)
                 .is_null(),
             "error creating registry twice",
         );

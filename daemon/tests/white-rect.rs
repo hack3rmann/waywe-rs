@@ -3,17 +3,9 @@ use std::pin::pin;
 use std::time::Instant;
 use std::{mem, time::Duration};
 use wayland_client::{
-    WlObjectHandle,
+    NoState, SmallVecMessageBuffer, WlDisplay, WlObjectHandle, WlRegistry,
     interface::WlCompositorCreateSurfaceRequest,
-    sys::{
-        display::WlDisplay,
-        object::{
-            default_impl::{Compositor, Surface},
-            dispatch::NoState,
-            registry::WlRegistry,
-        },
-        wire::SmallVecMessageBuffer,
-    },
+    sys::object::default_impl::{Compositor, Surface},
 };
 use wgpu::util::DeviceExt as _;
 

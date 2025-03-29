@@ -206,7 +206,10 @@ impl WlDynObject {
             .then_some(unsafe { mem::transmute::<&mut WlDynObject, &mut WlObject<T>>(self) })
     }
 
-    pub fn write_storage_location(&mut self, storage: *mut ()) {
+    /// # Safety
+    ///
+    /// `storage` should point to a valid [`WlObjectStorage<S>`] with state `S`
+    pub(crate) unsafe fn write_storage_location(&mut self, storage: *mut ()) {
         let Some(user_data_ptr) = NonNull::new(
             self.proxy
                 .get_user_data()
@@ -264,6 +267,7 @@ unsafe impl<T: Dispatch + Send> Send for WlObject<T> {}
 unsafe impl<T: Dispatch + Sync> Sync for WlObject<T> {}
 
 impl<T: Dispatch> WlObject<T> {
+    /// Constructs new [`WlObject`] with no data
     pub fn new_empty(proxy: WlProxy) -> Self {
         Self {
             proxy,
@@ -271,6 +275,7 @@ impl<T: Dispatch> WlObject<T> {
         }
     }
 
+    /// Constructs new [`WlObject`] from [`WlProxy`] object and data assocciated with it
     pub fn new(proxy: WlProxy, data: T) -> Self {
         if is_empty_dispatch_data_allowed::<T>() {
             return Self::new_empty(proxy);
@@ -308,7 +313,10 @@ impl<T: Dispatch> WlObject<T> {
         }
     }
 
-    pub fn write_storage_location(&mut self, storage: Pin<&mut WlObjectStorage<'_, T::State>>) {
+    pub(crate) fn write_storage_location(
+        &mut self,
+        storage: Pin<&mut WlObjectStorage<'_, T::State>>,
+    ) {
         let user_data_ptr = self
             .proxy()
             .get_user_data()
@@ -325,7 +333,7 @@ impl<T: Dispatch> WlObject<T> {
         user_data.storage = Some(NonNull::from(unsafe { storage.get_unchecked_mut() }).cast());
     }
 
-    pub fn write_state_location(&mut self, state: Pin<&mut T::State>) {
+    pub(crate) fn write_state_location(&mut self, state: Pin<&mut T::State>) {
         let user_data_ptr = self
             .proxy()
             .get_user_data()
@@ -342,10 +350,12 @@ impl<T: Dispatch> WlObject<T> {
         user_data.state = Some(NonNull::from(unsafe { state.get_unchecked_mut() }));
     }
 
+    /// Proxy
     pub fn proxy(&self) -> &WlProxy {
         &self.proxy
     }
 
+    /// Proxy
     pub fn proxy_mut(&mut self) -> &mut WlProxy {
         &mut self.proxy
     }
@@ -371,7 +381,7 @@ impl<T: Dispatch> WlObject<T> {
     ///
     /// # Error
     ///
-    /// Returns [`Err`] if no data was set and T is not ZST.
+    /// Returns [`Err`] if no data was set and `T` is not ZST.
     pub fn data(&self) -> Result<&T, NonZstError> {
         let Some(user_data) = NonNull::new(self.proxy.get_user_data()) else {
             return zst_mut().map(|t| &*t);
@@ -390,7 +400,7 @@ impl<T: Dispatch> WlObject<T> {
     ///
     /// # Error
     ///
-    /// Returns [`Err`] if no data was set and T is not ZST.
+    /// Returns [`Err`] if no data was set and `T` is not ZST.
     pub fn data_mut(&mut self) -> Result<&mut T, NonZstError> {
         let Some(user_data) = NonNull::new(self.proxy.get_user_data()) else {
             return zst_mut();

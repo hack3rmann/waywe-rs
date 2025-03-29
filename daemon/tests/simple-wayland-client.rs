@@ -7,16 +7,16 @@ use std::{
     time::{Duration, Instant},
 };
 use wayland_client::{
-    assert_dispatch_is_empty, interface::{
+    Dispatch, FromProxy, HasObjectType, SmallVecMessageBuffer, StackMessageBuffer, State,
+    WlDisplay, WlMessage, WlObject, WlObjectHandle, WlObjectStorage, WlObjectType, WlProxy,
+    WlRegistry, assert_dispatch_is_empty,
+    interface::{
         Event, WlCompositorCreateSurfaceRequest, WlSurfaceCommitRequest,
         XdgSurfaceAckConfigureRequest, XdgSurfaceConfigureEvent, XdgSurfaceGetToplevelRequest,
         XdgToplevelCloseEvent, XdgToplevelConfigureEvent, XdgToplevelSetAppIdRequest,
         XdgToplevelSetTitleRequest, XdgWmBaseGetXdgSurfaceRequest, XdgWmBasePingEvent,
         XdgWmBasePongRequest,
-    }, sys::{
-        object::{dispatch::State, FromProxy},
-        wire::WlMessage,
-    }, Dispatch, HasObjectType, SmallVecMessageBuffer, StackMessageBuffer, WlDisplay, WlObject, WlObjectHandle, WlObjectStorage, WlObjectType, WlProxy, WlRegistry
+    },
 };
 use wgpu::util::DeviceExt as _;
 

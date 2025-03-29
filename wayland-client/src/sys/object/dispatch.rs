@@ -62,32 +62,43 @@ pub trait Dispatch: HasObjectType + 'static {
 /// #     NoState, WlObjectType, WlMessage, WlObjectStorage,
 /// #     assert_dispatch_is_empty,
 /// # };
-/// #[derive(Debug, Default)]
 /// pub struct WlSurface;
 ///
 /// # impl HasObjectType for WlSurface {
 /// #     const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
 /// # }
 ///
-/// # impl FromProxy for WlSurface {
-/// #     fn from_proxy(_: &WlProxy) -> Self { Self }
-/// # }
-///
 /// impl Dispatch for WlSurface {
 ///     type State = NoState;
 ///     const ALLOW_EMPTY_DISPATCH: bool = true;
-///
-///     fn dispatch(
-///         &mut self,
-///         _: &Self::State,
-///         _: &mut WlObjectStorage<'_, Self::State>,
-///         _: WlMessage<'_>,
-///     ) {
-///         unreachable!()
-///     }
 /// }
 ///
 /// assert_dispatch_is_empty!(WlSurface);
+/// ```
+///
+/// This fails to compile:
+///
+/// ```rust,compile_fail
+/// # use wayland_client::{
+/// #     HasObjectType, WlProxy, FromProxy, Dispatch,
+/// #     NoState, WlObjectType, WlMessage, WlObjectStorage,
+/// #     assert_dispatch_is_empty,
+/// # };
+/// // Non-ZST with Drop implementation
+/// pub struct WlCompositor(pub Vec<()>);
+///
+/// # impl HasObjectType for WlCompositor {
+/// #     const OBJECT_TYPE: WlObjectType = WlObjectType::Compositor;
+/// # }
+///
+/// impl Dispatch for WlCompositor {
+///     type State = NoState;
+///
+///     // Allowing empty dispatch does not mean that it will use it
+///     const ALLOW_EMPTY_DISPATCH: bool = true;
+/// }
+///
+/// assert_dispatch_is_empty!(WlCompositor);
 /// ```
 #[macro_export]
 macro_rules! assert_dispatch_is_empty {
@@ -128,7 +139,7 @@ thread_local! {
 
 pub(crate) fn handle_dispatch_raw_panic() {
     if let Some(error) = DISPATCHER_PANIC_CAUSE.with_borrow_mut(Option::take) {
-        std::panic::resume_unwind(error);
+        panic::resume_unwind(error);
     }
 }
 
