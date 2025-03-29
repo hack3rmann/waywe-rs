@@ -47,12 +47,12 @@ impl<'d, S: State> WlEventQueue<'d, S> {
     /// # Note
     ///
     /// Returns [`None`] if the queue is main.
-    pub fn as_raw(&self) -> Option<NonNull<wl_event_queue>> {
+    pub const fn as_raw(&self) -> Option<NonNull<wl_event_queue>> {
         self.raw
     }
 
     /// The queue is main (the display queue) or not
-    pub fn is_main(&self) -> bool {
+    pub const fn is_main(&self) -> bool {
         self.raw.is_none()
     }
 

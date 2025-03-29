@@ -10,6 +10,7 @@ use crate::object::WlObjectId;
 use fxhash::FxHashMap;
 use std::{
     marker::PhantomData,
+    panic::{self, AssertUnwindSafe},
     pin::Pin,
     ptr::{self, NonNull},
 };
@@ -247,10 +248,17 @@ impl<S: State> WlObjectStorage<'_, S> {
             return Err(ObjectDataAcquireError::AcquiredTwice);
         }
 
-        f(self);
+        // NOTE(hack3rmann): panic can lead to invalid state for the storage here.
+        // If `f` has panicked `self.acquired_object` will not be `Some` after
+        // returning from this function
+        let panic_result = panic::catch_unwind(AssertUnwindSafe(|| f(self)));
 
         if self.acquired_object.take() != Some(id) {
             return Err(ObjectDataAcquireError::AcquiredIdCorruped);
+        }
+
+        if let Err(panic_payload) = panic_result {
+            panic::resume_unwind(panic_payload);
         }
 
         Ok(())

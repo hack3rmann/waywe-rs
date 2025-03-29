@@ -10,10 +10,10 @@ use super::{
     wire::MessageBuffer,
 };
 use crate::{
-    init::{GetSocketPathError, connect_wayland_socket},
+    init::{connect_wayland_socket, GetSocketPathError},
     interface::{Request, WlDisplayGetRegistryRequest, WlObjectType},
     object::HasObjectType,
-    sys::object::dispatch::handle_dispatch_raw_panic,
+    sys::object::dispatch,
 };
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, RawDisplayHandle, WaylandDisplayHandle,
@@ -23,12 +23,12 @@ use std::{
     mem::ManuallyDrop,
     os::fd::{BorrowedFd, IntoRawFd, RawFd},
     pin::Pin,
-    ptr::{self, NonNull},
-    sync::atomic::{AtomicBool, AtomicPtr, Ordering::*},
+    ptr::NonNull,
+    sync::atomic::{AtomicBool, Ordering::*},
 };
 use thiserror::Error;
 use wayland_sys::{
-    DisplayErrorCode, DisplayErrorCodeFromI32Error, wl_display, wl_display_connect_to_fd,
+    DisplayErrorCode, wl_display, wl_display_connect_to_fd,
     wl_display_create_queue, wl_display_disconnect, wl_display_get_error, wl_display_roundtrip,
     wl_display_roundtrip_queue, wl_event_queue,
 };
@@ -37,7 +37,6 @@ use wayland_sys::{
 pub struct WlDisplay<S: State> {
     proxy: ManuallyDrop<WlProxy>,
     state: NonNull<S>,
-    main_storage: AtomicPtr<()>,
     main_queue_taken: AtomicBool,
     raw_fd: RawFd,
 }
@@ -72,7 +71,6 @@ impl<S: State> WlDisplay<S> {
             raw_fd,
             // Safety: constructing NonNull from pinned pointer is safe
             state: NonNull::from(unsafe { state.get_unchecked_mut() }),
-            main_storage: AtomicPtr::new(ptr::null_mut()),
             main_queue_taken: AtomicBool::new(false),
         })
     }
@@ -125,15 +123,6 @@ impl<S: State> WlDisplay<S> {
         buf: &mut impl MessageBuffer,
         storage: Pin<&mut WlObjectStorage<'d, S>>,
     ) -> WlObjectHandle<WlRegistry<S>> {
-        // FIXME(hack3rmann): it should not assume that `storage` belongs to the main queue
-        // FIXME(hack3rmann): it should allow creating registry twice and more
-        assert!(
-            self.main_storage
-                .swap((&raw const *storage).cast_mut().cast(), Relaxed)
-                .is_null(),
-            "error creating registry twice",
-        );
-
         // Safety: parent interface matcher request's one
         let proxy = unsafe {
             WlDisplayGetRegistryRequest
@@ -173,9 +162,19 @@ impl<S: State> WlDisplay<S> {
         }
     }
 
-    pub(crate) fn get_error_code(&self) -> Result<DisplayErrorCode, DisplayErrorCodeFromI32Error> {
+    /// Retrieve the last error that occurred on a display.
+    ///
+    /// # Error
+    ///
+    /// Returns [`None`] if no error occurred
+    pub(crate) fn get_error_code(&self) -> Option<DisplayErrorCode> {
+        // Safety: calling this function on a valid display is safe
         let raw_code = unsafe { wl_display_get_error(self.as_raw().as_ptr()) };
-        DisplayErrorCode::try_from(raw_code)
+
+        (raw_code != 0).then_some({
+            // Safety: non-zero code means it is a valid display error code
+            unsafe { DisplayErrorCode::from_i32_unchecked(raw_code) }
+        })
     }
 
     /// Block until all pending requests are processed by the server.
@@ -186,16 +185,9 @@ impl<S: State> WlDisplay<S> {
     pub fn roundtrip<'d>(&'d self, queue: Pin<&mut WlEventQueue<'d, S>>, state: Pin<&S>) {
         assert_eq!(&raw const *state, self.state.as_ptr().cast_const());
 
-        if queue.is_main() {
-            assert_eq!(
-                &raw const *queue.as_ref().storage(),
-                self.main_storage.load(Relaxed).cast_const().cast()
-            );
-        }
-
         let n_events_dispatched = unsafe { self.roundtrip_queue_unchecked(&queue) };
 
-        handle_dispatch_raw_panic();
+        dispatch::handle_panic();
 
         if n_events_dispatched == -1 {
             let error_code = self.get_error_code().unwrap();

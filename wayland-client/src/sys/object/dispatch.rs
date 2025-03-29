@@ -137,7 +137,7 @@ thread_local! {
         = const { RefCell::new(None) };
 }
 
-pub(crate) fn handle_dispatch_raw_panic() {
+pub(crate) fn handle_panic() {
     if let Some(error) = DISPATCHER_PANIC_CAUSE.with_borrow_mut(Option::take) {
         panic::resume_unwind(error);
     }
@@ -154,6 +154,11 @@ where
     T: HasObjectType,
     S: State,
 {
+    // `dispatch_raw` may be called several times after the last panic
+    if DISPATCHER_PANIC_CAUSE.with_borrow(Option::is_some) {
+        return -1;
+    }
+
     tracing::trace!(
         interface = T::OBJECT_TYPE.interface_name(),
         event = T::OBJECT_TYPE
@@ -177,13 +182,6 @@ where
             tracing::error!("no data pointer is set");
             return -1;
         };
-
-        // All code below relies on the fact that in previous dispatch
-        // invocation the object storage has released object data being used
-        // in this dispatcher.
-        if DISPATCHER_PANIC_CAUSE.with_borrow(Option::is_some) {
-            return -1;
-        }
 
         // Safety: `proxy` in libwayland dispatcher is always valid
         let id = unsafe { WlObjectId::try_from(wl_proxy_get_id(proxy)).unwrap_unchecked() };
