@@ -515,3 +515,101 @@ fn simple_wayland_client() {
         display.roundtrip(queue.as_mut(), client_state.as_ref());
     }
 }
+
+#[allow(unused)]
+#[deprecated = "unsound behavior"]
+unsafe fn wait_for_segv() {
+    let mut set = unsafe { mem::zeroed() };
+    let mut sig_index = 0;
+
+    assert_ne!(-1, unsafe { libc::sigemptyset(&raw mut set) });
+    assert_ne!(-1, unsafe { libc::sigaddset(&raw mut set, libc::SIGSEGV) });
+    assert_ne!(-1, unsafe {
+        libc::sigwait(&raw const set, &raw mut sig_index)
+    });
+
+    panic!("caught segfault");
+}
+
+#[test]
+fn multithread_client() {
+    tracing_subscriber::fmt::init();
+
+    let mut client_state = pin!(ClientState::default());
+    let mut buf = StackMessageBuffer::new();
+
+    let display = WlDisplay::connect(client_state.as_mut()).unwrap();
+
+    let mut main_queue = pin!(display.take_main_queue());
+    let mut side_queue = pin!(display.create_event_queue().unwrap());
+
+    let registry = display.create_registry(&mut buf, main_queue.as_mut().storage_mut());
+
+    display.roundtrip(main_queue.as_mut(), client_state.as_ref());
+
+    let compositor =
+        WlRegistry::bind::<WlCompositor>(&mut buf, main_queue.as_mut().storage_mut(), registry)
+            .unwrap();
+
+    main_queue
+        .as_mut()
+        .storage_mut()
+        .move_object(side_queue.as_mut().storage_mut(), compositor);
+
+    let wm_base =
+        WlRegistry::bind::<WlWmBase>(&mut buf, main_queue.as_mut().storage_mut(), registry)
+            .unwrap();
+
+    main_queue
+        .as_mut()
+        .storage_mut()
+        .move_object(side_queue.as_mut().storage_mut(), wm_base);
+
+    std::thread::scope(|scope| {
+        let display = &display;
+
+        scope.spawn(move || {
+            display.roundtrip(side_queue.as_mut(), client_state.as_ref());
+
+            let surface: WlObjectHandle<WlSurface> = compositor.create_object(
+                &mut buf,
+                side_queue.as_mut().storage_mut(),
+                WlCompositorCreateSurfaceRequest,
+            );
+
+            let xdg_surface: WlObjectHandle<WlXdgSurface> = wm_base.create_object(
+                &mut buf,
+                side_queue.as_mut().storage_mut(),
+                XdgWmBaseGetXdgSurfaceRequest {
+                    surface: surface.id(),
+                },
+            );
+
+            let toplevel: WlObjectHandle<WlToplevel> = xdg_surface.create_object(
+                &mut buf,
+                side_queue.as_mut().storage_mut(),
+                XdgSurfaceGetToplevelRequest,
+            );
+
+            toplevel.request(
+                &mut buf,
+                &side_queue.as_ref().storage(),
+                XdgToplevelSetTitleRequest { title: APP_NAME },
+            );
+
+            toplevel.request(
+                &mut buf,
+                &side_queue.as_ref().storage(),
+                XdgToplevelSetAppIdRequest { app_id: APP_NAME },
+            );
+
+            surface.request(
+                &mut buf,
+                &side_queue.as_ref().storage(),
+                WlSurfaceCommitRequest,
+            );
+
+            display.roundtrip(side_queue.as_mut(), client_state.as_ref());
+        });
+    });
+}

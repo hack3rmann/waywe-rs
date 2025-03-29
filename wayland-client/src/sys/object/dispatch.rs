@@ -10,7 +10,6 @@ use std::{
     cell::RefCell,
     ffi::{c_int, c_void},
     mem, panic,
-    pin::Pin,
     ptr::NonNull,
     slice,
 };
@@ -138,16 +137,10 @@ where
             return -1;
         };
 
-        // # Safety
-        //
-        // - here we have exclusive access to the storage
-        //   (see `WlDisplay::dispatch`)
-        let mut storage = unsafe { Pin::new_unchecked(storage_ptr.as_mut()) };
+        // Safety: we have exclusive access to the storage (see `WlDisplay::dispatch`)
+        let storage = unsafe { storage_ptr.as_mut() };
 
-        // # Safety
-        //
-        // - here we have exclusive access to the state
-        //   (see `WlDisplay::dispatch`)
+        // Safety: we have exclusive access to the state (see `WlDisplay::dispatch`)
         let state = unsafe { state_ptr.as_mut() };
 
         // Safety: an opcode provided by the libwayland backend is always valid (often really small)

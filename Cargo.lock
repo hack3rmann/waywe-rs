@@ -362,6 +362,7 @@ name = "daemon"
 version = "0.0.1"
 dependencies = [
  "bytemuck",
+ "libc",
  "raw-window-handle",
  "rustix",
  "thiserror 2.0.12",

@@ -207,10 +207,13 @@ impl WlDynObject {
     }
 
     pub fn write_storage_location(&mut self, storage: *mut ()) {
-        let user_data_ptr = self
-            .proxy
-            .get_user_data()
-            .cast::<WlDispatchData<(), NoState>>();
+        let Some(user_data_ptr) = NonNull::new(
+            self.proxy
+                .get_user_data()
+                .cast::<WlDispatchData<(), NoState>>(),
+        ) else {
+            return;
+        };
 
         // # Safety
         //
@@ -218,6 +221,7 @@ impl WlDynObject {
         // - we have exclusive access to the proxy object
         unsafe {
             user_data_ptr
+                .as_ptr()
                 .wrapping_byte_add(offset_of!(WlDispatchData::<(), NoState>, storage))
                 .cast::<*mut ()>()
                 .write(storage)

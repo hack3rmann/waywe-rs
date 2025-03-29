@@ -4,9 +4,8 @@ use thiserror::Error;
 pub use crate::interface::generated::WlObjectType;
 
 /// Ids and names for Wayland objects
-#[derive(Clone, Debug, PartialEq, Eq, Copy, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, Copy, PartialOrd, Ord, Hash)]
 pub struct WlObjectId(pub NonZeroU32);
-static_assertions::assert_impl_all!(WlObjectId: Send, Sync);
 
 impl WlObjectId {
     /// Makes new id from `u32`
@@ -22,12 +21,6 @@ impl WlObjectId {
 impl Default for WlObjectId {
     fn default() -> Self {
         Self::new(1)
-    }
-}
-
-impl std::hash::Hash for WlObjectId {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        state.write_u32(u32::from(*self));
     }
 }
 

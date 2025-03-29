@@ -7,8 +7,8 @@ use super::{
     proxy::WlProxy,
 };
 use crate::object::WlObjectId;
+use fxhash::FxHashMap;
 use std::{
-    collections::HashMap,
     marker::PhantomData,
     pin::Pin,
     ptr::{self, NonNull},
@@ -25,8 +25,7 @@ static_assertions::assert_impl_all!(WlObjectStorageEntry: Send, Sync);
 /// A storage for wayland's objects
 #[derive(Debug)]
 pub struct WlObjectStorage<'d, S: State> {
-    // NOTE(hack3rmann): this is a fast map as long as `ObjectId` hashes to itself
-    objects: HashMap<WlObjectId, WlObjectStorageEntry>,
+    objects: FxHashMap<WlObjectId, WlObjectStorageEntry>,
     acquired_object: Option<WlObjectId>,
     state: NonNull<S>,
     queue: Option<NonNull<wl_event_queue>>,
@@ -49,7 +48,7 @@ impl<S: State> WlObjectStorage<'_, S> {
     /// The returned lifetime should be adjusted properly.
     pub unsafe fn new(state: NonNull<S>) -> Self {
         Self {
-            objects: HashMap::new(),
+            objects: FxHashMap::default(),
             acquired_object: None,
             state,
             queue: None,

@@ -13,3 +13,6 @@ wgpu = { version = "24.0.1", features = ["glsl"] }
 wayland-client.workspace = true
 tracing-subscriber = "0.3.19"
 tracing.workspace = true
+
+[dev-dependencies]
+libc = "0.2.171"
