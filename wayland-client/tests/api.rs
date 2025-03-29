@@ -10,7 +10,6 @@ use std::{
     ptr, slice, thread,
     time::Duration,
 };
-use tracing_test::traced_test;
 use wayland_client::{
     Dispatch, FromProxy, HasObjectType, NoState, StackMessageBuffer, WlDisplay, WlObjectHandle,
     WlObjectType, WlProxy, WlRegistry,
@@ -167,7 +166,6 @@ fn open_shm() -> Result<(OwnedFd, String), rustix::io::Errno> {
 }
 
 #[test]
-#[traced_test]
 fn white_rect() {
     let mut buf = StackMessageBuffer::new();
 

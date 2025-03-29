@@ -1,4 +1,5 @@
 use super::{
+    log,
     object::{
         WlObject, WlObjectHandle,
         dispatch::State,
@@ -10,7 +11,7 @@ use super::{
     wire::MessageBuffer,
 };
 use crate::{
-    init::{connect_wayland_socket, GetSocketPathError},
+    init::{GetSocketPathError, connect_wayland_socket},
     interface::{Request, WlDisplayGetRegistryRequest, WlObjectType},
     object::HasObjectType,
     sys::object::dispatch,
@@ -28,9 +29,9 @@ use std::{
 };
 use thiserror::Error;
 use wayland_sys::{
-    DisplayErrorCode, wl_display, wl_display_connect_to_fd,
-    wl_display_create_queue, wl_display_disconnect, wl_display_get_error, wl_display_roundtrip,
-    wl_display_roundtrip_queue, wl_event_queue,
+    DisplayErrorCode, wl_display, wl_display_connect_to_fd, wl_display_create_queue,
+    wl_display_disconnect, wl_display_get_error, wl_display_roundtrip, wl_display_roundtrip_queue,
+    wl_event_queue,
 };
 
 /// A handle to the libwayland backend
@@ -65,6 +66,8 @@ impl<S: State> WlDisplay<S> {
 
         // Safety: `*mut wl_display` is compatible with `*mut wl_proxy`
         let proxy = ManuallyDrop::new(unsafe { WlProxy::from_raw(display.cast()) });
+
+        log::setup();
 
         Ok(Self {
             proxy,

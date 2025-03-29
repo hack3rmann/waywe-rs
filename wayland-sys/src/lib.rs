@@ -1,6 +1,7 @@
 #![allow(non_camel_case_types)]
 
 use libc::{c_uint, free, malloc, realloc};
+use va_list::VaList;
 use std::{
     ffi::{CStr, c_char, c_int, c_void},
     mem::{self, offset_of},
@@ -1006,6 +1007,8 @@ impl TryFrom<i32> for DisplayErrorCode {
     }
 }
 
+pub type wl_log_func_t = unsafe extern "C" fn(*const c_char, VaList);
+
 #[link(name = "wayland-client")]
 #[allow(dead_code)]
 unsafe extern "C" {
@@ -1265,6 +1268,9 @@ unsafe extern "C" {
     /// to EAGAIN and -1 returned. In that case, use poll on the display
     /// file descriptor to wait for it to become writable again.
     pub fn wl_display_flush(display: *mut wl_display) -> c_int;
+
+    /// Sets global log handler for libwayland-client backend
+    pub fn wl_log_set_handler_client(handler: wl_log_func_t);
 
     /// Destroy an event queue
     ///

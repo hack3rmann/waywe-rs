@@ -1973,6 +1973,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "va_list"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "153b41c3fc24dcbdf1281fc2b93d5d67ef2ef73ccd0e3b1d6bef2ce4861cce15"
+
+[[package]]
 name = "valuable"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2084,6 +2090,7 @@ dependencies = [
  "thiserror 2.0.12",
  "tracing",
  "tracing-test",
+ "va_list",
  "wayland-scanner",
  "wayland-sys",
 ]
@@ -2111,6 +2118,7 @@ dependencies = [
  "libc",
  "static_assertions",
  "thiserror 2.0.12",
+ "va_list",
 ]
 
 [[package]]

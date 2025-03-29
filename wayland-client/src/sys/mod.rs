@@ -3,6 +3,7 @@ pub mod object;
 pub mod object_storage;
 pub mod proxy;
 pub mod wire;
+pub mod log;
 
 pub mod protocol {
     use wayland_scanner::include_wl_interfaces;

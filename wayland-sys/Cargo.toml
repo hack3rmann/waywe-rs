@@ -7,3 +7,4 @@ edition.workspace = true
 libc = "0.2.170"
 thiserror.workspace = true
 static_assertions.workspace = true
+va_list = "0.2.0"
