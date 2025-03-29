@@ -24,6 +24,7 @@ pub use generated::prelude::*;
 pub use registry::{
     event::Global as WlRegistryGlobalEvent, request::Bind as WlRegistryBindRequest,
 };
+pub use generated::WlObjectType;
 
 impl WlObjectType {
     /// The name of this interface
@@ -64,8 +65,7 @@ impl WlObjectType {
     }
 }
 
-pub use generated::WlObjectType;
-
+/// Indicator that request produces an object
 pub trait ObjectParent {
     const CHILD_TYPE: WlObjectType;
 }
@@ -75,8 +75,10 @@ pub trait Request<'s>: Sized + HasObjectType {
     /// The opcode for the request
     const CODE: OpCode;
 
+    // TODO(hack3rmann): rename this const
+    //
     /// The type of an interface object of which will be created by libwayland
-    const OUTGOING_INTERFACE: Option<WlObjectType> = None;
+    const OUTGOING_INTERFACE: Option<WlObjectType>;
 
     /// Builds the message on the top of given message buffer
     fn build_message<'m, S: State>(
@@ -87,6 +89,8 @@ pub trait Request<'s>: Sized + HasObjectType {
     where
         's: 'm;
 
+    // TODO(hack3rmann): remove this function
+    //
     /// # Safety
     ///
     /// - `parent` proxy should match the parent interface
