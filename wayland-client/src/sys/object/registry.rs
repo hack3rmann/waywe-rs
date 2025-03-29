@@ -1,5 +1,6 @@
 use super::{Dispatch, FromProxy, WlObject, WlObjectHandle, dispatch::State};
 use crate::{
+    NoState,
     interface::{
         Event, WlObjectType, WlRegistryBindRequest, WlRegistryGlobalEvent,
         WlRegistryGlobalRemoveEvent,
@@ -26,11 +27,10 @@ pub struct WlRegistry<S> {
     pub(crate) interfaces: FxHashMap<WlObjectType, WlRegistryGlobalInfo>,
     pub(crate) _p: PhantomData<fn() -> S>,
 }
-
-unsafe impl<S> Send for WlRegistry<S> {}
-unsafe impl<S> Sync for WlRegistry<S> {}
+static_assertions::assert_impl_all!(WlRegistry<NoState>: Send, Sync);
 
 impl<S: State> WlRegistry<S> {
+    /// Constructs new [`WlRegistry`]
     pub fn new() -> Self {
         Self {
             interfaces: FxHashMap::default(),
@@ -38,54 +38,12 @@ impl<S: State> WlRegistry<S> {
         }
     }
 
+    /// Interfaces of all registered global objects
     pub fn interfaces(&self) -> &FxHashMap<WlObjectType, WlRegistryGlobalInfo> {
         &self.interfaces
     }
 
-    pub fn bind_value<T>(
-        buf: &mut impl MessageBuffer,
-        storage: Pin<&mut WlObjectStorage<'_, S>>,
-        registry: WlObjectHandle<WlRegistry<S>>,
-        object: T,
-    ) -> Option<WlObjectHandle<T>>
-    where
-        T: Dispatch<State = S>,
-    {
-        Self::bind_from_fn(buf, storage, registry, |_, _, _| object)
-    }
-
-    // TODO(hack3rmann): make this function free standing
-    pub fn bind<T>(
-        buf: &mut impl MessageBuffer,
-        storage: Pin<&mut WlObjectStorage<'_, S>>,
-        registry: WlObjectHandle<WlRegistry<S>>,
-    ) -> Option<WlObjectHandle<T>>
-    where
-        T: Dispatch<State = S> + FromProxy,
-    {
-        Self::bind_from_fn(buf, storage, registry, |_, _, proxy| T::from_proxy(proxy))
-    }
-
-    pub fn bind_from_fn<B, T, F>(
-        buf: &mut B,
-        mut storage: Pin<&mut WlObjectStorage<'_, S>>,
-        registry: WlObjectHandle<WlRegistry<S>>,
-        make_data: F,
-    ) -> Option<WlObjectHandle<T>>
-    where
-        B: MessageBuffer,
-        T: Dispatch<State = S>,
-        F: FnOnce(&mut B, Pin<&mut WlObjectStorage<'_, S>>, &WlProxy) -> T,
-    {
-        // Safety: `WlRegistry` is the parent for this request
-        let proxy =
-            unsafe { WlRegistryBindRequest::<T>::new().send(storage.get_object(registry)?, buf)? };
-
-        let data = make_data(buf, storage.as_mut(), &proxy);
-
-        Some(storage.insert(WlObject::new(proxy, data)))
-    }
-
+    /// Numerical name of global object of given type
     pub fn name_of(&self, object_type: WlObjectType) -> Option<WlObjectId> {
         self.interfaces.get(&object_type).map(|global| global.name)
     }
@@ -119,6 +77,54 @@ impl<S: State> WlRegistry<S> {
         };
 
         self.interfaces.remove(&ty);
+    }
+}
+
+impl<S: State> WlObjectHandle<WlRegistry<S>> {
+    /// Bind request on [`WlRegistry`]
+    pub fn bind<T>(
+        self,
+        buf: &mut impl MessageBuffer,
+        storage: Pin<&mut WlObjectStorage<'_, S>>,
+    ) -> Option<WlObjectHandle<T>>
+    where
+        T: Dispatch<State = S> + FromProxy,
+    {
+        self.bind_from_fn(buf, storage, |_, _, proxy| T::from_proxy(proxy))
+    }
+
+    /// Bind request on [`WlRegistry`] with given value
+    pub fn bind_value<T>(
+        self,
+        buf: &mut impl MessageBuffer,
+        storage: Pin<&mut WlObjectStorage<'_, S>>,
+        object: T,
+    ) -> Option<WlObjectHandle<T>>
+    where
+        T: Dispatch<State = S>,
+    {
+        self.bind_from_fn(buf, storage, |_, _, _| object)
+    }
+
+    /// Bind request on [`WlRegistry`] with given function providing value
+    pub fn bind_from_fn<B, T, F>(
+        self,
+        buf: &mut B,
+        mut storage: Pin<&mut WlObjectStorage<'_, S>>,
+        make_data: F,
+    ) -> Option<WlObjectHandle<T>>
+    where
+        B: MessageBuffer,
+        T: Dispatch<State = S>,
+        F: FnOnce(&mut B, Pin<&mut WlObjectStorage<'_, S>>, &WlProxy) -> T,
+    {
+        // Safety: `WlRegistry` is the parent for this request
+        let proxy =
+            unsafe { WlRegistryBindRequest::<T>::new().send(storage.get_object(self)?, buf)? };
+
+        let data = make_data(buf, storage.as_mut(), &proxy);
+
+        Some(storage.insert(WlObject::new(proxy, data)))
     }
 }
 

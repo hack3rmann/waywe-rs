@@ -12,7 +12,7 @@ use std::{
 };
 use wayland_client::{
     Dispatch, FromProxy, HasObjectType, NoState, StackMessageBuffer, WlDisplay, WlObjectHandle,
-    WlObjectType, WlProxy, WlRegistry,
+    WlObjectType, WlProxy,
     interface::{
         WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlRegionDestroyRequest,
         WlShmCreatePoolRequest, WlShmFormat, WlShmPoolCreateBufferRequest, WlSurfaceAttachRequest,
@@ -67,8 +67,9 @@ fn get_protocol_error() {
     }
 
     // TODO(hack3rmann): replace with different request
-    let _wrong_global: WlObjectHandle<WrongGlobal> =
-        WlRegistry::bind(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
+    let _wrong_global: WlObjectHandle<WrongGlobal> = registry
+        .bind(&mut buf, queue.as_mut().storage_mut())
+        .unwrap();
 
     display.roundtrip(queue.as_mut(), state.as_ref());
 
@@ -118,8 +119,9 @@ fn create_surface() {
 
     display.roundtrip(queue.as_mut(), state.as_ref());
 
-    let compositor =
-        WlRegistry::bind::<Compositor>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
+    let compositor = registry
+        .bind::<Compositor>(&mut buf, queue.as_mut().storage_mut())
+        .unwrap();
 
     let surface: WlObjectHandle<Surface> = compositor.create_object(
         &mut buf,
@@ -151,8 +153,9 @@ fn bind_wlr_shell() {
 
     display.roundtrip(queue.as_mut(), state.as_ref());
 
-    let _layer_shell =
-        WlRegistry::bind::<LayerShell>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
+    let _layer_shell = registry
+        .bind::<LayerShell>(&mut buf, queue.as_mut().storage_mut())
+        .unwrap();
 
     display.roundtrip(queue.as_mut(), state.as_ref());
 }
@@ -188,13 +191,17 @@ fn white_rect() {
 
     display.roundtrip(queue.as_mut(), state.as_ref());
 
-    let shm = WlRegistry::bind::<Shm>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
+    let shm = registry
+        .bind::<Shm>(&mut buf, queue.as_mut().storage_mut())
+        .unwrap();
 
-    let viewporter =
-        WlRegistry::bind::<WpViewporter>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
+    let viewporter = registry
+        .bind::<WpViewporter>(&mut buf, queue.as_mut().storage_mut())
+        .unwrap();
 
-    let compositor =
-        WlRegistry::bind::<Compositor>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
+    let compositor = registry
+        .bind::<Compositor>(&mut buf, queue.as_mut().storage_mut())
+        .unwrap();
 
     let surface: WlObjectHandle<Surface> = compositor.create_object(
         &mut buf,
@@ -227,11 +234,13 @@ fn white_rect() {
     region.request(&mut buf, &queue.as_ref().storage(), WlRegionDestroyRequest);
     queue.as_mut().storage_mut().release(region).unwrap();
 
-    let output =
-        WlRegistry::bind::<Output>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
+    let output = registry
+        .bind::<Output>(&mut buf, queue.as_mut().storage_mut())
+        .unwrap();
 
-    let layer_shell =
-        WlRegistry::bind::<LayerShell>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
+    let layer_shell = registry
+        .bind::<LayerShell>(&mut buf, queue.as_mut().storage_mut())
+        .unwrap();
 
     let layer_surface: WlObjectHandle<WlLayerSurface> = layer_shell.create_object(
         &mut buf,

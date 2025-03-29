@@ -3,7 +3,7 @@ use std::pin::pin;
 use std::time::Instant;
 use std::{mem, time::Duration};
 use wayland_client::{
-    NoState, SmallVecMessageBuffer, WlDisplay, WlObjectHandle, WlRegistry,
+    NoState, SmallVecMessageBuffer, WlDisplay, WlObjectHandle,
     interface::WlCompositorCreateSurfaceRequest,
     sys::object::default_impl::{Compositor, Surface},
 };
@@ -24,8 +24,9 @@ async fn use_wgpu_to_draw_anything() {
 
     display.roundtrip(queue.as_mut(), state.as_ref());
 
-    let compositor =
-        WlRegistry::bind::<Compositor>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
+    let compositor = registry
+        .bind::<Compositor>(&mut buf, queue.as_mut().storage_mut())
+        .unwrap();
 
     let surface: WlObjectHandle<Surface> = compositor.create_object(
         &mut buf,

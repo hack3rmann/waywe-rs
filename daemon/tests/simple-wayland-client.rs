@@ -9,7 +9,7 @@ use std::{
 use wayland_client::{
     Dispatch, FromProxy, HasObjectType, SmallVecMessageBuffer, StackMessageBuffer, State,
     WlDisplay, WlMessage, WlObject, WlObjectHandle, WlObjectStorage, WlObjectType, WlProxy,
-    WlRegistry, assert_dispatch_is_empty,
+    assert_dispatch_is_empty,
     interface::{
         Event, WlCompositorCreateSurfaceRequest, WlSurfaceCommitRequest,
         XdgSurfaceAckConfigureRequest, XdgSurfaceConfigureEvent, XdgSurfaceGetToplevelRequest,
@@ -296,11 +296,13 @@ fn simple_wayland_client() {
 
     display.roundtrip(queue.as_mut(), client_state.as_ref());
 
-    let compositor =
-        WlRegistry::bind::<WlCompositor>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
+    let compositor = registry
+        .bind::<WlCompositor>(&mut buf, queue.as_mut().storage_mut())
+        .unwrap();
 
-    let wm_base =
-        WlRegistry::bind::<WlWmBase>(&mut buf, queue.as_mut().storage_mut(), registry).unwrap();
+    let wm_base = registry
+        .bind::<WlWmBase>(&mut buf, queue.as_mut().storage_mut())
+        .unwrap();
 
     display.roundtrip(queue.as_mut(), client_state.as_ref());
 
@@ -548,9 +550,9 @@ fn multithread_client() {
 
     display.roundtrip(main_queue.as_mut(), client_state.as_ref());
 
-    let compositor =
-        WlRegistry::bind::<WlCompositor>(&mut buf, main_queue.as_mut().storage_mut(), registry)
-            .unwrap();
+    let compositor = registry
+        .bind::<WlCompositor>(&mut buf, main_queue.as_mut().storage_mut())
+        .unwrap();
 
     main_queue
         .as_mut()
@@ -558,9 +560,9 @@ fn multithread_client() {
         .move_object(side_queue.as_mut().storage_mut(), compositor)
         .unwrap();
 
-    let wm_base =
-        WlRegistry::bind::<WlWmBase>(&mut buf, main_queue.as_mut().storage_mut(), registry)
-            .unwrap();
+    let wm_base = registry
+        .bind::<WlWmBase>(&mut buf, main_queue.as_mut().storage_mut())
+        .unwrap();
 
     main_queue
         .as_mut()
