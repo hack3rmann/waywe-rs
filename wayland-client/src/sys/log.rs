@@ -1,5 +1,4 @@
 use std::{
-    cell::UnsafeCell,
     ffi::{CStr, c_char, c_int},
     slice, str,
 };
@@ -8,26 +7,29 @@ use wayland_sys::wl_log_set_handler_client;
 
 pub(crate) const MAX_LOG_MESSAGE_LEN: usize = 256;
 
-thread_local! {
-    pub(crate) static BUFFER: UnsafeCell<[u8; MAX_LOG_MESSAGE_LEN]>
-        = const { UnsafeCell::new([0; MAX_LOG_MESSAGE_LEN]) };
-}
-
 /// # Safety
 ///
 /// - `format` should be a valid format c-string corresponding to `args` values
 /// - `args` are valid
 pub(crate) unsafe extern "C" fn wl_log_raw(format: *const c_char, args: VaList) {
-    let buffer_ptr = BUFFER.with(UnsafeCell::get).cast::<c_char>();
+    let mut buffer = [0_u8; MAX_LOG_MESSAGE_LEN];
 
     // # Safety
     //
     // - `buffer_ptr` points to a valid buffer of `MAX_LOG_MESSAGE_LEN` bytes
     // - `format` is a valid format c-string corresponding to `args` values
     // - `args` are valid
-    let result = unsafe { vsnprintf(buffer_ptr, MAX_LOG_MESSAGE_LEN, format, args) };
+    let result = unsafe {
+        vsnprintf(
+            buffer.as_mut_ptr().cast(),
+            MAX_LOG_MESSAGE_LEN,
+            format,
+            args,
+        )
+    };
 
     let bytes = if result > 0 {
+        // TODO(hack3rmann): use dynamic buffer for this
         if result as usize + 1 == MAX_LOG_MESSAGE_LEN {
             tracing::error!(MAX_LOG_MESSAGE_LEN, "error message is too large");
         }
@@ -35,7 +37,7 @@ pub(crate) unsafe extern "C" fn wl_log_raw(format: *const c_char, args: VaList) 
         // Safety: if `vsnprintf` returns number greater than 0, then it has
         // wrote this number of bytes into the buffer, therefore `result`
         // is the slice's length.
-        unsafe { slice::from_raw_parts(buffer_ptr.cast::<u8>(), result as usize) }
+        unsafe { slice::from_raw_parts(buffer.as_ptr(), result as usize) }
     } else {
         // Safety: `format` is a valid c-string
         unsafe { CStr::from_ptr(format) }.to_bytes()
