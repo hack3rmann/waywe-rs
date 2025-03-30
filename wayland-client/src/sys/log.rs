@@ -1,5 +1,6 @@
 use std::{
     ffi::{CStr, c_char, c_int},
+    mem::MaybeUninit,
     slice, str,
 };
 use va_list::VaList;
@@ -12,7 +13,7 @@ pub(crate) const MAX_LOG_MESSAGE_LEN: usize = 256;
 /// - `format` should be a valid format c-string corresponding to `args` values
 /// - `args` are valid
 pub(crate) unsafe extern "C" fn wl_log_raw(format: *const c_char, args: VaList) {
-    let mut buffer = [0_u8; MAX_LOG_MESSAGE_LEN];
+    let mut buffer = MaybeUninit::<[u8; MAX_LOG_MESSAGE_LEN]>::uninit();
 
     // # Safety
     //
@@ -29,15 +30,20 @@ pub(crate) unsafe extern "C" fn wl_log_raw(format: *const c_char, args: VaList) 
     };
 
     let bytes = if result > 0 {
-        // TODO(hack3rmann): use dynamic buffer for this
-        if result as usize + 1 == MAX_LOG_MESSAGE_LEN {
-            tracing::error!(MAX_LOG_MESSAGE_LEN, "error message is too large");
+        let message_len = result as usize;
+
+        if message_len + 1 >= MAX_LOG_MESSAGE_LEN {
+            tracing::error!(
+                max_message_len = MAX_LOG_MESSAGE_LEN - 1,
+                message_len,
+                "error message is too large"
+            );
         }
 
         // Safety: if `vsnprintf` returns number greater than 0, then it has
         // wrote this number of bytes into the buffer, therefore `result`
         // is the slice's length.
-        unsafe { slice::from_raw_parts(buffer.as_ptr(), result as usize) }
+        unsafe { slice::from_raw_parts(buffer.as_ptr().cast::<u8>(), message_len) }
     } else {
         // Safety: `format` is a valid c-string
         unsafe { CStr::from_ptr(format) }.to_bytes()
@@ -46,6 +52,8 @@ pub(crate) unsafe extern "C" fn wl_log_raw(format: *const c_char, args: VaList) 
     // Safety: wayland log messages are valid UTF-8
     let raw_message = unsafe { str::from_utf8_unchecked(bytes) };
 
+    // NOTE(hack3rmann): most log messages include a linebreak at the end.
+    // `tracing` prints those messages and writes another linebreak at the end.
     let message = trim_last_linebreak(raw_message);
 
     tracing::error!("{message}");
