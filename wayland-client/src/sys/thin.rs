@@ -1,5 +1,7 @@
 use std::{
-    any, fmt, hash, mem::{self, MaybeUninit}, ptr::NonNull
+    any, fmt, hash,
+    mem::{self, MaybeUninit},
+    ptr::NonNull,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

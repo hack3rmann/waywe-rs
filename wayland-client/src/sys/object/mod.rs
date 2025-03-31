@@ -419,7 +419,7 @@ impl<T: Dispatch> Drop for WlObject<T> {
 /// Constructs mut reference to ZST type 'from a thin air'
 const fn zst_mut<T>() -> Result<&'static mut T, NonZstError> {
     if mem::size_of::<T>() == 0 {
-        // Safety: any non-null reference is a valid reference to some ZST
+        // Safety: any non-null well-aligned reference is a valid reference to some ZST
         Ok(unsafe { NonNull::dangling().as_mut() })
     } else {
         Err(NonZstError)
