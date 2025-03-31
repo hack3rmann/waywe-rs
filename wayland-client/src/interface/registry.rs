@@ -21,18 +21,20 @@
 
 use crate::{
     object::WlObjectId,
-    sys::wire::{WlMessage, MessageBuffer},
+    sys::wire::{MessageBuffer, WlMessage},
 };
 
 pub mod request {
-    use wayland_sys::wl_proxy_marshal_array_constructor;
-
     use super::*;
-    use crate::{object::{HasObjectType, InterfaceMessageArgument, WlObjectType}, sys::{
-        object::{dispatch::State, registry::WlRegistry, WlObject},
-        proxy::WlProxy,
-        wire::OpCode,
-    }};
+    use crate::{
+        ffi,
+        object::{HasObjectType, InterfaceMessageArgument, WlObjectType},
+        sys::{
+            object::{WlObject, dispatch::State, registry::WlRegistry},
+            proxy::WlProxy,
+            wire::OpCode,
+        },
+    };
     use std::{marker::PhantomData, ptr::NonNull};
 
     /// Binds a new, client-created object to the server using the
@@ -81,7 +83,7 @@ pub mod request {
             let interface = &raw const *Self::OUTGOING_INTERFACE.backend_interface();
 
             let raw_proxy = unsafe {
-                wl_proxy_marshal_array_constructor(
+                ffi::wl_proxy_marshal_array_constructor(
                     registry.proxy().as_raw().as_ptr(),
                     message.opcode.into(),
                     message.arguments.as_ptr().cast_mut(),

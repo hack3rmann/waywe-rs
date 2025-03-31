@@ -11,8 +11,9 @@ use super::{
     wire::MessageBuffer,
 };
 use crate::{
+    ffi,
     init::{GetSocketPathError, connect_wayland_socket},
-    interface::{Request, WlDisplayGetRegistryRequest, WlObjectType},
+    interface::{WlDisplayGetRegistryRequest, WlObjectType, send_request_raw},
     object::HasObjectType,
     sys::object::dispatch,
 };
@@ -28,11 +29,7 @@ use std::{
     sync::atomic::{AtomicBool, Ordering::*},
 };
 use thiserror::Error;
-use wayland_sys::{
-    DisplayErrorCode, wl_display, wl_display_connect_to_fd, wl_display_create_queue,
-    wl_display_disconnect, wl_display_get_error, wl_display_roundtrip, wl_display_roundtrip_queue,
-    wl_event_queue,
-};
+use wayland_sys::{DisplayErrorCode, wl_display, wl_event_queue};
 
 /// A handle to the libwayland backend
 pub struct WlDisplay<S: State> {
@@ -61,7 +58,7 @@ impl<S: State> WlDisplay<S> {
         let raw_fd = fd.into_raw_fd();
 
         // Safety: calling this function on a valid file descriptor is ok
-        let display = NonNull::new(unsafe { wl_display_connect_to_fd(raw_fd) })
+        let display = NonNull::new(unsafe { ffi::wl_display_connect_to_fd(raw_fd) })
             .ok_or(DisplayConnectToFdError)?;
 
         // Safety: `*mut wl_display` is compatible with `*mut wl_proxy`
@@ -128,9 +125,13 @@ impl<S: State> WlDisplay<S> {
     ) -> WlObjectHandle<WlRegistry<S>> {
         // Safety: parent interface matcher request's one
         let proxy = unsafe {
-            WlDisplayGetRegistryRequest
-                .send(buf, storage.as_ref().get_ref(), self.proxy())
-                .unwrap()
+            send_request_raw(
+                WlDisplayGetRegistryRequest,
+                buf,
+                storage.as_ref().get_ref(),
+                self.proxy(),
+            )
+            .unwrap()
         };
 
         storage.insert(WlObject::new(proxy, WlRegistry::default()))
@@ -139,7 +140,7 @@ impl<S: State> WlDisplay<S> {
     /// Creates raw event queue
     pub(crate) fn create_event_queue_raw(&self) -> *mut wl_event_queue {
         // Safety: display is valid
-        unsafe { wl_display_create_queue(self.as_raw().as_ptr()) }
+        unsafe { ffi::wl_display_create_queue(self.as_raw().as_ptr()) }
     }
 
     /// # Safety
@@ -147,7 +148,7 @@ impl<S: State> WlDisplay<S> {
     /// - no one should access the object storage during this call
     /// - no one should access the state during this call
     pub(crate) unsafe fn roundtrip_unchecked(&self) -> i32 {
-        unsafe { wl_display_roundtrip(self.as_raw().as_ptr()) }
+        unsafe { ffi::wl_display_roundtrip(self.as_raw().as_ptr()) }
     }
 
     /// # Safety
@@ -159,7 +160,7 @@ impl<S: State> WlDisplay<S> {
         queue: &WlEventQueue<'d, S>,
     ) -> i32 {
         if let Some(queue_ptr) = queue.as_raw() {
-            unsafe { wl_display_roundtrip_queue(self.as_raw().as_ptr(), queue_ptr.as_ptr()) }
+            unsafe { ffi::wl_display_roundtrip_queue(self.as_raw().as_ptr(), queue_ptr.as_ptr()) }
         } else {
             unsafe { self.roundtrip_unchecked() }
         }
@@ -172,7 +173,7 @@ impl<S: State> WlDisplay<S> {
     /// Returns [`None`] if no error occurred
     pub(crate) fn get_error_code(&self) -> Option<DisplayErrorCode> {
         // Safety: calling this function on a valid display is safe
-        let raw_code = unsafe { wl_display_get_error(self.as_raw().as_ptr()) };
+        let raw_code = unsafe { ffi::wl_display_get_error(self.as_raw().as_ptr()) };
 
         (raw_code != 0).then_some({
             // Safety: non-zero code means it is a valid display error code
@@ -220,7 +221,7 @@ impl<S: State> HasObjectType for WlDisplay<S> {
 impl<S: State> Drop for WlDisplay<S> {
     fn drop(&mut self) {
         // Safety: `self.as_raw_display_ptr()` is a valid display object
-        unsafe { wl_display_disconnect(self.as_raw().as_ptr()) };
+        unsafe { ffi::wl_display_disconnect(self.as_raw().as_ptr()) };
     }
 }
 

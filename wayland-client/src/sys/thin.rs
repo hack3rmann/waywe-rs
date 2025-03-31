@@ -1,9 +1,8 @@
 use std::{
-    mem::{self, MaybeUninit},
-    ptr::NonNull,
+    any, fmt, hash, mem::{self, MaybeUninit}, ptr::NonNull
 };
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct SizeAndOffset(pub(crate) usize);
 
 impl SizeAndOffset {
@@ -33,15 +32,24 @@ impl SizeAndOffset {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct DataWrapperHeader {
+impl fmt::Debug for SizeAndOffset {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct(any::type_name::<Self>())
+            .field("size", &self.size())
+            .field("offset", &self.offset())
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) struct ThinDataHeader {
     pub(crate) drop: unsafe fn(*mut ()),
     // TODO(hack3rmann): we can pack both `size` and `offset` into one `u16` type
     pub(crate) size_and_offset: SizeAndOffset,
 }
 
-impl DataWrapperHeader {
-    pub(crate) const OFFSET_SHIFT: usize = mem::size_of::<DataWrapperHeader>();
+impl ThinDataHeader {
+    pub(crate) const OFFSET_SHIFT: usize = mem::size_of::<ThinDataHeader>();
 
     pub(crate) const fn of<T: 'static>() -> Self {
         let drop = |ptr: *mut ()| unsafe {
@@ -53,7 +61,7 @@ impl DataWrapperHeader {
             size_and_offset: const {
                 SizeAndOffset::new(
                     mem::size_of::<T>(),
-                    mem::offset_of!(DataWrapper<T>, data) - Self::OFFSET_SHIFT,
+                    mem::offset_of!(ThinData<T>, inner) - Self::OFFSET_SHIFT,
                 )
                 .unwrap()
             },
@@ -70,43 +78,128 @@ impl DataWrapperHeader {
 }
 
 #[repr(C)]
-pub(crate) struct DataWrapper<T: 'static> {
-    pub(crate) header: DataWrapperHeader,
-    pub(crate) data: T,
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ThinData<T: 'static> {
+    pub(crate) header: ThinDataHeader,
+    pub(crate) inner: T,
 }
 
-impl<T: 'static> DataWrapper<T> {
+impl<T: 'static> ThinData<T> {
     pub(crate) const fn new(data: T) -> Self {
         Self {
-            header: const { DataWrapperHeader::of::<T>() },
-            data,
+            header: const { ThinDataHeader::of::<T>() },
+            inner: data,
         }
     }
 }
 
+impl<T: Default + 'static> Default for ThinData<T> {
+    fn default() -> Self {
+        Self::new(T::default())
+    }
+}
+
+impl<T: PartialEq + 'static> PartialEq for ThinData<T> {
+    fn eq(&self, other: &Self) -> bool {
+        T::eq(&self.inner, &other.inner)
+    }
+
+    #[allow(clippy::partialeq_ne_impl)]
+    fn ne(&self, other: &Self) -> bool {
+        T::ne(&self.inner, &other.inner)
+    }
+}
+
+impl<T: Eq + 'static> Eq for ThinData<T> {}
+
+impl<T: PartialOrd + 'static> PartialOrd for ThinData<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        T::partial_cmp(&self.inner, &other.inner)
+    }
+
+    fn lt(&self, other: &Self) -> bool {
+        T::lt(&self.inner, &other.inner)
+    }
+
+    fn le(&self, other: &Self) -> bool {
+        T::le(&self.inner, &other.inner)
+    }
+
+    fn gt(&self, other: &Self) -> bool {
+        T::gt(&self.inner, &other.inner)
+    }
+
+    fn ge(&self, other: &Self) -> bool {
+        T::ge(&self.inner, &other.inner)
+    }
+}
+
+impl<T: Ord + 'static> Ord for ThinData<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        T::cmp(&self.inner, &other.inner)
+    }
+
+    fn max(self, other: Self) -> Self
+    where
+        Self: Sized,
+    {
+        Self {
+            header: self.header,
+            inner: T::max(self.inner, other.inner),
+        }
+    }
+
+    fn min(self, other: Self) -> Self
+    where
+        Self: Sized,
+    {
+        Self {
+            header: self.header,
+            inner: T::min(self.inner, other.inner),
+        }
+    }
+
+    fn clamp(self, min: Self, max: Self) -> Self
+    where
+        Self: Sized,
+    {
+        Self {
+            header: self.header,
+            inner: T::clamp(self.inner, min.inner, max.inner),
+        }
+    }
+}
+
+impl<T: hash::Hash + 'static> hash::Hash for ThinData<T> {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        T::hash(&self.inner, state)
+    }
+}
+
 #[repr(C)]
-pub(crate) struct DynDataWrapper {
-    pub(crate) header: DataWrapperHeader,
+pub(crate) struct DynThinData {
+    pub(crate) header: ThinDataHeader,
     pub(crate) bytes: [MaybeUninit<u8>],
 }
 
-impl DynDataWrapper {
+impl DynThinData {
     pub(crate) unsafe fn from_ptr(ptr: NonNull<()>) -> NonNull<Self> {
-        let header = unsafe { ptr.cast::<DataWrapperHeader>().as_ref() };
+        let header = unsafe { ptr.cast::<ThinDataHeader>().as_ref() };
 
-        let n_align_bytese = header.offset() - mem::size_of::<DataWrapperHeader>();
+        let n_align_bytese = header.offset() - mem::size_of::<ThinDataHeader>();
         let byte_slice_size = header.size() + n_align_bytese;
 
         // HACK(hack3rmann): constructing fat pointer like this is non-const
         unsafe { mem::transmute::<(NonNull<()>, usize), NonNull<Self>>((ptr, byte_slice_size)) }
     }
 
-    pub(crate) fn from_ref<T: 'static>(value: &DataWrapper<T>) -> &Self {
+    #[cfg(test)]
+    pub(crate) fn from_ref<T: 'static>(value: &ThinData<T>) -> &Self {
         unsafe { Self::from_ptr(NonNull::from(value).cast()).as_ref() }
     }
 }
 
-impl Drop for DynDataWrapper {
+impl Drop for DynThinData {
     fn drop(&mut self) {
         let data_ptr = (&raw mut *self)
             .cast::<()>()
@@ -133,18 +226,18 @@ mod tests {
 
     #[test]
     fn data_wrapper_size_and_offset() {
-        const X1: DataWrapper<i32> = DataWrapper::new(42);
+        const X1: ThinData<i32> = ThinData::new(42);
         const { assert!(X1.header.size() == mem::size_of::<i32>()) };
-        const { assert!(X1.header.offset() == mem::size_of::<DataWrapperHeader>()) };
+        const { assert!(X1.header.offset() == mem::size_of::<ThinDataHeader>()) };
     }
 
     #[test]
     fn zst() {
         struct Zst;
 
-        let value = const { DataWrapper::new(Zst) };
+        let value = const { ThinData::new(Zst) };
 
-        let dynamic = DynDataWrapper::from_ref(&value);
+        let dynamic = DynThinData::from_ref(&value);
 
         assert_eq!(dynamic.bytes.len(), 0);
         assert_eq!(mem::size_of_val(&value), mem::size_of_val(dynamic));
@@ -152,8 +245,8 @@ mod tests {
 
     #[test]
     fn copy() {
-        let value = const { DataWrapper::new(42) };
-        let dynamic = DynDataWrapper::from_ref(&value);
+        let value = const { ThinData::new(42) };
+        let dynamic = DynThinData::from_ref(&value);
 
         assert_eq!(dynamic.bytes.len(), mem::size_of::<i32>());
         assert_eq!(mem::size_of_val(&value), mem::size_of_val(dynamic));
@@ -161,8 +254,8 @@ mod tests {
 
     #[test]
     fn boxed_copy() {
-        let value = DataWrapper::new(Box::new(42));
-        let dynamic = DynDataWrapper::from_ref(&value);
+        let value = ThinData::new(Box::new(42));
+        let dynamic = DynThinData::from_ref(&value);
 
         assert_eq!(dynamic.bytes.len(), mem::size_of::<Box<i32>>());
         assert_eq!(mem::size_of_val(&value), mem::size_of_val(dynamic));
@@ -176,12 +269,12 @@ mod tests {
             value: Box<i32>,
         }
 
-        let value = DataWrapper::new(Struct {
+        let value = ThinData::new(Struct {
             values: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
             value: Box::new(42),
         });
 
-        let dynamic = DynDataWrapper::from_ref(&value);
+        let dynamic = DynThinData::from_ref(&value);
 
         assert_eq!(dynamic.bytes.len(), mem::size_of::<Struct>());
         assert_eq!(mem::size_of_val(&value), mem::size_of_val(dynamic));
@@ -189,8 +282,8 @@ mod tests {
 
     #[test]
     fn big_alignment() {
-        let value = const { DataWrapper::new(42_u128) };
-        let dynamic = DynDataWrapper::from_ref(&value);
+        let value = const { ThinData::new(42_u128) };
+        let dynamic = DynThinData::from_ref(&value);
 
         #[cfg(target_pointer_width = "64")]
         assert_eq!(dynamic.bytes.len(), mem::size_of::<u128>());
@@ -202,24 +295,24 @@ mod tests {
     fn zst_drop() {
         struct Zst;
 
-        let value = Box::into_raw(Box::new(const { DataWrapper::new(Zst) }));
-        let dynamic = unsafe { DynDataWrapper::from_ptr(NonNull::new(value).unwrap().cast()) };
+        let value = Box::into_raw(Box::new(const { ThinData::new(Zst) }));
+        let dynamic = unsafe { DynThinData::from_ptr(NonNull::new(value).unwrap().cast()) };
 
         drop(unsafe { Box::from_raw(dynamic.as_ptr()) });
     }
 
     #[test]
     fn copy_drop() {
-        let value = Box::into_raw(Box::new(const { DataWrapper::new(42) }));
-        let dynamic = unsafe { DynDataWrapper::from_ptr(NonNull::new(value).unwrap().cast()) };
+        let value = Box::into_raw(Box::new(const { ThinData::new(42) }));
+        let dynamic = unsafe { DynThinData::from_ptr(NonNull::new(value).unwrap().cast()) };
 
         drop(unsafe { Box::from_raw(dynamic.as_ptr()) });
     }
 
     #[test]
     fn boxed_copy_drop() {
-        let value = Box::into_raw(Box::new(DataWrapper::new(Box::new(42))));
-        let dynamic = unsafe { DynDataWrapper::from_ptr(NonNull::new(value).unwrap().cast()) };
+        let value = Box::into_raw(Box::new(ThinData::new(Box::new(42))));
+        let dynamic = unsafe { DynThinData::from_ptr(NonNull::new(value).unwrap().cast()) };
 
         drop(unsafe { Box::from_raw(dynamic.as_ptr()) });
     }
@@ -232,12 +325,12 @@ mod tests {
             value: Box<i32>,
         }
 
-        let value = Box::into_raw(Box::new(DataWrapper::new(Struct {
+        let value = Box::into_raw(Box::new(ThinData::new(Struct {
             values: vec![1, 2, 3, 4, 5, 6, 7, 8],
             value: Box::new(42),
         })));
 
-        let dynamic = unsafe { DynDataWrapper::from_ptr(NonNull::new(value).unwrap().cast()) };
+        let dynamic = unsafe { DynThinData::from_ptr(NonNull::new(value).unwrap().cast()) };
 
         drop(unsafe { Box::from_raw(dynamic.as_ptr()) });
     }

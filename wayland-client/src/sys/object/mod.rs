@@ -3,12 +3,15 @@ pub mod dispatch;
 pub mod event_queue;
 pub mod registry;
 
-use super::{object_storage::WlObjectStorage, proxy::WlProxy, wire::MessageBuffer};
+use super::{object_storage::WlObjectStorage, proxy::WlProxy, thin::ThinData, wire::MessageBuffer};
 use crate::{
-    interface::{ObjectParent, Request},
+    ffi,
+    interface::{ObjectParent, Request, send_request_raw},
     object::{HasObjectType, WlObjectId},
 };
-use dispatch::{Dispatch, NoState, WlDispatchData, dispatch_raw, is_empty_dispatch_data_allowed};
+use dispatch::{
+    Dispatch, WlDispatchData, WlDynDispatchData, dispatch_raw, is_empty_dispatch_data_allowed,
+};
 use std::{
     any::{self, TypeId},
     fmt, hash,
@@ -19,7 +22,6 @@ use std::{
     ptr::{self, NonNull},
 };
 use thiserror::Error;
-use wayland_sys::wl_proxy_add_dispatcher;
 
 /// A trait used to construct newly created object.
 pub trait FromProxy: Sized {
@@ -68,12 +70,14 @@ impl<T> WlObjectHandle<T> {
             );
 
             assert!(
-                R::OUTGOING_INTERFACE.is_none(),
+                R::CHILD_TYPE.is_none(),
                 "request's outgoing interface should be set to None",
             )
         };
 
-        let proxy = unsafe { request.send(buf, storage, storage.get_proxy(self.id).unwrap()) };
+        let proxy =
+            unsafe { send_request_raw(request, buf, storage, storage.get_proxy(self.id).unwrap()) };
+
         debug_assert!(proxy.is_none());
     }
 
@@ -99,7 +103,7 @@ impl<T> WlObjectHandle<T> {
                 "request's parent interface should match the self type one's"
             );
 
-            match R::OUTGOING_INTERFACE {
+            match <R as Request>::CHILD_TYPE {
                 Some(object_type) => assert!(
                     object_type as u32 == D::OBJECT_TYPE as u32,
                     "request's outgoing interface should match the return type one's"
@@ -109,13 +113,13 @@ impl<T> WlObjectHandle<T> {
         };
 
         let proxy = unsafe {
-            request
-                .send(
-                    buf,
-                    storage.as_ref().get_ref(),
-                    storage.get_proxy(self.id).unwrap(),
-                )
-                .unwrap()
+            send_request_raw(
+                request,
+                buf,
+                storage.as_ref().get_ref(),
+                storage.get_proxy(self.id).unwrap(),
+            )
+            .unwrap()
         };
 
         let data = D::from_proxy(&proxy);
@@ -161,30 +165,9 @@ impl<T> PartialEq for WlObjectHandle<T> {
 impl<T> Eq for WlObjectHandle<T> {}
 
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq, Copy)]
-pub(crate) struct TypeInfo {
-    pub(crate) id: TypeId,
-    pub(crate) drop: unsafe fn(*mut ()),
-}
-
-impl TypeInfo {
-    pub(crate) fn of<T: 'static>() -> TypeInfo {
-        TypeInfo {
-            id: TypeId::of::<T>(),
-            drop: |ptr: *mut ()| unsafe {
-                ptr.cast::<T>().drop_in_place();
-            },
-        }
-    }
-}
-
-// HACK(hack3rmann): dropping this type may cause memory leak
-// Drop implementation for this type drops `WlDispatchData<()>`
-// instead of `WlDispatchData<T>` with correct type `T`.
-#[repr(C)]
 pub(crate) struct WlDynObject {
     pub(crate) proxy: WlProxy,
-    pub(crate) type_info: TypeInfo,
+    pub(crate) type_id: TypeId,
 }
 
 impl WlDynObject {
@@ -193,7 +176,7 @@ impl WlDynObject {
         //
         // - `WlDynObject` and `WlObject<T>` have the same header - `WlProxy`
         // - both structs are `repr(C)`
-        (self.type_info.id == TypeId::of::<T>())
+        (self.type_id == TypeId::of::<T>())
             .then_some(unsafe { mem::transmute::<&WlDynObject, &WlObject<T>>(self) })
     }
 
@@ -202,7 +185,7 @@ impl WlDynObject {
         //
         // - `WlDynObject` and `WlObject<T>` have the same header - `WlProxy`
         // - both structs are `repr(C)`
-        (self.type_info.id == TypeId::of::<T>())
+        (self.type_id == TypeId::of::<T>())
             .then_some(unsafe { mem::transmute::<&mut WlDynObject, &mut WlObject<T>>(self) })
     }
 
@@ -210,11 +193,7 @@ impl WlDynObject {
     ///
     /// `storage` should point to a valid [`WlObjectStorage<S>`] with state `S`
     pub(crate) unsafe fn write_storage_location(&mut self, storage: *mut ()) {
-        let Some(user_data_ptr) = NonNull::new(
-            self.proxy
-                .get_user_data()
-                .cast::<WlDispatchData<(), NoState>>(),
-        ) else {
+        let Some(user_data_ptr) = NonNull::new(self.proxy.get_user_data()) else {
             return;
         };
 
@@ -225,7 +204,7 @@ impl WlDynObject {
         unsafe {
             user_data_ptr
                 .as_ptr()
-                .wrapping_byte_add(offset_of!(WlDispatchData::<(), NoState>, storage))
+                .wrapping_byte_add(offset_of!(WlDynDispatchData, storage))
                 .cast::<*mut ()>()
                 .write(storage)
         };
@@ -235,17 +214,18 @@ impl WlDynObject {
 impl Drop for WlDynObject {
     fn drop(&mut self) {
         // Safety: `self.proxy` is a valid object produced by libwayland
-        let user_data = self.proxy.get_user_data();
-
-        let data_ptr = user_data
-            .wrapping_byte_add(offset_of!(WlDispatchData<(), NoState>, data))
-            .cast::<()>();
+        let Some(user_data) = NonNull::new(self.proxy.get_user_data()) else {
+            return;
+        };
 
         // # Safety
         //
-        // - `data_ptr` points to a valid location of `T`
-        // - `drop` called once
-        unsafe { (self.type_info.drop)(data_ptr) }
+        // - `user_data` points to `WlDispatchData<..>`
+        // - `WlDynDispatchData` can be safely constructed from a pointer to `WlDispatchData<..>`
+        let ptr = unsafe { WlDynDispatchData::from_ptr(user_data.cast()) };
+
+        // Safety: `ptr` points to box-allocated memory
+        _ = unsafe { Box::from_raw(ptr.as_ptr()) };
     }
 }
 
@@ -285,14 +265,14 @@ impl<T: Dispatch> WlObject<T> {
             dispatch: T::dispatch,
             storage: None,
             state: None,
-            data,
+            data: ThinData::new(data),
         });
 
         let dispatch_data_ptr = Box::into_raw(dispatch_data);
 
         // Safety: `proxy` is a valid object provided by libwayland
         let result = unsafe {
-            wl_proxy_add_dispatcher(
+            ffi::wl_proxy_add_dispatcher(
                 proxy.as_raw().as_ptr(),
                 dispatch_raw::<T, T::State>,
                 ptr::null(),
@@ -373,7 +353,7 @@ impl<T: Dispatch> WlObject<T> {
                     .cast::<WlProxy>()
                     .read()
             },
-            type_info: TypeInfo::of::<T>(),
+            type_id: TypeId::of::<T>(),
         }
     }
 
@@ -393,6 +373,7 @@ impl<T: Dispatch> WlObject<T> {
                 .cast::<WlDispatchData<T, T::State>>()
                 .as_ref()
                 .data
+                .inner
         })
     }
 
@@ -412,6 +393,7 @@ impl<T: Dispatch> WlObject<T> {
                 .cast::<WlDispatchData<T, T::State>>()
                 .as_mut()
                 .data
+                .inner
         })
     }
 }

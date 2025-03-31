@@ -84,6 +84,10 @@ impl VecMessageBuffer {
     pub const fn new() -> Self {
         Self(Vec::new())
     }
+    
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(Vec::with_capacity(capacity))
+    }
 }
 
 #[derive(Clone, Default)]
@@ -97,6 +101,10 @@ unsafe impl<const N: usize> Sync for SmallVecMessageBuffer<N> {}
 impl<const N: usize> SmallVecMessageBuffer<N> {
     pub const fn new() -> Self {
         Self(SmallVec::new_const())
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(SmallVec::with_capacity(capacity))
     }
 }
 
@@ -113,6 +121,7 @@ unsafe impl Send for StackMessageBuffer {}
 unsafe impl Sync for StackMessageBuffer {}
 
 impl StackMessageBuffer {
+    /// Maximum number of arguments allowed to be passed into request
     pub const CAPACITY: usize = 20;
 
     /// Constructs new [`StackMessageBuffer`]

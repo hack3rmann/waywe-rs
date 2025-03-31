@@ -9,6 +9,7 @@ pub mod generated {
 }
 
 use crate::{
+    ffi,
     object::HasObjectType,
     sys::{
         object::dispatch::State,
@@ -18,13 +19,12 @@ use crate::{
     },
 };
 use std::ptr::{self, NonNull};
-use wayland_sys::wl_proxy_marshal_array_constructor;
 
+pub use generated::WlObjectType;
 pub use generated::prelude::*;
 pub use registry::{
     event::Global as WlRegistryGlobalEvent, request::Bind as WlRegistryBindRequest,
 };
-pub use generated::WlObjectType;
 
 impl WlObjectType {
     /// The name of this interface
@@ -75,10 +75,8 @@ pub trait Request<'s>: Sized + HasObjectType {
     /// The opcode for the request
     const CODE: OpCode;
 
-    // TODO(hack3rmann): rename this const
-    //
     /// The type of an interface object of which will be created by libwayland
-    const OUTGOING_INTERFACE: Option<WlObjectType>;
+    const CHILD_TYPE: Option<WlObjectType>;
 
     /// Builds the message on the top of given message buffer
     fn build_message<'m, S: State>(
@@ -88,35 +86,6 @@ pub trait Request<'s>: Sized + HasObjectType {
     ) -> WlMessage<'m>
     where
         's: 'm;
-
-    // TODO(hack3rmann): remove this function
-    //
-    /// # Safety
-    ///
-    /// - `parent` proxy should match the parent interface
-    /// - resulting `WlProxy` object should be owned
-    unsafe fn send<S: State>(
-        self,
-        buf: &mut impl MessageBuffer,
-        storage: &WlObjectStorage<'_, S>,
-        parent: &WlProxy,
-    ) -> Option<WlProxy> {
-        let message = self.build_message(buf, storage);
-        let interface = Self::OUTGOING_INTERFACE
-            .map(|i| &raw const *i.backend_interface())
-            .unwrap_or(ptr::null());
-
-        let raw_proxy = unsafe {
-            wl_proxy_marshal_array_constructor(
-                parent.as_raw().as_ptr(),
-                message.opcode.into(),
-                message.arguments.as_ptr().cast_mut(),
-                interface,
-            )
-        };
-
-        Some(unsafe { WlProxy::from_raw(NonNull::new(raw_proxy)?) })
-    }
 }
 
 /// Represents events on Wayland's interfaces
@@ -126,4 +95,31 @@ pub trait Event<'s>: Sized {
 
     /// Tries to read the given message as an event of implementor type
     fn from_message(message: WlMessage<'s>) -> Option<Self>;
+}
+
+/// # Safety
+///
+/// - `parent` proxy should match the parent interface
+/// - resulting `WlProxy` object should be consumed to an object storage
+pub(crate) unsafe fn send_request_raw<'s, S: State, R: Request<'s>>(
+    request: R,
+    buf: &mut impl MessageBuffer,
+    storage: &WlObjectStorage<'_, S>,
+    parent: &WlProxy,
+) -> Option<WlProxy> {
+    let message = request.build_message(buf, storage);
+    let interface = R::CHILD_TYPE
+        .map(|i| &raw const *i.backend_interface())
+        .unwrap_or(ptr::null());
+
+    let raw_proxy = unsafe {
+        ffi::wl_proxy_marshal_array_constructor(
+            parent.as_raw().as_ptr(),
+            message.opcode.into(),
+            message.arguments.as_ptr().cast_mut(),
+            interface,
+        )
+    };
+
+    Some(unsafe { WlProxy::from_raw(NonNull::new(raw_proxy)?) })
 }

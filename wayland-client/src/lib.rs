@@ -23,5 +23,6 @@ pub use {
             WlMessage,
         },
     },
-    wayland_sys as ffi,
 };
+
+pub(crate) use wayland_sys as ffi;

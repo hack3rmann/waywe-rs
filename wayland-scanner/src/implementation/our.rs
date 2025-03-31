@@ -458,7 +458,7 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
 
         impl<'s> crate::interface::Request<'s> for #request_struct_name #struct_lifetime {
             const CODE: crate::sys::wire::OpCode = #opcode_literal ;
-            const OUTGOING_INTERFACE: ::std::option::Option<super::super::super::WlObjectType>
+            const CHILD_TYPE: ::std::option::Option<super::super::super::WlObjectType>
                 = #outgoing_interface_value ;
 
             fn build_message<'m, S: crate::sys::object::dispatch::State>(

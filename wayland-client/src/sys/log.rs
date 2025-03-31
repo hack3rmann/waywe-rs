@@ -1,10 +1,10 @@
+use crate::ffi;
 use std::{
     ffi::{CStr, c_char, c_int},
     mem::MaybeUninit,
     slice, str,
 };
 use va_list::VaList;
-use wayland_sys::wl_log_set_handler_client;
 
 pub(crate) const MAX_LOG_MESSAGE_LEN: usize = 256;
 
@@ -75,7 +75,7 @@ fn trim_last_linebreak(source: &str) -> &str {
 
 /// Setup wayland client logger
 pub(crate) fn setup() {
-    unsafe { wl_log_set_handler_client(wl_log_raw) };
+    unsafe { ffi::wl_log_set_handler_client(wl_log_raw) };
 }
 
 // NOTE(hack3rmann): the crate `libc` does not provide this function se we do.

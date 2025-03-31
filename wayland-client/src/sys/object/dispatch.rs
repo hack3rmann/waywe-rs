@@ -1,7 +1,9 @@
 use crate::{
+    ffi,
     object::{HasObjectType, WlObjectId},
     sys::{
         object_storage::WlObjectStorage,
+        thin::{DynThinData, ThinData},
         wire::{OpCode, WlMessage},
     },
 };
@@ -13,10 +15,7 @@ use std::{
     ptr::NonNull,
     slice,
 };
-use wayland_sys::{
-    count_arguments_from_message_signature_raw, wl_argument, wl_message, wl_proxy_get_id,
-    wl_proxy_get_user_data,
-};
+use wayland_sys::{wl_argument, wl_message};
 
 /// # Note
 ///
@@ -125,11 +124,36 @@ pub const fn is_empty_dispatch_data_allowed<T: Dispatch>() -> bool {
 pub(crate) type WlDispatchFn<T, S> = fn(&mut T, &S, &mut WlObjectStorage<'_, S>, WlMessage<'_>);
 
 #[repr(C)]
-pub(crate) struct WlDispatchData<T, S: State> {
+pub(crate) struct WlDispatchData<T: 'static, S: State> {
     pub dispatch: WlDispatchFn<T, S>,
     pub storage: Option<NonNull<WlObjectStorage<'static, S>>>,
     pub state: Option<NonNull<S>>,
-    pub data: T,
+    pub data: ThinData<T>,
+}
+
+#[repr(C)]
+pub(crate) struct WlDynDispatchData {
+    pub dispatch: NonNull<()>,
+    pub storage: Option<NonNull<()>>,
+    pub state: Option<NonNull<()>>,
+    pub data: DynThinData,
+}
+
+impl WlDynDispatchData {
+    pub const DATA_OFFSET: usize = mem::offset_of!(WlDispatchData<(), NoState>, data);
+
+    pub unsafe fn from_ptr(ptr: NonNull<()>) -> NonNull<Self> {
+        let data_ptr = unsafe {
+            DynThinData::from_ptr(
+                NonNull::new(ptr.as_ptr().wrapping_byte_add(Self::DATA_OFFSET)).unwrap_unchecked(),
+            )
+        };
+
+        let (_, meta) =
+            unsafe { mem::transmute::<NonNull<DynThinData>, (NonNull<()>, usize)>(data_ptr) };
+
+        unsafe { mem::transmute::<(NonNull<()>, usize), NonNull<Self>>((ptr, meta)) }
+    }
 }
 
 thread_local! {
@@ -151,7 +175,7 @@ pub(crate) unsafe extern "C" fn dispatch_raw<T, S>(
     arguments: *mut wl_argument,
 ) -> c_int
 where
-    T: HasObjectType,
+    T: HasObjectType + 'static,
     S: State,
 {
     // `dispatch_raw` may be called several times after the last panic
@@ -172,7 +196,7 @@ where
     // and continuing stack unwind outside of `extern "C"` context
     panic::catch_unwind(|| {
         // Safety: `proxy` in libwayland dispatcher is always valid
-        let data = unsafe { wl_proxy_get_user_data(proxy) }.cast::<WlDispatchData<T, S>>();
+        let data = unsafe { ffi::wl_proxy_get_user_data(proxy) }.cast::<WlDispatchData<T, S>>();
 
         // # Safety
         //
@@ -184,7 +208,7 @@ where
         };
 
         // Safety: `proxy` in libwayland dispatcher is always valid
-        let id = unsafe { WlObjectId::try_from(wl_proxy_get_id(proxy)).unwrap_unchecked() };
+        let id = unsafe { WlObjectId::try_from(ffi::wl_proxy_get_id(proxy)).unwrap_unchecked() };
 
         let Some(mut storage_ptr) = data.storage.map(|p| p.cast::<WlObjectStorage<S>>()) else {
             tracing::error!("no pointer to `WlObjectStorage` is set");
@@ -210,7 +234,7 @@ where
         // - `message` points to a valid instance of `wl_message` (provided by libwayland)
         // - `message->signature` is a valid C-String (provided by libwayland)
         let n_arguments =
-            unsafe { count_arguments_from_message_signature_raw((*message).signature) };
+            unsafe { ffi::count_arguments_from_message_signature_raw((*message).signature) };
 
         // Safety: libwayland provides all arguments according to the signature of the event
         let arguments = unsafe { slice::from_raw_parts(arguments, n_arguments) };
@@ -218,7 +242,7 @@ where
         let message = WlMessage { opcode, arguments };
 
         if let Err(err) = storage.with_object_data_acquired(id, |storage| {
-            (data.dispatch)(&mut data.data, state, storage, message);
+            (data.dispatch)(&mut data.data.inner, state, storage, message);
         }) {
             tracing::error!("failed to acquire the object's data: {err}");
             return -1;

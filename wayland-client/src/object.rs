@@ -10,17 +10,21 @@ pub struct WlObjectId(pub NonZeroU32);
 impl WlObjectId {
     /// Makes new id from `u32`
     ///
-    /// # Panic
+    /// # Error
     ///
-    /// Panics if `value == 0`.
-    pub const fn new(value: u32) -> Self {
-        Self(NonZeroU32::new(value).unwrap())
+    /// Returns [`Err`] if `value` is `0`
+    pub const fn new(value: u32) -> Option<Self> {
+        if let Some(raw) = NonZeroU32::new(value) {
+            Some(Self(raw))
+        } else {
+            None
+        }
     }
 }
 
 impl Default for WlObjectId {
     fn default() -> Self {
-        Self::new(1)
+        const { Self::new(1).unwrap() }
     }
 }
 
