@@ -1,3 +1,5 @@
+//! Message constructors and parsers for wayland
+
 use super::proxy::{WlProxy, WlProxyQuery};
 use crate::{interface::Event, object::InterfaceMessageArgument};
 use smallvec::SmallVec;
@@ -17,18 +19,27 @@ pub type OpCode = u16;
 /// - the implementor ensures all calls are valid
 /// - the implementor ensures the caller of these functions can not destinguish
 ///   the behavior of them from the [`Vec`] ones
-pub unsafe trait MessageBuffer {
+pub unsafe trait WlMessageBuffer {
+    /// Clears the buffer
     fn clear(&mut self);
+
+    /// Adds an argument to the buffer
     fn push(&mut self, argument: WlArgument);
+
+    /// Buffer length in elements
     fn len(&self) -> usize;
+
+    /// Buffer is empty (len = 0)
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    /// Slice of collected arguments (up to length)
     fn as_slice(&self) -> &[WlArgument];
 }
-static_assertions::assert_obj_safe!(MessageBuffer);
+static_assertions::assert_obj_safe!(WlMessageBuffer);
 
-unsafe impl MessageBuffer for VecMessageBuffer {
+unsafe impl WlMessageBuffer for WlVecMessageBuffer {
     fn clear(&mut self) {
         Vec::clear(&mut self.0);
     }
@@ -50,7 +61,7 @@ unsafe impl MessageBuffer for VecMessageBuffer {
     }
 }
 
-unsafe impl<const N: usize> MessageBuffer for SmallVecMessageBuffer<N> {
+unsafe impl<const N: usize> WlMessageBuffer for WlSmallVecMessageBuffer<N> {
     fn clear(&mut self) {
         SmallVec::clear(&mut self.0)
     }
@@ -72,37 +83,39 @@ unsafe impl<const N: usize> MessageBuffer for SmallVecMessageBuffer<N> {
     }
 }
 
+/// Message buffer based on [`Vec`] implementation
 #[derive(Clone, Default)]
-pub struct VecMessageBuffer(pub(crate) Vec<WlArgument>);
+pub struct WlVecMessageBuffer(pub(crate) Vec<WlArgument>);
 
-unsafe impl Send for VecMessageBuffer {}
+unsafe impl Send for WlVecMessageBuffer {}
+unsafe impl Sync for WlVecMessageBuffer {}
 
-// Safety: no interior mutability
-unsafe impl Sync for VecMessageBuffer {}
-
-impl VecMessageBuffer {
+impl WlVecMessageBuffer {
+    /// Constructs new [`WlVecMessageBuffer`]
     pub const fn new() -> Self {
         Self(Vec::new())
     }
-    
+
+    /// Constructs new [`WlVecMessageBuffer`] with allocated capacity
     pub fn with_capacity(capacity: usize) -> Self {
         Self(Vec::with_capacity(capacity))
     }
 }
 
+/// Message buffer based on [`SmallVec`] implementation
 #[derive(Clone, Default)]
-pub struct SmallVecMessageBuffer<const N: usize>(pub(crate) SmallVec<[WlArgument; N]>);
+pub struct WlSmallVecMessageBuffer<const N: usize>(pub(crate) SmallVec<[WlArgument; N]>);
 
-unsafe impl<const N: usize> Send for SmallVecMessageBuffer<N> {}
+unsafe impl<const N: usize> Send for WlSmallVecMessageBuffer<N> {}
+unsafe impl<const N: usize> Sync for WlSmallVecMessageBuffer<N> {}
 
-// Safety: no interior mutability
-unsafe impl<const N: usize> Sync for SmallVecMessageBuffer<N> {}
-
-impl<const N: usize> SmallVecMessageBuffer<N> {
+impl<const N: usize> WlSmallVecMessageBuffer<N> {
+    /// Constructs new [`WlSmallVecMessageBuffer`]
     pub const fn new() -> Self {
         Self(SmallVec::new_const())
     }
 
+    /// Constructs new [`WlSmallVecMessageBuffer`] with allocated capacity
     pub fn with_capacity(capacity: usize) -> Self {
         Self(SmallVec::with_capacity(capacity))
     }
@@ -110,17 +123,15 @@ impl<const N: usize> SmallVecMessageBuffer<N> {
 
 /// Message buffer constrained to the stack.
 #[derive(Clone)]
-pub struct StackMessageBuffer {
+pub struct WlStackMessageBuffer {
     len: usize,
-    buf: [MaybeUninit<WlArgument>; StackMessageBuffer::CAPACITY],
+    buf: [MaybeUninit<WlArgument>; WlStackMessageBuffer::CAPACITY],
 }
 
-unsafe impl Send for StackMessageBuffer {}
+unsafe impl Send for WlStackMessageBuffer {}
+unsafe impl Sync for WlStackMessageBuffer {}
 
-// Safety: no interior mutability
-unsafe impl Sync for StackMessageBuffer {}
-
-impl StackMessageBuffer {
+impl WlStackMessageBuffer {
     /// Maximum number of arguments allowed to be passed into request
     pub const CAPACITY: usize = 20;
 
@@ -165,13 +176,13 @@ impl StackMessageBuffer {
     }
 }
 
-impl Default for StackMessageBuffer {
+impl Default for WlStackMessageBuffer {
     fn default() -> Self {
         Self::new()
     }
 }
 
-unsafe impl MessageBuffer for StackMessageBuffer {
+unsafe impl WlMessageBuffer for WlStackMessageBuffer {
     fn clear(&mut self) {
         Self::clear(self);
     }
@@ -203,34 +214,33 @@ pub struct WlMessage<'s> {
 }
 
 unsafe impl Send for WlMessage<'_> {}
-
-// Safety: no interior mutability
 unsafe impl Sync for WlMessage<'_> {}
 
 impl<'s> WlMessage<'s> {
     /// Returns a builder for the message
-    pub fn builder<Buffer: MessageBuffer>(
+    pub fn builder<Buffer: WlMessageBuffer>(
         buf: &'s mut Buffer,
-    ) -> MessageBuilderHeaderless<'s, Buffer> {
-        MessageBuilderHeaderless::new(buf)
+    ) -> WlMessageBuilderHeaderless<'s, Buffer> {
+        WlMessageBuilderHeaderless::new(buf)
     }
 
     /// Returns a reader for this message
-    pub fn reader(&self) -> MessageReader<'s> {
-        MessageReader::new(self.arguments)
+    pub fn reader(&self) -> WlMessageReader<'s> {
+        WlMessageReader::new(self.arguments)
     }
 
+    /// Tries to parse this message as an event `E`
     pub fn as_event<E: Event<'s>>(self) -> Option<E> {
         E::from_message(self)
     }
 }
 
 /// Builder of the message header
-pub struct MessageBuilderHeaderless<'s, Buffer: MessageBuffer> {
+pub struct WlMessageBuilderHeaderless<'s, Buffer: WlMessageBuffer> {
     pub(crate) buf: &'s mut Buffer,
 }
 
-impl<'s, Buffer: MessageBuffer> MessageBuilderHeaderless<'s, Buffer> {
+impl<'s, Buffer: WlMessageBuffer> WlMessageBuilderHeaderless<'s, Buffer> {
     /// Creates new [`MessageBuffer`] from given message buffer
     pub fn new(buf: &'s mut Buffer) -> Self {
         buf.clear();
@@ -238,18 +248,18 @@ impl<'s, Buffer: MessageBuffer> MessageBuilderHeaderless<'s, Buffer> {
     }
 
     /// Sets parent object and opcode for the message
-    pub fn opcode(self, opcode: OpCode) -> MessageBuilder<'s, Buffer> {
-        MessageBuilder::new_header(self.buf, opcode)
+    pub fn opcode(self, opcode: OpCode) -> WlMessageBuilder<'s, Buffer> {
+        WlMessageBuilder::new_header(self.buf, opcode)
     }
 }
 
 /// Builder of the message body
-pub struct MessageBuilder<'s, Buffer: MessageBuffer> {
+pub struct WlMessageBuilder<'s, Buffer: WlMessageBuffer> {
     pub(crate) buf: &'s mut Buffer,
     pub(crate) opcode: OpCode,
 }
 
-impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
+impl<'s, Buffer: WlMessageBuffer> WlMessageBuilder<'s, Buffer> {
     /// Creates the builder
     pub fn new_header(buf: &'s mut Buffer, opcode: OpCode) -> Self {
         Self { buf, opcode }
@@ -273,6 +283,7 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
         self
     }
 
+    /// Writes a `wl_fixed` number to the message
     pub fn fixed(self, value: WlFixed) -> Self {
         self.buf.push(WlArgument::fixed(value));
         self
@@ -335,7 +346,7 @@ impl<'s, Buffer: MessageBuffer> MessageBuilder<'s, Buffer> {
 }
 
 /// Provides a coversion function from [`WlArgument`]
-pub trait FromWlArgument<'s>: Sized {
+pub trait FromArgument<'s>: Sized {
     /// # Safety
     ///
     /// The value extracted from `WlArgument` shoud be the same
@@ -343,25 +354,25 @@ pub trait FromWlArgument<'s>: Sized {
     unsafe fn from_argument(value: WlArgument) -> Self;
 }
 
-impl FromWlArgument<'_> for i32 {
+impl FromArgument<'_> for i32 {
     unsafe fn from_argument(value: WlArgument) -> Self {
         unsafe { value.i }
     }
 }
 
-impl FromWlArgument<'_> for u32 {
+impl FromArgument<'_> for u32 {
     unsafe fn from_argument(value: WlArgument) -> Self {
         unsafe { value.u }
     }
 }
 
-impl FromWlArgument<'_> for wl_fixed_t {
+impl FromArgument<'_> for wl_fixed_t {
     unsafe fn from_argument(value: WlArgument) -> Self {
         unsafe { value.f }
     }
 }
 
-impl FromWlArgument<'_> for OwnedFd {
+impl FromArgument<'_> for OwnedFd {
     unsafe fn from_argument(value: WlArgument) -> Self {
         let raw_fd = unsafe { value.h };
         // Safety: file descriptor provided by the libwayland must be owned by us
@@ -369,7 +380,7 @@ impl FromWlArgument<'_> for OwnedFd {
     }
 }
 
-impl FromWlArgument<'_> for WlProxyQuery {
+impl FromArgument<'_> for WlProxyQuery {
     unsafe fn from_argument(value: WlArgument) -> Self {
         let proxy_ptr = unsafe { value.o }.cast::<wl_proxy>();
         // Safety: proxy object provided by the libwayland should be valid or point to null
@@ -377,7 +388,7 @@ impl FromWlArgument<'_> for WlProxyQuery {
     }
 }
 
-impl<'s> FromWlArgument<'s> for &'s CStr {
+impl<'s> FromArgument<'s> for &'s CStr {
     unsafe fn from_argument(value: WlArgument) -> Self {
         let ptr = unsafe { value.s };
         // Safety: string provided by the libwayland must be valid
@@ -385,14 +396,14 @@ impl<'s> FromWlArgument<'s> for &'s CStr {
     }
 }
 
-impl<'s, T> FromWlArgument<'s> for &'s [T] {
+impl<'s, T> FromArgument<'s> for &'s [T] {
     unsafe fn from_argument(value: WlArgument) -> Self {
         let raw = unsafe { value.a.read() };
         unsafe { slice::from_raw_parts(raw.data.cast(), raw.size / mem::size_of::<T>()) }
     }
 }
 
-impl<'s> FromWlArgument<'s> for BorrowedFd<'s> {
+impl<'s> FromArgument<'s> for BorrowedFd<'s> {
     unsafe fn from_argument(value: WlArgument) -> Self {
         let raw = unsafe { value.h };
         unsafe { BorrowedFd::borrow_raw(raw) }
@@ -401,12 +412,12 @@ impl<'s> FromWlArgument<'s> for BorrowedFd<'s> {
 
 /// Represents a message reader capable of converting [`WlArgument`]s to values
 #[derive(Clone, Copy)]
-pub struct MessageReader<'s> {
+pub struct WlMessageReader<'s> {
     /// The rest of message's arguments
     pub arguments: &'s [WlArgument],
 }
 
-impl<'s> MessageReader<'s> {
+impl<'s> WlMessageReader<'s> {
     /// Constructs new [`MessageReader`]
     pub const fn new(arguments: &'s [WlArgument]) -> Self {
         Self { arguments }
@@ -418,7 +429,7 @@ impl<'s> MessageReader<'s> {
     ///
     /// An argument being read by this call thould have the same type
     /// as the argument written to the message before
-    pub unsafe fn read<A: FromWlArgument<'s>>(&mut self) -> Option<A> {
+    pub unsafe fn read<A: FromArgument<'s>>(&mut self) -> Option<A> {
         let first_arg = self.arguments.first().copied()?;
         self.arguments = &self.arguments[1..];
         Some(unsafe { A::from_argument(first_arg) })

@@ -1,3 +1,5 @@
+//! Object identifiers and types
+
 use std::{ffi::CStr, fmt, num::NonZeroU32};
 use thiserror::Error;
 
@@ -42,6 +44,7 @@ impl TryFrom<u32> for WlObjectId {
     }
 }
 
+/// [`WlObjectId`] is zero
 #[derive(Debug, Error)]
 #[error("invalid zero `ObjectId`")]
 pub struct ZeroObjectIdError;
@@ -54,13 +57,16 @@ impl fmt::Display for WlObjectType {
 
 /// Assocciated `ObjectType`
 pub trait HasObjectType {
+    /// Type the object have
     const OBJECT_TYPE: WlObjectType;
 }
 
 /// The type and the integer name for the global object.
 #[derive(Clone, Debug, PartialEq, Copy, Eq, PartialOrd, Ord, Hash)]
 pub struct InterfaceMessageArgument {
+    /// Object type
     pub object_type: WlObjectType,
+    /// Numerical name for the object
     pub name: WlObjectId,
 }
 static_assertions::assert_impl_all!(InterfaceMessageArgument: Send, Sync);

@@ -1,3 +1,5 @@
+//! Safe wrapper around libwayland `wl_display` implementation
+
 use super::{
     log,
     object::{
@@ -8,11 +10,11 @@ use super::{
     },
     object_storage::WlObjectStorage,
     proxy::WlProxy,
-    wire::MessageBuffer,
+    wire::WlMessageBuffer,
 };
 use crate::{
     ffi,
-    init::{GetSocketPathError, connect_wayland_socket},
+    init::{ConnectWaylandSocketError, connect_wayland_socket},
     interface::{WlDisplayGetRegistryRequest, WlObjectType, send_request_raw},
     object::HasObjectType,
     sys::object::dispatch,
@@ -120,7 +122,7 @@ impl<S: State> WlDisplay<S> {
     /// Creates `wl_registry` object and stores it in the storage
     pub fn create_registry<'d>(
         &'d self,
-        buf: &mut impl MessageBuffer,
+        buf: &mut impl WlMessageBuffer,
         storage: Pin<&mut WlObjectStorage<'d, S>>,
     ) -> WlObjectHandle<WlRegistry<S>> {
         // Safety: parent interface matcher request's one
@@ -202,14 +204,18 @@ impl<S: State> WlDisplay<S> {
     }
 }
 
+/// Error connecting display
 #[derive(Debug, Error)]
 pub enum DisplayConnectError {
+    /// Failed to connect to the wayland socket
     #[error(transparent)]
-    ConnectWaylandSocket(#[from] GetSocketPathError),
+    ConnectWaylandSocket(#[from] ConnectWaylandSocketError),
+    /// Failed to connect display to wayland fd
     #[error(transparent)]
     ConnectToFd(#[from] DisplayConnectToFdError),
 }
 
+/// Failed to connect display to wayland fd
 #[derive(Debug, Error)]
 #[error("failed to connect to wayland's socket")]
 pub struct DisplayConnectToFdError;

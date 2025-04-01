@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 use wayland_client::{
-    Dispatch, FromProxy, HasObjectType, SmallVecMessageBuffer, StackMessageBuffer, State,
+    Dispatch, FromProxy, HasObjectType, WlSmallVecMessageBuffer, WlStackMessageBuffer, State,
     WlDisplay, WlMessage, WlObject, WlObjectHandle, WlObjectStorage, WlObjectType, WlProxy,
     assert_dispatch_is_empty,
     interface::{
@@ -80,7 +80,7 @@ impl Dispatch for WlWmBase {
             return;
         };
 
-        let mut buf = SmallVecMessageBuffer::<1>::new();
+        let mut buf = WlSmallVecMessageBuffer::<1>::new();
 
         self.handle
             .request(&mut buf, storage, XdgWmBasePongRequest { serial });
@@ -145,7 +145,7 @@ impl Dispatch for WlXdgSurface {
             return;
         };
 
-        let mut buf = SmallVecMessageBuffer::<1>::new();
+        let mut buf = WlSmallVecMessageBuffer::<1>::new();
 
         self.handle
             .request(&mut buf, storage, XdgSurfaceAckConfigureRequest { serial });
@@ -289,7 +289,7 @@ fn simple_wayland_client() {
 
     let display = WlDisplay::connect(client_state.as_mut()).unwrap();
 
-    let mut buf = StackMessageBuffer::new();
+    let mut buf = WlStackMessageBuffer::new();
     let mut queue = pin!(display.take_main_queue().unwrap());
 
     let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
@@ -539,7 +539,7 @@ fn multithread_client() {
     _ = tracing_subscriber::fmt::try_init();
 
     let mut client_state = pin!(ClientState::default());
-    let mut buf = StackMessageBuffer::new();
+    let mut buf = WlStackMessageBuffer::new();
 
     let display = WlDisplay::connect(client_state.as_mut()).unwrap();
 

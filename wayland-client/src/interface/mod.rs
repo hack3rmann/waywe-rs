@@ -1,4 +1,8 @@
+//! Data structs representing all wayland requests, events and enums
+
 pub mod registry;
+
+/// Interfaces generated via `wayland-scanner`
 pub mod generated {
     wayland_scanner::include_interfaces!([
         "wayland-protocols/wayland.xml",
@@ -15,7 +19,7 @@ use crate::{
         object::dispatch::State,
         object_storage::WlObjectStorage,
         proxy::WlProxy,
-        wire::{MessageBuffer, OpCode, WlMessage},
+        wire::{WlMessageBuffer, OpCode, WlMessage},
     },
 };
 use std::ptr::{self, NonNull};
@@ -67,6 +71,7 @@ impl WlObjectType {
 
 /// Indicator that request produces an object
 pub trait ObjectParent {
+    /// Type of the child object
     const CHILD_TYPE: WlObjectType;
 }
 
@@ -81,7 +86,7 @@ pub trait Request<'s>: Sized + HasObjectType {
     /// Builds the message on the top of given message buffer
     fn build_message<'m, S: State>(
         self,
-        buf: &'m mut impl MessageBuffer,
+        buf: &'m mut impl WlMessageBuffer,
         storage: &'m WlObjectStorage<'_, S>,
     ) -> WlMessage<'m>
     where
@@ -103,7 +108,7 @@ pub trait Event<'s>: Sized {
 /// - resulting `WlProxy` object should be consumed to an object storage
 pub(crate) unsafe fn send_request_raw<'s, S: State, R: Request<'s>>(
     request: R,
-    buf: &mut impl MessageBuffer,
+    buf: &mut impl WlMessageBuffer,
     storage: &WlObjectStorage<'_, S>,
     parent: &WlProxy,
 ) -> Option<WlProxy> {

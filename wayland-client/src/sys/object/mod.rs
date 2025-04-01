@@ -1,9 +1,10 @@
-pub mod default_impl;
+//! Safe wrappers around libwayland `wl_proxy` implementaion.
+
 pub mod dispatch;
 pub mod event_queue;
 pub mod registry;
 
-use super::{object_storage::WlObjectStorage, proxy::WlProxy, thin::ThinData, wire::MessageBuffer};
+use super::{object_storage::WlObjectStorage, proxy::WlProxy, thin::ThinData, wire::WlMessageBuffer};
 use crate::{
     ffi,
     interface::{ObjectParent, Request, send_request_raw},
@@ -25,6 +26,7 @@ use thiserror::Error;
 
 /// A trait used to construct newly created object.
 pub trait FromProxy: Sized {
+    /// Construct `Self` from a proxy object
     fn from_proxy(proxy: &WlProxy) -> Self;
 }
 
@@ -56,7 +58,7 @@ impl<T> WlObjectHandle<T> {
     /// Can be used only for requests which create no object
     pub fn request<'r, R>(
         self,
-        buf: &mut impl MessageBuffer,
+        buf: &mut impl WlMessageBuffer,
         storage: &WlObjectStorage<'_, T::State>,
         request: R,
     ) where
@@ -88,7 +90,7 @@ impl<T> WlObjectHandle<T> {
     /// Can be used only for object creating requests (e.g. wl_compositor::create_surface)
     pub fn create_object<'r, D, R>(
         self,
-        buf: &mut impl MessageBuffer,
+        buf: &mut impl WlMessageBuffer,
         storage: Pin<&mut WlObjectStorage<'_, D::State>>,
         request: R,
     ) -> WlObjectHandle<D>
@@ -237,6 +239,7 @@ impl fmt::Debug for WlDynObject {
     }
 }
 
+/// [`WlProxy`] with assocciated event dispatcher and data
 #[repr(C)]
 pub struct WlObject<T: Dispatch> {
     pub(crate) proxy: WlProxy,
@@ -426,6 +429,7 @@ const fn zst_mut<T>() -> Result<&'static mut T, NonZstError> {
     }
 }
 
+/// Type is not zero-sized
 #[derive(Debug, Error)]
 #[error("failed to construct reference to non-ZST value from nothing")]
 pub struct NonZstError;

@@ -1,16 +1,27 @@
+//! Implementation of dynamic dispatch with thin pointers
+
 use std::{
     any, fmt, hash,
     mem::{self, MaybeUninit},
     ptr::NonNull,
 };
 
+/// Size and offset written in only one [`usize`]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct SizeAndOffset(pub(crate) usize);
+pub(crate) struct SizeAndOffset(pub usize);
 
 impl SizeAndOffset {
-    pub(crate) const N_OFFSET_BITS: usize = 4;
-    pub(crate) const MAX_OFFSET: usize = (1 << Self::N_OFFSET_BITS) - 1;
+    pub const N_OFFSET_BITS: usize = 4;
+    pub const MAX_OFFSET: usize = (1 << Self::N_OFFSET_BITS) - 1;
 
+    /// Constructs new [`SizeAndOffset`] with given `size` and `offset`
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Err`] if
+    ///
+    /// - `size` is too large (unrepresentable in this struct)
+    /// - `offset` is larger than `15`
     pub(crate) const fn new(size: usize, offset: usize) -> Option<Self> {
         if offset > Self::MAX_OFFSET {
             return None;
@@ -45,45 +56,46 @@ impl fmt::Debug for SizeAndOffset {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct ThinDataHeader {
-    pub(crate) drop: unsafe fn(*mut ()),
-    // TODO(hack3rmann): we can pack both `size` and `offset` into one `u16` type
-    pub(crate) size_and_offset: SizeAndOffset,
+    pub drop: unsafe fn(*mut ()),
+    pub size_and_offset: SizeAndOffset,
 }
 
 impl ThinDataHeader {
-    pub(crate) const OFFSET_SHIFT: usize = mem::size_of::<ThinDataHeader>();
+    pub const OFFSET_SHIFT: usize = mem::size_of::<ThinDataHeader>();
 
-    pub(crate) const fn of<T: 'static>() -> Self {
-        let drop = |ptr: *mut ()| unsafe {
-            ptr.cast::<T>().drop_in_place();
-        };
+    pub const fn of<T: 'static>() -> Self {
+        // Require Rust to compute it in compile time
+        const {
+            let drop = |ptr: *mut ()| unsafe {
+                ptr.cast::<T>().drop_in_place();
+            };
 
-        Self {
-            drop,
-            size_and_offset: const {
-                SizeAndOffset::new(
+            Self {
+                drop,
+                size_and_offset: SizeAndOffset::new(
                     mem::size_of::<T>(),
                     mem::offset_of!(ThinData<T>, inner) - Self::OFFSET_SHIFT,
                 )
-                .unwrap()
-            },
+                .unwrap(),
+            }
         }
     }
 
-    pub(crate) const fn size(self) -> usize {
+    pub const fn size(self) -> usize {
         self.size_and_offset.size()
     }
 
-    pub(crate) const fn offset(self) -> usize {
+    pub const fn offset(self) -> usize {
         self.size_and_offset.offset() + Self::OFFSET_SHIFT
     }
 }
 
+/// Wrapper that can be pointed to by a thin pointer
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct ThinData<T: 'static> {
-    pub(crate) header: ThinDataHeader,
-    pub(crate) inner: T,
+    pub header: ThinDataHeader,
+    pub inner: T,
 }
 
 impl<T: 'static> ThinData<T> {
@@ -178,6 +190,7 @@ impl<T: hash::Hash + 'static> hash::Hash for ThinData<T> {
     }
 }
 
+/// Implementation detail of thin pointers
 #[repr(C)]
 pub(crate) struct DynThinData {
     pub(crate) header: ThinDataHeader,
@@ -185,7 +198,7 @@ pub(crate) struct DynThinData {
 }
 
 impl DynThinData {
-    pub(crate) unsafe fn from_ptr(ptr: NonNull<()>) -> NonNull<Self> {
+    pub unsafe fn from_ptr(ptr: NonNull<()>) -> NonNull<Self> {
         let header = unsafe { ptr.cast::<ThinDataHeader>().as_ref() };
 
         let n_align_bytese = header.offset() - mem::size_of::<ThinDataHeader>();
@@ -196,7 +209,7 @@ impl DynThinData {
     }
 
     #[cfg(test)]
-    pub(crate) fn from_ref<T: 'static>(value: &ThinData<T>) -> &Self {
+    pub fn from_ref<T: 'static>(value: &ThinData<T>) -> &Self {
         unsafe { Self::from_ptr(NonNull::from(value).cast()).as_ref() }
     }
 }
@@ -216,21 +229,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn size_and_offset() {
-        const X1: SizeAndOffset = SizeAndOffset::new(9, 3).unwrap();
-        const { assert!(X1.size() == 9) };
-        const { assert!(X1.offset() == 3) };
+    const fn size_and_offset() {
+        const {
+            let x1 = SizeAndOffset::new(9, 3).unwrap();
+            assert!(x1.size() == 9);
+            assert!(x1.offset() == 3);
 
-        const X2: SizeAndOffset = SizeAndOffset::new(123456, 15).unwrap();
-        const { assert!(X2.size() == 123456) };
-        const { assert!(X2.offset() == 15) };
+            let x2 = SizeAndOffset::new(123456, 15).unwrap();
+            assert!(x2.size() == 123456);
+            assert!(x2.offset() == 15);
+        }
     }
 
     #[test]
-    fn data_wrapper_size_and_offset() {
-        const X1: ThinData<i32> = ThinData::new(42);
-        const { assert!(X1.header.size() == mem::size_of::<i32>()) };
-        const { assert!(X1.header.offset() == mem::size_of::<ThinDataHeader>()) };
+    const fn data_wrapper_size_and_offset() {
+        const {
+            let x1 = ThinData::new(42);
+            assert!(x1.header.size() == mem::size_of::<i32>());
+            assert!(x1.header.offset() == mem::size_of::<ThinDataHeader>());
+        }
     }
 
     #[test]

@@ -1,3 +1,5 @@
+//! Safe asynchronous event dispatch implementation
+
 use crate::{
     ffi,
     object::{HasObjectType, WlObjectId},
@@ -22,13 +24,14 @@ use wayland_sys::{wl_argument, wl_message};
 /// State has to be sized because pointer to the state has to be thin.
 pub trait State: Sync + Sized + 'static {}
 
-/// An empty state.
+/// Empty state
 pub struct NoState;
 
 impl State for NoState {}
 
 /// Types capable of dispatching the incoming events.
 pub trait Dispatch: HasObjectType + 'static {
+    /// The state that will be carried through all dispatchers
     type State: State;
 
     /// A small optimization for dispatch handlers.
@@ -41,6 +44,7 @@ pub trait Dispatch: HasObjectType + 'static {
     /// this data in the raw dispatcher.
     const ALLOW_EMPTY_DISPATCH: bool = false;
 
+    /// Dispatch incoming events
     fn dispatch(
         &mut self,
         _state: &Self::State,

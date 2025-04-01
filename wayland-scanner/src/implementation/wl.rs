@@ -21,6 +21,11 @@ pub fn include_wl_interfaces(token_stream: TokenStream) -> TokenStream {
 }
 
 pub fn interface_to_module(interface: &Interface) -> TokenStream {
+    let module_docs = format!("`wl_interface`s for {}", interface.name);
+    let const_docs = format!("`Interface` for {}", interface.name);
+    let messages_docs = format!("`WlMessages` for {}", interface.name);
+    let wl_interface_docs = format!("`wl_interface` for {}", interface.name);
+
     let module = Ident::new(&interface.name, Span::call_site());
 
     let interface_name_cstring = CString::new(interface.name.as_bytes())
@@ -70,7 +75,9 @@ pub fn interface_to_module(interface: &Interface) -> TokenStream {
         .map(|(i, event)| message_to_wl_message(event, i, MessageType::Event));
 
     quote! {
+        #[doc = #module_docs ]
         pub mod #module {
+            #[doc = #const_docs ]
             pub const INTERFACE: ::wayland_sys::Interface<'static>
                 = ::wayland_sys::Interface {
                     name: #interface_name_cstr_lit,
@@ -83,6 +90,7 @@ pub fn interface_to_module(interface: &Interface) -> TokenStream {
                     ],
                 };
 
+            #[doc = #messages_docs ]
             pub static WL_MESSAGES: ::wayland_sys::InterfaceWlMessages<'static>
                 = ::wayland_sys::InterfaceWlMessages {
                     methods: &[
@@ -93,6 +101,7 @@ pub fn interface_to_module(interface: &Interface) -> TokenStream {
                     ],
                 };
 
+            #[doc = #wl_interface_docs ]
             pub static WL_INTERFACE: ::wayland_sys::wl_interface
                 = ::wayland_sys::wl_interface {
                     name: INTERFACE.name.as_ptr(),

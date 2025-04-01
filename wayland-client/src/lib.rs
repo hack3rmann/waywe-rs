@@ -19,8 +19,8 @@ pub use {
         protocol,
         proxy::WlProxy,
         wire::{
-            MessageBuffer, OpCode, SmallVecMessageBuffer, StackMessageBuffer, VecMessageBuffer,
-            WlMessage,
+            OpCode, WlMessage, WlMessageBuffer, WlMessageBuilder, WlMessageBuilderHeaderless,
+            WlMessageReader, WlSmallVecMessageBuffer, WlStackMessageBuffer, WlVecMessageBuffer,
         },
     },
 };

@@ -21,9 +21,10 @@
 
 use crate::{
     object::WlObjectId,
-    sys::wire::{MessageBuffer, WlMessage},
+    sys::wire::{WlMessageBuffer, WlMessage},
 };
 
+/// Requests for `wl_registry` interface
 pub mod request {
     use super::*;
     use crate::{
@@ -45,6 +46,7 @@ pub mod request {
     }
 
     impl<T: HasObjectType> Bind<T> {
+        /// Constructs new bind request
         pub const fn new() -> Self {
             Self { _p: PhantomData }
         }
@@ -60,7 +62,7 @@ pub mod request {
         const OPCODE: OpCode = 0;
         const OUTGOING_INTERFACE: WlObjectType = T::OBJECT_TYPE;
 
-        fn build_message(self, buf: &mut impl MessageBuffer, name: WlObjectId) -> WlMessage<'_> {
+        fn build_message(self, buf: &mut impl WlMessageBuffer, name: WlObjectId) -> WlMessage<'_> {
             WlMessage::builder(buf)
                 .opcode(Self::OPCODE)
                 .interface(InterfaceMessageArgument {
@@ -77,7 +79,7 @@ pub mod request {
         pub unsafe fn send<S: State>(
             self,
             registry: &WlObject<WlRegistry<S>>,
-            buf: &mut impl MessageBuffer,
+            buf: &mut impl WlMessageBuffer,
         ) -> Option<WlProxy> {
             let message = self.build_message(buf, registry.name_of(T::OBJECT_TYPE)?);
             let interface = &raw const *Self::OUTGOING_INTERFACE.backend_interface();
@@ -96,6 +98,7 @@ pub mod request {
     }
 }
 
+/// Events for `wl_registry` interface
 pub mod event {
     pub use super::super::generated::wayland::registry::event::*;
 }

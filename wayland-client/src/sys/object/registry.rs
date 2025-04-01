@@ -1,3 +1,5 @@
+//! Wayland `wl_registry` implementation
+
 use super::{Dispatch, FromProxy, WlObject, WlObjectHandle, dispatch::State};
 use crate::{
     NoState,
@@ -9,19 +11,23 @@ use crate::{
     sys::{
         object_storage::WlObjectStorage,
         proxy::WlProxy,
-        wire::{MessageBuffer, WlMessage},
+        wire::{WlMessageBuffer, WlMessage},
     },
 };
 use fxhash::FxHashMap;
 use std::{marker::PhantomData, pin::Pin};
 
+/// Numerical name and version of a global object
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
 pub struct WlRegistryGlobalInfo {
+    /// Numerical name for a global object
     pub name: WlObjectId,
+    /// Version of a global object
     pub version: u32,
 }
 static_assertions::assert_impl_all!(WlRegistryGlobalInfo: Send, Sync);
 
+/// Canonical `wl_registry` implementation
 #[derive(Debug)]
 pub struct WlRegistry<S> {
     pub(crate) interfaces: FxHashMap<WlObjectType, WlRegistryGlobalInfo>,
@@ -84,7 +90,7 @@ impl<S: State> WlObjectHandle<WlRegistry<S>> {
     /// Bind request on [`WlRegistry`]
     pub fn bind<T>(
         self,
-        buf: &mut impl MessageBuffer,
+        buf: &mut impl WlMessageBuffer,
         storage: Pin<&mut WlObjectStorage<'_, S>>,
     ) -> Option<WlObjectHandle<T>>
     where
@@ -96,7 +102,7 @@ impl<S: State> WlObjectHandle<WlRegistry<S>> {
     /// Bind request on [`WlRegistry`] with given value
     pub fn bind_value<T>(
         self,
-        buf: &mut impl MessageBuffer,
+        buf: &mut impl WlMessageBuffer,
         storage: Pin<&mut WlObjectStorage<'_, S>>,
         object: T,
     ) -> Option<WlObjectHandle<T>>
@@ -114,7 +120,7 @@ impl<S: State> WlObjectHandle<WlRegistry<S>> {
         make_data: F,
     ) -> Option<WlObjectHandle<T>>
     where
-        B: MessageBuffer,
+        B: WlMessageBuffer,
         T: Dispatch<State = S>,
         F: FnOnce(&mut B, Pin<&mut WlObjectStorage<'_, S>>, &WlProxy) -> T,
     {

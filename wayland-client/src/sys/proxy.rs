@@ -1,10 +1,12 @@
+//! Thin wrapper around libwayland `wl_proxy` implementation
+
 use crate::{ffi, object::WlObjectId};
 use core::fmt;
 use std::{
     cmp::Ordering,
     ffi::{CStr, c_void},
     hash, mem,
-    ptr::NonNull,
+    ptr::{self, NonNull},
     slice, str,
     sync::atomic::{
         AtomicUsize,
@@ -149,11 +151,10 @@ impl fmt::Debug for WlProxy {
     }
 }
 
-// TODO(hack3rmann): missing docs
+/// Can provide object id for object querying
 #[derive(Clone, Copy)]
 pub struct WlProxyQuery {
-    // TODO(hack3rmann): determine a nice API for object querying
-    raw: *const wl_proxy,
+    raw: Option<NonNull<wl_proxy>>,
 }
 
 impl WlProxyQuery {
@@ -163,17 +164,22 @@ impl WlProxyQuery {
     ///
     /// - `raw` should be a valid object or null
     pub const unsafe fn from_raw(raw: *const wl_proxy) -> Self {
-        Self { raw }
+        Self {
+            raw: NonNull::new(raw.cast_mut()),
+        }
     }
 
     /// Raw representation of the query
     pub const fn to_raw(self) -> *const wl_proxy {
-        self.raw
+        match self.raw {
+            Some(ptr) => ptr.as_ptr().cast_const(),
+            None => ptr::null(),
+        }
     }
 
     /// Id of targeting proxy object
     pub fn id(self) -> Option<WlObjectId> {
-        NonNull::new(self.raw.cast_mut()).and_then(|ptr| {
+        self.raw.and_then(|ptr| {
             // Safety: if `ptr` is nonnull then this `wl_proxy` should be valid
             let raw_id = unsafe { ffi::wl_proxy_get_id(ptr.as_ptr()) };
             WlObjectId::try_from(raw_id).ok()

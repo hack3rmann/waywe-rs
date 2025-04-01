@@ -11,23 +11,109 @@ use std::{
     time::Duration,
 };
 use wayland_client::{
-    Dispatch, FromProxy, HasObjectType, NoState, StackMessageBuffer, WlDisplay, WlObjectHandle,
-    WlObjectType, WlProxy,
+    Dispatch, FromProxy, HasObjectType, NoState, WlDisplay, WlMessage, WlObjectHandle,
+    WlObjectStorage, WlObjectType, WlProxy, WlSmallVecMessageBuffer, WlStackMessageBuffer,
     interface::{
         WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlRegionDestroyRequest,
         WlShmCreatePoolRequest, WlShmFormat, WlShmPoolCreateBufferRequest, WlSurfaceAttachRequest,
         WlSurfaceCommitRequest, WlSurfaceDamageRequest, WlSurfaceSetBufferScaleRequest,
         WlSurfaceSetInputRegionRequest, WpViewporterGetViewportRequest,
-        ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellLayer, ZwlrLayerSurfaceAnchor,
-        ZwlrLayerSurfaceKeyboardInteractivity, ZwlrLayerSurfaceSetAnchorRequest,
-        ZwlrLayerSurfaceSetExclusiveZoneRequest, ZwlrLayerSurfaceSetKeyboardInteractivityRequest,
-        ZwlrLayerSurfaceSetMarginRequest, ZwlrLayerSurfaceSetSizeRequest,
-    },
-    sys::object::default_impl::{
-        Buffer, Compositor, LayerShell, Output, Region, Shm, ShmPool, Surface, WlLayerSurface,
-        WpViewport, WpViewporter,
+        ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellLayer,
+        ZwlrLayerSurfaceAckConfigureRequest, ZwlrLayerSurfaceAnchor,
+        ZwlrLayerSurfaceConfigureEvent, ZwlrLayerSurfaceKeyboardInteractivity,
+        ZwlrLayerSurfaceSetAnchorRequest, ZwlrLayerSurfaceSetExclusiveZoneRequest,
+        ZwlrLayerSurfaceSetKeyboardInteractivityRequest, ZwlrLayerSurfaceSetMarginRequest,
+        ZwlrLayerSurfaceSetSizeRequest,
     },
 };
+
+macro_rules! define_empty_dispatchers {
+    ( $( $Name:ident ),* $(,)? ) => {
+        $(
+            #[derive(Debug, Default)]
+            pub struct $Name;
+
+            impl wayland_client::HasObjectType for $Name {
+                const OBJECT_TYPE: wayland_client::WlObjectType = wayland_client::WlObjectType:: $Name;
+            }
+
+            impl wayland_client::FromProxy for $Name {
+                fn from_proxy(_: &wayland_client::WlProxy) -> Self { Self }
+            }
+
+            impl wayland_client::Dispatch for $Name {
+                type State = wayland_client::NoState;
+
+                const ALLOW_EMPTY_DISPATCH: bool = true;
+
+                fn dispatch(
+                    &mut self,
+                    _state: &Self::State,
+                    _storage: &mut wayland_client::WlObjectStorage<'_, Self::State>,
+                    _message: wayland_client::WlMessage<'_>,
+                ) {
+                    unreachable!()
+                }
+            }
+
+            wayland_client::assert_dispatch_is_empty!( $Name );
+        )*
+    };
+}
+
+define_empty_dispatchers! {
+    Buffer,
+    Callback,
+    Compositor,
+    Output,
+    Region,
+    Shm,
+    ShmPool,
+    Surface,
+    WpViewport,
+    WpViewporter,
+    LayerShell,
+}
+
+#[derive(Debug, Default)]
+pub struct WlLayerSurface {
+    pub handle: WlObjectHandle<Self>,
+}
+
+impl HasObjectType for WlLayerSurface {
+    const OBJECT_TYPE: WlObjectType = WlObjectType::LayerSurface;
+}
+
+impl FromProxy for WlLayerSurface {
+    fn from_proxy(proxy: &WlProxy) -> Self {
+        Self {
+            handle: WlObjectHandle::new(proxy.id()),
+        }
+    }
+}
+
+impl Dispatch for WlLayerSurface {
+    type State = NoState;
+
+    fn dispatch(
+        &mut self,
+        _: &Self::State,
+        storage: &mut WlObjectStorage<'_, Self::State>,
+        message: WlMessage<'_>,
+    ) {
+        let Some(ZwlrLayerSurfaceConfigureEvent { serial, .. }) = message.as_event() else {
+            return;
+        };
+
+        let mut buf = WlSmallVecMessageBuffer::<1>::new();
+
+        self.handle.request(
+            &mut buf,
+            storage,
+            ZwlrLayerSurfaceAckConfigureRequest { serial },
+        );
+    }
+}
 
 #[test]
 fn just_connect_display() {
@@ -42,7 +128,7 @@ fn just_connect_display() {
 fn get_protocol_error() {
     _ = tracing_subscriber::fmt::try_init();
 
-    let mut buf = StackMessageBuffer::new();
+    let mut buf = WlStackMessageBuffer::new();
 
     let mut state = pin!(NoState);
     let display = WlDisplay::connect(state.as_mut()).unwrap();
@@ -87,7 +173,7 @@ fn get_protocol_error() {
 fn get_registry() {
     _ = tracing_subscriber::fmt::try_init();
 
-    let mut buf = StackMessageBuffer::new();
+    let mut buf = WlStackMessageBuffer::new();
 
     let mut state = pin!(NoState);
     let display = WlDisplay::connect(state.as_mut()).unwrap();
@@ -110,7 +196,7 @@ fn get_registry() {
 fn create_surface() {
     _ = tracing_subscriber::fmt::try_init();
 
-    let mut buf = StackMessageBuffer::new();
+    let mut buf = WlStackMessageBuffer::new();
 
     let mut state = pin!(NoState);
     let display = WlDisplay::connect(state.as_mut()).unwrap();
@@ -144,7 +230,7 @@ fn create_surface() {
 fn bind_wlr_shell() {
     _ = tracing_subscriber::fmt::try_init();
 
-    let mut buf = StackMessageBuffer::new();
+    let mut buf = WlStackMessageBuffer::new();
 
     let mut state = pin!(NoState);
     let display = WlDisplay::connect(state.as_mut()).unwrap();
@@ -182,7 +268,7 @@ fn open_shm() -> Result<(OwnedFd, String), rustix::io::Errno> {
 fn white_rect() {
     _ = tracing_subscriber::fmt::try_init();
 
-    let mut buf = StackMessageBuffer::new();
+    let mut buf = WlStackMessageBuffer::new();
 
     let mut state = pin!(NoState);
     let display = WlDisplay::connect(state.as_mut()).unwrap();

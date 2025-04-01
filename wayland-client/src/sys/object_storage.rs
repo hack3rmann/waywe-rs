@@ -1,3 +1,5 @@
+//! Collection of [`WlObject`]s.
+
 use super::{
     display::WlDisplay,
     object::{
@@ -19,7 +21,7 @@ use wayland_sys::wl_event_queue;
 
 #[derive(Debug)]
 pub(crate) struct WlObjectStorageEntry {
-    pub(crate) object: WlDynObject,
+    pub object: WlDynObject,
 }
 static_assertions::assert_impl_all!(WlObjectStorageEntry: Send, Sync);
 
@@ -265,22 +267,29 @@ impl<S: State> WlObjectStorage<'_, S> {
     }
 }
 
+/// Corruption when acquireing object data
 #[derive(Debug, Error)]
 pub enum ObjectDataAcquireError {
+    /// Acquireing twice in a row without releasing the data
     #[error("error acquireing object data twice")]
     AcquiredTwice,
+    /// ID was corrupted during the call
     #[error("acquired object id was corrupted")]
     AcquiredIdCorruped,
 }
 
+/// Error moving object from one storage to another
 #[derive(Debug, Error)]
 pub enum MoveObjectError {
+    /// No object present in a source queue
     #[error("no object with {0:?} is in the source storage")]
     NoObject(WlObjectId),
+    /// Object was already present in destination queue
     #[error("object with {0:?} was already present in the destinations storage")]
     AlreadyPresent(WlObjectId),
 }
 
+/// No entry for a handle
 #[derive(Debug, Error)]
 #[error("no entry for {name}, with id = {id}", name = std::any::type_name::<T>(), id = u32::from(self.0.id()))]
 pub struct NoEntryError<T>(pub WlObjectHandle<T>);

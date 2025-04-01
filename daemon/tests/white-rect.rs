@@ -1,13 +1,47 @@
-use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+use raw_window_handle::{HasDisplayHandle, RawWindowHandle, WaylandWindowHandle};
 use std::pin::pin;
 use std::time::Instant;
 use std::{mem, time::Duration};
+use wayland_client::{Dispatch, FromProxy, HasObjectType, WlObjectType, WlProxy};
 use wayland_client::{
-    NoState, SmallVecMessageBuffer, WlDisplay, WlObjectHandle,
+    NoState, WlDisplay, WlObjectHandle, WlSmallVecMessageBuffer,
     interface::WlCompositorCreateSurfaceRequest,
-    sys::object::default_impl::{Compositor, Surface},
 };
 use wgpu::util::DeviceExt as _;
+
+struct Compositor;
+
+impl FromProxy for Compositor {
+    fn from_proxy(_: &WlProxy) -> Self {
+        Self
+    }
+}
+
+impl HasObjectType for Compositor {
+    const OBJECT_TYPE: WlObjectType = WlObjectType::Compositor;
+}
+
+impl Dispatch for Compositor {
+    type State = NoState;
+    const ALLOW_EMPTY_DISPATCH: bool = true;
+}
+
+struct Surface;
+
+impl FromProxy for Surface {
+    fn from_proxy(_: &WlProxy) -> Self {
+        Self
+    }
+}
+
+impl HasObjectType for Surface {
+    const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
+}
+
+impl Dispatch for Surface {
+    type State = NoState;
+    const ALLOW_EMPTY_DISPATCH: bool = true;
+}
 
 pub const TIMEOUT: Duration = Duration::from_millis(500);
 
@@ -15,7 +49,7 @@ pub const TIMEOUT: Duration = Duration::from_millis(500);
 async fn use_wgpu_to_draw_anything() {
     _ = tracing_subscriber::fmt::try_init();
 
-    let mut buf = SmallVecMessageBuffer::<8>::new();
+    let mut buf = WlSmallVecMessageBuffer::<8>::new();
 
     let mut state = pin!(NoState);
     let display = WlDisplay::connect(state.as_mut()).unwrap();
@@ -41,13 +75,14 @@ async fn use_wgpu_to_draw_anything() {
     });
 
     let raw_display_handle = display.display_handle().unwrap().as_raw();
-    let raw_window_handle = queue
-        .as_ref()
-        .storage()
-        .object(surface)
-        .window_handle()
-        .unwrap()
-        .as_raw();
+    let raw_window_handle = RawWindowHandle::Wayland(WaylandWindowHandle::new(
+        queue
+            .as_ref()
+            .storage()
+            .get_proxy(surface.id())
+            .unwrap()
+            .as_raw(),
+    ));
 
     let wgpu_surface = unsafe {
         instance

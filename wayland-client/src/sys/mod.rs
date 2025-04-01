@@ -1,3 +1,5 @@
+//! Safe wrappers on libwayland types
+
 pub mod display;
 pub mod object;
 pub mod object_storage;
@@ -6,6 +8,7 @@ pub mod wire;
 pub mod log;
 pub mod thin;
 
+/// Wayland interfaces and their signatures
 pub mod protocol {
     use wayland_scanner::include_wl_interfaces;
 

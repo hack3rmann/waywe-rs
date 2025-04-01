@@ -1,3 +1,5 @@
+//! Wrapper around libwayland `wl_event_queue`
+
 use super::dispatch::State;
 use crate::{WlDisplay, WlObjectStorage};
 use std::{mem::ManuallyDrop, pin::Pin, ptr::NonNull};
@@ -78,10 +80,13 @@ impl<S: State> Drop for WlEventQueue<'_, S> {
     }
 }
 
+/// Error creating an event queue
 #[derive(Debug, Error)]
 pub enum CreateQueueError {
+    /// Error from libwayland
     #[error("`wl_display_create_queue` failed: {0:?}")]
     BackendFailed(DisplayErrorCode),
+    /// Main queue taken already
     #[error("main queue is already taken")]
     MainTakenTwice,
 }

@@ -1,3 +1,5 @@
+//! Logging adaptor between `tracing` and `libwayland`
+
 use crate::ffi;
 use std::{
     ffi::{CStr, c_char, c_int},
