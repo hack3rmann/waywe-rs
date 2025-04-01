@@ -198,14 +198,19 @@ pub(crate) struct DynThinData {
 }
 
 impl DynThinData {
-    pub unsafe fn from_ptr(ptr: NonNull<()>) -> NonNull<Self> {
-        let header = unsafe { ptr.cast::<ThinDataHeader>().as_ref() };
+    pub unsafe fn ptr_to_meta(ptr: NonNull<()>) -> usize {
+        let header = unsafe { ptr.cast::<ThinDataHeader>().read() };
+        let n_align_bytes = header.offset() - mem::size_of::<ThinDataHeader>();
 
-        let n_align_bytese = header.offset() - mem::size_of::<ThinDataHeader>();
-        let byte_slice_size = header.size() + n_align_bytese;
+        header.size() + n_align_bytes
+    }
+
+    #[cfg(test)]
+    pub unsafe fn from_ptr(ptr: NonNull<()>) -> NonNull<Self> {
+        let meta = unsafe { Self::ptr_to_meta(ptr) };
 
         // HACK(hack3rmann): constructing fat pointer like this is non-const
-        unsafe { mem::transmute::<(NonNull<()>, usize), NonNull<Self>>((ptr, byte_slice_size)) }
+        unsafe { mem::transmute::<(NonNull<()>, usize), NonNull<Self>>((ptr, meta)) }
     }
 
     #[cfg(test)]

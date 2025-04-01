@@ -1,12 +1,12 @@
 //! Safe wrappers on libwayland types
 
 pub mod display;
+pub(crate) mod log;
 pub mod object;
 pub mod object_storage;
 pub mod proxy;
+pub(crate) mod thin;
 pub mod wire;
-pub mod log;
-pub mod thin;
 
 /// Wayland interfaces and their signatures
 pub mod protocol {

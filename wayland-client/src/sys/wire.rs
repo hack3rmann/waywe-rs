@@ -135,7 +135,7 @@ impl WlStackMessageBuffer {
     /// Maximum number of arguments allowed to be passed into request
     pub const CAPACITY: usize = 20;
 
-    /// Constructs new [`StackMessageBuffer`]
+    /// Constructs new [`WlStackMessageBuffer`]
     pub const fn new() -> Self {
         Self {
             len: 0,
@@ -241,7 +241,7 @@ pub struct WlMessageBuilderHeaderless<'s, Buffer: WlMessageBuffer> {
 }
 
 impl<'s, Buffer: WlMessageBuffer> WlMessageBuilderHeaderless<'s, Buffer> {
-    /// Creates new [`MessageBuffer`] from given message buffer
+    /// Creates new [`WlMessageBuffer`] from given message buffer
     pub fn new(buf: &'s mut Buffer) -> Self {
         buf.clear();
         Self { buf }
@@ -345,7 +345,7 @@ impl<'s, Buffer: WlMessageBuffer> WlMessageBuilder<'s, Buffer> {
     }
 }
 
-/// Provides a coversion function from [`WlArgument`]
+/// Provides a coversion function from [`WlArgument`](wayland_sys::wl_argument)
 pub trait FromArgument<'s>: Sized {
     /// # Safety
     ///
@@ -418,7 +418,7 @@ pub struct WlMessageReader<'s> {
 }
 
 impl<'s> WlMessageReader<'s> {
-    /// Constructs new [`MessageReader`]
+    /// Constructs new [`WlMessageReader`]
     pub const fn new(arguments: &'s [WlArgument]) -> Self {
         Self { arguments }
     }

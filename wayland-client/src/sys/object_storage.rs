@@ -11,6 +11,7 @@ use super::{
 use crate::object::WlObjectId;
 use fxhash::FxHashMap;
 use std::{
+    fmt,
     marker::PhantomData,
     panic::{self, AssertUnwindSafe},
     pin::Pin,
@@ -290,6 +291,14 @@ pub enum MoveObjectError {
 }
 
 /// No entry for a handle
-#[derive(Debug, Error)]
+#[derive(Error)]
 #[error("no entry for {name}, with id = {id}", name = std::any::type_name::<T>(), id = u32::from(self.0.id()))]
 pub struct NoEntryError<T>(pub WlObjectHandle<T>);
+
+impl<T> fmt::Debug for NoEntryError<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple(std::any::type_name::<Self>())
+            .field(&self.0)
+            .finish()
+    }
+}

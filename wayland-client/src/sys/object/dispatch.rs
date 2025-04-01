@@ -24,14 +24,14 @@ use wayland_sys::{wl_argument, wl_message};
 /// State has to be sized because pointer to the state has to be thin.
 pub trait State: Sync + Sized + 'static {}
 
+impl<T: Sync + Sized + 'static> State for T {}
+
 /// Empty state
 pub struct NoState;
 
-impl State for NoState {}
-
 /// Types capable of dispatching the incoming events.
 pub trait Dispatch: HasObjectType + 'static {
-    /// The state that will be carried through all dispatchers
+    /// The state being carried through all dispatchers
     type State: State;
 
     /// A small optimization for dispatch handlers.
@@ -147,15 +147,15 @@ impl WlDynDispatchData {
     pub const DATA_OFFSET: usize = mem::offset_of!(WlDispatchData<(), NoState>, data);
 
     pub unsafe fn from_ptr(ptr: NonNull<()>) -> NonNull<Self> {
+        // Safety: `NonNull` construction from another `NonNull`
         let data_ptr = unsafe {
-            DynThinData::from_ptr(
-                NonNull::new(ptr.as_ptr().wrapping_byte_add(Self::DATA_OFFSET)).unwrap_unchecked(),
-            )
+            NonNull::new(ptr.as_ptr().wrapping_byte_add(Self::DATA_OFFSET)).unwrap_unchecked()
         };
 
-        let (_, meta) =
-            unsafe { mem::transmute::<NonNull<DynThinData>, (NonNull<()>, usize)>(data_ptr) };
+        // Safety: `data_ptr` points to `ThinData<T>`
+        let meta = unsafe { DynThinData::ptr_to_meta(data_ptr) };
 
+        // Safety: construction of a fat pointer
         unsafe { mem::transmute::<(NonNull<()>, usize), NonNull<Self>>((ptr, meta)) }
     }
 }

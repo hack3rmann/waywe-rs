@@ -7,8 +7,8 @@ use std::{
     time::{Duration, Instant},
 };
 use wayland_client::{
-    Dispatch, FromProxy, HasObjectType, WlSmallVecMessageBuffer, WlStackMessageBuffer, State,
-    WlDisplay, WlMessage, WlObject, WlObjectHandle, WlObjectStorage, WlObjectType, WlProxy,
+    Dispatch, FromProxy, HasObjectType, WlDisplay, WlMessage, WlObject, WlObjectHandle,
+    WlObjectStorage, WlObjectType, WlProxy, WlSmallVecMessageBuffer, WlStackMessageBuffer,
     assert_dispatch_is_empty,
     interface::{
         Event, WlCompositorCreateSurfaceRequest, WlSurfaceCommitRequest,
@@ -31,8 +31,6 @@ pub struct ClientState {
     pub next_width: AtomicU32,
     pub next_height: AtomicU32,
 }
-
-impl State for ClientState {}
 
 pub struct WlCompositor;
 
