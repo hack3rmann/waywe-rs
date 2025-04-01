@@ -47,7 +47,7 @@
 //!
 //! # Implementing the [`Dispatch`] trait
 //!
-//! The core [`wayland_client`](crate) trait. Allowes the implementor type
+//! The core [`wayland_client`](crate) trait. Allows the implementor type
 //! to proccess the events incoming to this object.
 //!
 //! ```rust
