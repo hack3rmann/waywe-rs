@@ -11,7 +11,6 @@ thiserror.workspace = true
 tracing.workspace = true
 bitflags = "2.8.0"
 static_assertions.workspace = true
-smallvec.workspace = true
 glam = "0.30.0"
 wayland-scanner = { path = "../wayland-scanner" }
 wayland-sys.workspace = true
@@ -19,7 +18,11 @@ phf = { version = "0.11.3", features = ["macros", "phf_macros"] }
 fxhash = "0.2.1"
 paste.workspace = true
 va_list = "0.2.0"
+smallvec = { version = "1.14.0", features = ["union", "serde", "const_generics", "const_new"], optional = true }
 
 [dev-dependencies]
 tracing-test.workspace = true
 tracing-subscriber.workspace = true
+
+[features]
+smallvec = ["dep:smallvec"]

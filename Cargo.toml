@@ -15,7 +15,7 @@ version = "0.0.1"
 edition = "2024"
 
 [workspace.dependencies]
-wayland-client = { path = "wayland-client" }
+wayland-client = { path = "wayland-client", features = ["smallvec"] }
 waylnad-scanner = { path = "wayland-scanner" }
 wayland-sys = { path = "wayland-sys" }
 thiserror = "2.0.11"

@@ -2,7 +2,6 @@
 
 use super::proxy::{WlProxy, WlProxyQuery};
 use crate::{interface::Event, object::InterfaceMessageArgument};
-use smallvec::SmallVec;
 use std::{
     ffi::CStr,
     mem::{self, MaybeUninit},
@@ -10,6 +9,9 @@ use std::{
     ptr, slice,
 };
 use wayland_sys::{wl_fixed_t, wl_object, wl_proxy, WlArgument, WlFixed};
+
+#[cfg(feature = "smallvec")]
+use smallvec::SmallVec;
 
 /// The code of the performing operation on the interface
 pub type OpCode = u16;
@@ -61,6 +63,7 @@ unsafe impl WlMessageBuffer for WlVecMessageBuffer {
     }
 }
 
+#[cfg(feature = "smallvec")]
 unsafe impl<const N: usize> WlMessageBuffer for WlSmallVecMessageBuffer<N> {
     fn clear(&mut self) {
         SmallVec::clear(&mut self.0)
@@ -103,12 +106,17 @@ impl WlVecMessageBuffer {
 }
 
 /// Message buffer based on [`SmallVec`] implementation
+#[cfg(feature = "smallvec")]
 #[derive(Clone, Default)]
 pub struct WlSmallVecMessageBuffer<const N: usize>(pub(crate) SmallVec<[WlArgument; N]>);
 
+#[cfg(feature = "smallvec")]
 unsafe impl<const N: usize> Send for WlSmallVecMessageBuffer<N> {}
+
+#[cfg(feature = "smallvec")]
 unsafe impl<const N: usize> Sync for WlSmallVecMessageBuffer<N> {}
 
+#[cfg(feature = "smallvec")]
 impl<const N: usize> WlSmallVecMessageBuffer<N> {
     /// Constructs new [`WlSmallVecMessageBuffer`]
     pub const fn new() -> Self {

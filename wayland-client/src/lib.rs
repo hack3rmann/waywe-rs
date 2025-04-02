@@ -303,10 +303,13 @@ pub use {
         proxy::WlProxy,
         wire::{
             OpCode, WlMessage, WlMessageBuffer, WlMessageBuilder, WlMessageBuilderHeaderless,
-            WlMessageReader, WlSmallVecMessageBuffer, WlStackMessageBuffer, WlVecMessageBuffer,
+            WlMessageReader, WlStackMessageBuffer, WlVecMessageBuffer,
         },
     },
 };
+
+#[cfg(feature = "smallvec")]
+pub use sys::wire::WlSmallVecMessageBuffer;
 
 #[doc(hidden)]
 pub(crate) use wayland_sys as ffi;

@@ -12,7 +12,7 @@ use std::{
 };
 use wayland_client::{
     Dispatch, FromProxy, HasObjectType, NoState, WlDisplay, WlMessage, WlObjectHandle,
-    WlObjectStorage, WlObjectType, WlProxy, WlSmallVecMessageBuffer, WlStackMessageBuffer,
+    WlObjectStorage, WlObjectType, WlProxy, WlStackMessageBuffer,
     interface::{
         WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlRegionDestroyRequest,
         WlShmCreatePoolRequest, WlShmFormat, WlShmPoolCreateBufferRequest, WlSurfaceAttachRequest,
@@ -105,7 +105,7 @@ impl Dispatch for WlLayerSurface {
             return;
         };
 
-        let mut buf = WlSmallVecMessageBuffer::<1>::new();
+        let mut buf = WlStackMessageBuffer::new();
 
         self.handle.request(
             &mut buf,
