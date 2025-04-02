@@ -8,22 +8,22 @@
 //!
 //! ## Dispatch
 //!
-//! This crate has built around the [`Dispatch`] trait. All types of Wayland
+//! This crate is built around the [`Dispatch`] trait. All types of Wayland
 //! objects should implement this trait to be capable of dispatching Wayland events.
-//! Having even loop idea it the mind, [`Dispatch::dispatch`] also references
-//! global state implementing the [`State`] trait. This trait is automatically
-//! implemented for all types being [`Sync + 'static`](std::marker::Sync).
+//! Having event loop idea in mind, [`Dispatch::dispatch`] also references
+//! global state by means of a struct that implements the [`State`] trait. This trait
+//! is automatically implemented for all [`Sync + 'static`](std::marker::Sync) types.
 //!
 //! ## Display
 //!
 //! The main object this crate provides is [`WlDisplay`]. It can be used
-//! to create [`WlEventQueue`]s, [`WlRegistry`]s and dispatching all events
-//! from given queue at once (see [`WlDisplay::roundtrip`]).
+//! to create [`WlEventQueue`]s, [`WlRegistry`]s and to dispatch all events
+//! from a given queue at once (see [`WlDisplay::roundtrip`]).
 //!
 //! # Initial setup
 //!
-//! In order to communicate with Wayland, [`WlDisplay`] should be created.
-//! [`WlDisplay`] with dispatch all events on a given [`WlEventQueue`].
+//! In order to communicate with Wayland, [`WlDisplay`] must be created.
+//! [`WlDisplay`] will dispatch all events on a given [`WlEventQueue`].
 //! Display has the default queue to dispatch events called 'the main queue'.
 //! Both *state* and *event queue* should be pinned to be useful later.
 //! Long story short, `libwayland` implementation passes all the pointers around,
@@ -95,8 +95,8 @@
 //!
 //! This optimization requires implementor type of the [`Dispatch`] trait
 //!
-//! 1. being ZST
-//! 2. not implement the [`Drop`] trait
+//! 1. to be ZST
+//! 2. not to implement the [`Drop`] trait
 //! 3. [`Dispatch::ALLOW_EMPTY_DISPATCH`] set to `true`
 //!
 //! ```rust
@@ -148,7 +148,7 @@
 //!
 //! # Binding to globals
 //!
-//! In order to build a request message, a kind [`WlMessageBuffer`] should be created.
+//! In order to build a request message, a kind of `[`WlMessageBuffer`] should be created.
 //! [`wayland_client`](crate) provides implementation of 3 different message buffers:
 //!
 //! 1. [`WlVecMessageBuffer`] using [`Vec`] as a backend buffer
@@ -156,8 +156,8 @@
 //! 3. [`WlStackMessageBuffer`] implementation confined to the stack.
 //!
 //! Binding to globals requires [`WlRegistry`] to be created and initialized via
-//! the event dispatch. Event dispatch happens on given event queue when
-//! [`WlDisplay::roundtrip`] has called on this queue.
+//! the event dispatch. Event dispatch happens on the given event queue when
+//! [`WlDisplay::roundtrip`] is called on this queue.
 //!
 //! ```rust
 //! # use wayland_client::{HasObjectType, Dispatch, WlObjectType, WlStackMessageBuffer, WlDisplay};
@@ -187,13 +187,13 @@
 //! let mut buf = WlStackMessageBuffer::new();
 //!
 //! // Request Wayland to create a registry. The registry is empty initially.
-//! // `registry` itself is a lightweight handle essentially.
+//! // `registry` itself is essentially a lightweight handle.
 //! let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 //!
 //! // We should wait the registry to be filled.
 //! display.roundtrip(queue.as_mut(), state.as_ref());
 //!
-//! // If Wayland-Server have this global being present, it creates
+//! // If Wayland-Server has this global present, it creates
 //! // a new object on the storage of the main `WlEventQueue` `queue`
 //! // and returns a weak handle to it
 //! let compositor = registry
@@ -207,10 +207,10 @@
 //! # Making requests
 //!
 //! [`wayland_client`](crate) provides a way to make a request on a particular
-//! object via calls [`WlObjectHandle::request`] and [`WlObjectHandle::create_object`].
+//! object via calls to [`WlObjectHandle::request`] and [`WlObjectHandle::create_object`].
 //! It is a general and type-safe way to create wayland objects and make any request.
-//! With safety in mind, the program would not compile if a user mistypes a dispatcher
-//! name or makes a request with different interface different from the request parent one.
+//! As a safety condideration the program won't compile if a user mistypes a dispatcher
+//! name or makes a request with different interface different from the request's parental one.
 //!
 //! ```rust
 //! # use wayland_client::{
@@ -276,7 +276,7 @@
 //!     WlSurfaceDestroyRequest,
 //! );
 //!
-//! // Surface object then can be destroyed like this
+//! // Surface object can then be destroyed like this
 //! queue.as_mut().storage_mut().release(surface).unwrap();
 //! ```
 

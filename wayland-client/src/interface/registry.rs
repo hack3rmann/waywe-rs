@@ -1,6 +1,6 @@
-//! The singleton global registry object.  The server has a number of
+//! A singleton global registry object.  The server has a number of
 //! global objects that are available to all clients.  These objects
-//! typically represent an actual object in the server (for example,
+//! typically represent an actual object on the server (for example,
 //! an input device) or they are singleton objects that provide
 //! extension functionality.
 //!
@@ -8,11 +8,11 @@
 //! will emit a global event for each global currently in the
 //! registry.  Globals come and go as a result of device or
 //! monitor hotplugs, reconfiguration or other events, and the
-//! registry will send out global and global_remove events to
+//! registry will send out `global` and `global_remove` events to
 //! keep the client up to date with the changes.  To mark the end
 //! of the initial burst of events, the client can use the
-//! wl_display.sync request immediately after calling
-//! wl_display.get_registry.
+//! `wl_display.sync`request immediately after calling
+//! `wl_display.get_registry`.
 //!
 //! A client can bind to a global object by using the bind
 //! request.  This creates a client-side handle that lets the object
@@ -21,7 +21,7 @@
 
 use crate::{
     object::WlObjectId,
-    sys::wire::{WlMessageBuffer, WlMessage},
+    sys::wire::{WlMessage, WlMessageBuffer},
 };
 
 /// Requests for `wl_registry` interface
