@@ -9,6 +9,7 @@ use crate::{
         wire::{OpCode, WlMessage},
     },
 };
+use static_assertions::assert_impl_all;
 use std::{
     any::Any,
     cell::RefCell,
@@ -27,7 +28,9 @@ pub trait State: Sync + Sized + 'static {}
 impl<T: Sync + Sized + 'static> State for T {}
 
 /// Empty state
+#[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
 pub struct NoState;
+assert_impl_all!(NoState: Sync);
 
 /// Types capable of dispatching the incoming events.
 pub trait Dispatch: HasObjectType + 'static {
@@ -146,6 +149,9 @@ pub(crate) struct WlDynDispatchData {
 impl WlDynDispatchData {
     pub const DATA_OFFSET: usize = mem::offset_of!(WlDispatchData<(), NoState>, data);
 
+    /// # Safety
+    ///
+    /// `ptr` should point to `WlDispatchData<T, S>` with any `T` and `S`
     pub unsafe fn from_ptr(ptr: NonNull<()>) -> NonNull<Self> {
         // Safety: `NonNull` construction from another `NonNull`
         let data_ptr = unsafe {

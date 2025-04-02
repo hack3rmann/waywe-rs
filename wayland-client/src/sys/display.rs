@@ -23,7 +23,7 @@ use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, RawDisplayHandle, WaylandDisplayHandle,
 };
 use std::{
-    any, fmt,
+    fmt,
     mem::ManuallyDrop,
     os::fd::{BorrowedFd, IntoRawFd, RawFd},
     pin::Pin,
@@ -233,9 +233,9 @@ impl<S: State> Drop for WlDisplay<S> {
 
 impl<S: State> fmt::Debug for WlDisplay<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct(any::type_name::<Self>())
+        f.debug_struct("WlDisplay")
             .field("proxy", &*self.proxy)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

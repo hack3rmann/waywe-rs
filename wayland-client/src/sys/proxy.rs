@@ -146,7 +146,9 @@ impl Eq for WlProxy {}
 
 impl fmt::Debug for WlProxy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct(std::any::type_name::<Self>())
+        f.debug_struct("WlProxy")
+            .field("id", &self.id())
+            .field("interface", &self.interface_name())
             .finish_non_exhaustive()
     }
 }
@@ -189,7 +191,8 @@ impl WlProxyQuery {
 
 impl fmt::Debug for WlProxyQuery {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct(std::any::type_name::<Self>())
+        f.debug_struct("WlProxyQeury")
+            .field("id", &self.id())
             .finish_non_exhaustive()
     }
 }

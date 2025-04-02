@@ -1,7 +1,7 @@
 //! Implementation of dynamic dispatch with thin pointers
 
 use std::{
-    any, fmt, hash,
+    fmt, hash,
     mem::{self, MaybeUninit},
     ptr::NonNull,
 };
@@ -47,7 +47,7 @@ impl SizeAndOffset {
 
 impl fmt::Debug for SizeAndOffset {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct(any::type_name::<Self>())
+        f.debug_struct("SizeAndOffset")
             .field("size", &self.size())
             .field("offset", &self.offset())
             .finish()

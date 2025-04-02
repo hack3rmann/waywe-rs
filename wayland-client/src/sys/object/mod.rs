@@ -4,7 +4,9 @@ pub mod dispatch;
 pub mod event_queue;
 pub mod registry;
 
-use super::{object_storage::WlObjectStorage, proxy::WlProxy, thin::ThinData, wire::WlMessageBuffer};
+use super::{
+    object_storage::WlObjectStorage, proxy::WlProxy, thin::ThinData, wire::WlMessageBuffer,
+};
 use crate::{
     ffi,
     interface::{ObjectParent, Request, send_request_raw},
@@ -14,7 +16,7 @@ use dispatch::{
     Dispatch, WlDispatchData, WlDynDispatchData, dispatch_raw, is_empty_dispatch_data_allowed,
 };
 use std::{
-    any::{self, TypeId},
+    any::TypeId,
     fmt, hash,
     marker::PhantomData,
     mem::{self, MaybeUninit, offset_of},
@@ -152,7 +154,7 @@ impl<T> Copy for WlObjectHandle<T> {}
 
 impl<T> fmt::Debug for WlObjectHandle<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct(any::type_name::<Self>())
+        f.debug_struct("WlObjectHandle")
             .field("id", &self.id)
             .finish()
     }
@@ -233,7 +235,7 @@ impl Drop for WlDynObject {
 
 impl fmt::Debug for WlDynObject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct(any::type_name::<Self>())
+        f.debug_struct("WlDynObject")
             .field("proxy", &self.proxy)
             .finish_non_exhaustive()
     }
@@ -450,7 +452,7 @@ impl<T: Dispatch> DerefMut for WlObject<T> {
 
 impl<T: fmt::Debug + Dispatch> fmt::Debug for WlObject<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct(any::type_name::<Self>())
+        f.debug_struct("WlObject")
             .field("proxy", &self.proxy)
             .field("data", &self.data())
             .finish()

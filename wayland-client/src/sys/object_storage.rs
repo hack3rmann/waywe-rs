@@ -27,7 +27,6 @@ pub(crate) struct WlObjectStorageEntry {
 static_assertions::assert_impl_all!(WlObjectStorageEntry: Send, Sync);
 
 /// A storage for wayland's objects
-#[derive(Debug)]
 pub struct WlObjectStorage<'d, S: State> {
     objects: FxHashMap<WlObjectId, WlObjectStorageEntry>,
     acquired_object: Option<WlObjectId>,
@@ -268,6 +267,14 @@ impl<S: State> WlObjectStorage<'_, S> {
     }
 }
 
+impl<S: State> fmt::Debug for WlObjectStorage<'_, S> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("WlObjectStorage")
+            .field("objects", &self.objects)
+            .finish_non_exhaustive()
+    }
+}
+
 /// Corruption when acquireing object data
 #[derive(Debug, Error)]
 pub enum ObjectDataAcquireError {
@@ -297,8 +304,6 @@ pub struct NoEntryError<T>(pub WlObjectHandle<T>);
 
 impl<T> fmt::Debug for NoEntryError<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple(std::any::type_name::<Self>())
-            .field(&self.0)
-            .finish()
+        f.debug_tuple("NoEntryError").field(&self.0).finish()
     }
 }

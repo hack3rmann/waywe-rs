@@ -2,7 +2,7 @@
 
 use super::dispatch::State;
 use crate::{WlDisplay, WlObjectStorage};
-use std::{mem::ManuallyDrop, pin::Pin, ptr::NonNull};
+use std::{fmt, mem::ManuallyDrop, pin::Pin, ptr::NonNull};
 use thiserror::Error;
 use wayland_sys::{DisplayErrorCode, wl_event_queue, wl_event_queue_destroy};
 
@@ -77,6 +77,15 @@ impl<S: State> Drop for WlEventQueue<'_, S> {
         if let Some(raw_queue) = self.raw {
             unsafe { wl_event_queue_destroy(raw_queue.as_ptr()) };
         }
+    }
+}
+
+impl<S: State> fmt::Debug for WlEventQueue<'_, S> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("WlEventQueue")
+            .field("storage", &*self.storage)
+            .field("is_main", &self.is_main())
+            .finish_non_exhaustive()
     }
 }
 
