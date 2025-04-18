@@ -147,16 +147,16 @@ impl<S: State> WlDisplay<S> {
 
     /// # Safety
     ///
-    /// - no one should access the object storage during this call
-    /// - no one should access the state during this call
+    /// - anyone mustn't access the object storage during this call
+    /// - anyone mustn't access the state during this call
     pub(crate) unsafe fn roundtrip_unchecked(&self) -> i32 {
         unsafe { ffi::wl_display_roundtrip(self.as_raw().as_ptr()) }
     }
 
     /// # Safety
     ///
-    /// - no one should access the object storage during this call
-    /// - no one should access the state during this call
+    /// - anyone mustn't access the object storage during this call
+    /// - anyone mustn't access the state during this call
     pub(crate) unsafe fn roundtrip_queue_unchecked<'d>(
         &'d self,
         queue: &WlEventQueue<'d, S>,

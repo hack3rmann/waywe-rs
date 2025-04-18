@@ -74,8 +74,8 @@ pub mod request {
 
         /// # Safety
         ///
-        /// - `parent` proxy should match the parent interface
-        /// - resulting `WlProxy` object should be owned by `ObjectStorage` after call
+        /// - `parent` proxy must match the parent interface
+        /// - resulting `WlProxy` object must be owned by `ObjectStorage` after call
         pub unsafe fn send<S: State>(
             self,
             registry: &WlObject<WlRegistry<S>>,

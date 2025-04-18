@@ -154,7 +154,7 @@ impl<S: State> WlObjectStorage<'_, S> {
     ///
     /// # Errors
     ///
-    /// May return [`None`] if object does not contained by the storage or
+    /// May return [`None`] if the object is not contained by the storage or
     /// it had been acquired via a call to [`WlObjectStorage::with_object_data_acquired`]
     pub fn get_object<T: Dispatch<State = S>>(
         &self,
@@ -240,7 +240,7 @@ impl<S: State> WlObjectStorage<'_, S> {
     /// Will return [`Err`] if
     ///
     /// - this object had been acquired already.
-    /// - acquired object id has corrupted after the `f` call.
+    /// - acquired object id was corrupted after the `f` call.
     pub fn with_object_data_acquired(
         &mut self,
         id: WlObjectId,

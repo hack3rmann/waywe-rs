@@ -19,7 +19,7 @@ use crate::{
         object::dispatch::State,
         object_storage::WlObjectStorage,
         proxy::WlProxy,
-        wire::{WlMessageBuffer, OpCode, WlMessage},
+        wire::{OpCode, WlMessage, WlMessageBuffer},
     },
 };
 use std::ptr::{self, NonNull};
@@ -36,7 +36,7 @@ impl WlObjectType {
         unsafe { self.interface().name_str_unchecked() }
     }
 
-    /// The for the particular request in this interface
+    /// The name for the particular request in this interface
     ///
     /// # Error
     ///
@@ -83,7 +83,7 @@ pub trait Request<'s>: Sized + HasObjectType {
     /// The type of an interface object of which will be created by libwayland
     const CHILD_TYPE: Option<WlObjectType>;
 
-    /// Builds the message on the top of given message buffer
+    /// Builds the message on top of the given message buffer
     fn build_message<'m, S: State>(
         self,
         buf: &'m mut impl WlMessageBuffer,
@@ -104,8 +104,8 @@ pub trait Event<'s>: Sized {
 
 /// # Safety
 ///
-/// - `parent` proxy should match the parent interface
-/// - resulting `WlProxy` object should be consumed to an object storage
+/// - `parent` proxy must match the parent interface
+/// - resulting `WlProxy` object must be consumed to an object storage
 pub(crate) unsafe fn send_request_raw<'s, S: State, R: Request<'s>>(
     request: R,
     buf: &mut impl WlMessageBuffer,

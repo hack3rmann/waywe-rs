@@ -8,7 +8,7 @@ use std::{
     os::fd::{AsRawFd, BorrowedFd, FromRawFd as _, OwnedFd},
     ptr, slice,
 };
-use wayland_sys::{wl_fixed_t, wl_object, wl_proxy, WlArgument, WlFixed};
+use wayland_sys::{WlArgument, WlFixed, wl_fixed_t, wl_object, wl_proxy};
 
 #[cfg(feature = "smallvec")]
 use smallvec::SmallVec;
@@ -431,11 +431,11 @@ impl<'s> WlMessageReader<'s> {
         Self { arguments }
     }
 
-    /// Reads a values from the next arguments of the message
+    /// Reads a value from the next arguments of the message
     ///
     /// # Safety
     ///
-    /// An argument being read by this call thould have the same type
+    /// An argument being read by this call should have the same type
     /// as the argument written to the message before
     pub unsafe fn read<A: FromArgument<'s>>(&mut self) -> Option<A> {
         let first_arg = self.arguments.first().copied()?;
