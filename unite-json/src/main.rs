@@ -148,11 +148,11 @@ fn unite(res: &mut UnitedValue, second: &Value) -> bool {
 
 impl std::fmt::Display for UnitedValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", _format_united_value(self, 0, 0))
+        write!(f, "{}", format_united_value(self, 0, 0))
     }
 }
 
-fn _format_united_value(val: &UnitedValue, deps: u32, offset: u32) -> String {
+fn format_united_value(val: &UnitedValue, deps: u32, offset: u32) -> String {
     // This the offset that has to be inserted before print
     let start_tab: String = (0..offset).map(|_| "    ").collect();
 
@@ -180,9 +180,9 @@ fn _format_united_value(val: &UnitedValue, deps: u32, offset: u32) -> String {
 
             for elem in arr {
                 if multiline_print {
-                    res.push_str(&_format_united_value(elem, deps + 1, deps + 1));
+                    res.push_str(&format_united_value(elem, deps + 1, deps + 1));
                 } else {
-                    res.push_str(&_format_united_value(elem, deps + 1, 0));
+                    res.push_str(&format_united_value(elem, deps + 1, 0));
                 }
                 res.push(',');
                 res.push(delimiter);
@@ -216,21 +216,21 @@ fn _format_united_value(val: &UnitedValue, deps: u32, offset: u32) -> String {
                 if obj[key].len() == 1 {
                     res.push_str(&format!(
                         "{}",
-                        &_format_united_value(&obj[key][0], deps + 1, 0)
+                        &format_united_value(&obj[key][0], deps + 1, 0)
                     ));
                 } else {
-                    if obj[key].len() > 0 {
+                    if multiline_print {
                         res.push('\n');
                     }
                     for value in obj[key].iter() {
                         if multiline_print {
                             res.push_str(&format!(
                                 "{}",
-                                &_format_united_value(value, deps + 2, deps + 2)
+                                &format_united_value(value, deps + 2, deps + 2)
                             ));
                             res.push_str(",\n");
                         } else {
-                            res.push_str(&format!("{}", &_format_united_value(value, deps + 2, 0)));
+                            res.push_str(&format!("{}", &format_united_value(value, deps + 2, 0)));
                             res.push_str(", ")
                         }
                     }
@@ -333,7 +333,7 @@ mod tests {
     }
 
     #[test]
-    fn test_unite() {
+    fn test_unite1() {
         let mut map = HashMap::new();
         map.insert(
             "a".to_owned(),
