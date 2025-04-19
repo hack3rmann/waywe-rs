@@ -178,7 +178,7 @@ fn format_united_value(val: &UnitedValue, deps: u32, offset: u32) -> String {
 
             let delimiter = if multiline_print { '\n' } else { ' ' };
 
-            for elem in arr {
+            for elem in &arr[..arr.len() - 1] {
                 if multiline_print {
                     res.push_str(&format_united_value(elem, deps + 1, deps + 1));
                 } else {
@@ -186,6 +186,18 @@ fn format_united_value(val: &UnitedValue, deps: u32, offset: u32) -> String {
                 }
                 res.push(',');
                 res.push(delimiter);
+            }
+            if arr.len() > 0 {
+                if multiline_print {
+                    res.push_str(&format_united_value(
+                        &arr[arr.len() - 1],
+                        deps + 1,
+                        deps + 1,
+                    ));
+                    res.push_str(",\n");
+                } else {
+                    res.push_str(&format_united_value(&arr[arr.len() - 1], deps + 1, 0));
+                }
             }
 
             if multiline_print {
@@ -222,7 +234,7 @@ fn format_united_value(val: &UnitedValue, deps: u32, offset: u32) -> String {
                     if multiline_print {
                         res.push('\n');
                     }
-                    for value in obj[key].iter() {
+                    for value in &obj[key][..obj[key].len() - 1] {
                         if multiline_print {
                             res.push_str(&format!(
                                 "{}",
@@ -232,6 +244,25 @@ fn format_united_value(val: &UnitedValue, deps: u32, offset: u32) -> String {
                         } else {
                             res.push_str(&format!("{}", &format_united_value(value, deps + 2, 0)));
                             res.push_str(", ")
+                        }
+                    }
+
+                    if obj[key].len() > 0 {
+                        if multiline_print {
+                            res.push_str(&format!(
+                                "{}",
+                                &format_united_value(
+                                    &obj[key][obj[key].len() - 1],
+                                    deps + 2,
+                                    deps + 2
+                                )
+                            ));
+                            res.push_str(",\n");
+                        } else {
+                            res.push_str(&format!(
+                                "{}",
+                                &format_united_value(&obj[key][obj[key].len() - 1], deps + 2, 0)
+                            ));
                         }
                     }
                 }
