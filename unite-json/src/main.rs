@@ -34,31 +34,36 @@ impl PartialEq<Value> for UnitedValue {
             UnitedValue::Null => match other {
                 Value::Null => true,
                 _ => {
-                    panic!("mismatch types in united_value and value")
+                    // panic!("mismatch types in united_value and value")
+                    false
                 }
             },
             UnitedValue::Bool(val1) => match other {
                 Value::Bool(val2) => val2 == val1,
                 _ => {
-                    panic!("mismatch types in united_value and value")
+                    // panic!("mismatch types in united_value and value")
+                    false
                 }
             },
             UnitedValue::Number(val1) => match other {
                 Value::Number(val2) => val2 == val1,
                 _ => {
-                    panic!("mismatch types in united_value and value")
+                    // panic!("mismatch types in united_value and value")
+                    false
                 }
             },
             UnitedValue::String(str1) => match other {
                 Value::String(str2) => str1 == str2,
                 _ => {
-                    panic!("mismatch types in united_value and value")
+                    // panic!("mismatch types in united_value and value")
+                    false
                 }
             },
             UnitedValue::Array(arr1) => match other {
                 Value::Array(arr2) => arr1.iter().zip(arr2.iter()).all(|(v1, v2)| v1 == v2),
                 _ => {
-                    panic!("mismatch types in united_value and value")
+                    // panic!("mismatch types in united_value and value")
+                    false
                 }
             },
             UnitedValue::Object(map1) => match other {
@@ -76,7 +81,8 @@ impl PartialEq<Value> for UnitedValue {
                     true
                 }
                 _ => {
-                    panic!("mismatch types in united_value and value")
+                    // panic!("mismatch types in united_value and value")
+                    false
                 }
             },
         }
@@ -140,150 +146,110 @@ fn unite(res: &mut UnitedValue, second: &Value) -> bool {
     true
 }
 
-fn format_united_value(val: &UnitedValue, deps: u32) -> String {
-    let cur_offset: String = (0..deps).map(|_| "    ").collect();
+impl std::fmt::Display for UnitedValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", _format_united_value(self, 0, 0))
+    }
+}
+
+fn _format_united_value(val: &UnitedValue, deps: u32, offset: u32) -> String {
+    // This the offset that has to be inserted before print
+    let start_tab: String = (0..offset).map(|_| "    ").collect();
+
+    // These two are used for multiline printing
+    let current_tab: String = (0..deps).map(|_| "    ").collect();
+    let next_tab = current_tab.clone() + "    ";
 
     match val {
-        UnitedValue::Null => cur_offset + "null",
-        UnitedValue::Bool(val) => cur_offset + &val.to_string(),
-        UnitedValue::Number(val) => cur_offset + &val.to_string(),
-        UnitedValue::String(val) => format!("\"{}\"", cur_offset + &val),
-        UnitedValue::Array(val) => {
-            let delimiter = if val.len() > 3 {
-                format!(",\n")
-            } else {
-                ", ".to_string()
-            };
+        UnitedValue::Null => start_tab + "null",
+        UnitedValue::Bool(val) => format!("{start_tab}{val}"),
+        UnitedValue::Number(val) => format!("{start_tab}{val}"),
+        UnitedValue::String(val) => format!("{start_tab}\"{val}\""),
+        UnitedValue::Array(arr) => {
+            let multiline_print =
+                arr.len() > 3 || matches!(arr[0], UnitedValue::Array(_) | UnitedValue::Object(_));
 
-            let mut res = if val.len() > 3 {
-                format!("{cur_offset}[\n")
-            } else {
-                format!("{cur_offset}[")
-            };
+            let mut res = start_tab;
 
-            let cur_deps = if val.len() > 3 { deps + 1 } else { 0 };
-            for value in &val[..val.len() - 1] {
-                res.push_str(&format!(
-                    "{}{delimiter}",
-                    format_united_value(value, cur_deps),
-                ));
-            }
-            res.push_str(&format!(
-                "{}",
-                format_united_value(&val[val.len() - 1], cur_deps)
-            ));
-
-            if val.len() > 3 {
-                res.push_str(&format!("\n{cur_offset}]"))
-            } else {
-                res.push_str("]")
+            res.push('[');
+            if multiline_print {
+                res.push('\n');
             }
 
+            let delimiter = if multiline_print { '\n' } else { ' ' };
+
+            for elem in arr {
+                if multiline_print {
+                    res.push_str(&_format_united_value(elem, deps + 1, deps + 1));
+                } else {
+                    res.push_str(&_format_united_value(elem, deps + 1, 0));
+                }
+                res.push(',');
+                res.push(delimiter);
+            }
+
+            if multiline_print {
+                res.push_str(&format!("\n{current_tab}"));
+            }
+            res.push(']');
             res
         }
-        UnitedValue::Object(val) => {
-            let mut res = cur_offset.clone() + "{\n";
+        UnitedValue::Object(obj) => {
+            let mut res = start_tab;
 
-            let old_offset = cur_offset.clone();
-            let cur_offset = cur_offset.clone() + "    ";
+            res.push_str("{\n");
 
-            for (field, possible_values) in val {
-                res.push_str(&(cur_offset.clone()));
-                res.push_str("\"");
-                res.push_str(&field.to_string());
-                if possible_values.len() > 1 {
-                    res.push_str("\": <");
-                } else {
-                    res.push_str("\": ");
+            for key in obj.keys() {
+                res.push_str(&next_tab);
+                res.push('"');
+                res.push_str(key);
+                res.push_str("\": ");
+
+                let multiline_print = obj[key].len() > 3
+                    || (obj[key].len() > 0
+                        && matches!(obj[key][0], UnitedValue::Array(_) | UnitedValue::Object(_)));
+
+                if obj[key].len() > 1 {
+                    res.push_str("<");
                 }
 
-                let delimiter = if matches!(
-                    possible_values[0],
-                    UnitedValue::Array(_) | UnitedValue::Object(_)
-                ) {
-                    "\n"
-                } else {
-                    " "
-                };
-                let cur_deps = if possible_values.len() == 1
-                    && matches!(
-                        possible_values[0],
-                        UnitedValue::Object(_) | UnitedValue::Array(_)
-                    ) {
-                    deps + 2
-                } else if possible_values.len() > 3
-                    || matches!(possible_values[0], UnitedValue::Object(_))
-                {
-                    deps + 2
-                } else {
-                    0
-                };
-
-                for possible_value in &possible_values[..possible_values.len() - 1] {
+                if obj[key].len() == 1 {
                     res.push_str(&format!(
-                        "{delimiter}{},",
-                        format_united_value(possible_value, cur_deps)
+                        "{}",
+                        &_format_united_value(&obj[key][0], deps + 1, 0)
                     ));
-                }
-                res.push_str(&format!(
-                    "{delimiter}{}{}",
-                    format_united_value(&possible_values[possible_values.len() - 1], cur_deps),
-                    // if delimiter == " " { "" } else { "\n" }
-                    delimiter
-                ));
-
-                if possible_values.len() <= 1 {
-                    res.push_str(&("\n"))
-                } else if possible_values.len() > 3
-                    || matches!(
-                        possible_values[0],
-                        UnitedValue::Object(_) | UnitedValue::Array(_)
-                    )
-                {
-                    res.push_str(&(cur_offset.clone() + ">\n"));
                 } else {
-                    res.push_str(&(">\n"));
+                    if obj[key].len() > 0 {
+                        res.push('\n');
+                    }
+                    for value in obj[key].iter() {
+                        if multiline_print {
+                            res.push_str(&format!(
+                                "{}",
+                                &_format_united_value(value, deps + 2, deps + 2)
+                            ));
+                            res.push_str(",\n");
+                        } else {
+                            res.push_str(&format!("{}", &_format_united_value(value, deps + 2, 0)));
+                            res.push_str(", ")
+                        }
+                    }
                 }
-            }
-            res.push_str(&(old_offset + "}"));
 
+                if obj[key].len() > 1 {
+                    if multiline_print {
+                        res.push_str(&next_tab);
+                    }
+                    res.push_str(">");
+                }
+                res.push_str(",\n");
+            }
+
+            res.push_str(&format!("\n{current_tab}}}"));
             res
         }
     }
 }
-
-// impl std::fmt::Debug for UnitedValue {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         let res = match self {
-//             Self::Null => "null".to_string(),
-//             Self::Bool(val) => val.to_string(),
-//             Self::Number(val) => val.to_string(),
-//             Self::String(val) => val.to_owned(),
-//             Self::Array(val) => format!("{val:?}"),
-//             Self::Object(val) => {
-//                 let mut res = "{".to_string();
-
-//                 for (field, possible_values) in val {
-//                     res.push_str("\"");
-//                     res.push_str(&field.to_string());
-//                     res.push_str("\": <");
-
-//                     for possible_value in &possible_values[..possible_values.len() - 1] {
-//                         res.push_str(&format!("{possible_value:?}, "));
-//                     }
-//                     res.push_str(&format!("{:?}", possible_values[possible_values.len() - 1]));
-
-//                     res.push_str(">");
-//                 }
-//                 res.push_str("}");
-
-//                 res
-//             }
-//         };
-
-//         write!(f, "{}", res)
-//     }
-// }
 
 fn main() -> io::Result<()> {
     let path = Cli::parse().path;
@@ -299,13 +265,12 @@ fn main() -> io::Result<()> {
         let value: Value = serde_json::from_reader(fd)?;
 
         unite(&mut res, &value);
-        println!("res: {}, value: {value:#?}", format_united_value(&res, 0));
     }
 
     let united_json_fd = fs::File::create("united.json")?;
     let mut united_json_fd = BufWriter::new(united_json_fd);
 
-    united_json_fd.write_all(format!("{res:?}").as_bytes())?;
+    united_json_fd.write_all(format!("{}", res).as_bytes())?;
 
     Ok(())
 }
@@ -315,20 +280,6 @@ mod tests {
     use super::*;
 
     #[test]
-    #[ignore]
-    fn debug_united_value() {
-        let mut objects = HashMap::new();
-        objects.insert(
-            "sdf".to_string(),
-            vec![UnitedValue::Array(vec![UnitedValue::Bool(false); 3])],
-        );
-        let val = UnitedValue::Object(objects);
-
-        println!("{val:#?}");
-    }
-
-    #[test]
-    #[ignore]
     fn display_united_value() {
         let mut objects = HashMap::new();
         objects.insert(
@@ -347,11 +298,10 @@ mod tests {
         );
         let val = UnitedValue::Object(objects);
 
-        println!("{}", format_united_value(&val, 0));
+        println!("{val}");
     }
 
     #[test]
-    #[ignore]
     fn display_united_value2() {
         let mut objects = HashMap::new();
         objects.insert(
@@ -370,16 +320,16 @@ mod tests {
         );
         let val = UnitedValue::Object(objects);
 
-        println!("{}", format_united_value(&val, 0));
+        println!("{val}");
     }
 
     #[test]
-    #[ignore]
-    fn display_united_value3() {
-        let inner_val = UnitedValue::Array(vec![UnitedValue::Null; 4]);
-        let val = UnitedValue::Array(vec![inner_val; 4]);
+    fn display_united_value_array() {
+        let inner_inner_val = UnitedValue::Array(vec![UnitedValue::Null; 3]);
+        let inner_val = UnitedValue::Array(vec![inner_inner_val; 3]);
+        let val = UnitedValue::Array(vec![inner_val; 3]);
 
-        println!("{}", format_united_value(&val, 0));
+        println!("{val}");
     }
 
     #[test]
@@ -398,7 +348,7 @@ mod tests {
         let second = Value::Object(map);
 
         unite(&mut first, &second);
-        println!("unite:\n{}", format_united_value(&mut first, 0));
+        println!("unite:\n{first}");
     }
 
     #[test]
@@ -426,6 +376,32 @@ mod tests {
         let map2 = Value::Object(map2);
         unite(&mut map, &map2);
 
-        println!("unite2:\n{}", format_united_value(&map, 0));
+        println!("unite2:\n{map}");
+    }
+
+    #[test]
+    fn test_unite3() {
+        let mut map1 = HashMap::new();
+        let arr = UnitedValue::Number(serde_json::Number::from_u128(123).unwrap());
+        let arr = UnitedValue::Array(vec![arr]);
+
+        map1.insert("b".to_owned(), vec![arr]);
+        let mut map = HashMap::new();
+        map.insert("a".to_owned(), vec![UnitedValue::Object(map1)]);
+
+        let mut map = UnitedValue::Object(map);
+
+        let arr = Value::Number(serde_json::Number::from_u128(124).unwrap());
+        let arr = Value::Array(vec![arr]);
+
+        let mut map1 = serde_json::Map::new();
+        map1.insert("b".to_owned(), arr);
+        let mut map2 = serde_json::Map::new();
+        map2.insert("a".to_owned(), Value::Object(map1));
+
+        let map2 = Value::Object(map2);
+        unite(&mut map, &map2);
+
+        println!("unite3:\n{map}");
     }
 }
