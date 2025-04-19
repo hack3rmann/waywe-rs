@@ -189,7 +189,7 @@ fn format_united_value(val: &UnitedValue, deps: u32, offset: u32) -> String {
             }
 
             if multiline_print {
-                res.push_str(&format!("\n{current_tab}"));
+                res.push_str(&format!("{current_tab}"));
             }
             res.push(']');
             res
