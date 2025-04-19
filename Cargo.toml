@@ -8,6 +8,7 @@ members = [
     "wayland-scanner",
     "wayland",
     "wayland-sys",
+    "unite-json"
 ]
 
 [workspace.package]

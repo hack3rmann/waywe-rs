@@ -1,3 +1,5 @@
+// TODO(ArnoDarkrose): rewrite this with HashSet
+
 use std::collections::HashMap;
 use std::fs;
 use std::io;
@@ -16,7 +18,7 @@ struct Cli {
     path: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum UnitedValue {
     Null,
     Bool(bool),
@@ -26,8 +28,116 @@ pub enum UnitedValue {
     Object(HashMap<String, Vec<UnitedValue>>),
 }
 
-fn unite(res: &mut UnitedValue, second: Value) {
-    todo!()
+impl PartialEq<Value> for UnitedValue {
+    fn eq(&self, other: &Value) -> bool {
+        match self {
+            UnitedValue::Null => match other {
+                Value::Null => true,
+                _ => {
+                    panic!("mismatch types in united_value and value")
+                }
+            },
+            UnitedValue::Bool(val1) => match other {
+                Value::Bool(val2) => val2 == val1,
+                _ => {
+                    panic!("mismatch types in united_value and value")
+                }
+            },
+            UnitedValue::Number(val1) => match other {
+                Value::Number(val2) => val2 == val1,
+                _ => {
+                    panic!("mismatch types in united_value and value")
+                }
+            },
+            UnitedValue::String(str1) => match other {
+                Value::String(str2) => str1 == str2,
+                _ => {
+                    panic!("mismatch types in united_value and value")
+                }
+            },
+            UnitedValue::Array(arr1) => match other {
+                Value::Array(arr2) => arr1.iter().zip(arr2.iter()).all(|(v1, v2)| v1 == v2),
+                _ => {
+                    panic!("mismatch types in united_value and value")
+                }
+            },
+            UnitedValue::Object(map1) => match other {
+                Value::Object(map2) => {
+                    for key in map2.keys() {
+                        if !map1.contains_key(key) {
+                            return false;
+                        }
+
+                        if !map1[key].iter().any(|v| v == &map2[key]) {
+                            return false;
+                        }
+                    }
+
+                    true
+                }
+                _ => {
+                    panic!("mismatch types in united_value and value")
+                }
+            },
+        }
+    }
+}
+
+impl From<Value> for UnitedValue {
+    fn from(value: Value) -> Self {
+        match value {
+            Value::Null => UnitedValue::Null,
+            Value::Bool(val) => UnitedValue::Bool(val),
+            Value::Number(val) => UnitedValue::Number(val),
+            Value::String(val) => UnitedValue::String(val),
+            Value::Array(arr) => UnitedValue::Array(arr.into_iter().map(|v| v.into()).collect()),
+            Value::Object(obj) => {
+                let mut res = HashMap::new();
+
+                for (key, value) in obj.into_iter() {
+                    res.insert(key, vec![value.into()]);
+                }
+                UnitedValue::Object(res)
+            }
+        }
+    }
+}
+
+// returns true if successfully united and false otherwise
+fn unite(res: &mut UnitedValue, second: &Value) -> bool {
+    if res == second {
+        return true;
+    }
+
+    match res {
+        UnitedValue::Object(united_map) => match second {
+            Value::Object(map) => {
+                for key in map.keys() {
+                    if !united_map.contains_key(key) {
+                        united_map.insert(key.to_owned(), vec![map[key].clone().into()]);
+                    } else {
+                        if !united_map
+                            .get_mut(key)
+                            .unwrap()
+                            .iter_mut()
+                            .any(|v| unite(v, &map[key]))
+                        {
+                            united_map
+                                .get_mut(key)
+                                .unwrap()
+                                .push(map[key].clone().into());
+                        }
+                    }
+                }
+            }
+            _ => {
+                unreachable!()
+            }
+        },
+        _ => return false,
+    }
+
+    true
 }
 
 fn format_united_value(val: &UnitedValue, deps: u32) -> String {
@@ -37,7 +147,7 @@ fn format_united_value(val: &UnitedValue, deps: u32) -> String {
         UnitedValue::Null => cur_offset + "null",
         UnitedValue::Bool(val) => cur_offset + &val.to_string(),
         UnitedValue::Number(val) => cur_offset + &val.to_string(),
-        UnitedValue::String(val) => cur_offset + &val,
+        UnitedValue::String(val) => format!("\"{}\"", cur_offset + &val),
         UnitedValue::Array(val) => {
             let delimiter = if val.len() > 3 {
                 format!(",\n")
@@ -118,7 +228,8 @@ fn format_united_value(val: &UnitedValue, deps: u32) -> String {
                 res.push_str(&format!(
                     "{delimiter}{}{}",
                     format_united_value(&possible_values[possible_values.len() - 1], cur_deps),
-                    if delimiter == " " { "" } else { "\n" }
+                    // if delimiter == " " { "" } else { "\n" }
+                    delimiter
                 ));
 
                 if possible_values.len() <= 1 {
@@ -141,38 +252,38 @@ fn format_united_value(val: &UnitedValue, deps: u32) -> String {
     }
 }
 
-impl std::fmt::Debug for UnitedValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let res = match self {
-            Self::Null => "null".to_string(),
-            Self::Bool(val) => val.to_string(),
-            Self::Number(val) => val.to_string(),
-            Self::String(val) => val.to_owned(),
-            Self::Array(val) => format!("{val:?}"),
-            Self::Object(val) => {
-                let mut res = "{".to_string();
+// impl std::fmt::Debug for UnitedValue {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         let res = match self {
+//             Self::Null => "null".to_string(),
+//             Self::Bool(val) => val.to_string(),
+//             Self::Number(val) => val.to_string(),
+//             Self::String(val) => val.to_owned(),
+//             Self::Array(val) => format!("{val:?}"),
+//             Self::Object(val) => {
+//                 let mut res = "{".to_string();
 
-                for (field, possible_values) in val {
-                    res.push_str("\"");
-                    res.push_str(&field.to_string());
-                    res.push_str("\": <");
+//                 for (field, possible_values) in val {
+//                     res.push_str("\"");
+//                     res.push_str(&field.to_string());
+//                     res.push_str("\": <");
 
-                    for possible_value in &possible_values[..possible_values.len() - 1] {
-                        res.push_str(&format!("{possible_value:?}, "));
-                    }
-                    res.push_str(&format!("{:?}", possible_values[possible_values.len() - 1]));
+//                     for possible_value in &possible_values[..possible_values.len() - 1] {
+//                         res.push_str(&format!("{possible_value:?}, "));
+//                     }
+//                     res.push_str(&format!("{:?}", possible_values[possible_values.len() - 1]));
 
-                    res.push_str(">");
-                }
-                res.push_str("}");
+//                     res.push_str(">");
+//                 }
+//                 res.push_str("}");
 
-                res
-            }
-        };
+//                 res
+//             }
+//         };
 
-        write!(f, "{}", res)
-    }
-}
+//         write!(f, "{}", res)
+//     }
+// }
 
 fn main() -> io::Result<()> {
     let path = Cli::parse().path;
@@ -182,12 +293,13 @@ fn main() -> io::Result<()> {
     for entry in fs::read_dir(Path::new(&path))? {
         let file_path = entry?.path();
 
-        let fd = fs::File::open(file_path)?;
+        let fd = fs::File::open(file_path.join("project.json"))?;
         let fd = io::BufReader::new(fd);
 
         let value: Value = serde_json::from_reader(fd)?;
 
-        unite(&mut res, value);
+        unite(&mut res, &value);
+        println!("res: {}, value: {value:#?}", format_united_value(&res, 0));
     }
 
     let united_json_fd = fs::File::create("united.json")?;
@@ -203,6 +315,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore]
     fn debug_united_value() {
         let mut objects = HashMap::new();
         objects.insert(
@@ -215,6 +328,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn display_united_value() {
         let mut objects = HashMap::new();
         objects.insert(
@@ -237,6 +351,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn display_united_value2() {
         let mut objects = HashMap::new();
         objects.insert(
@@ -259,10 +374,58 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn display_united_value3() {
         let inner_val = UnitedValue::Array(vec![UnitedValue::Null; 4]);
         let val = UnitedValue::Array(vec![inner_val; 4]);
 
         println!("{}", format_united_value(&val, 0));
+    }
+
+    #[test]
+    fn test_unite() {
+        let mut map = HashMap::new();
+        map.insert(
+            "a".to_owned(),
+            vec![UnitedValue::Number(
+                serde_json::Number::from_u128(1).unwrap(),
+            )],
+        );
+        let mut first = UnitedValue::Object(map);
+
+        let mut map = serde_json::Map::new();
+        map.insert("a".to_owned(), serde_json::json!(0));
+        let second = Value::Object(map);
+
+        unite(&mut first, &second);
+        println!("unite:\n{}", format_united_value(&mut first, 0));
+    }
+
+    #[test]
+    fn test_unite2() {
+        let mut map1 = HashMap::new();
+        map1.insert(
+            "b".to_owned(),
+            vec![UnitedValue::Number(
+                serde_json::Number::from_u128(123).unwrap(),
+            )],
+        );
+        let mut map = HashMap::new();
+        map.insert("a".to_owned(), vec![UnitedValue::Object(map1)]);
+
+        let mut map = UnitedValue::Object(map);
+
+        let mut map1 = serde_json::Map::new();
+        map1.insert(
+            "b".to_owned(),
+            Value::Number(serde_json::Number::from_u128(124).unwrap()),
+        );
+        let mut map2 = serde_json::Map::new();
+        map2.insert("a".to_owned(), Value::Object(map1));
+
+        let map2 = Value::Object(map2);
+        unite(&mut map, &map2);
+
+        println!("unite2:\n{}", format_united_value(&map, 0));
     }
 }
