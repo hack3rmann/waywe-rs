@@ -1,4 +1,7 @@
 // TODO(ArnoDarkrose): rewrite this with HashSet
+//
+// TODO(ArnoDarkrose): maybe make arrays also recurrently unite
+// as objects (only viable example is tags, all in all this doesn't sound like a good idea)
 
 use std::collections::HashMap;
 use std::fs;
@@ -10,12 +13,30 @@ use std::path::Path;
 use clap::Parser;
 use serde_json::Number;
 use serde_json::Value;
+use tracing::debug;
 
-#[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
+const CLI_ABOUT: &str =  "
+
+This binary is used to unite different json files into one big file by keeping only unique fields and enclosing
+possible values for each field in <> triagonal braces (braces are omitted if there's only one possible value)
+The expected usage is passing the path to the steam directory with workshop assets for wallpaper engine (e.g $GAMES/steamapps/workshop/content/431960)
+By default the output is written to the united.json file";
+
+const PATH_ABOUT: &str = "
+Path to the directory with workshop assets for wallpaper engine.
+This has to be a directory with directories each of which containing a project.json in them. Those jsons will be united";
+
+#[derive(Debug, Parser)]
+#[command(version, about=CLI_ABOUT, long_about=CLI_ABOUT)]
 struct Cli {
-    /// Path to the steam directory with workshop assets for wallpaper engine
+    /// Path to the directory with workshop assets for wallpaper engine.
+    /// This has to be a directory with directories each of which containing a project.json in them. Those jsons will be united
+    #[arg(help = PATH_ABOUT)]
     path: String,
+
+    /// Write to stdout instead of the united.json
+    #[arg(long)]
+    stdout: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -31,40 +52,22 @@ pub enum UnitedValue {
 impl PartialEq<Value> for UnitedValue {
     fn eq(&self, other: &Value) -> bool {
         match self {
-            UnitedValue::Null => match other {
-                Value::Null => true,
-                _ => {
-                    // panic!("mismatch types in united_value and value")
-                    false
-                }
-            },
+            UnitedValue::Null => matches!(other, Value::Null),
             UnitedValue::Bool(val1) => match other {
                 Value::Bool(val2) => val2 == val1,
-                _ => {
-                    // panic!("mismatch types in united_value and value")
-                    false
-                }
+                _ => false,
             },
             UnitedValue::Number(val1) => match other {
                 Value::Number(val2) => val2 == val1,
-                _ => {
-                    // panic!("mismatch types in united_value and value")
-                    false
-                }
+                _ => false,
             },
             UnitedValue::String(str1) => match other {
                 Value::String(str2) => str1 == str2,
-                _ => {
-                    // panic!("mismatch types in united_value and value")
-                    false
-                }
+                _ => false,
             },
             UnitedValue::Array(arr1) => match other {
                 Value::Array(arr2) => arr1.iter().zip(arr2.iter()).all(|(v1, v2)| v1 == v2),
-                _ => {
-                    // panic!("mismatch types in united_value and value")
-                    false
-                }
+                _ => false,
             },
             UnitedValue::Object(map1) => match other {
                 Value::Object(map2) => {
@@ -80,10 +83,7 @@ impl PartialEq<Value> for UnitedValue {
 
                     true
                 }
-                _ => {
-                    // panic!("mismatch types in united_value and value")
-                    false
-                }
+                _ => false,
             },
         }
     }
@@ -109,7 +109,7 @@ impl From<Value> for UnitedValue {
     }
 }
 
-// returns true if successfully united and false otherwise
+// Returns true if successfully united and false otherwise
 fn unite(res: &mut UnitedValue, second: &Value) -> bool {
     if res == second {
         return true;
@@ -121,18 +121,16 @@ fn unite(res: &mut UnitedValue, second: &Value) -> bool {
                 for key in map.keys() {
                     if !united_map.contains_key(key) {
                         united_map.insert(key.to_owned(), vec![map[key].clone().into()]);
-                    } else {
-                        if !united_map
+                    } else if !united_map
+                        .get_mut(key)
+                        .unwrap()
+                        .iter_mut()
+                        .any(|v| unite(v, &map[key]))
+                    {
+                        united_map
                             .get_mut(key)
                             .unwrap()
-                            .iter_mut()
-                            .any(|v| unite(v, &map[key]))
-                        {
-                            united_map
-                                .get_mut(key)
-                                .unwrap()
-                                .push(map[key].clone().into());
-                        }
+                            .push(map[key].clone().into());
                     }
                 }
             }
@@ -152,6 +150,7 @@ impl std::fmt::Display for UnitedValue {
     }
 }
 
+// NOTE: this skips the values of the `description` field as they are too long and essentialy useless for us
 fn format_united_value(val: &UnitedValue, deps: u32, offset: u32) -> String {
     // This the offset that has to be inserted before print
     let start_tab: String = (0..offset).map(|_| "    ").collect();
@@ -187,7 +186,7 @@ fn format_united_value(val: &UnitedValue, deps: u32, offset: u32) -> String {
                 res.push(',');
                 res.push(delimiter);
             }
-            if arr.len() > 0 {
+            if !arr.is_empty() {
                 if multiline_print {
                     res.push_str(&format_united_value(
                         &arr[arr.len() - 1],
@@ -201,7 +200,7 @@ fn format_united_value(val: &UnitedValue, deps: u32, offset: u32) -> String {
             }
 
             if multiline_print {
-                res.push_str(&format!("{current_tab}"));
+                res.push_str(&current_tab.to_string());
             }
             res.push(']');
             res
@@ -217,51 +216,48 @@ fn format_united_value(val: &UnitedValue, deps: u32, offset: u32) -> String {
                 res.push_str(key);
                 res.push_str("\": ");
 
+                if key == "description" {
+                    res.push_str(",\n");
+                    continue;
+                }
+
                 let multiline_print = obj[key].len() > 3
-                    || (obj[key].len() > 0
+                    || (!obj[key].is_empty()
                         && matches!(obj[key][0], UnitedValue::Array(_) | UnitedValue::Object(_)));
 
                 if obj[key].len() > 1 {
-                    res.push_str("<");
+                    res.push('<');
                 }
 
                 if obj[key].len() == 1 {
-                    res.push_str(&format!(
-                        "{}",
-                        &format_united_value(&obj[key][0], deps + 1, 0)
-                    ));
+                    res.push_str(&format_united_value(&obj[key][0], deps + 1, 0));
                 } else {
                     if multiline_print {
                         res.push('\n');
                     }
                     for value in &obj[key][..obj[key].len() - 1] {
                         if multiline_print {
-                            res.push_str(&format!(
-                                "{}",
-                                &format_united_value(value, deps + 2, deps + 2)
-                            ));
+                            res.push_str(&format_united_value(value, deps + 2, deps + 2));
                             res.push_str(",\n");
                         } else {
-                            res.push_str(&format!("{}", &format_united_value(value, deps + 2, 0)));
+                            res.push_str(&format_united_value(value, deps + 2, 0));
                             res.push_str(", ")
                         }
                     }
 
-                    if obj[key].len() > 0 {
+                    if !obj[key].is_empty() {
                         if multiline_print {
-                            res.push_str(&format!(
-                                "{}",
-                                &format_united_value(
-                                    &obj[key][obj[key].len() - 1],
-                                    deps + 2,
-                                    deps + 2
-                                )
+                            res.push_str(&format_united_value(
+                                &obj[key][obj[key].len() - 1],
+                                deps + 2,
+                                deps + 2,
                             ));
                             res.push_str(",\n");
                         } else {
-                            res.push_str(&format!(
-                                "{}",
-                                &format_united_value(&obj[key][obj[key].len() - 1], deps + 2, 0)
+                            res.push_str(&format_united_value(
+                                &obj[key][obj[key].len() - 1],
+                                deps + 2,
+                                0,
                             ));
                         }
                     }
@@ -271,7 +267,7 @@ fn format_united_value(val: &UnitedValue, deps: u32, offset: u32) -> String {
                     if multiline_print {
                         res.push_str(&next_tab);
                     }
-                    res.push_str(">");
+                    res.push('>');
                 }
                 res.push_str(",\n");
             }
@@ -283,13 +279,16 @@ fn format_united_value(val: &UnitedValue, deps: u32, offset: u32) -> String {
 }
 
 fn main() -> io::Result<()> {
-    let path = Cli::parse().path;
+    let cli = Cli::parse();
+
+    let path = cli.path;
 
     let mut res = UnitedValue::Object(Default::default());
 
     for entry in fs::read_dir(Path::new(&path))? {
         let file_path = entry?.path();
 
+        debug!(?file_path, "opening file");
         let fd = fs::File::open(file_path.join("project.json"))?;
         let fd = io::BufReader::new(fd);
 
@@ -298,10 +297,17 @@ fn main() -> io::Result<()> {
         unite(&mut res, &value);
     }
 
-    let united_json_fd = fs::File::create("united.json")?;
-    let mut united_json_fd = BufWriter::new(united_json_fd);
+    if cli.stdout {
+        let fd = io::stdout();
+        let mut fd = BufWriter::new(fd);
 
-    united_json_fd.write_all(format!("{}", res).as_bytes())?;
+        fd.write_all(format!("{}", res).as_bytes())?;
+    } else {
+        let fd = fs::File::create("united.json")?;
+        let mut fd = BufWriter::new(fd);
+
+        fd.write_all(format!("{}", res).as_bytes())?;
+    };
 
     Ok(())
 }
