@@ -3,27 +3,23 @@
 // TODO(ArnoDarkrose): maybe make arrays also recurrently unite
 // as objects (only viable example is tags, all in all this doesn't sound like a good idea)
 
-use std::collections::HashMap;
-use std::fs;
-use std::io;
-use std::io::BufWriter;
-use std::io::Write;
-use std::path::Path;
-
 use clap::Parser;
-use serde_json::Number;
-use serde_json::Value;
+use serde_json::{Number, Value};
+use std::{
+    collections::HashMap,
+    fmt, fs,
+    io::{self, BufWriter, Write},
+    path::Path,
+};
 use tracing::debug;
 
 const CLI_ABOUT: &str =  "
-
 This binary is used to unite different json files into one big file by keeping only unique fields and enclosing
 possible values for each field in <> triagonal braces (braces are omitted if there's only one possible value)
 The expected usage is passing the path to the steam directory with workshop assets for wallpaper engine (e.g $GAMES/steamapps/workshop/content/431960)
 By default the output is written to the united.json file";
 
-const PATH_ABOUT: &str = "
-Path to the directory with workshop assets for wallpaper engine.
+const PATH_ABOUT: &str = "Path to the directory with workshop assets for wallpaper engine.
 This has to be a directory with directories each of which containing a project.json in them. Those jsons will be united";
 
 #[derive(Debug, Parser)]
@@ -51,40 +47,28 @@ pub enum UnitedValue {
 
 impl PartialEq<Value> for UnitedValue {
     fn eq(&self, other: &Value) -> bool {
-        match self {
-            UnitedValue::Null => matches!(other, Value::Null),
-            UnitedValue::Bool(val1) => match other {
-                Value::Bool(val2) => val2 == val1,
-                _ => false,
-            },
-            UnitedValue::Number(val1) => match other {
-                Value::Number(val2) => val2 == val1,
-                _ => false,
-            },
-            UnitedValue::String(str1) => match other {
-                Value::String(str2) => str1 == str2,
-                _ => false,
-            },
-            UnitedValue::Array(arr1) => match other {
-                Value::Array(arr2) => arr1.iter().zip(arr2.iter()).all(|(v1, v2)| v1 == v2),
-                _ => false,
-            },
-            UnitedValue::Object(map1) => match other {
-                Value::Object(map2) => {
-                    for key in map2.keys() {
-                        if !map1.contains_key(key) {
-                            return false;
-                        }
-
-                        if !map1[key].iter().any(|v| v == &map2[key]) {
-                            return false;
-                        }
+        match (self, other) {
+            (UnitedValue::Null, Value::Null) => true,
+            (UnitedValue::Bool(lhs), Value::Bool(rhs)) => lhs == rhs,
+            (UnitedValue::Number(lhs), Value::Number(rhs)) => lhs == rhs,
+            (UnitedValue::String(lhs), Value::String(rhs)) => lhs == rhs,
+            (UnitedValue::Array(lhs), Value::Array(rhs)) => {
+                lhs.iter().zip(rhs.iter()).all(|(v1, v2)| v1 == v2)
+            }
+            (UnitedValue::Object(lhs), Value::Object(rhs)) => 'object: {
+                for key in rhs.keys() {
+                    if !lhs.contains_key(key) {
+                        break 'object false;
                     }
 
-                    true
+                    if !lhs[key].iter().any(|v| v == &rhs[key]) {
+                        break 'object false;
+                    }
                 }
-                _ => false,
-            },
+
+                true
+            }
+            _ => false,
         }
     }
 }
@@ -97,56 +81,48 @@ impl From<Value> for UnitedValue {
             Value::Number(val) => UnitedValue::Number(val),
             Value::String(val) => UnitedValue::String(val),
             Value::Array(arr) => UnitedValue::Array(arr.into_iter().map(|v| v.into()).collect()),
-            Value::Object(obj) => {
-                let mut res = HashMap::new();
-
-                for (key, value) in obj.into_iter() {
-                    res.insert(key, vec![value.into()]);
-                }
-                UnitedValue::Object(res)
-            }
+            Value::Object(obj) => UnitedValue::Object(
+                obj.into_iter()
+                    .map(|(key, value)| (key, vec![value.into()]))
+                    .collect(),
+            ),
         }
     }
 }
 
-// Returns true if successfully united and false otherwise
+/// Returns `true` if successfully united and `false` otherwise
 fn unite(res: &mut UnitedValue, second: &Value) -> bool {
     if res == second {
         return true;
     }
 
-    match res {
-        UnitedValue::Object(united_map) => match second {
-            Value::Object(map) => {
-                for key in map.keys() {
-                    if !united_map.contains_key(key) {
-                        united_map.insert(key.to_owned(), vec![map[key].clone().into()]);
-                    } else if !united_map
+    match (res, second) {
+        (UnitedValue::Object(united_map), Value::Object(map)) => {
+            for key in map.keys() {
+                if !united_map.contains_key(key) {
+                    united_map.insert(key.to_owned(), vec![map[key].clone().into()]);
+                } else if !united_map
+                    .get_mut(key)
+                    .unwrap()
+                    .iter_mut()
+                    .any(|v| unite(v, &map[key]))
+                {
+                    united_map
                         .get_mut(key)
                         .unwrap()
-                        .iter_mut()
-                        .any(|v| unite(v, &map[key]))
-                    {
-                        united_map
-                            .get_mut(key)
-                            .unwrap()
-                            .push(map[key].clone().into());
-                    }
+                        .push(map[key].clone().into());
                 }
             }
-            _ => {
-                unreachable!()
-            }
-        },
+        }
         _ => return false,
     }
 
     true
 }
 
-impl std::fmt::Display for UnitedValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", format_united_value(self, 0, 0))
+impl fmt::Display for UnitedValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&format_united_value(self, 0, 0))
     }
 }
 
@@ -183,9 +159,11 @@ fn format_united_value(val: &UnitedValue, deps: u32, offset: u32) -> String {
                 } else {
                     res.push_str(&format_united_value(elem, deps + 1, 0));
                 }
+
                 res.push(',');
                 res.push(delimiter);
             }
+
             if !arr.is_empty() {
                 if multiline_print {
                     res.push_str(&format_united_value(
@@ -202,6 +180,7 @@ fn format_united_value(val: &UnitedValue, deps: u32, offset: u32) -> String {
             if multiline_print {
                 res.push_str(&current_tab.to_string());
             }
+
             res.push(']');
             res
         }
@@ -235,6 +214,7 @@ fn format_united_value(val: &UnitedValue, deps: u32, offset: u32) -> String {
                     if multiline_print {
                         res.push('\n');
                     }
+
                     for value in &obj[key][..obj[key].len() - 1] {
                         if multiline_print {
                             res.push_str(&format_united_value(value, deps + 2, deps + 2));
@@ -267,8 +247,10 @@ fn format_united_value(val: &UnitedValue, deps: u32, offset: u32) -> String {
                     if multiline_print {
                         res.push_str(&next_tab);
                     }
+
                     res.push('>');
                 }
+
                 res.push_str(",\n");
             }
 
