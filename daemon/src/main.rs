@@ -1,5 +1,16 @@
+use bytemuck::{Pod, Zeroable};
+use glam::Vec2;
 use raw_window_handle::{HasDisplayHandle as _, RawWindowHandle, WaylandWindowHandle};
-use std::{error::Error, ffi::CStr, mem, pin::pin};
+use std::{
+    error::Error,
+    ffi::CStr,
+    mem,
+    path::Path,
+    pin::pin,
+    thread,
+    time::{Duration, Instant},
+};
+use video_rs::{DecoderBuilder, Resize, decode::Decoder};
 use wayland_client::{
     WlSmallVecMessageBuffer,
     interface::{
@@ -19,7 +30,7 @@ use wayland_client::{
         wire::{WlMessage, WlStackMessageBuffer},
     },
 };
-use wgpu::util::DeviceExt as _;
+use wgpu::{ShaderStages, util::DeviceExt as _};
 
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
 struct ClientState;
@@ -126,9 +137,39 @@ impl SurfaceExtension for WlObject<Surface> {
     }
 }
 
+fn test() -> Result<(), Box<dyn Error>> {
+    video_rs::init().unwrap();
+
+    let source = Path::new("/home/hack3rmann/Videos/ObsRecordings/2024-11-22 04-49-01.mp4");
+    let mut decoder = Decoder::new(source).expect("failed to create decoder");
+
+    match std::fs::create_dir("out") {
+        Ok(()) => {}
+        Err(error) => match error.kind() {
+            std::io::ErrorKind::AlreadyExists => {}
+            _ => panic!(),
+        },
+    }
+
+    let (_, frame) = decoder.decode_iter().next().unwrap()?;
+    let (height, width, _) = frame.dim();
+    let frame = frame.as_slice().unwrap();
+
+    image::save_buffer(
+        "out/frame.png",
+        frame,
+        width as u32,
+        height as u32,
+        image::ExtendedColorType::Rgb8,
+    )?;
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt::init();
+    video_rs::init()?;
 
     let mut client_state = pin!(ClientState);
 
@@ -211,7 +252,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
         backends: wgpu::Backends::VULKAN,
-        flags: wgpu::InstanceFlags::DEBUG | wgpu::InstanceFlags::VALIDATION,
+        flags: if cfg!(debug_assertions) {
+            wgpu::InstanceFlags::DEBUG | wgpu::InstanceFlags::VALIDATION
+        } else {
+            wgpu::InstanceFlags::empty()
+        },
         ..Default::default()
     });
 
@@ -229,7 +274,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
+            power_preference: wgpu::PowerPreference::LowPower,
             force_fallback_adapter: false,
             compatible_surface: Some(&wgpu_surface),
         })
@@ -239,7 +284,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let (device, gpu_queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::empty(),
+                required_features: wgpu::Features::PUSH_CONSTANTS,
                 label: None,
                 required_limits: adapter.limits(),
                 memory_hints: wgpu::MemoryHints::Performance,
@@ -247,21 +292,26 @@ async fn main() -> Result<(), Box<dyn Error>> {
             None,
         )
         .await
-        .unwrap();
+        .expect("failed to request device");
 
+    const SCREEN_WIDTH: u32 = 2520;
+    const SCREEN_HEIGHT: u32 = 1680;
+
+    // TODO(hack3rmann): figure out the size of the current monitor
     wgpu_surface.configure(
         &device,
         &wgpu_surface
-            .get_default_config(&adapter, 2520, 1680)
+            .get_default_config(&adapter, SCREEN_WIDTH, SCREEN_HEIGHT)
             .unwrap(),
     );
 
+    // TODO(hack3rmann): use the correct surface format
     let surface_format = wgpu_surface.get_capabilities(&adapter).formats[0];
 
     let vertex_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Glsl {
-            shader: include_str!("../tests/shaders/white-vertex.glsl").into(),
+            shader: include_str!("shaders/white-vertex.glsl").into(),
             stage: wgpu::naga::ShaderStage::Vertex,
             defines: Default::default(),
         },
@@ -270,25 +320,94 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let fragment_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Glsl {
-            shader: include_str!("../tests/shaders/white-fragment.glsl").into(),
+            shader: include_str!("shaders/video.glsl").into(),
             stage: wgpu::naga::ShaderStage::Fragment,
             defines: Default::default(),
         },
     });
 
-    let triangle: [[f32; 2]; 3] = [[-0.5, -0.5], [0.5, -0.5], [0.0, 0.5]];
-    let vertex_size = mem::size_of_val(&triangle[0]);
+    let triangles = [
+        [[-1.0_f32, -1.0], [1.0, 1.0], [-1.0, 1.0]],
+        [[-1.0, -1.0], [1.0, -1.0], [1.0, 1.0]],
+    ];
+    let vertex_size = mem::size_of_val(&triangles[0][0]);
+    let n_vertices = triangles.len() * triangles[0].len();
 
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: None,
-        contents: bytemuck::bytes_of(&triangle),
+        contents: bytemuck::bytes_of(&triangles),
         usage: wgpu::BufferUsages::VERTEX,
     });
 
+    let video_texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("video"),
+        size: wgpu::Extent3d {
+            width: SCREEN_WIDTH,
+            height: SCREEN_HEIGHT,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+
+    let video_texture_view = video_texture.create_view(&Default::default());
+    let video_texture_sampler = device.create_sampler(&Default::default());
+
+    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("waywe-bind-group-layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
+                count: None,
+            },
+        ],
+    });
+
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("waywe-bind-group"),
+        layout: &bind_group_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&video_texture_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&video_texture_sampler),
+            },
+        ],
+    });
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Default, PartialEq, Debug, Pod, Zeroable)]
+    struct PushConst {
+        resolution: Vec2,
+        time: f32,
+    }
+
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
-        bind_group_layouts: &[],
-        push_constant_ranges: &[],
+        bind_group_layouts: &[&bind_group_layout],
+        push_constant_ranges: &[wgpu::PushConstantRange {
+            stages: wgpu::ShaderStages::FRAGMENT,
+            range: 0..mem::size_of::<PushConst>() as u32,
+        }],
     });
 
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -343,37 +462,104 @@ async fn main() -> Result<(), Box<dyn Error>> {
         cache: None,
     });
 
+    let source = Path::new(
+        "/home/hack3rmann/Downloads/Telegram Desktop/845514446/video.mp4",
+    );
+
+    let frame_loop_start = Instant::now();
+    let mut last_instant = frame_loop_start;
+
     loop {
-        let surface_texture = wgpu_surface.get_current_texture().unwrap();
-        let surface_view = surface_texture.texture.create_view(&Default::default());
+        let mut decoder = DecoderBuilder::new(source)
+            .with_resize(Resize::Exact(SCREEN_WIDTH, SCREEN_HEIGHT))
+            .build()?;
 
-        let mut encoder = device.create_command_encoder(&Default::default());
+        for frame in decoder.decode_iter() {
+            let frame_start = Instant::now();
+            let time_from_start = last_instant.duration_since(frame_loop_start);
+            last_instant = frame_start;
+            let time_seconds = time_from_start.as_secs_f32();
 
-        {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &surface_view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
+            let Ok((frame_time, frame)) = frame else {
+                break;
+            };
+            let frame_bytes = frame
+                .as_slice()
+                .unwrap()
+                .chunks_exact(3)
+                .flat_map(|rgb| [rgb[0], rgb[1], rgb[2], 255])
+                .collect::<Vec<_>>();
 
-            pass.set_pipeline(&pipeline);
-            pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-            pass.draw(0..triangle.len() as u32, 0..1);
+            gpu_queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &video_texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                &frame_bytes,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(SCREEN_WIDTH * 4),
+                    rows_per_image: None,
+                },
+                wgpu::Extent3d {
+                    width: SCREEN_WIDTH,
+                    height: SCREEN_HEIGHT,
+                    depth_or_array_layers: 1,
+                },
+            );
+            gpu_queue.submit([]);
+
+            let surface_texture = wgpu_surface.get_current_texture().unwrap();
+            let surface_view = surface_texture.texture.create_view(&Default::default());
+
+            let mut encoder = device.create_command_encoder(&Default::default());
+
+            {
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: None,
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &surface_view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+
+                pass.set_pipeline(&pipeline);
+                pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                pass.set_push_constants(
+                    ShaderStages::FRAGMENT,
+                    0,
+                    bytemuck::bytes_of(&PushConst {
+                        time: time_seconds,
+                        resolution: Vec2::new(SCREEN_WIDTH as f32, SCREEN_HEIGHT as f32),
+                    }),
+                );
+                pass.set_bind_group(0, &bind_group, &[]);
+                pass.draw(0..n_vertices as u32, 0..1);
+            }
+
+            _ = gpu_queue.submit([encoder.finish()]);
+
+            surface_texture.present();
+
+            display.roundtrip(queue.as_mut(), client_state.as_ref());
+
+            let render_time = Instant::now().duration_since(frame_start);
+            let sleep_time = Duration::from(frame_time).saturating_sub(render_time);
+
+            if !sleep_time.is_zero() {
+                thread::sleep(sleep_time);
+            } else {
+                tracing::warn!(?render_time, "frame took too long to prepare");
+            }
         }
-
-        _ = gpu_queue.submit([encoder.finish()]);
-
-        surface_texture.present();
-
-        display.roundtrip(queue.as_mut(), client_state.as_ref());
     }
 }

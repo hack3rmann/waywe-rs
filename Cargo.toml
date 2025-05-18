@@ -29,3 +29,4 @@ tracing-test = "0.2.5"
 paste = "1.0.15"
 smallvec = { version = "1.14.0", features = ["union", "serde", "const_generics", "const_new"] }
 tracing-subscriber = "0.3.19"
+glam = { version = "0.30.3", features = ["bytemuck"] }
