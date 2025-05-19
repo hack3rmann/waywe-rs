@@ -1,16 +1,17 @@
+extern crate ffmpeg_next as ffmpeg;
+
 use bytemuck::{Pod, Zeroable};
+use ffmpeg::frame::Video;
 use glam::Vec2;
 use raw_window_handle::{HasDisplayHandle as _, RawWindowHandle, WaylandWindowHandle};
 use std::{
     error::Error,
     ffi::CStr,
     mem,
-    path::Path,
     pin::pin,
     thread,
     time::{Duration, Instant},
 };
-use video_rs::{DecoderBuilder, Resize, decode::Decoder};
 use wayland_client::{
     WlSmallVecMessageBuffer,
     interface::{
@@ -137,39 +138,13 @@ impl SurfaceExtension for WlObject<Surface> {
     }
 }
 
-fn test() -> Result<(), Box<dyn Error>> {
-    video_rs::init().unwrap();
-
-    let source = Path::new("/home/hack3rmann/Videos/ObsRecordings/2024-11-22 04-49-01.mp4");
-    let mut decoder = Decoder::new(source).expect("failed to create decoder");
-
-    match std::fs::create_dir("out") {
-        Ok(()) => {}
-        Err(error) => match error.kind() {
-            std::io::ErrorKind::AlreadyExists => {}
-            _ => panic!(),
-        },
-    }
-
-    let (_, frame) = decoder.decode_iter().next().unwrap()?;
-    let (height, width, _) = frame.dim();
-    let frame = frame.as_slice().unwrap();
-
-    image::save_buffer(
-        "out/frame.png",
-        frame,
-        width as u32,
-        height as u32,
-        image::ExtendedColorType::Rgb8,
-    )?;
-
-    Ok(())
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt::init();
-    video_rs::init()?;
+    ffmpeg::init().unwrap();
+
+    const SCREEN_WIDTH: u32 = 2520;
+    const SCREEN_HEIGHT: u32 = 1680;
 
     let mut client_state = pin!(ClientState);
 
@@ -293,9 +268,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )
         .await
         .expect("failed to request device");
-
-    const SCREEN_WIDTH: u32 = 2520;
-    const SCREEN_HEIGHT: u32 = 1680;
 
     // TODO(hack3rmann): figure out the size of the current monitor
     wgpu_surface.configure(
@@ -462,33 +434,54 @@ async fn main() -> Result<(), Box<dyn Error>> {
         cache: None,
     });
 
-    let source = Path::new(
-        "/home/hack3rmann/Downloads/Telegram Desktop/845514446/video.mp4",
-    );
+    let mut video_context =
+        ffmpeg::format::input("/home/hack3rmann/Downloads/Telegram Desktop/845514446/video.mp4")?;
+    // ffmpeg::format::input("/home/hack3rmann/Videos/ObsRecordings/2025-05-16 15-51-50.mp4")?;
+    let video_input = video_context
+        .streams()
+        .best(ffmpeg::media::Type::Video)
+        .ok_or(ffmpeg::Error::StreamNotFound)?;
+    let video_stream_index = video_input.index();
+    let video_context_decoder =
+        ffmpeg::codec::context::Context::from_parameters(video_input.parameters())?;
+    let mut video_decoder = video_context_decoder.decoder().video()?;
+
+    let mut scaler = ffmpeg::software::scaling::Context::get(
+        video_decoder.format(),
+        video_decoder.width(),
+        video_decoder.height(),
+        ffmpeg::format::Pixel::RGBA,
+        SCREEN_WIDTH,
+        SCREEN_HEIGHT,
+        ffmpeg::software::scaling::Flags::BILINEAR,
+    )?;
+
+    let mut received_frame = Video::empty();
+    let mut scaled_frame = Video::empty();
 
     let frame_loop_start = Instant::now();
     let mut last_instant = frame_loop_start;
 
-    loop {
-        let mut decoder = DecoderBuilder::new(source)
-            .with_resize(Resize::Exact(SCREEN_WIDTH, SCREEN_HEIGHT))
-            .build()?;
+    for (stream, packet) in video_context
+        .packets()
+        .filter(|(stream, _)| stream.index() == video_stream_index)
+    {
+        video_decoder.send_packet(&packet)?;
 
-        for frame in decoder.decode_iter() {
+        let frame_rate_rational = stream.rate();
+        let frame_rate =
+            frame_rate_rational.numerator() as f32 / frame_rate_rational.denominator() as f32;
+        let target_frame_time_secs = 1.0 / frame_rate;
+        let target_frame_time = Duration::from_secs_f32(target_frame_time_secs);
+
+        while video_decoder.receive_frame(&mut received_frame).is_ok() {
             let frame_start = Instant::now();
             let time_from_start = last_instant.duration_since(frame_loop_start);
             last_instant = frame_start;
             let time_seconds = time_from_start.as_secs_f32();
 
-            let Ok((frame_time, frame)) = frame else {
-                break;
-            };
-            let frame_bytes = frame
-                .as_slice()
-                .unwrap()
-                .chunks_exact(3)
-                .flat_map(|rgb| [rgb[0], rgb[1], rgb[2], 255])
-                .collect::<Vec<_>>();
+            scaler.run(&received_frame, &mut scaled_frame)?;
+            let frame_data = scaled_frame.data(0);
 
             gpu_queue.write_texture(
                 wgpu::TexelCopyTextureInfo {
@@ -497,17 +490,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     origin: wgpu::Origin3d::ZERO,
                     aspect: wgpu::TextureAspect::All,
                 },
-                &frame_bytes,
+                frame_data,
                 wgpu::TexelCopyBufferLayout {
                     offset: 0,
-                    bytes_per_row: Some(SCREEN_WIDTH * 4),
+                    bytes_per_row: Some(video_texture.width() * 4),
                     rows_per_image: None,
                 },
-                wgpu::Extent3d {
-                    width: SCREEN_WIDTH,
-                    height: SCREEN_HEIGHT,
-                    depth_or_array_layers: 1,
-                },
+                video_texture.size(),
             );
             gpu_queue.submit([]);
 
@@ -553,7 +542,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             display.roundtrip(queue.as_mut(), client_state.as_ref());
 
             let render_time = Instant::now().duration_since(frame_start);
-            let sleep_time = Duration::from(frame_time).saturating_sub(render_time);
+            let sleep_time = target_frame_time.saturating_sub(render_time);
 
             if !sleep_time.is_zero() {
                 thread::sleep(sleep_time);
@@ -562,4 +551,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         }
     }
+
+    Ok(())
 }
