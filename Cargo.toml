@@ -9,7 +9,7 @@ members = [
     "wayland-client",
     "wayland-sys",
     "unite-json"
-]
+, "project-parser"]
 
 [workspace.package]
 version = "0.0.1"

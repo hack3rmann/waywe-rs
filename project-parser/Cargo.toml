@@ -1,0 +1,11 @@
+[package]
+name = "project-parser"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+nom = "8.0.0"
+serde = { version = "1.0.219", features = ["derive"] }
+steamy-vdf = "0.2.0"
+thiserror.workspace = true
+vdf-serde = "0.3.0"
