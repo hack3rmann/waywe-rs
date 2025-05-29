@@ -1,0 +1,9 @@
+[package]
+name = "video"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ffmpeg-next = "7.1.0"
+glam.workspace = true
+bitflags.workspace = true

@@ -1,8 +1,7 @@
 extern crate ffmpeg_next as ffmpeg;
 
 use bytemuck::{Pod, Zeroable};
-use ffmpeg::frame::Video;
-use glam::Vec2;
+use glam::{UVec2, Vec2};
 use raw_window_handle::{HasDisplayHandle as _, RawWindowHandle, WaylandWindowHandle};
 use std::{
     error::Error,
@@ -11,6 +10,10 @@ use std::{
     pin::pin,
     thread,
     time::{Duration, Instant},
+};
+use video::{
+    BackendError, Codec, CodecContext, FormatContext, Frame, MediaType, Packet, RatioI32, Scaler,
+    ScalerFlags, ScalerFormat, VideoPixelFormat,
 };
 use wayland_client::{
     WlSmallVecMessageBuffer,
@@ -298,6 +301,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         },
     });
 
+    // TODO(hack3rmann): do a fullscreen triangle instead of quad
+    // TODO(hacl3rmann): or use compute pipeline instead
     let triangles = [
         [[-1.0_f32, -1.0], [1.0, 1.0], [-1.0, 1.0]],
         [[-1.0, -1.0], [1.0, -1.0], [1.0, 1.0]],
@@ -434,54 +439,81 @@ async fn main() -> Result<(), Box<dyn Error>> {
         cache: None,
     });
 
-    let mut video_context =
-        ffmpeg::format::input("/home/hack3rmann/Downloads/Telegram Desktop/845514446/video.mp4")?;
-    // ffmpeg::format::input("/home/hack3rmann/Videos/ObsRecordings/2025-05-16 15-51-50.mp4")?;
-    let video_input = video_context
-        .streams()
-        .best(ffmpeg::media::Type::Video)
-        .ok_or(ffmpeg::Error::StreamNotFound)?;
-    let video_stream_index = video_input.index();
-    let video_context_decoder =
-        ffmpeg::codec::context::Context::from_parameters(video_input.parameters())?;
-    let mut video_decoder = video_context_decoder.decoder().video()?;
+    const FILE_NAMES: &[&CStr] = &[
+        c"/home/hack3rmann/Downloads/Telegram Desktop/845514446/video.mp4",
+        c"/home/hack3rmann/Videos/ObsRecordings/2025-05-16 15-51-50.mp4",
+        c"/home/hack3rmann/Pictures/Wallpapers/night-sky-purple-moon-clouds-3840x2160.mp4",
+        c"/home/hack3rmann/Downloads/sample-1.avi",
+    ];
 
-    let mut scaler = ffmpeg::software::scaling::Context::get(
-        video_decoder.format(),
-        video_decoder.width(),
-        video_decoder.height(),
-        ffmpeg::format::Pixel::RGBA,
-        SCREEN_WIDTH,
-        SCREEN_HEIGHT,
-        ffmpeg::software::scaling::Flags::BILINEAR,
-    )?;
+    let mut format_context = FormatContext::from_input(FILE_NAMES[0])?;
 
-    let mut received_frame = Video::empty();
-    let mut scaled_frame = Video::empty();
+    let best_stream = format_context.find_best_stream(MediaType::Video)?;
+    let best_stream_index = best_stream.index();
+    let codec_parameters = best_stream.codec_parameters();
+    let frame_rate = codec_parameters.frame_rate();
+    let video_size = codec_parameters.video_size().unwrap();
+    let Some(video::AudioVideoFormat::Video(video_format)) = codec_parameters.format() else {
+        unreachable!();
+    };
+    let mut codec_context = CodecContext::from_parameters(codec_parameters)?;
+
+    let Some(decoder) = Codec::find_for_id(codec_context.codec_id()) else {
+        panic!("failed to find decoder");
+    };
+
+    codec_context.open(decoder)?;
 
     let frame_loop_start = Instant::now();
     let mut last_instant = frame_loop_start;
 
-    for (stream, packet) in video_context
-        .packets()
-        .filter(|(stream, _)| stream.index() == video_stream_index)
-    {
-        video_decoder.send_packet(&packet)?;
+    let mut packet = Packet::new();
+    let mut frame = Frame::new();
+    let mut scaled_frame = Frame::new();
 
-        let frame_rate_rational = stream.rate();
-        let frame_rate =
-            frame_rate_rational.numerator() as f32 / frame_rate_rational.denominator() as f32;
-        let target_frame_time_secs = 1.0 / frame_rate;
+    let mut scaler = Scaler::new(
+        ScalerFormat {
+            size: video_size,
+            format: video_format,
+        },
+        ScalerFormat {
+            size: UVec2::new(SCREEN_WIDTH, SCREEN_HEIGHT),
+            format: VideoPixelFormat::Rgba8,
+        },
+        ScalerFlags::BILINEAR,
+    )?;
+
+    loop {
+        match format_context.read_packet(&mut packet) {
+            Ok(()) => {}
+            Err(BackendError::EOF) => break,
+            error @ Err(..) => error?,
+        }
+
+        if packet.stream_index() != best_stream_index {
+            continue;
+        }
+
+        codec_context.send_packet(&packet)?;
+
+        // TODO(hack3rmann): support for variable frame rate
+        let target_frame_time_secs = if !frame_rate.is_zero() {
+            frame_rate.inv().to_f32()
+        } else {
+            RatioI32::new(1, 60).to_f32()
+        };
+
         let target_frame_time = Duration::from_secs_f32(target_frame_time_secs);
 
-        while video_decoder.receive_frame(&mut received_frame).is_ok() {
+        while codec_context.receive_frame(&mut frame).is_ok() {
             let frame_start = Instant::now();
             let time_from_start = last_instant.duration_since(frame_loop_start);
             last_instant = frame_start;
             let time_seconds = time_from_start.as_secs_f32();
 
-            scaler.run(&received_frame, &mut scaled_frame)?;
-            let frame_data = scaled_frame.data(0);
+            scaler.run(&frame, &mut scaled_frame)?;
+
+            let frame_data = unsafe { scaled_frame.data() };
 
             gpu_queue.write_texture(
                 wgpu::TexelCopyTextureInfo {
@@ -512,7 +544,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         view: &surface_view,
                         resolve_target: None,
                         ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            load: wgpu::LoadOp::Load,
                             store: wgpu::StoreOp::Store,
                         },
                     })],
