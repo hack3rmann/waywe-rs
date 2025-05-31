@@ -8,18 +8,18 @@ use ffmpeg_next::ffi::{
     AVERROR_HTTP_SERVER_ERROR, AVERROR_HTTP_TOO_MANY_REQUESTS, AVERROR_HTTP_UNAUTHORIZED,
     AVERROR_INVALIDDATA, AVERROR_MUXER_NOT_FOUND, AVERROR_OPTION_NOT_FOUND, AVERROR_PATCHWELCOME,
     AVERROR_PROTOCOL_NOT_FOUND, AVERROR_STREAM_NOT_FOUND, AVERROR_UNKNOWN, AVFormatContext,
-    AVFrame, AVHWDeviceType, AVMediaType, AVPacket, AVPixelFormat, AVProfile, AVRational,
-    AVSampleFormat, AVStream, SWS_ACCURATE_RND, SWS_AREA, SWS_BICUBIC, SWS_BICUBLIN, SWS_BILINEAR,
-    SWS_BITEXACT, SWS_DIRECT_BGR, SWS_ERROR_DIFFUSION, SWS_FAST_BILINEAR, SWS_FULL_CHR_H_INP,
-    SWS_FULL_CHR_H_INT, SWS_GAUSS, SWS_LANCZOS, SWS_PARAM_DEFAULT, SWS_POINT, SWS_PRINT_INFO,
-    SWS_SINC, SWS_SPLINE, SWS_SRC_V_CHR_DROP_MASK, SWS_SRC_V_CHR_DROP_SHIFT, SWS_X, SwsContext,
-    av_codec_is_decoder, av_codec_is_encoder, av_codec_iterate, av_find_best_stream,
+    AVFrame, AVHWDeviceType, AVMediaType, AVPacket, AVPixFmtDescriptor, AVPixelFormat, AVProfile,
+    AVRational, AVSampleFormat, AVStream, SWS_ACCURATE_RND, SWS_AREA, SWS_BICUBIC, SWS_BICUBLIN,
+    SWS_BILINEAR, SWS_BITEXACT, SWS_DIRECT_BGR, SWS_ERROR_DIFFUSION, SWS_FAST_BILINEAR,
+    SWS_FULL_CHR_H_INP, SWS_FULL_CHR_H_INT, SWS_GAUSS, SWS_LANCZOS, SWS_PARAM_DEFAULT, SWS_POINT,
+    SWS_PRINT_INFO, SWS_SINC, SWS_SPLINE, SWS_SRC_V_CHR_DROP_MASK, SWS_SRC_V_CHR_DROP_SHIFT, SWS_X,
+    SwsContext, av_codec_is_decoder, av_codec_is_encoder, av_codec_iterate, av_find_best_stream,
     av_frame_alloc, av_frame_free, av_frame_get_buffer, av_hwdevice_get_type_name,
     av_hwdevice_iterate_types, av_new_packet, av_packet_alloc, av_packet_free, av_packet_ref,
-    av_packet_unref, av_read_frame, avcodec_alloc_context3, avcodec_find_decoder, avcodec_open2,
-    avcodec_parameters_to_context, avcodec_receive_frame, avcodec_send_packet,
-    avformat_close_input, avformat_find_stream_info, avformat_open_input, sws_getContext,
-    sws_scale,
+    av_packet_unref, av_pix_fmt_desc_get, av_read_frame, avcodec_alloc_context3,
+    avcodec_find_decoder, avcodec_open2, avcodec_parameters_to_context, avcodec_receive_frame,
+    avcodec_send_packet, avformat_close_input, avformat_find_stream_info, avformat_open_input,
+    sws_getContext, sws_scale,
 };
 use glam::UVec2;
 use std::{
@@ -874,7 +874,103 @@ impl VideoPixelFormat {
             _ => None,
         }
     }
+
+    pub fn descriptor(self) -> Option<VideoPixelDescriptor> {
+        let ptr = unsafe { av_pix_fmt_desc_get(self.to_backend()) };
+
+        NonNull::new(ptr.cast_mut()).map(|raw| unsafe { VideoPixelDescriptor::from_raw(raw) })
+    }
 }
+
+bitflags! {
+    #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord, Default, Hash)]
+    pub struct PixelFormatFlags: u64 {
+        const AV_PIX_FMT_FLAG_BE = 1;
+        const AV_PIX_FMT_FLAG_PAL = 2;
+        const AV_PIX_FMT_FLAG_BITSTREAM = 4;
+        const AV_PIX_FMT_FLAG_HWACCEL = 8;
+        const AV_PIX_FMT_FLAG_PLANAR = 16;
+        const AV_PIX_FMT_FLAG_RGB = 32;
+        const AV_PIX_FMT_FLAG_ALPHA = 128;
+        const AV_PIX_FMT_FLAG_BAYER = 256;
+        const AV_PIX_FMT_FLAG_FLOAT = 512;
+        const AV_PIX_FMT_FLAG_XYZ = 1024;
+    }
+}
+
+pub struct VideoPixelDescriptor {
+    raw: NonNull<AVPixFmtDescriptor>,
+}
+
+implement_raw!(VideoPixelDescriptor: AVPixFmtDescriptor);
+
+impl VideoPixelDescriptor {
+    pub const fn name(&self) -> &'static str {
+        let name_cstr = unsafe { CStr::from_ptr((*self.as_raw().as_ptr()).name) };
+        unsafe { str::from_utf8_unchecked(name_cstr.to_bytes()) }
+    }
+
+    /// Amount to shift the luma width right to find the chroma width.
+    /// For YV12 this is 1 for example.
+    /// This value only refers to the chroma components.
+    pub const fn log2_chroma_w(&self) -> u8 {
+        unsafe { (*self.as_raw().as_ptr()).log2_chroma_w }
+    }
+
+    /// Amount to shift the luma height right to find the chroma height.
+    /// For YV12 this is 1 for example.
+    /// This value only refers to the chroma components.
+    pub const fn log2_chroma_h(&self) -> u8 {
+        unsafe { (*self.as_raw().as_ptr()).log2_chroma_h }
+    }
+
+    pub const fn flags(&self) -> PixelFormatFlags {
+        let bits = unsafe { (*self.as_raw().as_ptr()).flags };
+        unsafe { PixelFormatFlags::from_bits(bits).unwrap_unchecked() }
+    }
+
+    /// Alternative comma-separated names.
+    pub const fn alias(&self) -> Option<&'static str> {
+        let ptr = unsafe { (*self.as_raw().as_ptr()).alias };
+
+        if ptr.is_null() {
+            return None;
+        }
+
+        let alias_cstr = unsafe { CStr::from_ptr(ptr) };
+
+        Some(unsafe { str::from_utf8_unchecked(alias_cstr.to_bytes()) })
+    }
+
+    /// Parameters that describe how pixels are packed.
+    ///
+    /// If the format has 1 or 2 components, then luma is 0.
+    /// If the format has 3 or 4 components:
+    /// if the RGB flag is set then 0 is red, 1 is green and 2 is blue;
+    /// otherwise 0 is luma, 1 is chroma-U and 2 is chroma-V.
+    ///
+    /// If present, the Alpha channel is always the last component.
+    pub const fn components(&self) -> &[ComponentDescriptor] {
+        let ptr = unsafe { &raw const (*self.as_raw().as_ptr()).comp[0] };
+        let count = unsafe { (*self.as_raw().as_ptr()).nb_components };
+        unsafe { slice::from_raw_parts(ptr, count as usize) }
+    }
+}
+
+impl fmt::Debug for VideoPixelDescriptor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("VideoPixelDescriptor")
+            .field("name", &self.name())
+            .field("log2_chroma_w", &self.log2_chroma_w())
+            .field("log2_chroma_h", &self.log2_chroma_h())
+            .field("flags", &self.flags())
+            .field("alias", &self.alias())
+            .field("components", &self.components())
+            .finish()
+    }
+}
+
+pub use ffmpeg_next::ffi::AVComponentDescriptor as ComponentDescriptor;
 
 #[derive(Clone, Copy, Debug)]
 pub enum AudioVideoFormat {
@@ -993,32 +1089,56 @@ impl CodecParameters {
         }
     }
 
+    /// The average bitrate of the encoded data (in bits per second).
     pub const fn bit_rate(&self) -> i64 {
         self.0.bit_rate
     }
 
+
+    /// The number of bits per sample in the codedwords.
+    /// 
+    /// This is basically the bitrate per sample. It is mandatory for a bunch of
+    /// formats to actually decode them. It's the number of bits for one sample in
+    /// the actual coded bitstream.
+    /// 
+    /// This could be for example 4 for ADPCM
+    /// For PCM formats this matches bits_per_raw_sample
+    /// Can be 0
     pub const fn bits_per_coded_sample(&self) -> i32 {
         self.0.bits_per_coded_sample
     }
 
+
+    /// This is the number of valid bits in each output sample. If the
+    /// sample format has more bits, the least significant bits are additional
+    /// padding bits, which are always 0. Use right shifts to reduce the sample
+    /// to its actual size. For example, audio formats with 24 bit samples will
+    /// have bits_per_raw_sample set to 24, and format set to AV_SAMPLE_FMT_S32.
+    /// To get the original sample use "(int32_t)sample >> 8"."
+    /// 
+    /// For ADPCM this might be 12 or 16 or similar
+    /// Can be 0
     pub const fn bits_per_raw_sample(&self) -> i32 {
         self.0.bits_per_raw_sample
     }
 
-    pub const fn width(&self) -> Option<u32> {
+    /// Video only. The width of the video frame in pixels.
+    pub const fn video_width(&self) -> Option<u32> {
         match (self.media_type(), self.0.width) {
             (Some(MediaType::Video), width @ 0..) => Some(width.cast_unsigned()),
             _ => None,
         }
     }
 
-    pub const fn height(&self) -> Option<u32> {
+    /// Video only. The height of the video frame in pixels.
+    pub const fn video_height(&self) -> Option<u32> {
         match (self.media_type(), self.0.height) {
             (Some(MediaType::Video), height @ 0..) => Some(height.cast_unsigned()),
             _ => None,
         }
     }
 
+    /// Video only. The dimensions of the video frame in pixels.
     pub const fn video_size(&self) -> Option<UVec2> {
         match (self.media_type(), self.0.width, self.0.height) {
             (Some(MediaType::Video), width @ 0.., height @ 0..) => {
@@ -1028,10 +1148,25 @@ impl CodecParameters {
         }
     }
 
+    /// Video only. The aspect ratio (width / height) which a single pixel
+    /// should have when displayed.
+    /// 
+    /// When the aspect ratio is unknown / undefined, the numerator should be
+    /// set to 0 (the denominator may have any value).
     pub const fn sample_aspect_ratio(&self) -> RatioI32 {
         RatioI32::from_backend(self.0.sample_aspect_ratio)
     }
 
+    /// Video only. Number of frames per second, for streams with constant frame
+    /// durations. Should be set to { 0, 1 } when some frames have differing
+    /// durations or if the value is not known.
+    /// 
+    /// # Note
+    ///
+    /// This field correponds to values that are stored in codec-level
+    /// headers and is typically overridden by container/transport-layer
+    /// timestamps, when available. It should thus be used only as a last resort,
+    /// when no higher-level timing information is available.
     pub const fn frame_rate(&self) -> RatioI32 {
         RatioI32::from_backend(self.0.framerate)
     }
@@ -1156,11 +1291,28 @@ impl Frame {
     /// # Safety
     ///
     /// FIXME(hack3rmann): unsafe, should rewrite
-    pub const unsafe fn data(&self) -> &[u8] {
+    pub unsafe fn plane_height(&self, index: usize) -> u32 {
+        if index != 1 && index != 2 {
+            return self.height();
+        }
+
+        let Some(desc) = self.format().unwrap().descriptor() else {
+            return self.height();
+        };
+
+        let s = desc.log2_chroma_h();
+        (self.height() + (1 << s) - 1) >> s
+    }
+
+    /// # Safety
+    ///
+    /// FIXME(hack3rmann): unsafe, should rewrite
+    pub unsafe fn data(&self, index: usize) -> &[u8] {
         unsafe {
             slice::from_raw_parts(
-                (*self.as_raw().as_ptr()).data[0],
-                (*self.as_raw().as_ptr()).linesize[0] as usize * self.height() as usize,
+                (*self.as_raw().as_ptr()).data[index],
+                (*self.as_raw().as_ptr()).linesize[index] as usize
+                    * self.plane_height(index) as usize,
             )
         }
     }
@@ -1185,6 +1337,7 @@ impl Frame {
         unsafe { (*this).width = size.x as i32 };
         unsafe { (*this).height = size.y as i32 };
 
+        // FIXME(hack3rmann): possible memory leak
         BackendError::result_of(unsafe { av_frame_get_buffer(self.as_raw().as_ptr(), 32) })
     }
 }
@@ -1271,6 +1424,7 @@ impl Clone for Packet {
 impl Drop for Packet {
     fn drop(&mut self) {
         let mut ptr = self.as_raw().as_ptr();
+        // FIXME(hack3rmann): use free on owned packets only
         unsafe { av_packet_unref(ptr) };
         unsafe { av_packet_free(&raw mut ptr) };
     }
