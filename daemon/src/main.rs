@@ -251,14 +251,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .unwrap()
     };
 
-    let adapter = instance
+    let Some(adapter) = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::LowPower,
             force_fallback_adapter: false,
             compatible_surface: Some(&wgpu_surface),
         })
         .await
-        .expect("failed to request adapter");
+    else {
+        panic!("failed to request adapter");
+    };
 
     let (device, gpu_queue) = adapter
         .request_device(
@@ -270,8 +272,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             },
             None,
         )
-        .await
-        .expect("failed to request device");
+        .await?;
 
     // TODO(hack3rmann): figure out the size of the current monitor
     wgpu_surface.configure(
@@ -282,7 +283,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     );
 
     // TODO(hack3rmann): use the correct surface format
-    let surface_format = wgpu_surface.get_capabilities(&adapter).formats[0];
+    let Some(surface_format) = wgpu_surface
+        .get_capabilities(&adapter)
+        .formats
+        .first()
+        .copied()
+    else {
+        panic!("no surface format supported");
+    };
 
     let vertex_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
@@ -302,18 +310,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
         },
     });
 
-    // TODO(hack3rmann): do a fullscreen triangle instead of quad
-    // TODO(hacl3rmann): or use compute pipeline instead
-    let triangles = [
-        [[-1.0_f32, -1.0], [1.0, 1.0], [-1.0, 1.0]],
-        [[-1.0, -1.0], [1.0, -1.0], [1.0, 1.0]],
+    const SCREEN_TRIANGLE: [Vec2; 3] = [
+        Vec2::new(-1.0, -1.0),
+        Vec2::new(3.0, -1.0),
+        Vec2::new(-1.0, 3.0),
     ];
-    let vertex_size = mem::size_of_val(&triangles[0][0]);
-    let n_vertices = triangles.len() * triangles[0].len();
+    const VERTEX_SIZE_BYTES: usize = mem::size_of_val(&SCREEN_TRIANGLE[0]);
 
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: None,
-        contents: bytemuck::bytes_of(&triangles),
+        label: Some("screen-triangle"),
+        contents: bytemuck::bytes_of(&SCREEN_TRIANGLE),
         usage: wgpu::BufferUsages::VERTEX,
     });
 
@@ -485,7 +491,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 zero_initialize_workgroup_memory: false,
             },
             buffers: &[wgpu::VertexBufferLayout {
-                array_stride: vertex_size as u64,
+                array_stride: VERTEX_SIZE_BYTES as u64,
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes: &[wgpu::VertexAttribute {
                     format: wgpu::VertexFormat::Float32x2,
@@ -656,7 +662,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     }),
                 );
                 pass.set_bind_group(0, &bind_group, &[]);
-                pass.draw(0..n_vertices as u32, 0..1);
+                pass.draw(0..SCREEN_TRIANGLE.len() as u32, 0..1);
             }
 
             _ = gpu_queue.submit([encoder.finish()]);

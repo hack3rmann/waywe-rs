@@ -871,7 +871,7 @@ impl VideoPixelFormat {
 
         match value {
             in_bounds @ 0..COUNT => Some(unsafe { mem::transmute::<i32, Self>(in_bounds) }),
-            _ => None,
+            ..0 | COUNT.. => None,
         }
     }
 
