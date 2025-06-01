@@ -298,7 +298,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         c"/home/hack3rmann/Downloads/sample-1.avi",
     ];
 
-    let mut format_context = FormatContext::from_input(FILE_NAMES[3])?;
+    let mut format_context = FormatContext::from_input(FILE_NAMES[1])?;
 
     let best_stream = format_context.find_best_stream(MediaType::Video)?;
     let time_base = best_stream.time_base();
@@ -336,11 +336,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut packet = Packet::new();
     let mut frame = Frame::new();
 
+    const DO_LOOP_VIDEO: bool = true;
+
     loop {
-        // TODO(hack3rmann): implement video loop
         match format_context.read_packet(&mut packet) {
             Ok(()) => {}
-            Err(BackendError::EOF) => break,
+            Err(BackendError::EOF) => {
+                if !DO_LOOP_VIDEO {
+                    break;
+                }
+
+                format_context.repeat_stream(best_stream_index)?;
+                continue;
+            },
             error @ Err(..) => error?,
         }
 

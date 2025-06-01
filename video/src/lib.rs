@@ -9,17 +9,17 @@ use ffmpeg_next::ffi::{
     AVERROR_INVALIDDATA, AVERROR_MUXER_NOT_FOUND, AVERROR_OPTION_NOT_FOUND, AVERROR_PATCHWELCOME,
     AVERROR_PROTOCOL_NOT_FOUND, AVERROR_STREAM_NOT_FOUND, AVERROR_UNKNOWN, AVFormatContext,
     AVFrame, AVHWDeviceType, AVMediaType, AVPacket, AVPixFmtDescriptor, AVPixelFormat, AVProfile,
-    AVRational, AVSampleFormat, AVStream, SWS_ACCURATE_RND, SWS_AREA, SWS_BICUBIC, SWS_BICUBLIN,
-    SWS_BILINEAR, SWS_BITEXACT, SWS_DIRECT_BGR, SWS_ERROR_DIFFUSION, SWS_FAST_BILINEAR,
-    SWS_FULL_CHR_H_INP, SWS_FULL_CHR_H_INT, SWS_GAUSS, SWS_LANCZOS, SWS_PARAM_DEFAULT, SWS_POINT,
-    SWS_PRINT_INFO, SWS_SINC, SWS_SPLINE, SWS_SRC_V_CHR_DROP_MASK, SWS_SRC_V_CHR_DROP_SHIFT, SWS_X,
-    SwsContext, av_codec_is_decoder, av_codec_is_encoder, av_codec_iterate, av_find_best_stream,
-    av_frame_alloc, av_frame_free, av_frame_get_buffer, av_hwdevice_get_type_name,
-    av_hwdevice_iterate_types, av_new_packet, av_packet_alloc, av_packet_free, av_packet_ref,
-    av_packet_unref, av_pix_fmt_desc_get, av_read_frame, avcodec_alloc_context3,
-    avcodec_find_decoder, avcodec_open2, avcodec_parameters_to_context, avcodec_receive_frame,
-    avcodec_send_packet, avformat_close_input, avformat_find_stream_info, avformat_open_input,
-    sws_getContext, sws_scale,
+    AVRational, AVSampleFormat, AVStream, SEEK_SET, SWS_ACCURATE_RND, SWS_AREA, SWS_BICUBIC,
+    SWS_BICUBLIN, SWS_BILINEAR, SWS_BITEXACT, SWS_DIRECT_BGR, SWS_ERROR_DIFFUSION,
+    SWS_FAST_BILINEAR, SWS_FULL_CHR_H_INP, SWS_FULL_CHR_H_INT, SWS_GAUSS, SWS_LANCZOS,
+    SWS_PARAM_DEFAULT, SWS_POINT, SWS_PRINT_INFO, SWS_SINC, SWS_SPLINE, SWS_SRC_V_CHR_DROP_MASK,
+    SWS_SRC_V_CHR_DROP_SHIFT, SWS_X, SwsContext, av_codec_is_decoder, av_codec_is_encoder,
+    av_codec_iterate, av_find_best_stream, av_frame_alloc, av_frame_free, av_frame_get_buffer,
+    av_hwdevice_get_type_name, av_hwdevice_iterate_types, av_new_packet, av_packet_alloc,
+    av_packet_free, av_packet_ref, av_packet_unref, av_pix_fmt_desc_get, av_read_frame,
+    avcodec_alloc_context3, avcodec_find_decoder, avcodec_open2, avcodec_parameters_to_context,
+    avcodec_receive_frame, avcodec_send_packet, avformat_close_input, avformat_find_stream_info,
+    avformat_open_input, avformat_seek_file, avio_seek, sws_getContext, sws_scale,
 };
 use glam::UVec2;
 use std::{
@@ -220,12 +220,17 @@ impl FormatContext {
     pub const fn streams(&self) -> &[Stream] {
         let ptr = unsafe { (*self.as_raw().as_ptr()).streams };
         let len = unsafe { (*self.as_raw().as_ptr()).nb_streams };
-        // TODO(hack3rmann): safety
         unsafe { slice::from_raw_parts(ptr.cast(), len as usize) }
     }
 
+    pub const fn streams_mut(&mut self) -> &mut [Stream] {
+        let ptr = unsafe { (*self.as_raw().as_ptr()).streams };
+        let len = unsafe { (*self.as_raw().as_ptr()).nb_streams };
+        unsafe { slice::from_raw_parts_mut(ptr.cast(), len as usize) }
+    }
+
     pub fn find_best_stream(&self, media_type: MediaType) -> Result<&Stream, BackendError> {
-        let index = match BackendError::result_or_non_negative(unsafe {
+        let index = match BackendError::result_or_u32(unsafe {
             av_find_best_stream(
                 self.as_raw().as_ptr(),
                 media_type.to_backend(),
@@ -252,6 +257,19 @@ impl FormatContext {
     pub fn read_packet(&mut self, packet: &mut Packet) -> Result<(), BackendError> {
         BackendError::result_of(unsafe {
             av_read_frame(self.as_raw().as_ptr(), packet.as_raw().as_ptr())
+        })
+    }
+
+    pub fn repeat_stream(&mut self, index: usize) -> Result<(), BackendError> {
+        let io_context_ptr = unsafe { (*self.as_raw().as_ptr()).pb };
+        let _new_pos =
+            BackendError::result_or_u64(unsafe { avio_seek(io_context_ptr, 0, SEEK_SET) })?;
+
+        let stream = &self.streams()[index];
+        let duration = unsafe { (*stream.as_raw().as_ptr()).duration };
+
+        BackendError::result_of(unsafe {
+            avformat_seek_file(self.as_raw().as_ptr(), index as i32, 0, 0, duration, 0)
         })
     }
 }
@@ -1784,10 +1802,20 @@ impl BackendError {
         }
     }
 
-    pub const fn result_or_non_negative(code: i32) -> Result<u32, Self> {
+    pub const fn result_or_u32(code: i32) -> Result<u32, Self> {
         match Self::new(code) {
             Some(error) => Err(error),
             None => Ok(code.cast_unsigned()),
+        }
+    }
+
+    pub const fn result_or_u64(code: i64) -> Result<u64, Self> {
+        const I32_MIN: i64 = i32::MIN as i64;
+
+        match code {
+            error @ I32_MIN..0 => Err(unsafe { Self::new(error as i32).unwrap_unchecked() }),
+            non_negative @ 0.. => Ok(non_negative.cast_unsigned()),
+            ..I32_MIN => panic!("error code out of range"),
         }
     }
 
