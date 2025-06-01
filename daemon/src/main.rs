@@ -329,7 +329,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let best_stream = format_context.find_best_stream(MediaType::Video)?;
     let best_stream_index = best_stream.index();
     let codec_parameters = best_stream.codec_parameters();
-    let frame_rate = codec_parameters.frame_rate();
+    let frame_rate = codec_parameters.frame_rate().unwrap();
     let video_size = codec_parameters.video_size().unwrap();
     assert!(
         matches!(
@@ -552,14 +552,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         codec_context.send_packet(&packet)?;
 
-        // TODO(hack3rmann): support for variable frame rate
-        let target_frame_time_secs = if !frame_rate.is_zero() {
-            frame_rate.inv().to_f32()
-        } else {
-            static ONCE: Once = Once::new();
-            ONCE.call_once(|| tracing::warn!("variable frame rate is unsupported"));
+        const FRAME_DURATION_60_FPS: f32 = RatioI32::new(1, 60).unwrap().to_f32();
 
-            RatioI32::new(1, 60).to_f32()
+        // TODO(hack3rmann): support for variable frame rate
+        let target_frame_time_secs = match frame_rate.inv() {
+            Some(duration) => duration.to_f32(),
+            None => {
+                static ONCE: Once = Once::new();
+                ONCE.call_once(|| tracing::warn!("variable frame rate is unsupported"));
+
+                FRAME_DURATION_60_FPS
+            }
         };
 
         let target_frame_time = Duration::from_secs_f32(target_frame_time_secs);

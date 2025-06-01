@@ -28,7 +28,7 @@ use std::{
     fmt, hint,
     marker::PhantomData,
     mem,
-    num::{NonZeroI64, NonZeroU32, NonZeroU64},
+    num::{NonZeroI32, NonZeroI64, NonZeroU32, NonZeroU64},
     ptr::{self, NonNull},
     slice, str,
 };
@@ -997,52 +997,51 @@ impl AudioVideoFormat {
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub struct RatioI32 {
     pub numerator: i32,
-    pub denominator: i32,
+    pub denominator: NonZeroI32,
 }
 
 impl RatioI32 {
     pub const ZERO: Self = Self {
         numerator: 0,
-        denominator: 1,
+        denominator: NonZeroI32::new(1).unwrap(),
     };
 
     pub const ONE: Self = Self {
         numerator: 1,
-        denominator: 1,
+        denominator: NonZeroI32::new(1).unwrap(),
     };
 
-    pub const fn new(numerator: i32, denominator: i32) -> Self {
-        Self {
-            numerator,
-            denominator,
+    pub const fn new(numerator: i32, denominator: i32) -> Option<Self> {
+        match NonZeroI32::new(denominator) {
+            None => None,
+            Some(non_zero) => Some(Self {
+                numerator,
+                denominator: non_zero,
+            }),
         }
     }
 
-    pub const fn from_backend(value: AVRational) -> Self {
-        Self {
-            numerator: value.num,
-            denominator: value.den,
-        }
+    pub const fn from_backend(value: AVRational) -> Option<Self> {
+        Self::new(value.num, value.den)
     }
 
     pub const fn to_backend(self) -> AVRational {
         AVRational {
             num: self.numerator,
-            den: self.denominator,
+            den: self.denominator.get(),
         }
     }
 
     pub const fn to_f32(self) -> f32 {
-        self.numerator as f32 / self.denominator as f32
+        self.numerator as f32 / self.denominator.get() as f32
     }
 
     pub const fn to_f64(self) -> f64 {
-        self.numerator as f64 / self.denominator as f64
+        self.numerator as f64 / self.denominator.get() as f64
     }
 
-    pub const fn inv(self) -> Self {
-        assert!(self.numerator != 0, "can not devide by zero");
-        Self::new(self.denominator, self.numerator)
+    pub const fn inv(self) -> Option<Self> {
+        Self::new(self.denominator.get(), self.numerator)
     }
 
     pub const fn is_zero(self) -> bool {
@@ -1094,13 +1093,12 @@ impl CodecParameters {
         self.0.bit_rate
     }
 
-
     /// The number of bits per sample in the codedwords.
-    /// 
+    ///
     /// This is basically the bitrate per sample. It is mandatory for a bunch of
     /// formats to actually decode them. It's the number of bits for one sample in
     /// the actual coded bitstream.
-    /// 
+    ///
     /// This could be for example 4 for ADPCM
     /// For PCM formats this matches bits_per_raw_sample
     /// Can be 0
@@ -1108,14 +1106,13 @@ impl CodecParameters {
         self.0.bits_per_coded_sample
     }
 
-
     /// This is the number of valid bits in each output sample. If the
     /// sample format has more bits, the least significant bits are additional
     /// padding bits, which are always 0. Use right shifts to reduce the sample
     /// to its actual size. For example, audio formats with 24 bit samples will
     /// have bits_per_raw_sample set to 24, and format set to AV_SAMPLE_FMT_S32.
     /// To get the original sample use "(int32_t)sample >> 8"."
-    /// 
+    ///
     /// For ADPCM this might be 12 or 16 or similar
     /// Can be 0
     pub const fn bits_per_raw_sample(&self) -> i32 {
@@ -1150,24 +1147,24 @@ impl CodecParameters {
 
     /// Video only. The aspect ratio (width / height) which a single pixel
     /// should have when displayed.
-    /// 
+    ///
     /// When the aspect ratio is unknown / undefined, the numerator should be
     /// set to 0 (the denominator may have any value).
-    pub const fn sample_aspect_ratio(&self) -> RatioI32 {
+    pub const fn sample_aspect_ratio(&self) -> Option<RatioI32> {
         RatioI32::from_backend(self.0.sample_aspect_ratio)
     }
 
     /// Video only. Number of frames per second, for streams with constant frame
     /// durations. Should be set to { 0, 1 } when some frames have differing
     /// durations or if the value is not known.
-    /// 
+    ///
     /// # Note
     ///
     /// This field correponds to values that are stored in codec-level
     /// headers and is typically overridden by container/transport-layer
     /// timestamps, when available. It should thus be used only as a last resort,
     /// when no higher-level timing information is available.
-    pub const fn frame_rate(&self) -> RatioI32 {
+    pub const fn frame_rate(&self) -> Option<RatioI32> {
         RatioI32::from_backend(self.0.framerate)
     }
 }
