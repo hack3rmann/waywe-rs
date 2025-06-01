@@ -17,9 +17,10 @@ use ffmpeg_next::ffi::{
     av_codec_iterate, av_find_best_stream, av_frame_alloc, av_frame_free, av_frame_get_buffer,
     av_hwdevice_get_type_name, av_hwdevice_iterate_types, av_new_packet, av_packet_alloc,
     av_packet_free, av_packet_ref, av_packet_unref, av_pix_fmt_desc_get, av_read_frame,
-    avcodec_alloc_context3, avcodec_find_decoder, avcodec_open2, avcodec_parameters_to_context,
-    avcodec_receive_frame, avcodec_send_packet, avformat_close_input, avformat_find_stream_info,
-    avformat_open_input, avformat_seek_file, avio_seek, sws_getContext, sws_scale,
+    av_strerror, avcodec_alloc_context3, avcodec_find_decoder, avcodec_open2,
+    avcodec_parameters_to_context, avcodec_receive_frame, avcodec_send_packet,
+    avformat_close_input, avformat_find_stream_info, avformat_open_input, avformat_seek_file,
+    avio_seek, sws_getContext, sws_scale,
 };
 use glam::UVec2;
 use std::{
@@ -28,7 +29,7 @@ use std::{
     fmt, hint,
     marker::PhantomData,
     mem,
-    num::{NonZeroI32, NonZeroI64, NonZeroU32, NonZeroU64},
+    num::{NonZeroI32, NonZeroI64, NonZeroU64},
     ptr::{self, NonNull},
     slice, str,
     time::Duration,
@@ -1154,26 +1155,27 @@ impl CodecParameters {
 
     /// Video only. The width of the video frame in pixels.
     pub const fn video_width(&self) -> Option<u32> {
-        match (self.media_type(), self.0.width) {
-            (Some(MediaType::Video), width @ 0..) => Some(width.cast_unsigned()),
+        match self.media_type() {
+            Some(MediaType::Video) => Some(self.0.width.cast_unsigned()),
             _ => None,
         }
     }
 
     /// Video only. The height of the video frame in pixels.
     pub const fn video_height(&self) -> Option<u32> {
-        match (self.media_type(), self.0.height) {
-            (Some(MediaType::Video), height @ 0..) => Some(height.cast_unsigned()),
+        match self.media_type() {
+            Some(MediaType::Video) => Some(self.0.height.cast_unsigned()),
             _ => None,
         }
     }
 
     /// Video only. The dimensions of the video frame in pixels.
     pub const fn video_size(&self) -> Option<UVec2> {
-        match (self.media_type(), self.0.width, self.0.height) {
-            (Some(MediaType::Video), width @ 0.., height @ 0..) => {
-                Some(UVec2::new(width.cast_unsigned(), height.cast_unsigned()))
-            }
+        match self.media_type() {
+            Some(MediaType::Video) => Some(UVec2::new(
+                self.0.width.cast_unsigned(),
+                self.0.height.cast_unsigned(),
+            )),
             _ => None,
         }
     }
@@ -1765,7 +1767,7 @@ impl Scaler {
 #[derive(Clone, Copy, PartialEq)]
 pub struct BackendError {
     // TODO(hack3rmann): use non-zero u31 for it
-    encoded_code: NonZeroU32,
+    encoded_code: NonZeroI32,
 }
 
 impl BackendError {
@@ -1822,29 +1824,44 @@ impl BackendError {
     pub const fn new(code: i32) -> Option<Self> {
         match code {
             ..0 => Some(Self {
-                encoded_code: unsafe {
-                    NonZeroU32::new_unchecked(code.wrapping_neg().cast_unsigned())
-                },
+                encoded_code: unsafe { NonZeroI32::new_unchecked(code) },
             }),
             0.. => None,
         }
     }
 
     pub const fn code(self) -> i32 {
-        self.encoded_code.get().cast_signed().wrapping_neg()
+        self.encoded_code.get()
+    }
+
+    pub fn description(self) -> Option<String> {
+        const BUFFER_SIZE: usize = 128;
+
+        let mut buffer = Vec::<u8>::with_capacity(BUFFER_SIZE);
+
+        if unsafe { av_strerror(self.code(), buffer.as_mut_ptr().cast(), BUFFER_SIZE) } != 0 {
+            return None;
+        }
+
+        let cstr = unsafe { CStr::from_ptr(buffer.as_ptr().cast()) };
+        unsafe { buffer.set_len(cstr.count_bytes()) };
+
+        Some(unsafe { String::from_utf8_unchecked(buffer) })
     }
 }
 
 impl fmt::Debug for BackendError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.code(), f)
+        match BackendError::description(*self) {
+            Some(desc) => f.write_str(&desc),
+            None => f.debug_tuple("BackendError").field(&self.code()).finish(),
+        }
     }
 }
 
 impl fmt::Display for BackendError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // FIXME(hack3rmann): get the error string from libav
-        write!(f, "BackendError({})", self.code())
+        fmt::Debug::fmt(&self, f)
     }
 }
 

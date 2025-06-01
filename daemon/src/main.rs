@@ -298,7 +298,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         c"/home/hack3rmann/Downloads/sample-1.avi",
     ];
 
-    let mut format_context = FormatContext::from_input(FILE_NAMES[1])?;
+    let mut format_context = FormatContext::from_input(FILE_NAMES[2])?;
 
     let best_stream = format_context.find_best_stream(MediaType::Video)?;
     let time_base = best_stream.time_base();
