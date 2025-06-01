@@ -1,7 +1,7 @@
 use bitflags::bitflags;
 use ffmpeg_next::ffi::{
     AV_PROFILE_UNKNOWN, AV_TIME_BASE_Q, AVCodec, AVCodecContext, AVCodecID, AVCodecParameters,
-    AVERROR_BSF_NOT_FOUND, AVERROR_BUFFER_TOO_SMALL, AVERROR_BUG, AVERROR_BUG2,
+    AVDiscard, AVERROR_BSF_NOT_FOUND, AVERROR_BUFFER_TOO_SMALL, AVERROR_BUG, AVERROR_BUG2,
     AVERROR_DECODER_NOT_FOUND, AVERROR_DEMUXER_NOT_FOUND, AVERROR_ENCODER_NOT_FOUND, AVERROR_EOF,
     AVERROR_EXIT, AVERROR_EXTERNAL, AVERROR_FILTER_NOT_FOUND, AVERROR_HTTP_BAD_REQUEST,
     AVERROR_HTTP_FORBIDDEN, AVERROR_HTTP_NOT_FOUND, AVERROR_HTTP_OTHER_4XX,
@@ -255,10 +255,12 @@ impl FormatContext {
         NonZeroI64::new(unsafe { (*self.as_raw().as_ptr()).bit_rate })
     }
 
-    pub fn read_packet(&mut self, packet: &mut Packet) -> Result<(), BackendError> {
+    pub fn read_packet(&mut self) -> Result<Packet, BackendError> {
+        let packet = Packet::new();
         BackendError::result_of(unsafe {
             av_read_frame(self.as_raw().as_ptr(), packet.as_raw().as_ptr())
         })
+        .map(|()| packet)
     }
 
     pub fn repeat_stream(&mut self, index: usize) -> Result<(), BackendError> {
@@ -282,6 +284,89 @@ impl Drop for FormatContext {
     }
 }
 
+bitflags! {
+    #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord, Hash)]
+    pub struct DispositionFlags: i32 {
+        const DEFAULT = 1;
+        const DUB = 2;
+        const ORIGINAL = 4;
+        const COMMENT = 8;
+        const LYRICS = 16;
+        const KARAOKE = 32;
+        const FORCED = 64;
+        const HEARING_IMPAIRED = 128;
+        const VISUAL_IMPAIRED = 256;
+        const CLEAN_EFFECTS = 512;
+        const ATTACHED_PIC = 1024;
+        const TIMED_THUMBNAILS = 2048;
+        const NON_DIEGETIC = 4096;
+        const CAPTIONS = 65536;
+        const DESCRIPTIONS = 131072;
+        const METADATA = 262144;
+        const DEPENDENT = 524288;
+        const STILL_IMAGE = 1048576;
+        const MULTILAYER = 2097152;
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord, Default, Hash)]
+pub enum Discard {
+    /// Discard nothing
+    None = -16,
+    /// Discard useless packets like 0 size packets in avi
+    #[default]
+    Default = 0,
+    /// Discard all non reference
+    NonReference = 8,
+    /// Discard all bidirectional frames
+    Bidirectional = 16,
+    /// Discard all non intra frames
+    NonIntra = 24,
+    /// Discard all frames except keyframes
+    NonKey = 32,
+    /// Discard all
+    All = 48,
+}
+
+impl Discard {
+    pub const fn from_i32(value: i32) -> Option<Self> {
+        Some(match value {
+            -16 => Self::None,
+            0 => Self::Default,
+            8 => Self::NonReference,
+            16 => Self::Bidirectional,
+            24 => Self::NonIntra,
+            32 => Self::NonKey,
+            48 => Self::All,
+            _ => return None,
+        })
+    }
+
+    pub const fn from_backend(value: AVDiscard) -> Self {
+        match value {
+            AVDiscard::AVDISCARD_NONE => Self::None,
+            AVDiscard::AVDISCARD_DEFAULT => Self::Default,
+            AVDiscard::AVDISCARD_NONREF => Self::NonReference,
+            AVDiscard::AVDISCARD_BIDIR => Self::Bidirectional,
+            AVDiscard::AVDISCARD_NONINTRA => Self::NonIntra,
+            AVDiscard::AVDISCARD_NONKEY => Self::NonKey,
+            AVDiscard::AVDISCARD_ALL => Self::All,
+        }
+    }
+
+    pub const fn to_backend(self) -> AVDiscard {
+        match self {
+            Self::None => AVDiscard::AVDISCARD_NONE,
+            Self::Default => AVDiscard::AVDISCARD_DEFAULT,
+            Self::NonReference => AVDiscard::AVDISCARD_NONREF,
+            Self::Bidirectional => AVDiscard::AVDISCARD_BIDIR,
+            Self::NonIntra => AVDiscard::AVDISCARD_NONINTRA,
+            Self::NonKey => AVDiscard::AVDISCARD_NONKEY,
+            Self::All => AVDiscard::AVDISCARD_ALL,
+        }
+    }
+}
+
 #[repr(C)]
 pub struct Stream {
     raw: NonNull<AVStream>,
@@ -290,6 +375,7 @@ pub struct Stream {
 implement_raw!(Stream: AVStream);
 
 impl Stream {
+    /// Stream index in [`FormatContext`]
     pub const fn index(&self) -> usize {
         match unsafe { (*self.as_raw().as_ptr()).index } {
             ..0 => unsafe { hint::unreachable_unchecked() },
@@ -297,6 +383,28 @@ impl Stream {
         }
     }
 
+    /// Format-specific stream ID.
+    pub const fn id(&self) -> i32 {
+        unsafe { (*self.as_raw().as_ptr()).id }
+    }
+
+    /// Duration of the stream, in stream time base.
+    /// If a source file does not specify a duration, but does specify
+    /// a bitrate, this value will be estimated from bitrate and file size.
+    pub const fn duration(&self) -> Option<FrameDuration> {
+        let duration_backend = unsafe { (*self.as_raw().as_ptr()).duration };
+        let Some(duration) = NonZeroI64::new(duration_backend) else {
+            return None;
+        };
+
+        let base_backend = unsafe { (*self.as_raw().as_ptr()).time_base };
+        // Safety: 'set by libavformat' therefore has non-zero denominator
+        let base = unsafe { RatioI32::from_backend(base_backend).unwrap_unchecked() };
+
+        Some(FrameDuration { base, duration })
+    }
+
+    /// Number of frames in this stream if known
     pub const fn frame_count(&self) -> Option<NonZeroU64> {
         match unsafe { (*self.as_raw().as_ptr()).nb_frames } {
             ..0 => unsafe { hint::unreachable_unchecked() },
@@ -304,8 +412,26 @@ impl Stream {
         }
     }
 
-    // TODO(hack3rmann): figure out safety for this
+    /// Stream disposition
+    pub const fn disposition(&self) -> DispositionFlags {
+        let bits = unsafe { (*self.as_raw().as_ptr()).disposition };
+        unsafe { DispositionFlags::from_bits(bits).unwrap_unchecked() }
+    }
+
+    /// Selects which packets can be discarded at will and do not need to be demuxed.
+    pub const fn discard(&self) -> Discard {
+        Discard::from_backend(unsafe { (*self.as_raw().as_ptr()).discard })
+    }
+
+    /// Sample aspect ratio (`0` if unknown)
+    pub const fn sample_aspect_ratio(&self) -> RatioI32 {
+        let value_backend = unsafe { (*self.as_raw().as_ptr()).sample_aspect_ratio };
+        unsafe { RatioI32::from_backend(value_backend).unwrap_unchecked() }
+    }
+
+    /// Codec parameters associated with this stream.
     pub const fn codec_parameters(&self) -> &CodecParameters {
+        // TODO(hack3rmann): figure out safety for this
         unsafe {
             (*self.as_raw().as_ptr())
                 .codecpar
@@ -315,10 +441,28 @@ impl Stream {
         }
     }
 
+    /// This is the fundamental unit of time (in seconds) in terms
+    /// of which frame timestamps are represented.
     pub const fn time_base(&self) -> RatioI32 {
         let backend_value = unsafe { (*self.as_raw().as_ptr()).time_base };
         // Safety: 'set by libavformat' therefore has non-zero denominator
         unsafe { RatioI32::from_backend(backend_value).unwrap_unchecked() }
+    }
+}
+
+impl fmt::Debug for Stream {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Stream")
+            .field("index", &self.index())
+            .field("id", &self.id())
+            .field("duration", &self.duration())
+            .field("frame_count", &self.frame_count())
+            .field("codec_parameters", &self.codec_parameters())
+            .field("time_base", &self.time_base())
+            .field("disposition", &self.disposition())
+            .field("discard", &self.discard())
+            .field("sample_aspect_ratio", &self.sample_aspect_ratio())
+            .finish_non_exhaustive()
     }
 }
 

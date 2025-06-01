@@ -13,8 +13,8 @@ use std::{
 };
 use swapchain::VideoPipeline;
 use video::{
-    BackendError, Codec, CodecContext, FormatContext, Frame, FrameDuration, MediaType, Packet,
-    RatioI32, VideoPixelFormat,
+    BackendError, Codec, CodecContext, FormatContext, Frame, FrameDuration, MediaType, RatioI32,
+    VideoPixelFormat,
 };
 use wayland_client::{
     WlSmallVecMessageBuffer,
@@ -333,14 +333,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let frame_loop_start = Instant::now();
     let mut last_instant = frame_loop_start;
 
-    let mut packet = Packet::new();
     let mut frame = Frame::new();
 
     const DO_LOOP_VIDEO: bool = true;
 
     loop {
-        match format_context.read_packet(&mut packet) {
-            Ok(()) => {}
+        let packet = match format_context.read_packet() {
+            Ok(packet) => packet,
             Err(BackendError::EOF) => {
                 if !DO_LOOP_VIDEO {
                     break;
@@ -348,9 +347,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                 format_context.repeat_stream(best_stream_index)?;
                 continue;
-            },
+            }
             error @ Err(..) => error?,
-        }
+        };
 
         if packet.stream_index() != best_stream_index {
             continue;
