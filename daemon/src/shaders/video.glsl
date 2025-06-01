@@ -1,9 +1,6 @@
 #version 460
 
-layout(push_constant) uniform struct PushConst {
-    vec2 resolution;
-    float time;
-} push;
+layout(push_constant) uniform vec2 resolution;
 
 layout(set = 0, binding = 0) uniform texture2D video_y_plane;
 layout(set = 0, binding = 1) uniform texture2D video_u_plane;
@@ -25,7 +22,7 @@ vec3 yuv_to_rgb(float y, float u, float v) {
 
 void main() {
     ivec2 video_size = textureSize(sampler2D(video_y_plane, video_sampler), 0);
-    float scale_factor = push.resolution.x * float(video_size.y) / (push.resolution.y * float(video_size.x));
+    float scale_factor = resolution.x * float(video_size.y) / (resolution.y * float(video_size.x));
 
     vec2 scaled_position = vec2(scale_factor * position.x, position.y);
 
