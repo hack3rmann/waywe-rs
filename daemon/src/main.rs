@@ -8,14 +8,13 @@ use std::{
     error::Error,
     ffi::CStr,
     pin::pin,
-    sync::Once,
     thread,
     time::{Duration, Instant},
 };
 use swapchain::VideoPipeline;
 use video::{
-    BackendError, Codec, CodecContext, FormatContext, Frame, MediaType, Packet, RatioI32,
-    VideoPixelFormat,
+    BackendError, Codec, CodecContext, FormatContext, Frame, FrameDuration, MediaType, Packet,
+    RatioI32, VideoPixelFormat,
 };
 use wayland_client::{
     WlSmallVecMessageBuffer,
@@ -283,7 +282,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .unwrap(),
     );
 
-    // TODO(hack3rmann): use the correct surface format
     let Some(surface_format) = wgpu_surface
         .get_capabilities(&adapter)
         .formats
@@ -300,9 +298,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         c"/home/hack3rmann/Downloads/sample-1.avi",
     ];
 
-    let mut format_context = FormatContext::from_input(FILE_NAMES[0])?;
+    let mut format_context = FormatContext::from_input(FILE_NAMES[3])?;
 
     let best_stream = format_context.find_best_stream(MediaType::Video)?;
+    let time_base = best_stream.time_base();
     let best_stream_index = best_stream.index();
     let codec_parameters = best_stream.codec_parameters();
     let frame_rate = codec_parameters.frame_rate().unwrap();
@@ -315,6 +314,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         "invalid format"
     );
     let mut codec_context = CodecContext::from_parameters(codec_parameters)?;
+
+    const FRAME_DURATION_60_FPS: Duration = RatioI32::new(1, 60).unwrap().to_duration_seconds();
+
+    let frame_time_fallback = match frame_rate.inv() {
+        Some(duration) => duration.to_duration_seconds(),
+        None => FRAME_DURATION_60_FPS,
+    };
 
     let video_pipeline = VideoPipeline::new(&device, surface_format, video_size, SCREEN_SIZE);
 
@@ -344,22 +350,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         codec_context.send_packet(&packet)?;
 
-        const FRAME_DURATION_60_FPS: f32 = RatioI32::new(1, 60).unwrap().to_f32();
-
-        // TODO(hack3rmann): support for variable frame rate
-        let target_frame_time_secs = match frame_rate.inv() {
-            Some(duration) => duration.to_f32(),
-            None => {
-                static ONCE: Once = Once::new();
-                ONCE.call_once(|| tracing::warn!("variable frame rate is unsupported"));
-
-                FRAME_DURATION_60_FPS
-            }
-        };
-
-        let target_frame_time = Duration::from_secs_f32(target_frame_time_secs);
-
         while codec_context.receive_frame(&mut frame).is_ok() {
+            let target_frame_time = frame
+                .duration_in(time_base)
+                .map(FrameDuration::to_duration)
+                .unwrap_or(frame_time_fallback);
+
             let frame_start = Instant::now();
             let time_from_start = last_instant.duration_since(frame_loop_start);
             last_instant = frame_start;

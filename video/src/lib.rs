@@ -1,6 +1,6 @@
 use bitflags::bitflags;
 use ffmpeg_next::ffi::{
-    AV_PROFILE_UNKNOWN, AVCodec, AVCodecContext, AVCodecID, AVCodecParameters,
+    AV_PROFILE_UNKNOWN, AV_TIME_BASE_Q, AVCodec, AVCodecContext, AVCodecID, AVCodecParameters,
     AVERROR_BSF_NOT_FOUND, AVERROR_BUFFER_TOO_SMALL, AVERROR_BUG, AVERROR_BUG2,
     AVERROR_DECODER_NOT_FOUND, AVERROR_DEMUXER_NOT_FOUND, AVERROR_ENCODER_NOT_FOUND, AVERROR_EOF,
     AVERROR_EXIT, AVERROR_EXTERNAL, AVERROR_FILTER_NOT_FOUND, AVERROR_HTTP_BAD_REQUEST,
@@ -31,6 +31,7 @@ use std::{
     num::{NonZeroI32, NonZeroI64, NonZeroU32, NonZeroU64},
     ptr::{self, NonNull},
     slice, str,
+    time::Duration,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -293,6 +294,12 @@ impl Stream {
                 .as_ref()
                 .unwrap_unchecked()
         }
+    }
+
+    pub const fn time_base(&self) -> RatioI32 {
+        let backend_value = unsafe { (*self.as_raw().as_ptr()).time_base };
+        // Safety: 'set by libavformat' therefore has non-zero denominator
+        unsafe { RatioI32::from_backend(backend_value).unwrap_unchecked() }
     }
 }
 
@@ -1047,6 +1054,14 @@ impl RatioI32 {
     pub const fn is_zero(self) -> bool {
         self.numerator == 0
     }
+
+    pub const fn to_duration_seconds(self) -> Duration {
+        // HACK(hack3rmann): may overflow a lot
+        let n_seconds = self.numerator as i64 / self.denominator.get() as i64;
+        let n_nanoseconds =
+            1_000_000_000_i64 * self.numerator as i64 / self.denominator.get() as i64;
+        Duration::new(n_seconds.cast_unsigned(), n_nanoseconds as u32)
+    }
 }
 
 impl Default for RatioI32 {
@@ -1249,6 +1264,24 @@ impl CodecContext {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct FrameDuration {
+    pub base: RatioI32,
+    pub duration: NonZeroI64,
+}
+
+impl FrameDuration {
+    pub const FALLBACK_BASE: RatioI32 = RatioI32::from_backend(AV_TIME_BASE_Q).unwrap();
+
+    pub const fn to_duration(self) -> Duration {
+        let n_seconds =
+            self.duration.get() * self.base.numerator as i64 / self.base.denominator.get() as i64;
+        let n_nanoseconds = 1_000_000_000_i64 * self.duration.get() * self.base.numerator as i64
+            / self.base.denominator.get() as i64;
+        Duration::new(n_seconds as u64, n_nanoseconds as u32)
+    }
+}
+
 pub struct Frame {
     raw: NonNull<AVFrame>,
 }
@@ -1283,6 +1316,14 @@ impl Frame {
 
     pub const fn format(&self) -> Option<VideoPixelFormat> {
         VideoPixelFormat::from_i32(unsafe { (*self.as_raw().as_ptr()).format })
+    }
+
+    pub const fn duration_in(&self, base: RatioI32) -> Option<FrameDuration> {
+        let Some(duration) = NonZeroI64::new(unsafe { (*self.as_raw().as_ptr()).duration }) else {
+            return None;
+        };
+
+        Some(FrameDuration { base, duration })
     }
 
     /// # Safety
