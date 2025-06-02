@@ -4,6 +4,6 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-ffmpeg-next = "7.1.0"
+ffmpeg-sys-next = "7.1.3"
 glam.workspace = true
 bitflags.workspace = true

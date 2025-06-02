@@ -1,7 +1,5 @@
 pub mod swapchain;
 
-extern crate ffmpeg_next as ffmpeg;
-
 use glam::UVec2;
 use raw_window_handle::{HasDisplayHandle as _, RawWindowHandle, WaylandWindowHandle};
 use std::{
@@ -144,7 +142,7 @@ impl SurfaceExtension for WlObject<Surface> {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt::init();
-    ffmpeg::init().unwrap();
+    video::init();
 
     const SCREEN_WIDTH: u32 = 2520;
     const SCREEN_HEIGHT: u32 = 1680;
@@ -296,9 +294,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         c"/home/hack3rmann/Videos/ObsRecordings/2025-05-16 15-51-50.mp4",
         c"/home/hack3rmann/Pictures/Wallpapers/night-sky-purple-moon-clouds-3840x2160.mp4",
         c"/home/hack3rmann/Downloads/sample-1.avi",
+        c"http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
     ];
 
-    let mut format_context = FormatContext::from_input(FILE_NAMES[2])?;
+    let mut format_context = FormatContext::from_input(FILE_NAMES[4])?;
 
     let best_stream = format_context.find_best_stream(MediaType::Video)?;
     let time_base = best_stream.time_base();
