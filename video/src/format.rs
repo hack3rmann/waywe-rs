@@ -1,10 +1,10 @@
 use crate::VideoPixelDescriptor;
 use bitflags::bitflags;
 use ffmpeg_sys_next::{AVPixelFormat, AVSampleFormat, av_pix_fmt_desc_get};
-use std::{mem, ptr::NonNull};
+use std::mem;
 
 /// Audio sample formats
-/// 
+///
 /// - The data described by the sample format is always in native-endian order.
 ///   Sample values can be expressed by native C types, hence the lack of a signed
 ///   24-bit sample format even though it is a common raw audio data format.
@@ -12,7 +12,7 @@ use std::{mem, ptr::NonNull};
 ///   [-1.0, 1.0](<-1.0, 1.0>). Any values outside this range are beyond full volume level.
 /// - The data layout as used in av_samples_fill_arrays() and elsewhere in FFmpeg
 ///   (such as AVFrame in libavcodec) is as follows:
-/// 
+///
 /// For planar sample formats, each audio channel is in a separate data plane,
 /// and linesize is the buffer size, in bytes, for a single plane. All data
 /// planes must be the same size. For packed sample formats, only the first data
@@ -602,26 +602,25 @@ impl VideoPixelFormat {
         }
     }
 
-    pub fn descriptor(self) -> Option<VideoPixelDescriptor> {
+    pub fn descriptor(self) -> Option<&'static VideoPixelDescriptor> {
         let ptr = unsafe { av_pix_fmt_desc_get(self.to_backend()) };
-
-        NonNull::new(ptr.cast_mut()).map(|raw| unsafe { VideoPixelDescriptor::from_raw(raw) })
+        unsafe { ptr.cast::<VideoPixelDescriptor>().as_ref() }
     }
 }
 
 bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord, Default, Hash)]
     pub struct PixelFormatFlags: u64 {
-        const AV_PIX_FMT_FLAG_BE = 1;
-        const AV_PIX_FMT_FLAG_PAL = 2;
-        const AV_PIX_FMT_FLAG_BITSTREAM = 4;
-        const AV_PIX_FMT_FLAG_HWACCEL = 8;
-        const AV_PIX_FMT_FLAG_PLANAR = 16;
-        const AV_PIX_FMT_FLAG_RGB = 32;
-        const AV_PIX_FMT_FLAG_ALPHA = 128;
-        const AV_PIX_FMT_FLAG_BAYER = 256;
-        const AV_PIX_FMT_FLAG_FLOAT = 512;
-        const AV_PIX_FMT_FLAG_XYZ = 1024;
+        const BE = 1;
+        const PAL = 2;
+        const BITSTREAM = 4;
+        const HWACCEL = 8;
+        const PLANAR = 16;
+        const RGB = 32;
+        const ALPHA = 128;
+        const BAYER = 256;
+        const FLOAT = 512;
+        const XYZ = 1024;
     }
 }
 

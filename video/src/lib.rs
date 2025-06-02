@@ -1,146 +1,42 @@
+pub mod codec;
+pub mod error;
 pub mod format;
+pub mod hardware_acceleration;
+pub mod time;
 
 use bitflags::bitflags;
 use ffmpeg_sys_next::{
-    AV_PROFILE_UNKNOWN, AV_TIME_BASE_Q, AVCodec, AVCodecContext, AVCodecID, AVCodecParameters,
-    AVDiscard, AVERROR_BSF_NOT_FOUND, AVERROR_BUFFER_TOO_SMALL, AVERROR_BUG, AVERROR_BUG2,
-    AVERROR_DECODER_NOT_FOUND, AVERROR_DEMUXER_NOT_FOUND, AVERROR_ENCODER_NOT_FOUND, AVERROR_EOF,
-    AVERROR_EXIT, AVERROR_EXTERNAL, AVERROR_FILTER_NOT_FOUND, AVERROR_HTTP_BAD_REQUEST,
-    AVERROR_HTTP_FORBIDDEN, AVERROR_HTTP_NOT_FOUND, AVERROR_HTTP_OTHER_4XX,
-    AVERROR_HTTP_SERVER_ERROR, AVERROR_HTTP_TOO_MANY_REQUESTS, AVERROR_HTTP_UNAUTHORIZED,
-    AVERROR_INVALIDDATA, AVERROR_MUXER_NOT_FOUND, AVERROR_OPTION_NOT_FOUND, AVERROR_PATCHWELCOME,
-    AVERROR_PROTOCOL_NOT_FOUND, AVERROR_STREAM_NOT_FOUND, AVERROR_UNKNOWN, AVFormatContext,
-    AVFrame, AVHWDeviceType, AVMediaType, AVPacket, AVPixFmtDescriptor, AVProfile, AVRational,
-    AVStream, SEEK_SET, SWS_ACCURATE_RND, SWS_AREA, SWS_BICUBIC, SWS_BICUBLIN, SWS_BILINEAR,
-    SWS_BITEXACT, SWS_DIRECT_BGR, SWS_ERROR_DIFFUSION, SWS_FAST_BILINEAR, SWS_FULL_CHR_H_INP,
-    SWS_FULL_CHR_H_INT, SWS_GAUSS, SWS_LANCZOS, SWS_PARAM_DEFAULT, SWS_POINT, SWS_PRINT_INFO,
-    SWS_SINC, SWS_SPLINE, SWS_SRC_V_CHR_DROP_MASK, SWS_SRC_V_CHR_DROP_SHIFT, SWS_X, SwsContext,
-    av_codec_is_decoder, av_codec_is_encoder, av_codec_iterate, av_find_best_stream,
-    av_frame_alloc, av_frame_free, av_frame_get_buffer, av_hwdevice_get_type_name,
-    av_hwdevice_iterate_types, av_new_packet, av_packet_alloc, av_packet_free, av_packet_ref,
-    av_packet_unref, av_read_frame, av_strerror, avcodec_alloc_context3, avcodec_find_decoder,
-    avcodec_open2, avcodec_parameters_copy, avcodec_parameters_to_context, avcodec_receive_frame,
-    avcodec_send_packet, avdevice_register_all, avformat_close_input, avformat_find_stream_info,
-    avformat_open_input, avformat_seek_file, avio_seek, strerror, sws_getContext, sws_scale,
+    AV_PROFILE_UNKNOWN, AVDiscard, AVFormatContext, AVFrame, AVMediaType, AVPacket,
+    AVPixFmtDescriptor, AVProfile, AVStream, SEEK_SET, SWS_ACCURATE_RND, SWS_AREA, SWS_BICUBIC,
+    SWS_BICUBLIN, SWS_BILINEAR, SWS_BITEXACT, SWS_DIRECT_BGR, SWS_ERROR_DIFFUSION,
+    SWS_FAST_BILINEAR, SWS_FULL_CHR_H_INP, SWS_FULL_CHR_H_INT, SWS_GAUSS, SWS_LANCZOS,
+    SWS_PARAM_DEFAULT, SWS_POINT, SWS_PRINT_INFO, SWS_SINC, SWS_SPLINE, SWS_SRC_V_CHR_DROP_MASK,
+    SWS_SRC_V_CHR_DROP_SHIFT, SWS_X, SwsContext, av_buffer_get_ref_count, av_codec_iterate,
+    av_find_best_stream, av_frame_alloc, av_frame_free, av_frame_get_buffer, av_frame_unref,
+    av_new_packet, av_packet_alloc, av_packet_free, av_packet_ref, av_packet_unref, av_read_frame,
+    avdevice_register_all, avformat_close_input, avformat_find_stream_info, avformat_open_input,
+    avformat_seek_file, avio_seek, sws_getContext, sws_scale,
 };
 use glam::UVec2;
 use std::{
-    error::Error,
     ffi::{CStr, c_void},
     fmt, hint,
     marker::PhantomData,
-    num::{NonZeroI32, NonZeroI64, NonZeroU64},
+    num::{NonZeroI64, NonZeroU64},
     ptr::{self, NonNull},
     slice, str,
-    time::Duration,
 };
 
+pub use codec::{Codec, CodecContext, CodecId, CodecParameters, OwnedCodecParameters};
+pub use error::BackendError;
 pub use ffmpeg_sys_next::AVComponentDescriptor as ComponentDescriptor;
 pub use format::{AudioVideoFormat, PixelFormatFlags, VideoPixelFormat};
+pub use hardware_acceleration::{HwDeviceType, HwDeviceTypeIterator};
+pub use time::{FrameDuration, RatioI32};
 
 /// Initialize `libavdevice` and register all the input and output devices.
 pub fn init() {
     unsafe { avdevice_register_all() };
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
-pub enum HwDeviceType {
-    VdPau = 1,
-    Cuda = 2,
-    #[default]
-    VaApi = 3,
-    DxVa2 = 4,
-    Qsv = 5,
-    VideoToolbox = 6,
-    D3D11Va = 7,
-    Drm = 8,
-    OpenCl = 9,
-    MediaCodec = 10,
-    Vulkan = 11,
-    D3D12Va = 12,
-}
-
-impl HwDeviceType {
-    /// Get FFI-compatible value
-    pub const fn to_backend(self) -> AVHWDeviceType {
-        match self {
-            Self::VdPau => AVHWDeviceType::AV_HWDEVICE_TYPE_VDPAU,
-            Self::Cuda => AVHWDeviceType::AV_HWDEVICE_TYPE_CUDA,
-            Self::VaApi => AVHWDeviceType::AV_HWDEVICE_TYPE_VAAPI,
-            Self::DxVa2 => AVHWDeviceType::AV_HWDEVICE_TYPE_DXVA2,
-            Self::Qsv => AVHWDeviceType::AV_HWDEVICE_TYPE_QSV,
-            Self::VideoToolbox => AVHWDeviceType::AV_HWDEVICE_TYPE_VIDEOTOOLBOX,
-            Self::D3D11Va => AVHWDeviceType::AV_HWDEVICE_TYPE_D3D11VA,
-            Self::Drm => AVHWDeviceType::AV_HWDEVICE_TYPE_DRM,
-            Self::OpenCl => AVHWDeviceType::AV_HWDEVICE_TYPE_OPENCL,
-            Self::MediaCodec => AVHWDeviceType::AV_HWDEVICE_TYPE_MEDIACODEC,
-            Self::Vulkan => AVHWDeviceType::AV_HWDEVICE_TYPE_VULKAN,
-            Self::D3D12Va => AVHWDeviceType::AV_HWDEVICE_TYPE_D3D12VA,
-        }
-    }
-
-    /// Construct [`HwDeviceType`] from FFI-compatible value
-    ///
-    /// # Note
-    ///
-    /// Returns [`None`] if `value` is [`AVHWDeviceType::AV_HWDEVICE_TYPE_NONE`]
-    pub const fn from_backend(ty: AVHWDeviceType) -> Option<Self> {
-        Some(match ty {
-            AVHWDeviceType::AV_HWDEVICE_TYPE_NONE => return None,
-            AVHWDeviceType::AV_HWDEVICE_TYPE_VDPAU => Self::VdPau,
-            AVHWDeviceType::AV_HWDEVICE_TYPE_CUDA => Self::Cuda,
-            AVHWDeviceType::AV_HWDEVICE_TYPE_VAAPI => Self::VaApi,
-            AVHWDeviceType::AV_HWDEVICE_TYPE_DXVA2 => Self::DxVa2,
-            AVHWDeviceType::AV_HWDEVICE_TYPE_QSV => Self::Qsv,
-            AVHWDeviceType::AV_HWDEVICE_TYPE_VIDEOTOOLBOX => Self::VideoToolbox,
-            AVHWDeviceType::AV_HWDEVICE_TYPE_D3D11VA => Self::D3D11Va,
-            AVHWDeviceType::AV_HWDEVICE_TYPE_DRM => Self::Drm,
-            AVHWDeviceType::AV_HWDEVICE_TYPE_OPENCL => Self::OpenCl,
-            AVHWDeviceType::AV_HWDEVICE_TYPE_MEDIACODEC => Self::MediaCodec,
-            AVHWDeviceType::AV_HWDEVICE_TYPE_VULKAN => Self::Vulkan,
-            AVHWDeviceType::AV_HWDEVICE_TYPE_D3D12VA => Self::D3D12Va,
-        })
-    }
-
-    /// Get the string name of an [`HwDeviceType`]
-    pub fn name(self) -> &'static CStr {
-        let name_ptr = unsafe { av_hwdevice_get_type_name(self.into()) };
-        unsafe { CStr::from_ptr(name_ptr) }
-    }
-}
-
-impl From<HwDeviceType> for AVHWDeviceType {
-    fn from(value: HwDeviceType) -> Self {
-        value.to_backend()
-    }
-}
-
-/// Iterate over supported device types.
-pub struct HwDeviceTypeIterator {
-    ty: AVHWDeviceType,
-}
-
-impl HwDeviceTypeIterator {
-    pub const fn new() -> Self {
-        Self {
-            ty: AVHWDeviceType::AV_HWDEVICE_TYPE_NONE,
-        }
-    }
-}
-
-impl Default for HwDeviceTypeIterator {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Iterator for HwDeviceTypeIterator {
-    type Item = HwDeviceType;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.ty = unsafe { av_hwdevice_iterate_types(self.ty) };
-        HwDeviceType::from_backend(self.ty)
-    }
 }
 
 macro_rules! implement_raw {
@@ -164,9 +60,11 @@ macro_rules! implement_raw {
         }
     };
     ( $Wrapper:ty : $Raw:ty ) => {
-        implement_raw!( $Wrapper { raw } : $Raw);
+        $crate::implement_raw!( $Wrapper { raw } : $Raw);
     };
 }
+
+pub(crate) use implement_raw;
 
 /// Media type
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Default, Eq, Ord, Hash)]
@@ -362,17 +260,16 @@ pub enum Discard {
 }
 
 impl Discard {
-    pub const fn from_i32(value: i32) -> Option<Self> {
-        Some(match value {
-            -16 => Self::None,
-            0 => Self::Default,
-            8 => Self::NonReference,
-            16 => Self::Bidirectional,
-            24 => Self::NonIntra,
-            32 => Self::NonKey,
-            48 => Self::All,
-            _ => return None,
-        })
+    pub const fn to_backend(self) -> AVDiscard {
+        match self {
+            Self::None => AVDiscard::AVDISCARD_NONE,
+            Self::Default => AVDiscard::AVDISCARD_DEFAULT,
+            Self::NonReference => AVDiscard::AVDISCARD_NONREF,
+            Self::Bidirectional => AVDiscard::AVDISCARD_BIDIR,
+            Self::NonIntra => AVDiscard::AVDISCARD_NONINTRA,
+            Self::NonKey => AVDiscard::AVDISCARD_NONKEY,
+            Self::All => AVDiscard::AVDISCARD_ALL,
+        }
     }
 
     pub const fn from_backend(value: AVDiscard) -> Self {
@@ -387,16 +284,17 @@ impl Discard {
         }
     }
 
-    pub const fn to_backend(self) -> AVDiscard {
-        match self {
-            Self::None => AVDiscard::AVDISCARD_NONE,
-            Self::Default => AVDiscard::AVDISCARD_DEFAULT,
-            Self::NonReference => AVDiscard::AVDISCARD_NONREF,
-            Self::Bidirectional => AVDiscard::AVDISCARD_BIDIR,
-            Self::NonIntra => AVDiscard::AVDISCARD_NONINTRA,
-            Self::NonKey => AVDiscard::AVDISCARD_NONKEY,
-            Self::All => AVDiscard::AVDISCARD_ALL,
-        }
+    pub const fn from_i32(value: i32) -> Option<Self> {
+        Some(match value {
+            -16 => Self::None,
+            0 => Self::Default,
+            8 => Self::NonReference,
+            16 => Self::Bidirectional,
+            24 => Self::NonIntra,
+            32 => Self::NonKey,
+            48 => Self::All,
+            _ => return None,
+        })
     }
 }
 
@@ -500,49 +398,37 @@ impl fmt::Debug for Stream {
 }
 
 #[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct CodecId(pub AVCodecID);
-
-impl fmt::Debug for CodecId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.0, f)
-    }
-}
-
-pub struct VideoPixelDescriptor {
-    raw: NonNull<AVPixFmtDescriptor>,
-}
-
-implement_raw!(VideoPixelDescriptor: AVPixFmtDescriptor);
+pub struct VideoPixelDescriptor(AVPixFmtDescriptor);
 
 impl VideoPixelDescriptor {
     pub const fn name(&self) -> &'static str {
-        let name_cstr = unsafe { CStr::from_ptr((*self.as_raw().as_ptr()).name) };
+        let name_cstr = unsafe { CStr::from_ptr(self.0.name) };
         unsafe { str::from_utf8_unchecked(name_cstr.to_bytes()) }
     }
 
     /// Amount to shift the luma width right to find the chroma width.
     /// For YV12 this is 1 for example.
     /// This value only refers to the chroma components.
-    pub const fn log2_chroma_w(&self) -> u8 {
-        unsafe { (*self.as_raw().as_ptr()).log2_chroma_w }
+    pub const fn log2_chroma_width(&self) -> u8 {
+        self.0.log2_chroma_w
     }
 
     /// Amount to shift the luma height right to find the chroma height.
     /// For YV12 this is 1 for example.
     /// This value only refers to the chroma components.
-    pub const fn log2_chroma_h(&self) -> u8 {
-        unsafe { (*self.as_raw().as_ptr()).log2_chroma_h }
+    pub const fn log2_chroma_height(&self) -> u8 {
+        self.0.log2_chroma_h
     }
 
+    /// Pixel format flags
     pub const fn flags(&self) -> PixelFormatFlags {
-        let bits = unsafe { (*self.as_raw().as_ptr()).flags };
+        let bits = self.0.flags;
         unsafe { PixelFormatFlags::from_bits(bits).unwrap_unchecked() }
     }
 
     /// Alternative comma-separated names.
     pub const fn alias(&self) -> Option<&'static str> {
-        let ptr = unsafe { (*self.as_raw().as_ptr()).alias };
+        let ptr = self.0.alias;
 
         if ptr.is_null() {
             return None;
@@ -562,8 +448,8 @@ impl VideoPixelDescriptor {
     ///
     /// If present, the Alpha channel is always the last component.
     pub const fn components(&self) -> &[ComponentDescriptor] {
-        let ptr = unsafe { &raw const (*self.as_raw().as_ptr()).comp[0] };
-        let count = unsafe { (*self.as_raw().as_ptr()).nb_components };
+        let ptr = &raw const self.0.comp[0];
+        let count = self.0.nb_components;
         unsafe { slice::from_raw_parts(ptr, count as usize) }
     }
 }
@@ -572,300 +458,12 @@ impl fmt::Debug for VideoPixelDescriptor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("VideoPixelDescriptor")
             .field("name", &self.name())
-            .field("log2_chroma_w", &self.log2_chroma_w())
-            .field("log2_chroma_h", &self.log2_chroma_h())
+            .field("log2_chroma_w", &self.log2_chroma_width())
+            .field("log2_chroma_h", &self.log2_chroma_height())
             .field("flags", &self.flags())
             .field("alias", &self.alias())
             .field("components", &self.components())
             .finish()
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
-pub struct RatioI32 {
-    pub numerator: i32,
-    pub denominator: NonZeroI32,
-}
-
-impl RatioI32 {
-    pub const ZERO: Self = Self {
-        numerator: 0,
-        denominator: NonZeroI32::new(1).unwrap(),
-    };
-
-    pub const ONE: Self = Self {
-        numerator: 1,
-        denominator: NonZeroI32::new(1).unwrap(),
-    };
-
-    pub const fn new(numerator: i32, denominator: i32) -> Option<Self> {
-        match NonZeroI32::new(denominator) {
-            None => None,
-            Some(non_zero) => Some(Self {
-                numerator,
-                denominator: non_zero,
-            }),
-        }
-    }
-
-    pub const fn from_backend(value: AVRational) -> Option<Self> {
-        Self::new(value.num, value.den)
-    }
-
-    pub const fn to_backend(self) -> AVRational {
-        AVRational {
-            num: self.numerator,
-            den: self.denominator.get(),
-        }
-    }
-
-    pub const fn to_f32(self) -> f32 {
-        self.numerator as f32 / self.denominator.get() as f32
-    }
-
-    pub const fn to_f64(self) -> f64 {
-        self.numerator as f64 / self.denominator.get() as f64
-    }
-
-    pub const fn inv(self) -> Option<Self> {
-        Self::new(self.denominator.get(), self.numerator)
-    }
-
-    pub const fn is_zero(self) -> bool {
-        self.numerator == 0
-    }
-
-    pub const fn to_duration_seconds(self) -> Duration {
-        // HACK(hack3rmann): may overflow a lot
-        let n_seconds = self.numerator as i64 / self.denominator.get() as i64;
-        let n_nanoseconds =
-            1_000_000_000_i64 * self.numerator as i64 / self.denominator.get() as i64;
-        Duration::new(n_seconds.cast_unsigned(), n_nanoseconds as u32)
-    }
-}
-
-impl Default for RatioI32 {
-    fn default() -> Self {
-        Self::ZERO
-    }
-}
-
-impl fmt::Debug for RatioI32 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}/{}", self.numerator, self.denominator)
-    }
-}
-
-#[repr(C)]
-pub struct CodecParameters(AVCodecParameters);
-
-impl CodecParameters {
-    /// General type of the encoded data.
-    pub const fn media_type(&self) -> Option<MediaType> {
-        MediaType::from_backend(self.0.codec_type)
-    }
-
-    /// Specific type of the encoded data (the codec used).
-    pub const fn codec_id(&self) -> CodecId {
-        CodecId(self.0.codec_id)
-    }
-
-    /// Additional information about the codec (corresponds to the AVI FOURCC).
-    pub const fn codec_tag(&self) -> u32 {
-        self.0.codec_tag
-    }
-
-    pub const fn format(&self) -> Option<AudioVideoFormat> {
-        match self.media_type() {
-            None | Some(MediaType::Attachment | MediaType::Subtitle | MediaType::Data) => None,
-            Some(MediaType::Video) => AudioVideoFormat::video_from_i32(self.0.format),
-            Some(MediaType::Audio) => AudioVideoFormat::audio_from_i32(self.0.format),
-        }
-    }
-
-    /// The average bitrate of the encoded data (in bits per second).
-    pub const fn bit_rate(&self) -> i64 {
-        self.0.bit_rate
-    }
-
-    /// The number of bits per sample in the codedwords.
-    ///
-    /// This is basically the bitrate per sample. It is mandatory for a bunch of
-    /// formats to actually decode them. It's the number of bits for one sample in
-    /// the actual coded bitstream.
-    ///
-    /// This could be for example 4 for ADPCM
-    /// For PCM formats this matches bits_per_raw_sample
-    /// Can be 0
-    pub const fn bits_per_coded_sample(&self) -> i32 {
-        self.0.bits_per_coded_sample
-    }
-
-    /// This is the number of valid bits in each output sample. If the
-    /// sample format has more bits, the least significant bits are additional
-    /// padding bits, which are always 0. Use right shifts to reduce the sample
-    /// to its actual size. For example, audio formats with 24 bit samples will
-    /// have bits_per_raw_sample set to 24, and format set to AV_SAMPLE_FMT_S32.
-    /// To get the original sample use "(int32_t)sample >> 8"."
-    ///
-    /// For ADPCM this might be 12 or 16 or similar
-    /// Can be 0
-    pub const fn bits_per_raw_sample(&self) -> i32 {
-        self.0.bits_per_raw_sample
-    }
-
-    /// Video only. The width of the video frame in pixels.
-    pub const fn video_width(&self) -> Option<u32> {
-        match self.media_type() {
-            Some(MediaType::Video) => Some(self.0.width.cast_unsigned()),
-            _ => None,
-        }
-    }
-
-    /// Video only. The height of the video frame in pixels.
-    pub const fn video_height(&self) -> Option<u32> {
-        match self.media_type() {
-            Some(MediaType::Video) => Some(self.0.height.cast_unsigned()),
-            _ => None,
-        }
-    }
-
-    /// Video only. The dimensions of the video frame in pixels.
-    pub const fn video_size(&self) -> Option<UVec2> {
-        match self.media_type() {
-            Some(MediaType::Video) => Some(UVec2::new(
-                self.0.width.cast_unsigned(),
-                self.0.height.cast_unsigned(),
-            )),
-            _ => None,
-        }
-    }
-
-    /// Video only. The aspect ratio (width / height) which a single pixel
-    /// should have when displayed.
-    ///
-    /// When the aspect ratio is unknown / undefined, the numerator should be
-    /// set to 0 (the denominator may have any value).
-    pub const fn sample_aspect_ratio(&self) -> Option<RatioI32> {
-        RatioI32::from_backend(self.0.sample_aspect_ratio)
-    }
-
-    /// Video only. Number of frames per second, for streams with constant frame
-    /// durations. Should be set to { 0, 1 } when some frames have differing
-    /// durations or if the value is not known.
-    ///
-    /// # Note
-    ///
-    /// This field correponds to values that are stored in codec-level
-    /// headers and is typically overridden by container/transport-layer
-    /// timestamps, when available. It should thus be used only as a last resort,
-    /// when no higher-level timing information is available.
-    pub const fn frame_rate(&self) -> Option<RatioI32> {
-        RatioI32::from_backend(self.0.framerate)
-    }
-
-    pub fn try_clone_from(&mut self, source: &Self) -> Result<(), BackendError> {
-        BackendError::result_of(unsafe {
-            avcodec_parameters_copy((&raw mut *self).cast(), (&raw const *source).cast())
-        })
-    }
-}
-
-impl fmt::Debug for CodecParameters {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("CodecParameters")
-            .field("media_type", &self.media_type())
-            .field("codec_id", &self.codec_id())
-            .field("format", &self.format())
-            .field("bit_rate", &self.bit_rate())
-            .field("bits_per_coded_sample", &self.bits_per_coded_sample())
-            .field("bits_per_raw_sample", &self.bits_per_raw_sample())
-            .field("video_size", &self.video_size())
-            .field("sample_aspect_ratio", &self.sample_aspect_ratio())
-            .field("frame_rate", &self.frame_rate())
-            .finish_non_exhaustive()
-    }
-}
-
-pub struct CodecContext {
-    raw: NonNull<AVCodecContext>,
-}
-
-implement_raw!(CodecContext: AVCodecContext);
-
-impl CodecContext {
-    pub fn from_parameters(parameters: &CodecParameters) -> Result<Self, BackendError> {
-        // FIXME(hack3rmann): may result in suboptimal behavior ((C) docs)
-        let Some(codec_context_ptr) = NonNull::new(unsafe { avcodec_alloc_context3(ptr::null()) })
-        else {
-            panic!("unexpected libav error");
-        };
-
-        BackendError::result_of(unsafe {
-            avcodec_parameters_to_context(
-                codec_context_ptr.as_ptr(),
-                (&raw const *parameters).cast(),
-            )
-        })?;
-
-        Ok(Self {
-            raw: codec_context_ptr,
-        })
-    }
-
-    pub fn from_stream(stream: &Stream) -> Result<Self, BackendError> {
-        Self::from_parameters(stream.codec_parameters())
-    }
-
-    pub fn send_packet(&mut self, packet: &Packet) -> Result<(), BackendError> {
-        BackendError::result_of(unsafe {
-            avcodec_send_packet(self.as_raw().as_ptr(), packet.as_raw().as_ptr())
-        })
-    }
-
-    pub const fn codec_id(&self) -> CodecId {
-        CodecId(unsafe { (*self.as_raw().as_ptr()).codec_id })
-    }
-
-    pub const fn codec(&self) -> Option<&Codec> {
-        match NonNull::new(unsafe { (*self.as_raw().as_ptr()).codec }.cast_mut()) {
-            None => None,
-            Some(non_null) => Some(unsafe { non_null.cast().as_ref() }),
-        }
-    }
-
-    pub fn open(&mut self, codec: &Codec) -> Result<(), BackendError> {
-        BackendError::result_of(unsafe {
-            avcodec_open2(
-                self.as_raw().as_ptr(),
-                (&raw const *codec).cast(),
-                ptr::null_mut(),
-            )
-        })
-    }
-
-    pub fn receive_frame(&mut self, frame: &mut Frame) -> Result<(), BackendError> {
-        BackendError::result_of(unsafe {
-            avcodec_receive_frame(self.as_raw().as_ptr(), frame.as_raw().as_ptr())
-        })
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct FrameDuration {
-    pub base: RatioI32,
-    pub duration: NonZeroI64,
-}
-
-impl FrameDuration {
-    pub const FALLBACK_BASE: RatioI32 = RatioI32::from_backend(AV_TIME_BASE_Q).unwrap();
-
-    pub const fn to_duration(self) -> Duration {
-        let n_seconds =
-            self.duration.get() * self.base.numerator as i64 / self.base.denominator.get() as i64;
-        let n_nanoseconds = 1_000_000_000_i64 * self.duration.get() * self.base.numerator as i64
-            / self.base.denominator.get() as i64;
-        Duration::new(n_seconds as u64, n_nanoseconds as u32)
     }
 }
 
@@ -925,7 +523,7 @@ impl Frame {
             return self.height();
         };
 
-        let s = desc.log2_chroma_h();
+        let s = desc.log2_chroma_height();
         (self.height() + (1 << s) - 1) >> s
     }
 
@@ -965,6 +563,21 @@ impl Frame {
         // FIXME(hack3rmann): possible memory leak
         BackendError::result_of(unsafe { av_frame_get_buffer(self.as_raw().as_ptr(), 32) })
     }
+
+    pub fn is_owned(&self) -> bool {
+        let ptr = unsafe { (*self.as_raw().as_ptr()).buf[0] };
+
+        if ptr.is_null() {
+            return true;
+        }
+
+        let reference_count = match unsafe { av_buffer_get_ref_count(ptr) } {
+            non_negative @ 0.. => non_negative as usize,
+            ..0 => unsafe { hint::unreachable_unchecked() },
+        };
+
+        reference_count == 1
+    }
 }
 
 impl fmt::Debug for Frame {
@@ -978,7 +591,12 @@ impl fmt::Debug for Frame {
 impl Drop for Frame {
     fn drop(&mut self) {
         let mut ptr = self.raw.as_ptr();
-        unsafe { av_frame_free(&raw mut ptr) };
+
+        if self.is_owned() {
+            unsafe { av_frame_free(&raw mut ptr) };
+        } else {
+            unsafe { av_frame_unref(ptr) };
+        }
     }
 }
 
@@ -996,9 +614,11 @@ implement_raw!(Packet: AVPacket);
 
 impl Packet {
     pub fn new() -> Self {
-        Self {
-            raw: NonNull::new(unsafe { av_packet_alloc() }).expect("av_packet_alloc() failed"),
-        }
+        let Some(raw) = NonNull::new(unsafe { av_packet_alloc() }) else {
+            panic!("failed to allocate new packet");
+        };
+
+        Self { raw }
     }
 
     pub fn init(&mut self, size: usize) -> Result<(), BackendError> {
@@ -1030,6 +650,21 @@ impl Packet {
             non_negative @ 0.. => non_negative as usize,
         }
     }
+
+    pub fn is_owned(&self) -> bool {
+        let ptr = unsafe { (*self.as_raw().as_ptr()).buf };
+
+        if ptr.is_null() {
+            return true;
+        }
+
+        let reference_count = match unsafe { av_buffer_get_ref_count(ptr) } {
+            non_negative @ 0.. => non_negative as usize,
+            ..0 => unsafe { hint::unreachable_unchecked() },
+        };
+
+        reference_count == 1
+    }
 }
 
 impl fmt::Debug for Packet {
@@ -1042,16 +677,22 @@ impl fmt::Debug for Packet {
 
 impl Clone for Packet {
     fn clone(&self) -> Self {
-        self.try_clone().unwrap()
+        match self.try_clone() {
+            Err(error) => panic!("failed to clone a packet: {error:?}"),
+            Ok(packet) => packet,
+        }
     }
 }
 
 impl Drop for Packet {
     fn drop(&mut self) {
         let mut ptr = self.as_raw().as_ptr();
-        // FIXME(hack3rmann): use free on owned packets only
-        unsafe { av_packet_unref(ptr) };
-        unsafe { av_packet_free(&raw mut ptr) };
+
+        if self.is_owned() {
+            unsafe { av_packet_free(&raw mut ptr) };
+        } else {
+            unsafe { av_packet_unref(ptr) };
+        }
     }
 }
 
@@ -1066,10 +707,12 @@ impl Default for Packet {
 pub struct Profile(AVProfile);
 
 impl Profile {
+    /// Profile ID
     pub const fn id(self) -> i32 {
         self.0.profile
     }
 
+    /// Short name for the profile
     pub const fn name(self) -> &'static str {
         let name_cstr = unsafe { CStr::from_ptr(self.0.name) };
         unsafe { str::from_utf8_unchecked(name_cstr.to_bytes()) }
@@ -1082,85 +725,6 @@ impl fmt::Debug for Profile {
             .field("id", &self.id())
             .field("name", &self.name())
             .finish()
-    }
-}
-
-#[repr(transparent)]
-pub struct Codec(AVCodec);
-
-impl Codec {
-    pub fn find_for_id(id: CodecId) -> Option<&'static Self> {
-        unsafe { avcodec_find_decoder(id.0).cast::<Self>().as_ref() }
-    }
-
-    pub const fn name(&self) -> &str {
-        let name_cstr = unsafe { CStr::from_ptr(self.0.name) };
-        unsafe { str::from_utf8_unchecked(name_cstr.to_bytes()) }
-    }
-
-    pub const fn long_name(&self) -> &str {
-        let name_cstr = unsafe { CStr::from_ptr(self.0.long_name) };
-        unsafe { str::from_utf8_unchecked(name_cstr.to_bytes()) }
-    }
-
-    pub const fn media_type(&self) -> Option<MediaType> {
-        MediaType::from_backend(self.0.type_)
-    }
-
-    pub const fn id(&self) -> CodecId {
-        CodecId(self.0.id)
-    }
-
-    pub const fn profiles(&self) -> Option<&[Profile]> {
-        if self.0.profiles.is_null() {
-            return None;
-        }
-
-        let mut profile_ptr = self.0.profiles;
-        let mut count = 0;
-
-        while unsafe { (*profile_ptr).profile } != AV_PROFILE_UNKNOWN {
-            profile_ptr = profile_ptr.wrapping_add(1);
-            count += 1;
-        }
-
-        Some(unsafe { slice::from_raw_parts(self.0.profiles.cast(), count) })
-    }
-
-    pub const fn profile_iterator(&self) -> Option<ProfileIterator<'_>> {
-        match NonNull::new(self.0.profiles.cast_mut()) {
-            None => None,
-            Some(non_null) => Some(unsafe { ProfileIterator::from_raw(non_null) }),
-        }
-    }
-
-    pub const fn wrapper_name(&self) -> Option<&str> {
-        if self.0.wrapper_name.is_null() {
-            return None;
-        }
-
-        let wrapper_name_cstr = unsafe { CStr::from_ptr(self.0.wrapper_name) };
-        Some(unsafe { str::from_utf8_unchecked(wrapper_name_cstr.to_bytes()) })
-    }
-
-    pub fn is_decoder(&self) -> bool {
-        0 != unsafe { av_codec_is_decoder(&raw const self.0) }
-    }
-
-    pub fn is_encoder(&self) -> bool {
-        0 != unsafe { av_codec_is_encoder(&raw const self.0) }
-    }
-}
-
-impl fmt::Debug for Codec {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Codec")
-            .field("name", &self.name())
-            .field("long_name", &self.long_name())
-            .field("media_type", &self.media_type())
-            .field("id", &self.id())
-            .field("wrapper_name", &self.wrapper_name())
-            .finish_non_exhaustive()
     }
 }
 
@@ -1328,159 +892,5 @@ impl Scaler {
         }
 
         Ok(())
-    }
-}
-
-#[derive(Clone, Copy, PartialEq)]
-pub struct BackendError {
-    // TODO(hack3rmann): use non-zero u31 for it
-    encoded_code: NonZeroI32,
-}
-
-impl BackendError {
-    /// End of file
-    pub const EOF: Self = Self::new(AVERROR_EOF).unwrap();
-    /// Bitstream filter not found
-    pub const BSF_NOT_FOUND: Self = Self::new(AVERROR_BSF_NOT_FOUND).unwrap();
-    /// Internal bug, should not have happened
-    pub const BUG: Self = Self::new(AVERROR_BUG).unwrap();
-    /// Buffer too small
-    pub const BUFFER_TOO_SMALL: Self = Self::new(AVERROR_BUFFER_TOO_SMALL).unwrap();
-    /// Decoder not found
-    pub const DECODER_NOT_FOUND: Self = Self::new(AVERROR_DECODER_NOT_FOUND).unwrap();
-    /// Demuxer not found
-    pub const DEMUXER_NOT_FOUND: Self = Self::new(AVERROR_DEMUXER_NOT_FOUND).unwrap();
-    /// Encoder not found
-    pub const ENCODER_NOT_FOUND: Self = Self::new(AVERROR_ENCODER_NOT_FOUND).unwrap();
-    /// Immediate exit requested
-    pub const EXIT: Self = Self::new(AVERROR_EXIT).unwrap();
-    /// Generic error in an external library
-    pub const EXTERNAL: Self = Self::new(AVERROR_EXTERNAL).unwrap();
-    /// Filter not found
-    pub const FILTER_NOT_FOUND: Self = Self::new(AVERROR_FILTER_NOT_FOUND).unwrap();
-    /// Invalid data found when processing input
-    pub const INVALID_DATA: Self = Self::new(AVERROR_INVALIDDATA).unwrap();
-    /// Muxer not found
-    pub const MUXER_NOT_FOUND: Self = Self::new(AVERROR_MUXER_NOT_FOUND).unwrap();
-    /// Option not found
-    pub const OPTION_NOT_FOUND: Self = Self::new(AVERROR_OPTION_NOT_FOUND).unwrap();
-    /// Not yet implemented in FFmpeg, patches welcome
-    pub const PATCH_WELCOME: Self = Self::new(AVERROR_PATCHWELCOME).unwrap();
-    /// Protocol not found
-    pub const PROTOCOL_NOT_FOUND: Self = Self::new(AVERROR_PROTOCOL_NOT_FOUND).unwrap();
-    /// Stream not found
-    pub const STREAM_NOT_FOUND: Self = Self::new(AVERROR_STREAM_NOT_FOUND).unwrap();
-    /// Internal bug, should not have happened
-    pub const BUG2: Self = Self::new(AVERROR_BUG2).unwrap();
-    /// Unknown error occurred
-    pub const UNKNOWN: Self = Self::new(AVERROR_UNKNOWN).unwrap();
-    /// Server returned 400 Bad Request
-    pub const HTTP_BAD_REQUEST: Self = Self::new(AVERROR_HTTP_BAD_REQUEST).unwrap();
-    /// Server returned 401 Unauthorized (authorization failed)
-    pub const HTTP_UNAUTHORIZED: Self = Self::new(AVERROR_HTTP_UNAUTHORIZED).unwrap();
-    /// Server returned 403 Forbidden (access denied)
-    pub const HTTP_FORBIDDEN: Self = Self::new(AVERROR_HTTP_FORBIDDEN).unwrap();
-    /// Server returned 404 Not Found
-    pub const HTTP_NOT_FOUND: Self = Self::new(AVERROR_HTTP_NOT_FOUND).unwrap();
-    /// Server returned 429 Too Many Requests
-    pub const HTTP_TOO_MANY_REQUESTS: Self = Self::new(AVERROR_HTTP_TOO_MANY_REQUESTS).unwrap();
-    /// Server returned 4XX Client Error, but not one of 40{0,1,3,4}
-    pub const HTTP_OTHER_4XX: Self = Self::new(AVERROR_HTTP_OTHER_4XX).unwrap();
-    /// Server returned 5XX Server Error reply
-    pub const HTTP_SERVER_ERROR: Self = Self::new(AVERROR_HTTP_SERVER_ERROR).unwrap();
-
-    pub const ERROR_BUFFER_SIZE: usize = 128;
-
-    pub const fn result_of(code: i32) -> Result<(), Self> {
-        match Self::new(code) {
-            Some(error) => Err(error),
-            None => Ok(()),
-        }
-    }
-
-    pub const fn result_or_u32(code: i32) -> Result<u32, Self> {
-        match Self::new(code) {
-            Some(error) => Err(error),
-            None => Ok(code.cast_unsigned()),
-        }
-    }
-
-    pub const fn result_or_u64(code: i64) -> Result<u64, Self> {
-        const I32_MIN: i64 = i32::MIN as i64;
-
-        match code {
-            error @ I32_MIN..0 => Err(unsafe { Self::new(error as i32).unwrap_unchecked() }),
-            non_negative @ 0.. => Ok(non_negative.cast_unsigned()),
-            ..I32_MIN => panic!("error code out of range"),
-        }
-    }
-
-    pub const fn new(code: i32) -> Option<Self> {
-        match code {
-            ..0 => Some(Self {
-                encoded_code: unsafe { NonZeroI32::new_unchecked(code) },
-            }),
-            0.. => None,
-        }
-    }
-
-    pub const fn code(self) -> i32 {
-        self.encoded_code.get()
-    }
-
-    fn posix_error_description(self) -> Option<&'static str> {
-        let str_ptr = unsafe { strerror(self.code()) };
-
-        if str_ptr.is_null() {
-            return None;
-        }
-
-        let description_cstr = unsafe { CStr::from_ptr(str_ptr) };
-        Some(unsafe { str::from_utf8_unchecked(description_cstr.to_bytes()) })
-    }
-
-    pub fn description(self) -> Option<String> {
-        let mut buffer = Vec::<u8>::with_capacity(Self::ERROR_BUFFER_SIZE);
-
-        match unsafe {
-            av_strerror(
-                self.code(),
-                buffer.as_mut_ptr().cast(),
-                Self::ERROR_BUFFER_SIZE,
-            )
-        } {
-            1.. => return None,
-            0 => {
-                let cstr = unsafe { CStr::from_ptr(buffer.as_ptr().cast()) };
-                unsafe { buffer.set_len(cstr.count_bytes()) };
-            }
-            ..0 => {
-                let desc = self.posix_error_description()?;
-                buffer.extend_from_slice(desc.as_bytes());
-            }
-        }
-
-        Some(unsafe { String::from_utf8_unchecked(buffer) })
-    }
-}
-
-impl fmt::Debug for BackendError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match BackendError::description(*self) {
-            Some(desc) => write!(f, "BackendError({}): {desc}", self.code()),
-            None => f.debug_tuple("BackendError").field(&self.code()).finish(),
-        }
-    }
-}
-
-impl fmt::Display for BackendError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self, f)
-    }
-}
-
-impl Error for BackendError {
-    fn description(&self) -> &str {
-        "libav backend error"
     }
 }

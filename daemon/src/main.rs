@@ -297,7 +297,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         c"http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
     ];
 
-    let mut format_context = FormatContext::from_input(FILE_NAMES[4])?;
+    let mut format_context = FormatContext::from_input(FILE_NAMES[2])?;
 
     let best_stream = format_context.find_best_stream(MediaType::Video)?;
     let time_base = best_stream.time_base();
