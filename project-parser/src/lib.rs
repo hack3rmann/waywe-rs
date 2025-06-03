@@ -1,8 +1,5 @@
-use std::collections::HashMap;
 use std::io::{self, Read};
 use std::{env::home_dir, fs::File, path::PathBuf};
-
-use serde::Deserialize;
 
 pub mod vdf;
 

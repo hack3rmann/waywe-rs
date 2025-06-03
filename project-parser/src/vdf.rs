@@ -1,5 +1,8 @@
+// TODO(ArnoDarkrose): make everything I've made so far combinators instead of parsers
+
 use nom::bytes::complete::{tag, take_while};
 use nom::character::complete::line_ending;
+use nom::error::{FromExternalError, ParseError};
 use nom::multi::many;
 use nom::sequence::{delimited, preceded, terminated};
 use nom::{AsChar, IResult, Parser};
@@ -24,13 +27,34 @@ pub enum LibraryFoldersParseError<T> {
     ParseIntError(#[from] std::num::ParseIntError),
 }
 
+impl<'a> ParseError<&'a str> for LibraryFoldersParseError<&'a str> {
+    fn from_error_kind(input: &'a str, kind: nom::error::ErrorKind) -> Self {
+        Self::NomError(nom::Err::Error(nom::error::Error::from_error_kind(
+            input, kind,
+        )))
+    }
+
+    // TODO(ArnoDarkrose)
+    fn append(_: &'a str, _: nom::error::ErrorKind, other: Self) -> Self {
+        other
+    }
+}
+
+impl<'a, E> FromExternalError<&'a str, E> for LibraryFoldersParseError<&'a str> {
+    fn from_external_error(input: &'a str, kind: nom::error::ErrorKind, _: E) -> Self {
+        Self::from_error_kind(input, kind)
+    }
+}
+
 fn delimited_in_quotes(
     elem: &str,
-) -> impl Parser<&str, Output = &str, Error = nom::error::Error<&str>> {
+) -> impl Parser<&str, Output = &str, Error = LibraryFoldersParseError<&str>> {
     delimited(tag("\""), tag(elem), tag("\""))
 }
 
-fn table_element(elem: &str) -> impl Parser<&str, Output = &str, Error = nom::error::Error<&str>> {
+fn table_element(
+    elem: &str,
+) -> impl Parser<&str, Output = &str, Error = LibraryFoldersParseError<&str>> {
     let path = preceded(take_while(AsChar::is_space), delimited_in_quotes(elem));
 
     let path = preceded(path, take_while(AsChar::is_space));
@@ -41,7 +65,8 @@ fn table_element(elem: &str) -> impl Parser<&str, Output = &str, Error = nom::er
     terminated(path, line_ending)
 }
 
-fn apps_table(i: &str) -> IResult<&str, Vec<usize>, LibraryFoldersParseError<&str>> {
+fn apps_table<'a>()
+-> impl Parser<&'a str, Output = Vec<usize>, Error = LibraryFoldersParseError<&'a str>> {
     let first_line = delimited(
         take_while(AsChar::is_space),
         delimited_in_quotes("apps"),
@@ -55,7 +80,16 @@ fn apps_table(i: &str) -> IResult<&str, Vec<usize>, LibraryFoldersParseError<&st
     let app_id = terminated(app_id, take_while(|c| !AsChar::is_newline(c)));
     let app_id = terminated(app_id, line_ending);
 
-    let apps_ids = many(0.., app_id);
+    let apps_ids = many(0.., app_id)
+        .map(|vec: Vec<&str>| {
+            vec.into_iter()
+                .map(|v| v.parse::<usize>())
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .map_res(|v| match v {
+            Ok(v) => Ok(v),
+            Err(e) => Err(LibraryFoldersParseError::<&str>::ParseIntError(e)),
+        });
 
     let open_brace = delimited(
         take_while(AsChar::is_space),
@@ -71,21 +105,80 @@ fn apps_table(i: &str) -> IResult<&str, Vec<usize>, LibraryFoldersParseError<&st
 
     let apps_ids = delimited(open_brace, apps_ids, closing_brace);
 
-    let mut apps_ids = preceded(first_line, apps_ids);
-
-    let (rem, apps_ids): (_, Vec<&str>) = apps_ids
-        .parse(i)
-        .map_err(|v| nom::Err::Error(LibraryFoldersParseError::NomError(v)))?;
-
-    let apps_ids: Result<Vec<usize>, _> = apps_ids.into_iter().map(|v| v.parse()).collect();
-    let apps_ids =
-        apps_ids.map_err(|e| nom::Err::Error(LibraryFoldersParseError::ParseIntError(e)))?;
-
-    Ok((rem, apps_ids))
+    preceded(first_line, apps_ids)
 }
 
-pub fn table(i: &str) -> IResult<&str, Table, LibraryFoldersParseError<&str>> {
-    // TODO(ArnoDarkrose): implement the rest of the function
+fn table<'a>() -> impl Parser<&'a str, Output = Table, Error = LibraryFoldersParseError<&'a str>> {
+    let open_brace = delimited(
+        take_while(AsChar::is_space),
+        tag("{"),
+        preceded(take_while(AsChar::is_space), line_ending),
+    );
+
+    let closing_brace = delimited(
+        take_while(AsChar::is_space),
+        tag("}"),
+        preceded(take_while(AsChar::is_space), line_ending),
+    );
+
+    (
+        preceded(open_brace, table_element("path")),
+        table_element("label"),
+        table_element("contentid")
+            .map(|v| v.parse())
+            .map_res(|v| match v {
+                Ok(v) => Ok(v),
+                Err(e) => Err(LibraryFoldersParseError::<&str>::ParseIntError(e)),
+            }),
+        table_element("totalsize")
+            .map(|v| v.parse())
+            .map_res(|v| match v {
+                Ok(v) => Ok(v),
+                Err(e) => Err(LibraryFoldersParseError::<&str>::ParseIntError(e)),
+            }),
+        table_element("update_clean_bytes_tally")
+            .map(|v| v.parse())
+            .map_res(|v| match v {
+                Ok(v) => Ok(v),
+                Err(e) => Err(LibraryFoldersParseError::<&str>::ParseIntError(e)),
+            }),
+        table_element("time_last_update_verified")
+            .map(|v| v.parse())
+            .map_res(|v| match v {
+                Ok(v) => Ok(v),
+                Err(e) => Err(LibraryFoldersParseError::<&str>::ParseIntError(e)),
+            }),
+        terminated(apps_table(), closing_brace),
+    )
+        .map(
+            |(
+                path,
+                label,
+                contentid,
+                totalsize,
+                update_clean_bytes_tally,
+                time_last_update_verified,
+                apps_ids,
+            )| {
+                Table {
+                    path: path.to_string(),
+                    label: label.to_string(),
+                    contentid,
+                    totalsize,
+                    update_clean_bytes_tally,
+                    time_last_update_verified,
+                    apps_ids,
+                }
+            },
+        )
+}
+
+// NOTE: this doesn't work
+pub fn library_folders(i: &str) -> IResult<&str, Vec<Table>, LibraryFoldersParseError<&str>> {
+    let first_line = delimited_in_quotes("libraryfolders");
+
+    let first_line = preceded(first_line, take_while(AsChar::is_space));
+    let first_line = terminated(first_line, line_ending);
 
     let open_brace = delimited(
         take_while(AsChar::is_space),
@@ -93,56 +186,30 @@ pub fn table(i: &str) -> IResult<&str, Table, LibraryFoldersParseError<&str>> {
         preceded(take_while(AsChar::is_space), line_ending),
     );
 
-    let mut closing_brace = delimited(
+    let closing_brace = delimited(
         take_while(AsChar::is_space),
         tag("}"),
         preceded(take_while(AsChar::is_space), line_ending),
     );
 
-    let (
-        rem,
-        (path, label, contentid, totalsize, update_clean_bytes_tally, time_last_update_verified),
-    ) = (
-        preceded(open_brace, table_element("path")),
-        table_element("label"),
-        table_element("contentid"),
-        table_element("totalsize"),
-        table_element("update_clean_bytes_tally"),
-        table_element("time_last_update_verified"),
-    )
-        .parse(i)
-        .map_err(|v| nom::Err::Error(LibraryFoldersParseError::NomError(v)))?;
+    let library_folders = preceded(first_line, open_brace);
 
-    let (rem, apps_ids) = apps_table(rem)?;
+    let until_quotes = take_while(|c| c != '\"');
+    let in_quotes = delimited(tag("\""), until_quotes, tag("\""));
 
-    let (rem, _) = closing_brace
-        .parse(rem)
-        .map_err(|v| nom::Err::Error(LibraryFoldersParseError::NomError(v)))?;
+    let element = preceded(take_while(AsChar::is_space), in_quotes);
+    let element = preceded(element, take_while(AsChar::is_space));
+    let element = preceded(element, line_ending);
+    let element = preceded(element, table());
+    let element = terminated(element, closing_brace);
 
-    let contentid: usize = contentid
-        .parse()
-        .map_err(|v| nom::Err::Error(LibraryFoldersParseError::ParseIntError(v)))?;
-    let totalsize: usize = totalsize
-        .parse()
-        .map_err(|v| nom::Err::Error(LibraryFoldersParseError::ParseIntError(v)))?;
-    let update_clean_bytes_tally: usize = update_clean_bytes_tally
-        .parse()
-        .map_err(|v| nom::Err::Error(LibraryFoldersParseError::ParseIntError(v)))?;
-    let time_last_update_verified: usize = time_last_update_verified
-        .parse()
-        .map_err(|v| nom::Err::Error(LibraryFoldersParseError::ParseIntError(v)))?;
+    let elements = many(0.., element);
 
-    let res = Table {
-        path: path.to_owned(),
-        label: label.to_owned(),
-        contentid,
-        totalsize,
-        update_clean_bytes_tally,
-        time_last_update_verified,
-        apps_ids,
-    };
+    let mut library_folders = preceded(library_folders, elements);
 
-    Ok((rem, res))
+    let res = library_folders.parse(i)?;
+
+    Ok(res)
 }
 
 #[cfg(test)]
@@ -155,7 +222,7 @@ mod tests {
     use super::*;
 
     #[test]
-    #[ignore = "requires test file"]
+    // #[ignore = "requires test file"]
     fn test_table_elements() {
         let fd = File::open("table_elems_test").unwrap();
         let mut fd = BufReader::new(fd);
@@ -187,7 +254,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "requires test file"]
+    // #[ignore = "requires test file"]
     fn test_apps_table() {
         let fd = File::open("apps_table_test").unwrap();
         let mut fd = BufReader::new(fd);
@@ -195,15 +262,14 @@ mod tests {
         let mut buf = String::new();
         fd.read_to_string(&mut buf).unwrap();
 
-        let (_rem, apps_ids) = apps_table(&buf).unwrap();
+        let (_rem, apps_ids) = apps_table().parse(&buf).unwrap();
 
         let gt = vec![228980, 1070560, 1391110, 1493710, 1628350, 2180100];
-
         assert_eq!(apps_ids, gt);
     }
 
     #[test]
-    #[ignore = "requires test file"]
+    // #[ignore = "requires test file"]
     fn test_table() {
         let fd = File::open("table_test").unwrap();
         let mut fd = BufReader::new(fd);
@@ -211,7 +277,7 @@ mod tests {
         let mut buf = String::new();
         fd.read_to_string(&mut buf).unwrap();
 
-        let (_rem, table) = table(&buf).unwrap();
+        let (_rem, table) = table().parse(&buf).unwrap();
 
         let gt = Table {
             path: "/home/arno/.local/share/Steam".to_owned(),
@@ -224,5 +290,18 @@ mod tests {
         };
 
         assert_eq!(table, gt);
+    }
+
+    #[test]
+    fn test_library_folders() {
+        let fd = File::open("library_folders_test").unwrap();
+        let mut fd = BufReader::new(fd);
+
+        let mut buf = String::new();
+        fd.read_to_string(&mut buf).unwrap();
+
+        let (_rem, library_folders) = library_folders(&buf).unwrap();
+
+        dbg!(library_folders);
     }
 }
