@@ -6,6 +6,7 @@ use std::{
     error::Error,
     ffi::CStr,
     pin::pin,
+    sync::atomic::{AtomicU32, Ordering::Relaxed},
     thread,
     time::{Duration, Instant},
 };
@@ -34,8 +35,11 @@ use wayland_client::{
     },
 };
 
-#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
-struct ClientState;
+#[derive(Default, Debug)]
+struct ClientState {
+    pub width: AtomicU32,
+    pub height: AtomicU32,
+}
 
 struct Compositor;
 
@@ -101,13 +105,21 @@ impl Dispatch for LayerSurface {
 
     fn dispatch(
         &mut self,
-        _state: &Self::State,
+        state: &Self::State,
         storage: &mut WlObjectStorage<'_, Self::State>,
         message: WlMessage<'_>,
     ) {
-        let Some(ZwlrLayerSurfaceConfigureEvent { serial, .. }) = message.as_event() else {
+        let Some(ZwlrLayerSurfaceConfigureEvent {
+            serial,
+            width,
+            height,
+        }) = message.as_event()
+        else {
             return;
         };
+
+        state.width.store(width, Relaxed);
+        state.height.store(height, Relaxed);
 
         let mut buf = WlSmallVecMessageBuffer::<3>::new();
 
@@ -144,11 +156,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt::init();
     video::init();
 
-    const SCREEN_WIDTH: u32 = 2520;
-    const SCREEN_HEIGHT: u32 = 1680;
-    const SCREEN_SIZE: UVec2 = UVec2::new(SCREEN_WIDTH, SCREEN_HEIGHT);
-
-    let mut client_state = pin!(ClientState);
+    let mut client_state = pin!(ClientState::default());
 
     let display = WlDisplay::connect(client_state.as_mut()).unwrap();
 
@@ -227,6 +235,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     display.roundtrip(queue.as_mut(), client_state.as_ref());
 
+    let screen_size = UVec2::new(
+        client_state.width.load(Relaxed),
+        client_state.height.load(Relaxed),
+    );
+
+    assert_ne!(screen_size.x, 0);
+    assert_ne!(screen_size.y, 0);
+
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
         backends: wgpu::Backends::VULKAN,
         flags: if cfg!(debug_assertions) {
@@ -272,11 +288,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )
         .await?;
 
-    // TODO(hack3rmann): figure out the size of the current monitor
     wgpu_surface.configure(
         &device,
         &wgpu_surface
-            .get_default_config(&adapter, SCREEN_WIDTH, SCREEN_HEIGHT)
+            .get_default_config(&adapter, screen_size.x, screen_size.y)
             .unwrap(),
     );
 
@@ -321,7 +336,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         None => FRAME_DURATION_60_FPS,
     };
 
-    let video_pipeline = VideoPipeline::new(&device, surface_format, video_size, SCREEN_SIZE);
+    let video_pipeline = VideoPipeline::new(&device, surface_format, video_size, screen_size);
 
     let Some(decoder) = Codec::find_for_id(codec_context.codec_id()) else {
         panic!("failed to find decoder");

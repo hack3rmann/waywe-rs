@@ -362,7 +362,6 @@ impl Stream {
 
     /// Codec parameters associated with this stream.
     pub const fn codec_parameters(&self) -> &CodecParameters {
-        // TODO(hack3rmann): figure out safety for this
         unsafe {
             (*self.as_raw().as_ptr())
                 .codecpar

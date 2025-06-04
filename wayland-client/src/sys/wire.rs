@@ -3,10 +3,7 @@
 use super::proxy::{WlProxy, WlProxyQuery};
 use crate::{interface::Event, object::InterfaceMessageArgument};
 use std::{
-    ffi::CStr,
-    mem::{self, MaybeUninit},
-    os::fd::{AsRawFd, BorrowedFd, FromRawFd as _, OwnedFd},
-    ptr, slice,
+    ffi::CStr, fmt, mem::{self, MaybeUninit}, os::fd::{AsRawFd, BorrowedFd, FromRawFd as _, OwnedFd}, ptr, slice
 };
 use wayland_sys::{WlArgument, WlFixed, wl_fixed_t, wl_object, wl_proxy};
 
@@ -240,6 +237,14 @@ impl<'s> WlMessage<'s> {
     /// Tries to parse this message as an event `E`
     pub fn as_event<E: Event<'s>>(self) -> Option<E> {
         E::from_message(self)
+    }
+}
+
+impl fmt::Debug for WlMessage<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("WlMessage")
+            .field("opcode", &self.opcode)
+            .finish_non_exhaustive()
     }
 }
 

@@ -152,7 +152,6 @@ fn get_protocol_error() {
         }
     }
 
-    // TODO(hack3rmann): replace with different request
     let _wrong_global: WlObjectHandle<WrongGlobal> = registry
         .bind(&mut buf, queue.as_mut().storage_mut())
         .unwrap();
