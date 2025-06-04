@@ -6,7 +6,10 @@ use std::{
     error::Error,
     ffi::CStr,
     pin::pin,
-    sync::atomic::{AtomicU32, Ordering::Relaxed},
+    sync::{
+        Once,
+        atomic::{AtomicU32, Ordering::Relaxed},
+    },
     thread,
     time::{Duration, Instant},
 };
@@ -331,9 +334,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     const FRAME_DURATION_60_FPS: Duration = RatioI32::new(1, 60).unwrap().to_duration_seconds();
 
-    let frame_time_fallback = match frame_rate.inv() {
+    let frame_time_fallback = move || match frame_rate.inv() {
         Some(duration) => duration.to_duration_seconds(),
-        None => FRAME_DURATION_60_FPS,
+        None => {
+            static ONCE: Once = Once::new();
+            ONCE.call_once(|| {
+                tracing::warn!("can not determine vodeo frame rate, falling back to 60 fps")
+            });
+            FRAME_DURATION_60_FPS
+        }
     };
 
     let video_pipeline = VideoPipeline::new(&device, surface_format, video_size, screen_size);
@@ -375,7 +384,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let target_frame_time = frame
                 .duration_in(time_base)
                 .map(FrameDuration::to_duration)
-                .unwrap_or(frame_time_fallback);
+                .unwrap_or_else(frame_time_fallback);
 
             let frame_start = Instant::now();
             let time_from_start = last_instant.duration_since(frame_loop_start);
