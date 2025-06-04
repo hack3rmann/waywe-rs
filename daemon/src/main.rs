@@ -1,4 +1,4 @@
-pub mod swapchain;
+pub mod video_pipeline;
 
 use glam::UVec2;
 use raw_window_handle::{HasDisplayHandle as _, RawWindowHandle, WaylandWindowHandle};
@@ -9,11 +9,11 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-use swapchain::VideoPipeline;
 use video::{
     BackendError, Codec, CodecContext, FormatContext, Frame, FrameDuration, MediaType, RatioI32,
     VideoPixelFormat,
 };
+use video_pipeline::VideoPipeline;
 use wayland_client::{
     WlSmallVecMessageBuffer,
     interface::{

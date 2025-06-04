@@ -280,7 +280,10 @@ impl VideoPipeline {
         pass.set_push_constants(
             wgpu::ShaderStages::FRAGMENT,
             0,
-            bytemuck::bytes_of(&Vec2::new(self.screen_size.x as f32, self.screen_size.y as f32)),
+            bytemuck::bytes_of(&Vec2::new(
+                self.screen_size.x as f32,
+                self.screen_size.y as f32,
+            )),
         );
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.draw(0..SCREEN_TRIANGLE.len() as u32, 0..1);
