@@ -1,7 +1,7 @@
 use std::io::{self, Read};
 use std::{env::home_dir, fs::File, path::PathBuf};
 
-pub mod vdf;
+pub mod library_folders;
 
 #[derive(thiserror::Error, Debug)]
 pub enum LocateError {
@@ -10,9 +10,8 @@ pub enum LocateError {
 
     #[error(transparent)]
     IoError(#[from] io::Error),
-
-    #[error(transparent)]
-    VdfError(#[from] vdf_serde::Error),
+    // #[error(transparent)]
+    // VdfError(#[from] vdf_serde::Error),
 }
 
 pub type LocateResult<T> = Result<T, LocateError>;
