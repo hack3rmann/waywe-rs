@@ -38,8 +38,8 @@ pub fn decompress_image(width: usize, height: usize, data: &[u32], format: DxtFo
     };
 
     // The picture is divided into 4x4 blocks
-    let num_blocks_width = (width + 3) / 4;
-    let num_blocks_height = (height + 3) / 4;
+    let num_blocks_width = width.div_ceil(4);
+    let num_blocks_height = height.div_ceil(4);
     let expected_data_size = num_blocks_height * num_blocks_width * block_size;
 
     assert!(
