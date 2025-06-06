@@ -242,6 +242,8 @@ pub struct CodecContext {
     raw: NonNull<AVCodecContext>,
 }
 
+unsafe impl Send for CodecContext {}
+
 implement_raw!(CodecContext: AVCodecContext);
 
 impl CodecContext {

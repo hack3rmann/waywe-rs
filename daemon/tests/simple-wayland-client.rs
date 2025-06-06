@@ -283,9 +283,9 @@ impl Swapchain {
 fn simple_wayland_client() {
     _ = tracing_subscriber::fmt::try_init();
 
-    let mut client_state = pin!(ClientState::default());
+    let client_state = pin!(ClientState::default());
 
-    let display = WlDisplay::connect(client_state.as_mut()).unwrap();
+    let display = WlDisplay::connect(client_state.as_ref()).unwrap();
 
     let mut buf = WlStackMessageBuffer::new();
     let mut queue = pin!(display.take_main_queue().unwrap());
@@ -536,10 +536,10 @@ unsafe fn wait_for_segv() {
 fn multithread_client() {
     _ = tracing_subscriber::fmt::try_init();
 
-    let mut client_state = pin!(ClientState::default());
+    let client_state = pin!(ClientState::default());
     let mut buf = WlStackMessageBuffer::new();
 
-    let display = WlDisplay::connect(client_state.as_mut()).unwrap();
+    let display = WlDisplay::connect(client_state.as_ref()).unwrap();
 
     let mut main_queue = pin!(display.take_main_queue().unwrap());
     let mut side_queue = pin!(display.create_queue().unwrap());

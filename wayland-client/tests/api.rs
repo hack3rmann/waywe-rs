@@ -119,8 +119,8 @@ impl Dispatch for WlLayerSurface {
 fn just_connect_display() {
     _ = tracing_subscriber::fmt::try_init();
 
-    let mut state = pin!(NoState);
-    WlDisplay::connect(state.as_mut()).unwrap();
+    let state = pin!(NoState);
+    WlDisplay::connect(state.as_ref()).unwrap();
 }
 
 #[test]
@@ -130,8 +130,8 @@ fn get_protocol_error() {
 
     let mut buf = WlStackMessageBuffer::new();
 
-    let mut state = pin!(NoState);
-    let display = WlDisplay::connect(state.as_mut()).unwrap();
+    let state = pin!(NoState);
+    let display = WlDisplay::connect(state.as_ref()).unwrap();
     let mut queue = pin!(display.take_main_queue().unwrap());
     let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 
@@ -174,8 +174,8 @@ fn get_registry() {
 
     let mut buf = WlStackMessageBuffer::new();
 
-    let mut state = pin!(NoState);
-    let display = WlDisplay::connect(state.as_mut()).unwrap();
+    let state = pin!(NoState);
+    let display = WlDisplay::connect(state.as_ref()).unwrap();
     let mut queue = pin!(display.take_main_queue().unwrap());
     let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 
@@ -197,8 +197,8 @@ fn create_surface() {
 
     let mut buf = WlStackMessageBuffer::new();
 
-    let mut state = pin!(NoState);
-    let display = WlDisplay::connect(state.as_mut()).unwrap();
+    let state = pin!(NoState);
+    let display = WlDisplay::connect(state.as_ref()).unwrap();
     let mut queue = pin!(display.take_main_queue().unwrap());
     let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 
@@ -231,8 +231,8 @@ fn bind_wlr_shell() {
 
     let mut buf = WlStackMessageBuffer::new();
 
-    let mut state = pin!(NoState);
-    let display = WlDisplay::connect(state.as_mut()).unwrap();
+    let state = pin!(NoState);
+    let display = WlDisplay::connect(state.as_ref()).unwrap();
     let mut queue = pin!(display.take_main_queue().unwrap());
     let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 
@@ -269,8 +269,8 @@ fn white_rect() {
 
     let mut buf = WlStackMessageBuffer::new();
 
-    let mut state = pin!(NoState);
-    let display = WlDisplay::connect(state.as_mut()).unwrap();
+    let state = pin!(NoState);
+    let display = WlDisplay::connect(state.as_ref()).unwrap();
     let mut queue = pin!(display.take_main_queue().unwrap());
     let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 

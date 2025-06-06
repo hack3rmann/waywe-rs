@@ -114,6 +114,8 @@ pub struct FormatContext {
     raw: NonNull<AVFormatContext>,
 }
 
+unsafe impl Send for FormatContext {}
+
 implement_raw!(FormatContext: AVFormatContext);
 
 impl FormatContext {
@@ -470,6 +472,8 @@ pub struct Frame {
     raw: NonNull<AVFrame>,
 }
 
+unsafe impl Send for Frame {}
+
 implement_raw!(Frame: AVFrame);
 
 impl Frame {
@@ -608,6 +612,8 @@ impl Default for Frame {
 pub struct Packet {
     raw: NonNull<AVPacket>,
 }
+
+unsafe impl Send for Packet {}
 
 implement_raw!(Packet: AVPacket);
 

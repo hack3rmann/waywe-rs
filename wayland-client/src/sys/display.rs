@@ -46,7 +46,7 @@ unsafe impl<S: State> Sync for WlDisplay<S> {}
 
 impl<S: State> WlDisplay<S> {
     /// Connect to libwayland backend
-    pub fn connect(state: Pin<&mut S>) -> Result<Self, DisplayConnectError> {
+    pub fn connect(state: Pin<&S>) -> Result<Self, DisplayConnectError> {
         let fd = unsafe { connect_wayland_socket()? };
         Ok(Self::connect_to_fd(state, fd)?)
     }
@@ -54,7 +54,7 @@ impl<S: State> WlDisplay<S> {
     /// Connect to Wayland display on an already open fd.
     /// The fd will be closed in case of failure.
     pub fn connect_to_fd(
-        state: Pin<&mut S>,
+        state: Pin<&S>,
         fd: impl IntoRawFd,
     ) -> Result<Self, DisplayConnectToFdError> {
         let raw_fd = fd.into_raw_fd();
@@ -72,7 +72,7 @@ impl<S: State> WlDisplay<S> {
             proxy,
             raw_fd,
             // Safety: constructing NonNull from pinned pointer is safe
-            state: NonNull::from(unsafe { state.get_unchecked_mut() }),
+            state: NonNull::from(state.get_ref()),
             main_queue_taken: AtomicBool::new(false),
         })
     }
@@ -120,10 +120,11 @@ impl<S: State> WlDisplay<S> {
     }
 
     /// Creates `wl_registry` object and stores it in the storage
-    pub fn create_registry<'d>(
+    // FIXME(hack3rmann): should be 'd: 's
+    pub fn create_registry<'d, 's: 'd>(
         &'d self,
         buf: &mut impl WlMessageBuffer,
-        storage: Pin<&mut WlObjectStorage<'d, S>>,
+        storage: Pin<&mut WlObjectStorage<'s, S>>,
     ) -> WlObjectHandle<WlRegistry<S>> {
         // Safety: parent interface matcher request's one
         let proxy = unsafe {
@@ -188,7 +189,8 @@ impl<S: State> WlDisplay<S> {
     /// This function blocks until the server has processed all currently
     /// issued requests by sending a request to the display server
     /// and waiting for a reply before returning.
-    pub fn roundtrip<'d>(&'d self, queue: Pin<&mut WlEventQueue<'d, S>>, state: Pin<&S>) {
+    // FIXME(hack3rmann): should be 'd: 'q
+    pub fn roundtrip<'d, 'q: 'd>(&'d self, queue: Pin<&mut WlEventQueue<'q, S>>, state: Pin<&S>) {
         assert_eq!(&raw const *state, self.state.as_ptr().cast_const());
 
         let n_events_dispatched = unsafe { self.roundtrip_queue_unchecked(&queue) };
