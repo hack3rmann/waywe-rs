@@ -1,10 +1,14 @@
 use crate::{
-    AudioVideoFormat, BackendError, Frame, MediaType, Packet, Profile, ProfileIterator, RatioI32,
-    Stream, implement_raw,
+    AudioVideoFormat, BackendError, Frame, HardwareDeviceType, MediaType, Packet, Profile,
+    ProfileIterator, RatioI32, Stream,
+    hardware::{HardwareConfig, HardwareConfigIterator},
+    implement_raw,
 };
+use bitflags::bitflags;
 use ffmpeg_sys_next::{
-    AV_PROFILE_UNKNOWN, AVCodec, AVCodecContext, AVCodecID, AVCodecParameters, av_codec_is_decoder,
-    av_codec_is_encoder, avcodec_alloc_context3, avcodec_find_decoder, avcodec_open2,
+    AV_PROFILE_UNKNOWN, AVCodec, AVCodecContext, AVCodecID, AVCodecParameters, AVPixelFormat,
+    av_buffer_ref, av_codec_is_decoder, av_codec_is_encoder, av_hwdevice_ctx_create,
+    avcodec_alloc_context3, avcodec_find_decoder, avcodec_get_hw_config, avcodec_open2,
     avcodec_parameters_alloc, avcodec_parameters_copy, avcodec_parameters_free,
     avcodec_parameters_to_context, avcodec_receive_frame, avcodec_send_packet,
 };
@@ -254,6 +258,39 @@ impl CodecContext {
             panic!("unexpected libav error");
         };
 
+        let mut device_ctx_ptr = ptr::null_mut();
+
+        // FIXME(hack3rmann): memory leak here
+        BackendError::result_of(unsafe {
+            av_hwdevice_ctx_create(
+                &raw mut device_ctx_ptr,
+                HardwareDeviceType::VaApi.to_backend(),
+                ptr::null(),
+                ptr::null_mut(),
+                0,
+            )
+        })?;
+
+        unsafe extern "C" fn get_hw_format(
+            _: *mut AVCodecContext,
+            formats: *const AVPixelFormat,
+        ) -> AVPixelFormat {
+            let mut format_ptr = formats;
+
+            loop {
+                let format = unsafe { format_ptr.read() };
+
+                if let AVPixelFormat::AV_PIX_FMT_VAAPI | AVPixelFormat::AV_PIX_FMT_NONE = format {
+                    break format;
+                }
+
+                format_ptr = format_ptr.wrapping_add(1);
+            }
+        }
+
+        unsafe { (*codec_context_ptr.as_ptr()).hw_device_ctx = av_buffer_ref(device_ctx_ptr) };
+        unsafe { (*codec_context_ptr.as_ptr()).get_format = Some(get_hw_format) };
+
         BackendError::result_of(unsafe {
             avcodec_parameters_to_context(
                 codec_context_ptr.as_ptr(),
@@ -314,6 +351,30 @@ impl fmt::Debug for CodecId {
     }
 }
 
+bitflags! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Default, Ord, Hash)]
+    pub struct CodecCapability: i32 {
+        const DRAW_HORIZ_BAND = 1;
+        const DR1 = 2;
+        const DELAY = 32;
+        const SMALL_LAST_FRAME = 64;
+        const SUBFRAMES = 256;
+        const EXPERIMENTAL = 512;
+        const CHANNEL_CONF = 1024;
+        const FRAME_THREADS = 4096;
+        const SLICE_THREADS = 8192;
+        const PARAM_CHANGE = 16384;
+        const OTHER_THREADS = 32768;
+        const VARIABLE_FRAME_SIZE = 65536;
+        const AVOID_PROBING = 131072;
+        const HARDWARE = 262144;
+        const HYBRID = 524288;
+        const ENCODER_REORDERED_OPAQUE = 1048576;
+        const ENCODER_FLUSH = 2097152;
+        const ENCODER_RECON_FRAME = 4194304;
+    }
+}
+
 #[repr(transparent)]
 pub struct Codec(AVCodec);
 
@@ -338,6 +399,10 @@ impl Codec {
 
     pub const fn id(&self) -> CodecId {
         CodecId(self.0.id)
+    }
+
+    pub const fn capabilities(&self) -> CodecCapability {
+        unsafe { CodecCapability::from_bits(self.0.capabilities).unwrap_unchecked() }
     }
 
     pub const fn profiles(&self) -> Option<&[Profile]> {
@@ -379,6 +444,15 @@ impl Codec {
     pub fn is_encoder(&self) -> bool {
         0 != unsafe { av_codec_is_encoder(&raw const self.0) }
     }
+
+    pub fn hardware_config_for_index(&self, index: usize) -> Option<&HardwareConfig> {
+        let ptr = unsafe { avcodec_get_hw_config((&raw const *self).cast(), index as i32) };
+        unsafe { ptr.cast::<HardwareConfig>().as_ref() }
+    }
+
+    pub fn hardware_config(&self) -> HardwareConfigIterator<'_> {
+        HardwareConfigIterator::new(self)
+    }
 }
 
 impl fmt::Debug for Codec {
@@ -388,6 +462,7 @@ impl fmt::Debug for Codec {
             .field("long_name", &self.long_name())
             .field("media_type", &self.media_type())
             .field("id", &self.id())
+            .field("capabilities", &self.capabilities())
             .field("wrapper_name", &self.wrapper_name())
             .finish_non_exhaustive()
     }

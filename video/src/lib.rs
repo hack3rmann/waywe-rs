@@ -1,7 +1,7 @@
 pub mod codec;
 pub mod error;
 pub mod format;
-pub mod hardware_acceleration;
+pub mod hardware;
 pub mod time;
 
 use bitflags::bitflags;
@@ -27,11 +27,13 @@ use std::{
     slice, str,
 };
 
+pub use ffmpeg_sys_next as ffi;
+
 pub use codec::{Codec, CodecContext, CodecId, CodecParameters, OwnedCodecParameters};
 pub use error::BackendError;
 pub use ffmpeg_sys_next::AVComponentDescriptor as ComponentDescriptor;
 pub use format::{AudioVideoFormat, PixelFormatFlags, VideoPixelFormat};
-pub use hardware_acceleration::{HwDeviceType, HwDeviceTypeIterator};
+pub use hardware::{HardwareDeviceType, HwDeviceTypeIterator};
 pub use time::{FrameDuration, RatioI32};
 
 /// Initialize `libavdevice` and register all the input and output devices.
@@ -638,7 +640,7 @@ impl Packet {
         Ok(result)
     }
 
-    pub fn try_clone(&self) -> Result<Self, BackendError> {
+    pub fn try_ref(&mut self) -> Result<Self, BackendError> {
         let packet_ptr = Self::new();
         BackendError::result_of(unsafe {
             av_packet_ref(
@@ -677,15 +679,6 @@ impl fmt::Debug for Packet {
         f.debug_struct("Packet")
             .field("stream_index", &self.stream_index())
             .finish_non_exhaustive()
-    }
-}
-
-impl Clone for Packet {
-    fn clone(&self) -> Self {
-        match self.try_clone() {
-            Err(error) => panic!("failed to clone a packet: {error:?}"),
-            Ok(packet) => packet,
-        }
     }
 }
 
@@ -773,6 +766,14 @@ impl CodecIterator {
         CodecIterator {
             raw: ptr::null_mut(),
         }
+    }
+
+    pub fn decoders() -> impl Iterator<Item = &'static Codec> {
+        Self::new().filter(|c| c.is_decoder())
+    }
+
+    pub fn encoders() -> impl Iterator<Item = &'static Codec> {
+        Self::new().filter(|c| c.is_encoder())
     }
 }
 

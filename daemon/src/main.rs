@@ -10,12 +10,12 @@ use std::time::Duration;
 use tracing::error;
 use video::{
     BackendError, Codec, CodecContext, FormatContext, Frame, FrameDuration, MediaType, Packet,
-    RatioI32, VideoPixelFormat,
+    RatioI32, VideoPixelFormat, ffi::av_hwframe_transfer_data,
 };
-use video_pipeline::VideoPipeline;
+use video_pipeline::VideoPipelineNv12;
 
 struct Video {
-    pub pipeline: VideoPipeline,
+    pub pipeline: VideoPipelineNv12,
     pub format_context: FormatContext,
     pub time_base: RatioI32,
     pub best_stream_index: usize,
@@ -86,10 +86,14 @@ impl App for VideoApp {
                     }
                 };
 
-                let Some(decoder) = Codec::find_for_id(codec_context.codec_id()) else {
+                let Some(decoder) = Codec::find_for_id(codec_parameters.codec_id()) else {
                     error!("failed to find decoder");
                     return;
                 };
+
+                for config in decoder.hardware_config() {
+                    dbg!(config);
+                }
 
                 if let Err(error) = codec_context.open(decoder) {
                     error!(?error, "failed to open codec context");
@@ -106,7 +110,7 @@ impl App for VideoApp {
                 Almost::init(
                     &mut self.video,
                     Video {
-                        pipeline: VideoPipeline::new(
+                        pipeline: VideoPipelineNv12::new(
                             &runtime.wgpu.device,
                             runtime.wgpu.surface_format,
                             video_size,
@@ -159,10 +163,7 @@ impl App for VideoApp {
                     }
                 };
 
-                if let Err(error) = self.video.codec_context.send_packet(&packet) {
-                    error!(?error, "failed to send packet to the decoder");
-                    return Err(FrameError::Skip);
-                }
+                self.video.codec_context.send_packet(&packet).unwrap();
 
                 _ = self.packet.insert(packet);
             }
@@ -182,7 +183,17 @@ impl App for VideoApp {
             .map(FrameDuration::to_duration)
             .unwrap_or(self.video.frame_time_fallback);
 
-        let data_planes = unsafe { [self.frame.data(0), self.frame.data(1), self.frame.data(2)] };
+        let frame = Frame::new();
+
+        unsafe {
+            av_hwframe_transfer_data(
+                frame.as_raw().as_ptr(),
+                self.frame.as_raw().as_ptr().cast_const(),
+                0,
+            )
+        };
+
+        let data_planes = unsafe { [frame.data(0), frame.data(1)] };
 
         self.video
             .pipeline
