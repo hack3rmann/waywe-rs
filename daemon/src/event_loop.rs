@@ -222,10 +222,8 @@ impl Default for EventQueue {
             c"/home/hack3rmann/Downloads/nailmaster-mato.3840x2160.mp4",
             c"/home/hack3rmann/Downloads/alone-hollow-knight.3840x2160.mp4",
             c"/home/hack3rmann/Downloads/queens-gardens-hollow-knight.3840x2160.mp4",
-            c"/home/hack3rmann/Downloads/queens-gardens-hollow-knight.3840x2160-remuxed.mp4",
             c"/home/hack3rmann/Videos/ObsRecordings/2025-05-16 15-51-50.mp4",
             c"/home/hack3rmann/Pictures/Wallpapers/night-sky-purple-moon-clouds-3840x2160.mp4",
-            c"/home/hack3rmann/Downloads/sample-1.avi",
             c"http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
         ];
 

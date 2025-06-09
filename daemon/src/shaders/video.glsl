@@ -3,9 +3,8 @@
 layout(push_constant) uniform vec2 resolution;
 
 layout(set = 0, binding = 0) uniform texture2D video_y_plane;
-layout(set = 0, binding = 1) uniform texture2D video_u_plane;
-layout(set = 0, binding = 2) uniform texture2D video_v_plane;
-layout(set = 0, binding = 3) uniform sampler video_sampler;
+layout(set = 0, binding = 1) uniform texture2D video_uv_plane;
+layout(set = 0, binding = 2) uniform sampler video_sampler;
 
 in vec2 position;
 out vec4 surface_color;
@@ -30,10 +29,9 @@ void main() {
     texture_coordinates.y = 1.0 - texture_coordinates.y;
 
     float y = texture(sampler2D(video_y_plane, video_sampler), texture_coordinates).r;
-    float u = texture(sampler2D(video_u_plane, video_sampler), texture_coordinates).r;
-    float v = texture(sampler2D(video_v_plane, video_sampler), texture_coordinates).r;
+    vec2 uv = texture(sampler2D(video_uv_plane, video_sampler), texture_coordinates).rg;
 
-    surface_color.rgb = yuv_to_rgb(y, u, v);
+    surface_color.rgb = yuv_to_rgb(y, uv.x, uv.y);
     surface_color.a = 1.0;
 
     surface_color.rgb = vec3(

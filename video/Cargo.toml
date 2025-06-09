@@ -7,3 +7,4 @@ edition.workspace = true
 ffmpeg-sys-next = { version = "7.1.3", features = ["build-vaapi"] }
 glam.workspace = true
 bitflags.workspace = true
+thiserror.workspace = true

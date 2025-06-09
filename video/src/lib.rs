@@ -1,3 +1,4 @@
+pub mod acceleration;
 pub mod codec;
 pub mod error;
 pub mod format;
@@ -27,11 +28,9 @@ use std::{
     slice, str,
 };
 
-pub use ffmpeg_sys_next as ffi;
-
 pub use codec::{Codec, CodecContext, CodecId, CodecParameters, OwnedCodecParameters};
 pub use error::BackendError;
-pub use ffmpeg_sys_next::AVComponentDescriptor as ComponentDescriptor;
+pub use ffmpeg_sys_next::{self as ffi, AVComponentDescriptor as ComponentDescriptor};
 pub use format::{AudioVideoFormat, PixelFormatFlags, VideoPixelFormat};
 pub use hardware::{HardwareDeviceType, HwDeviceTypeIterator};
 pub use time::{FrameDuration, RatioI32};
