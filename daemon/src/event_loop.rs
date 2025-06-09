@@ -4,6 +4,7 @@ use crate::runtime::{
 };
 use glam::UVec2;
 use std::{
+    env,
     ffi::{CStr, CString},
     sync::{Once, atomic::Ordering::Relaxed},
     thread,
@@ -227,10 +228,17 @@ impl Default for EventQueue {
             c"http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
         ];
 
+        let path = env::args()
+            .nth(1)
+            .map(|s| {
+                let mut bytes = s.into_bytes();
+                bytes.push(0);
+                unsafe { CString::from_vec_with_nul_unchecked(bytes) }
+            })
+            .unwrap_or_else(|| CString::from(FILE_NAMES[4]));
+
         Self {
-            events: vec![Event::UpdateWallpaper {
-                path: CString::from(FILE_NAMES[4]),
-            }],
+            events: vec![Event::UpdateWallpaper { path }],
         }
     }
 }
