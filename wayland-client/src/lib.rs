@@ -36,10 +36,10 @@
 //! struct ClientState {}
 //!
 //! // State has to be pinned
-//! let mut state = pin!(ClientState {});
+//! let state = pin!(ClientState {});
 //!
 //! // Connect to Wayland
-//! let display = WlDisplay::connect(state.as_mut()).unwrap();
+//! let display = WlDisplay::connect(state.as_ref()).unwrap();
 //!
 //! // Take the main display event queue, pin it
 //! let mut queue = pin!(display.take_main_queue().unwrap());
@@ -171,8 +171,8 @@
 //! #     type State = ClientState;
 //! #     const ALLOW_EMPTY_DISPATCH: bool = true;
 //! # }
-//! # let mut state = pin!(ClientState {});
-//! # let display = WlDisplay::connect(state.as_mut()).unwrap();
+//! # let state = pin!(ClientState {});
+//! # let display = WlDisplay::connect(state.as_ref()).unwrap();
 //! # let mut queue = pin!(display.take_main_queue().unwrap());
 //! use wayland_client::{FromProxy, WlProxy};
 //!
@@ -228,8 +228,8 @@
 //! #     const ALLOW_EMPTY_DISPATCH: bool = true;
 //! # }
 //! # let mut buf = WlStackMessageBuffer::new();
-//! # let mut state = pin!(ClientState {});
-//! # let display = WlDisplay::connect(state.as_mut()).unwrap();
+//! # let state = pin!(ClientState {});
+//! # let display = WlDisplay::connect(state.as_ref()).unwrap();
 //! # let mut queue = pin!(display.take_main_queue().unwrap());
 //! # impl FromProxy for Compositor {
 //! #     fn from_proxy(_proxy: &WlProxy) -> Self { Self }
