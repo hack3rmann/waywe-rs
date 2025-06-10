@@ -1,11 +1,11 @@
+use ffmpeg_sys_next::{AV_TIME_BASE_Q, AVRational};
 use std::{
     fmt,
     num::{NonZeroI32, NonZeroI64},
     time::Duration,
 };
 
-use ffmpeg_sys_next::{AV_TIME_BASE_Q, AVRational};
-
+/// 64-bit signed rational numbers, 32-bit for numerator, 32-bit for denominator
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub struct RatioI32 {
     pub numerator: i32,
@@ -25,6 +25,11 @@ impl RatioI32 {
         denominator: NonZeroI32::new(1).unwrap(),
     };
 
+    /// Constructs new [`RatioI32`]
+    ///
+    /// # Note
+    ///
+    /// Returns [`None`] if `denominator` is `0`
     pub const fn new(numerator: i32, denominator: i32) -> Option<Self> {
         match NonZeroI32::new(denominator) {
             None => None,
@@ -54,6 +59,7 @@ impl RatioI32 {
         self.numerator as f64 / self.denominator.get() as f64
     }
 
+    /// `1 / x`
     pub const fn inv(self) -> Option<Self> {
         Self::new(self.denominator.get(), self.numerator)
     }
@@ -62,6 +68,7 @@ impl RatioI32 {
         self.numerator == 0
     }
 
+    /// Converts [`RatioI32`] to [`Duration`] assuming `self` contains number of seconds
     pub const fn to_duration_seconds(self) -> Duration {
         // HACK(hack3rmann): may overflow a lot
         let n_seconds = self.numerator as i64 / self.denominator.get() as i64;
@@ -83,16 +90,22 @@ impl fmt::Debug for RatioI32 {
     }
 }
 
+/// Frame duration with chosen time base
 #[derive(Clone, Copy, Debug)]
 pub struct FrameDuration {
+    /// Time units in seconds
     pub base: RatioI32,
+    /// Duration in `base` units
     pub duration: NonZeroI64,
 }
 
 impl FrameDuration {
+    /// Fallback time base
     pub const FALLBACK_BASE: RatioI32 = RatioI32::from_backend(AV_TIME_BASE_Q).unwrap();
 
+    /// Converts [`FrameDuration`] to just [`Duration`]
     pub const fn to_duration(self) -> Duration {
+        // HACK(hack3rmann): may overflow a lot
         let n_seconds =
             self.duration.get() * self.base.numerator as i64 / self.base.denominator.get() as i64;
         let n_nanoseconds = 1_000_000_000_i64 * self.duration.get() * self.base.numerator as i64

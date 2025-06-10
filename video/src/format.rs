@@ -602,6 +602,11 @@ impl VideoPixelFormat {
         }
     }
 
+    /// Pixel format descriptor
+    ///
+    /// # Note
+    ///
+    /// Returns [`None`] if unknown
     pub fn descriptor(self) -> Option<&'static VideoPixelDescriptor> {
         let ptr = unsafe { av_pix_fmt_desc_get(self.to_backend()) };
         unsafe { ptr.cast::<VideoPixelDescriptor>().as_ref() }

@@ -28,12 +28,18 @@ use std::{
     slice, str,
 };
 
+pub use acceleration::VaError;
 pub use codec::{Codec, CodecContext, CodecId, CodecParameters, OwnedCodecParameters};
 pub use error::BackendError;
-pub use ffmpeg_sys_next::{self as ffi, AVComponentDescriptor as ComponentDescriptor};
+pub use ffmpeg_sys_next::AVComponentDescriptor as ComponentDescriptor;
 pub use format::{AudioVideoFormat, PixelFormatFlags, VideoPixelFormat};
 pub use hardware::{HardwareDeviceType, HwDeviceTypeIterator};
 pub use time::{FrameDuration, RatioI32};
+
+pub mod ffi {
+    pub use crate::acceleration::ffi as va;
+    pub use ffmpeg_sys_next as ffmpeg;
+}
 
 /// Initialize `libavdevice` and register all the input and output devices.
 pub fn init() {
@@ -41,11 +47,16 @@ pub fn init() {
 }
 
 macro_rules! implement_raw {
-    ( $Wrapper:ty { $raw:ident } : $Raw:ty ) => {
+    ( $Wrapper:ty { $raw:ident $( , $field:ident : $value:expr )* $(,)? } : $Raw:ty ) => {
         impl $Wrapper {
             #[allow(clippy::missing_safety_doc)]
             pub const unsafe fn from_raw(raw: ::std::ptr::NonNull<$Raw>) -> Self {
-                Self { $raw: raw }
+                Self {
+                    $raw: raw,
+                    $(
+                        $field: $value,
+                    )*
+                }
             }
 
             #[allow(forgetting_copy_types, clippy::forget_non_drop)]
@@ -79,6 +90,7 @@ pub enum MediaType {
 }
 
 impl MediaType {
+    /// Number of enum values
     pub const COUNT: usize = AVMediaType::AVMEDIA_TYPE_NB as usize;
 
     /// Get FFI-compatible value
@@ -122,9 +134,9 @@ implement_raw!(FormatContext: AVFormatContext);
 impl FormatContext {
     /// Open an input stream and read the header. The codecs are not opened.
     ///
-    /// # Parameters
+    /// # Parameter
     ///
-    /// - `url` - URL of the stream to open.
+    /// `url` - URL of the stream to open.
     ///
     /// # Note
     ///
@@ -146,24 +158,50 @@ impl FormatContext {
         Ok(context)
     }
 
+    /// Read packets of a media file to get stream information. This
+    /// is useful for file formats with no headers such as MPEG. This
+    /// function also computes the real framerate in case of MPEG-2 repeat
+    /// frame mode.
+    /// The logical file position is not changed by this function;
+    /// examined packets may be buffered for later processing.
+    ///
+    /// # Note
+    ///
+    /// This function isn't guaranteed to open all the codecs, so
+    /// options being non-empty at return is a perfectly normal behavior.
     pub fn find_stream_info(&mut self) -> Result<(), BackendError> {
         BackendError::result_of(unsafe {
             avformat_find_stream_info(self.as_raw().as_ptr(), ptr::null_mut())
         })
     }
 
+    /// A list of all streams in the file.
     pub const fn streams(&self) -> &[Stream] {
         let ptr = unsafe { (*self.as_raw().as_ptr()).streams };
         let len = unsafe { (*self.as_raw().as_ptr()).nb_streams };
         unsafe { slice::from_raw_parts(ptr.cast(), len as usize) }
     }
 
+    /// A list of all streams in the file.
     pub const fn streams_mut(&mut self) -> &mut [Stream] {
         let ptr = unsafe { (*self.as_raw().as_ptr()).streams };
         let len = unsafe { (*self.as_raw().as_ptr()).nb_streams };
         unsafe { slice::from_raw_parts_mut(ptr.cast(), len as usize) }
     }
 
+    /// Find the "best" stream in the file.
+    /// The best stream is determined according to various heuristics as the most
+    /// likely to be what the user expects.
+    /// If the decoder parameter is non-NULL, av_find_best_stream will find the
+    /// default decoder for the stream's codec; streams for which no decoder can
+    /// be found are ignored.
+    ///
+    /// # Return
+    ///
+    /// - [`Ok`] in case of success
+    /// - [`Err`] with [`BackendError::STREAM_NOT_FOUND`] if no stream with the
+    ///   requested type could be found
+    /// - [`Err`] witg [`BackendError::DECODER_NOT_FOUND`] if streams were found but not decoder
     pub fn find_best_stream(&self, media_type: MediaType) -> Result<&Stream, BackendError> {
         let index = match BackendError::result_or_u32(unsafe {
             av_find_best_stream(
@@ -185,10 +223,32 @@ impl FormatContext {
         Ok(unsafe { self.streams().get_unchecked(index) })
     }
 
+    /// Total stream bitrate in bit/s, [`None`] if not
+    /// available. Never set it directly if the file_size and the
+    /// duration are known as FFmpeg can compute it automatically.
     pub const fn bit_rate(&self) -> Option<NonZeroI64> {
         NonZeroI64::new(unsafe { (*self.as_raw().as_ptr()).bit_rate })
     }
 
+    /// Return the next frame of a stream.
+    /// This function returns what is stored in the file, and does not validate
+    /// that what is there are valid frames for the decoder. It will split what is
+    /// stored in the file into frames and return one for each call. It will not
+    /// omit invalid data between valid frames so as to give the decoder the maximum
+    /// information possible for decoding.
+    ///
+    /// On success, the returned packet is reference-counted (pkt->buf is set) and
+    /// valid indefinitely. The packet must be freed with av_packet_unref() when
+    /// it is no longer needed. For video, the packet contains exactly one frame.
+    /// For audio, it contains an integer number of frames if each frame has
+    /// a known fixed size (e.g. PCM or ADPCM data). If the audio frames have
+    /// a variable size (e.g. MPEG audio), then it contains one frame.
+    ///
+    /// pkt->pts, pkt->dts and pkt->duration are always set to correct
+    /// values in AVStream.time_base units (and guessed if the format cannot
+    /// provide them). pkt->pts can be AV_NOPTS_VALUE if the video format
+    /// has B-frames, so it is better to rely on pkt->dts if you do not
+    /// decompress the payload.
     pub fn read_packet(&mut self) -> Result<Packet, BackendError> {
         let packet = Packet::new();
         BackendError::result_of(unsafe {
@@ -197,6 +257,7 @@ impl FormatContext {
         .map(|()| packet)
     }
 
+    /// Seeks to the start of the input file
     pub fn repeat_stream(&mut self, index: usize) -> Result<(), BackendError> {
         let io_context_ptr = unsafe { (*self.as_raw().as_ptr()).pb };
         let _new_pos =
@@ -403,6 +464,7 @@ impl fmt::Debug for Stream {
 pub struct VideoPixelDescriptor(AVPixFmtDescriptor);
 
 impl VideoPixelDescriptor {
+    /// Format name string
     pub const fn name(&self) -> &'static str {
         let name_cstr = unsafe { CStr::from_ptr(self.0.name) };
         unsafe { str::from_utf8_unchecked(name_cstr.to_bytes()) }
@@ -469,15 +531,43 @@ impl fmt::Debug for VideoPixelDescriptor {
     }
 }
 
+/// This structure describes decoded (raw) audio or video data.
+///
+/// AVFrame must be allocated using av_frame_alloc(). Note that this only
+/// allocates the AVFrame itself, the buffers for the data must be managed
+/// through other means (see below).
+/// AVFrame must be freed with av_frame_free().
+///
+/// AVFrame is typically allocated once and then reused multiple times to hold
+/// different data (e.g. a single AVFrame to hold frames received from a
+/// decoder). In such a case, av_frame_unref() will free any references held by
+/// the frame and reset it to its original clean state before it
+/// is reused again.
+///
+/// The data described by an AVFrame is usually reference counted through the
+/// AVBuffer API. The underlying buffer references are stored in AVFrame.buf /
+/// AVFrame.extended_buf. An AVFrame is considered to be reference counted if at
+/// least one reference is set, i.e. if AVFrame.buf[0](0) != NULL. In such a case,
+/// every single data plane must be contained in one of the buffers in
+/// AVFrame.buf or AVFrame.extended_buf.
+/// There may be a single buffer for all the data, or one separate buffer for
+/// each plane, or anything in between.
+///
+/// sizeof(AVFrame) is not a part of the public ABI, so new fields may be added
+/// to the end with a minor bump.
+///
+/// Fields can be accessed through AVOptions, the name string used, matches the
+/// C structure field name for fields accessible through AVOptions.
 pub struct Frame {
     raw: NonNull<AVFrame>,
 }
 
-unsafe impl Send for Frame {}
-
 implement_raw!(Frame: AVFrame);
 
+unsafe impl Send for Frame {}
+
 impl Frame {
+    /// Allocate an [`Frame`] and set its fields to default values.
     pub fn new() -> Self {
         let frame_ptr = unsafe { av_frame_alloc() };
         Self {
@@ -485,6 +575,7 @@ impl Frame {
         }
     }
 
+    /// Width of the video in pixels
     pub const fn width(&self) -> u32 {
         match unsafe { (*self.as_raw().as_ptr()).width } {
             ..0 => unsafe { hint::unreachable_unchecked() },
@@ -492,6 +583,7 @@ impl Frame {
         }
     }
 
+    /// Height of the video in pixels
     pub const fn height(&self) -> u32 {
         match unsafe { (*self.as_raw().as_ptr()).height } {
             ..0 => unsafe { hint::unreachable_unchecked() },
@@ -499,14 +591,25 @@ impl Frame {
         }
     }
 
+    /// Dimensions of the video in pixels
     pub const fn size(&self) -> UVec2 {
         UVec2::new(self.width(), self.height())
     }
 
+    /// Format of each video pixel
+    ///
+    /// # Note
+    ///
+    /// Returns [`None`] if unknown or unset.
     pub const fn format(&self) -> Option<VideoPixelFormat> {
         VideoPixelFormat::from_i32(unsafe { (*self.as_raw().as_ptr()).format })
     }
 
+    /// Frame duration in `base` units
+    ///
+    /// # Note
+    ///
+    /// Returns [`None`] if unknown
     pub const fn duration_in(&self, base: RatioI32) -> Option<FrameDuration> {
         let Some(duration) = NonZeroI64::new(unsafe { (*self.as_raw().as_ptr()).duration }) else {
             return None;
@@ -568,6 +671,7 @@ impl Frame {
         BackendError::result_of(unsafe { av_frame_get_buffer(self.as_raw().as_ptr(), 32) })
     }
 
+    /// Checks if [`Frame`] is not reference_counted
     pub fn is_owned(&self) -> bool {
         let ptr = unsafe { (*self.as_raw().as_ptr()).buf[0] };
 
@@ -610,15 +714,35 @@ impl Default for Frame {
     }
 }
 
+/// This structure stores compressed data. It is typically exported by demuxers
+/// and then passed as input to decoders, or received as output from encoders and
+/// then passed to muxers.
+///
+/// For video, it should typically contain one compressed frame. For audio it may
+/// contain several compressed frames. Encoders are allowed to output empty
+/// packets, with no compressed data, containing only side data
+/// (e.g. to update some stream parameters at the end of encoding).
+///
+/// The semantics of data ownership depends on the buf field.
+/// If it is set, the packet data is dynamically allocated and is
+/// valid indefinitely until a call to av_packet_unref() reduces the
+/// reference count to 0.
+///
+/// If the buf field is not set av_packet_ref() would make a copy instead
+/// of increasing the reference count.
+///
+/// The side data is always allocated with av_malloc(), copied by
+/// av_packet_ref() and freed by av_packet_unref().
 pub struct Packet {
     raw: NonNull<AVPacket>,
 }
 
-unsafe impl Send for Packet {}
-
 implement_raw!(Packet: AVPacket);
 
+unsafe impl Send for Packet {}
+
 impl Packet {
+    /// Creates new empty [`Packet`]
     pub fn new() -> Self {
         let Some(raw) = NonNull::new(unsafe { av_packet_alloc() }) else {
             panic!("failed to allocate new packet");
@@ -627,18 +751,27 @@ impl Packet {
         Self { raw }
     }
 
+    /// Initializes packet with default values
     pub fn init(&mut self, size: usize) -> Result<(), BackendError> {
         BackendError::result_of(unsafe {
             av_new_packet(self.as_raw().as_ptr(), size.try_into().unwrap())
         })
     }
 
+    /// Creates new default-initialized [`Packet`]
     pub fn with_capacity(size: usize) -> Result<Self, BackendError> {
         let mut result = Self::new();
         result.init(size)?;
         Ok(result)
     }
 
+    /// Setup a new reference to the data described by a given packet
+    ///
+    /// If src is reference-counted, setup dst as a new reference to the
+    /// buffer in src. Otherwise allocate a new buffer in dst and copy the
+    /// data from src into it.
+    ///
+    /// All the other fields are copied from src.
     pub fn try_ref(&mut self) -> Result<Self, BackendError> {
         let packet_ptr = Self::new();
         BackendError::result_of(unsafe {
@@ -650,6 +783,7 @@ impl Packet {
         .map(|()| packet_ptr)
     }
 
+    /// Index of the stream this packet belongs to
     pub const fn stream_index(&self) -> usize {
         match unsafe { (*self.as_raw().as_ptr()).stream_index } {
             ..0 => unsafe { hint::unreachable_unchecked() },
@@ -657,6 +791,7 @@ impl Packet {
         }
     }
 
+    /// Checks if [`Packet`] is not reference-counted
     pub fn is_owned(&self) -> bool {
         let ptr = unsafe { (*self.as_raw().as_ptr()).buf };
 
@@ -685,6 +820,7 @@ impl Drop for Packet {
     fn drop(&mut self) {
         let mut ptr = self.as_raw().as_ptr();
 
+        // NOTE(hack3rmann): if the packet is reference-counted then just unref it
         if self.is_owned() {
             unsafe { av_packet_free(&raw mut ptr) };
         } else {
@@ -703,7 +839,17 @@ impl Default for Packet {
 #[derive(Clone, Copy)]
 pub struct Profile(AVProfile);
 
+unsafe impl Send for Profile {}
+unsafe impl Sync for Profile {}
+
+pub static PROFILE_UNKNOWN: Profile = Profile::UNKNOWN;
+
 impl Profile {
+    pub const UNKNOWN: Self = Self(AVProfile {
+        profile: AV_PROFILE_UNKNOWN,
+        name: ptr::null(),
+    });
+
     /// Profile ID
     pub const fn id(self) -> i32 {
         self.0.profile
@@ -725,6 +871,7 @@ impl fmt::Debug for Profile {
     }
 }
 
+/// Iterator yielding [`Profile`]s
 pub struct ProfileIterator<'s> {
     ptr: NonNull<AVProfile>,
     _p: PhantomData<&'s Codec>,
@@ -756,21 +903,25 @@ impl<'s> Iterator for ProfileIterator<'s> {
     }
 }
 
+/// Iterator yielding all supported [`Codec`]s on this device
 pub struct CodecIterator {
     raw: *mut c_void,
 }
 
 impl CodecIterator {
+    /// Constructs new [`CodecIterator`]
     pub const fn new() -> Self {
         CodecIterator {
             raw: ptr::null_mut(),
         }
     }
 
+    /// Handy filter for decoders
     pub fn decoders() -> impl Iterator<Item = &'static Codec> {
         Self::new().filter(|c| c.is_decoder())
     }
 
+    /// Handy filter for encoders
     pub fn encoders() -> impl Iterator<Item = &'static Codec> {
         Self::new().filter(|c| c.is_encoder())
     }
@@ -787,8 +938,7 @@ impl Iterator for CodecIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         let codec = unsafe { av_codec_iterate(&raw mut self.raw) };
-        let ptr = NonNull::new(codec.cast_mut())?.cast::<Codec>();
-        Some(unsafe { ptr.as_ref() })
+        unsafe { codec.cast::<Codec>().as_ref() }
     }
 }
 
@@ -824,13 +974,13 @@ bitflags! {
     }
 }
 
-pub struct Scaler {
+pub struct SoftwareScaler {
     raw: NonNull<SwsContext>,
     source_format: ScalerFormat,
     destination_format: ScalerFormat,
 }
 
-impl Scaler {
+impl SoftwareScaler {
     pub const fn as_raw(&self) -> NonNull<SwsContext> {
         self.raw
     }

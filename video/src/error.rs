@@ -9,6 +9,7 @@ use ffmpeg_sys_next::{
 };
 use std::{error::Error, ffi::CStr, fmt, num::NonZeroI32};
 
+/// Backend error from libav
 #[derive(Clone, Copy, PartialEq)]
 pub struct BackendError {
     encoded_code: NonZeroI32,
@@ -68,6 +69,7 @@ impl BackendError {
 
     pub const ERROR_BUFFER_SIZE: usize = 128;
 
+    /// Constructs [`Result`] from libav status code
     pub const fn result_of(code: i32) -> Result<(), Self> {
         match Self::new(code) {
             Some(error) => Err(error),
@@ -75,6 +77,7 @@ impl BackendError {
         }
     }
 
+    /// Returns error if `code` is negative or a non-negative number instead
     pub const fn result_or_u32(code: i32) -> Result<u32, Self> {
         match Self::new(code) {
             Some(error) => Err(error),
@@ -82,6 +85,11 @@ impl BackendError {
         }
     }
 
+    /// Returns error if `code` is negative or a non-negative number instead
+    ///
+    /// # Panic
+    ///
+    /// Panics if `code < i32::MIN`
     pub const fn result_or_u64(code: i64) -> Result<u64, Self> {
         const I32_MIN: i64 = i32::MIN as i64;
 
@@ -92,6 +100,7 @@ impl BackendError {
         }
     }
 
+    /// Constructs new [`BackendError`] from libav status code
     pub const fn new(code: i32) -> Option<Self> {
         match code {
             ..0 => Some(Self {
@@ -101,6 +110,7 @@ impl BackendError {
         }
     }
 
+    /// Error code
     pub const fn code(self) -> i32 {
         self.encoded_code.get()
     }
@@ -116,6 +126,7 @@ impl BackendError {
         Some(unsafe { str::from_utf8_unchecked(description_cstr.to_bytes()) })
     }
 
+    /// String with the error description
     pub fn description(self) -> Option<String> {
         let mut buffer = Vec::<u8>::with_capacity(Self::ERROR_BUFFER_SIZE);
 

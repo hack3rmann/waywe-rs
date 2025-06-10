@@ -1,6 +1,6 @@
 use crate::{
-    AudioVideoFormat, BackendError, Frame, MediaType, Packet, Profile, ProfileIterator, RatioI32,
-    Stream,
+    AudioVideoFormat, BackendError, Frame, MediaType, PROFILE_UNKNOWN, Packet, Profile,
+    ProfileIterator, RatioI32, Stream,
     hardware::{HardwareConfig, HardwareConfigIterator, HardwareDeviceContext},
     implement_raw,
 };
@@ -22,6 +22,7 @@ use std::{
     slice,
 };
 
+/// Describes the properties of an encoded stream.
 #[repr(transparent)]
 pub struct CodecParameters(AVCodecParameters);
 
@@ -41,6 +42,11 @@ impl CodecParameters {
         self.0.codec_tag
     }
 
+    /// Format of the data to be processed.
+    ///
+    /// # Note
+    ///
+    /// Returns [`None`] if `self.media_type()` is not [`MediaType::Video`] or [`MediaType::Audio`]
     pub const fn format(&self) -> Option<AudioVideoFormat> {
         match self.media_type() {
             None | Some(MediaType::Attachment | MediaType::Subtitle | MediaType::Data) => None,
@@ -158,6 +164,9 @@ impl ToOwned for CodecParameters {
     }
 }
 
+/// Describes the properties of an encoded stream.
+///
+/// This is the 'owned' version of [`CodecParameters`]
 pub struct OwnedCodecParameters {
     raw: NonNull<AVCodecParameters>,
 }
@@ -165,6 +174,7 @@ pub struct OwnedCodecParameters {
 implement_raw!(OwnedCodecParameters: AVCodecParameters);
 
 impl OwnedCodecParameters {
+    /// Constructs new [`OwnedCodecParameters`] with default values
     pub fn new() -> Self {
         let Some(raw) = NonNull::new(unsafe { avcodec_parameters_alloc() }) else {
             panic!("failed to allocate avcodec parameters");
@@ -173,6 +183,7 @@ impl OwnedCodecParameters {
         Self { raw }
     }
 
+    /// Tries to clone `other` completely
     pub fn try_clone_from(&mut self, other: &CodecParameters) -> Result<(), BackendError> {
         BackendError::result_of(unsafe {
             avcodec_parameters_copy(self.as_raw().as_ptr(), (&raw const *other).cast())
@@ -242,28 +253,30 @@ impl Default for OwnedCodecParameters {
     }
 }
 
+/// Main external API structure.
+/// New fields can be added to the end with minor version bumps.
+/// Removal, reordering and changes to existing fields require a major
+/// version bump.
+///
+/// The name string for AVOptions options matches the associated command line
+/// parameter name and can be found in libavcodec/options_table.h
+/// The AVOption/command line parameter names differ in some cases from the C
+/// structure field names for historic reasons or brevity.
 pub struct CodecContext {
-    // NOTE(hack3rmann): drop order matters here
-    _hw_device_context: Option<HardwareDeviceContext>,
     raw: NonNull<AVCodecContext>,
 }
+
+implement_raw!(CodecContext: AVCodecContext);
 
 unsafe impl Send for CodecContext {}
 
 impl CodecContext {
-    /// # Safety
-    /// TODO(hack3rmann):safety
-    pub const unsafe fn from_raw(raw: NonNull<AVCodecContext>) -> Self {
-        Self {
-            raw,
-            _hw_device_context: None,
-        }
-    }
-
-    pub const fn as_raw(&self) -> NonNull<AVCodecContext> {
-        self.raw
-    }
-
+    /// Fill the codec context based on the values from the supplied codec
+    /// parameters. Any allocated fields in codec that have a corresponding field in
+    /// par are freed and replaced with duplicates of the corresponding field in par.
+    /// Fields in codec that do not have a counterpart in par are not touched.
+    ///
+    /// Also, initializes hardware acceleration context on this [`CodecContext`]
     pub fn from_parameters_with_hw_accel(
         parameters: &CodecParameters,
     ) -> Result<Self, BackendError> {
@@ -273,7 +286,8 @@ impl CodecContext {
             panic!("unexpected libav error");
         };
 
-        let hw_device_context = unsafe { HardwareDeviceContext::new_on_codec(codec_context_ptr)? };
+        // NOTE(hack3rmann): libav automatically takes ownership of `HardwareDeviceContext`
+        unsafe { HardwareDeviceContext::new_on_codec(codec_context_ptr)? };
 
         BackendError::result_of(unsafe {
             avcodec_parameters_to_context(
@@ -284,24 +298,69 @@ impl CodecContext {
 
         Ok(Self {
             raw: codec_context_ptr,
-            _hw_device_context: Some(hw_device_context),
         })
     }
 
+    /// Fill the codec context based on the values from the supplied codec
+    /// parameters. Any allocated fields in codec that have a corresponding field in
+    /// par are freed and replaced with duplicates of the corresponding field in par.
+    /// Fields in codec that do not have a counterpart in par are not touched.
+    pub fn from_parameters(parameters: &CodecParameters) -> Result<Self, BackendError> {
+        // FIXME(hack3rmann): may result in suboptimal behavior ((C) docs)
+        let Some(codec_context_ptr) = NonNull::new(unsafe { avcodec_alloc_context3(ptr::null()) })
+        else {
+            panic!("unexpected libav error");
+        };
+
+        BackendError::result_of(unsafe {
+            avcodec_parameters_to_context(
+                codec_context_ptr.as_ptr(),
+                (&raw const *parameters).cast(),
+            )
+        })?;
+
+        Ok(Self {
+            raw: codec_context_ptr,
+        })
+    }
+
+    /// Constructs [`CodecContext`] from [`CodecParameters`] provided be `stream`
     pub fn from_stream(stream: &Stream) -> Result<Self, BackendError> {
         Self::from_parameters_with_hw_accel(stream.codec_parameters())
     }
 
+    // TODO(hack3rmann): provide `CodecContext::set_skip_frame` API based
+    // on `(*self.raw).skip_frame` value
+    //
+    /// Supply raw packet data as input to a decoder.
+    ///
+    /// Internally, this call will copy relevant [`CodecContext`] fields, which can
+    /// influence decoding per-packet, and apply them when the packet is actually
+    /// decoded. (For example `CodecContext::set_skip_frame`, which might direct the
+    /// decoder to drop the frame contained by the packet sent with this function.)
+    ///
+    /// # Note
+    ///
+    /// The [`CodecContext`] **MUST** have been opened with [`CodecContext::open`]
+    /// before packets may be fed to the decoder.
+    ///
+    /// # Warning
+    ///
+    /// The input buffer, avpkt->data must be AV_INPUT_BUFFER_PADDING_SIZE
+    /// larger than the actual read bytes because some optimized bitstream
+    /// readers read 32 or 64 bits at once and could read over the end.
     pub fn send_packet(&mut self, packet: &Packet) -> Result<(), BackendError> {
         BackendError::result_of(unsafe {
             avcodec_send_packet(self.as_raw().as_ptr(), packet.as_raw().as_ptr())
         })
     }
 
+    /// ID of the codec
     pub const fn codec_id(&self) -> CodecId {
         CodecId(unsafe { (*self.as_raw().as_ptr()).codec_id })
     }
 
+    /// [`Codec`] used with this [`CodecContext`]
     pub const fn codec(&self) -> Option<&Codec> {
         match NonNull::new(unsafe { (*self.as_raw().as_ptr()).codec }.cast_mut()) {
             None => None,
@@ -309,6 +368,20 @@ impl CodecContext {
         }
     }
 
+    /// Initialize the [`CodecContext`] to use the given [`Codec`].
+    ///
+    /// Depending on the codec, you might need to set options in the codec context
+    /// also for decoding (e.g. width, height, or the pixel or audio sample format in
+    /// the case the information is not available in the bitstream, as when decoding
+    /// raw audio or video).
+    ///
+    /// # Note
+    ///
+    /// Always call this function before using decoding routines.
+    ///
+    /// # Parameter
+    ///
+    /// `codec` - The codec to open this context for. If a non-NULL codec has been
     pub fn open(&mut self, codec: &Codec) -> Result<(), BackendError> {
         BackendError::result_of(unsafe {
             avcodec_open2(
@@ -319,6 +392,7 @@ impl CodecContext {
         })
     }
 
+    /// Return decoded output data from a decoder or encoder.
     pub fn receive_frame(&mut self, frame: &mut Frame) -> Result<(), BackendError> {
         BackendError::result_of(unsafe {
             avcodec_receive_frame(self.as_raw().as_ptr(), frame.as_raw().as_ptr())
@@ -333,6 +407,7 @@ impl Drop for CodecContext {
     }
 }
 
+/// Codec ID
 #[repr(transparent)]
 #[derive(Clone, Copy)]
 pub struct CodecId(pub AVCodecID);
@@ -367,39 +442,59 @@ bitflags! {
     }
 }
 
+/// Audio/Video codec
 #[repr(transparent)]
 pub struct Codec(AVCodec);
 
 impl Codec {
-    pub fn find_for_id(id: CodecId) -> Option<&'static Self> {
+    /// Find a registered decoder with a matching codec ID.
+    pub fn find_decoder_for_id(id: CodecId) -> Option<&'static Self> {
         unsafe { avcodec_find_decoder(id.0).cast::<Self>().as_ref() }
     }
 
+    /// Name of the codec implementation.
+    /// The name is globally unique among encoders and among decoders (but an
+    /// encoder and a decoder can share the same name).
+    /// This is the primary way to find a codec from the user perspective.
     pub const fn name(&self) -> &str {
         let name_cstr = unsafe { CStr::from_ptr(self.0.name) };
         unsafe { str::from_utf8_unchecked(name_cstr.to_bytes()) }
     }
 
+    /// Descriptive name for the codec, meant to be more human readable than name.
     pub const fn long_name(&self) -> &str {
         let name_cstr = unsafe { CStr::from_ptr(self.0.long_name) };
         unsafe { str::from_utf8_unchecked(name_cstr.to_bytes()) }
     }
 
+    /// Media type codec processes
     pub const fn media_type(&self) -> Option<MediaType> {
         MediaType::from_backend(self.0.type_)
     }
 
+    /// Codec ID
     pub const fn id(&self) -> CodecId {
         CodecId(self.0.id)
     }
 
+    /// Codec capabilities
     pub const fn capabilities(&self) -> CodecCapability {
         unsafe { CodecCapability::from_bits(self.0.capabilities).unwrap_unchecked() }
     }
 
-    pub const fn profiles(&self) -> Option<&[Profile]> {
+    /// Codec profiles.
+    ///
+    /// # Warning
+    ///
+    /// It will iterate over all profiles to determine their count.
+    /// You should probably use [`Codec::profile_iterator`] instead.
+    ///
+    /// # Note
+    ///
+    /// May be empty if unknown.
+    pub const fn profiles(&self) -> &[Profile] {
         if self.0.profiles.is_null() {
-            return None;
+            return &[];
         }
 
         let mut profile_ptr = self.0.profiles;
@@ -410,16 +505,37 @@ impl Codec {
             count += 1;
         }
 
-        Some(unsafe { slice::from_raw_parts(self.0.profiles.cast(), count) })
+        unsafe { slice::from_raw_parts(self.0.profiles.cast(), count) }
     }
 
-    pub const fn profile_iterator(&self) -> Option<ProfileIterator<'_>> {
+    /// Codec profiles.
+    ///
+    /// # Note
+    ///
+    /// May be empty if unknown.
+    pub const fn profile_iterator(&self) -> ProfileIterator<'_> {
         match NonNull::new(self.0.profiles.cast_mut()) {
-            None => None,
-            Some(non_null) => Some(unsafe { ProfileIterator::from_raw(non_null) }),
+            None => unsafe {
+                ProfileIterator::from_raw(
+                    NonNull::new_unchecked((&raw const PROFILE_UNKNOWN).cast_mut()).cast(),
+                )
+            },
+            Some(non_null) => unsafe { ProfileIterator::from_raw(non_null) },
         }
     }
 
+    /// Group name of the codec implementation.
+    /// This is a short symbolic name of the wrapper backing this codec. A
+    /// wrapper uses some kind of external implementation for the codec, such
+    /// as an external library, or a codec implementation provided by the OS or
+    /// the hardware.
+    ///
+    /// # Note
+    ///
+    /// Returns [`None`] if this is a builtin, libavcodec native codec.
+    /// Returns [`Some`] with the suffix in AVCodec.name in most cases.
+    ///
+    /// Usually [`Codec::name`] will be of the form "\<codec_name>\_\<wrapper_name>".
     pub const fn wrapper_name(&self) -> Option<&str> {
         if self.0.wrapper_name.is_null() {
             return None;
@@ -429,19 +545,27 @@ impl Codec {
         Some(unsafe { str::from_utf8_unchecked(wrapper_name_cstr.to_bytes()) })
     }
 
+    /// The codec is decoder
     pub fn is_decoder(&self) -> bool {
         0 != unsafe { av_codec_is_decoder(&raw const self.0) }
     }
 
+    /// The codec is encoder
     pub fn is_encoder(&self) -> bool {
         0 != unsafe { av_codec_is_encoder(&raw const self.0) }
     }
 
+    /// Retrieve supported hardware configurations for a codec.
+    ///
+    /// Values of index from zero to some maximum return the indexed configuration
+    /// descriptor; all other values return [`None`]. If the codec does not support
+    /// any hardware configurations then it will always return [`None`].
     pub fn hardware_config_for_index(&self, index: usize) -> Option<&HardwareConfig> {
         let ptr = unsafe { avcodec_get_hw_config((&raw const *self).cast(), index as i32) };
         unsafe { ptr.cast::<HardwareConfig>().as_ref() }
     }
 
+    /// Iterator yieding [`HardwareConfig`] for the [`Codec`]
     pub fn hardware_config(&self) -> HardwareConfigIterator<'_> {
         HardwareConfigIterator::new(self)
     }

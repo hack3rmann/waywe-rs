@@ -1,10 +1,9 @@
-use std::{
-    ffi::{CStr, c_char, c_void},
-    fmt,
-    os::fd::RawFd,
-};
+pub mod ffi;
+
+use std::{ffi::CStr, fmt, str};
 use thiserror::Error;
 
+/// Error codes for libva backend
 #[derive(Clone, Copy, Error, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub enum VaError {
     Unknown = -1,
@@ -43,10 +42,10 @@ pub enum VaError {
 
 impl VaError {
     /// Acquire status value from error
-    pub const fn status(self) -> VaStatus {
+    pub const fn status(self) -> ffi::Status {
         match self {
             Self::Unknown => -1,
-            other => other as VaStatus,
+            other => other as ffi::Status,
         }
     }
 
@@ -55,7 +54,7 @@ impl VaError {
     /// # Note
     ///
     /// Returns [`None`] if `status` is invalid
-    pub const fn new(status: VaStatus) -> Option<Self> {
+    pub const fn new(status: ffi::Status) -> Option<Self> {
         Some(match status {
             -1 => Self::Unknown,
             1 => Self::OperationFailed,
@@ -98,7 +97,7 @@ impl VaError {
     /// # Panic
     ///
     /// Panics if `status` is not a valid libva status
-    pub fn result_of(status: VaStatus) -> Result<(), Self> {
+    pub fn result_of(status: ffi::Status) -> Result<(), Self> {
         Err(match status {
             -1 => Self::Unknown,
             0 => return Ok(()),
@@ -140,8 +139,8 @@ impl VaError {
 
     /// Error description
     pub fn description(self) -> &'static str {
-        let error_cstr = unsafe { CStr::from_ptr(vaErrorStr(self.status())) };
-        unsafe { std::str::from_utf8_unchecked(error_cstr.to_bytes()) }
+        let error_cstr = unsafe { CStr::from_ptr(ffi::error_str(self.status())) };
+        unsafe { str::from_utf8_unchecked(error_cstr.to_bytes()) }
     }
 }
 
@@ -158,95 +157,4 @@ impl fmt::Display for VaError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.description())
     }
-}
-
-/// Window system dependent
-pub type VaDisplay = *mut c_void;
-/// Generic ID type, can be re-typed for specific implementation
-pub type VaGenericId = u32;
-pub type VaSurfaceId = VaGenericId;
-/// Return status type from functions
-pub type VaStatus = i32;
-
-#[repr(C)]
-#[derive(Clone, Copy, Default, Debug)]
-pub struct VaDrmPrimeSurfaceDescriptorObject {
-    /// DRM PRIME file descriptor for this object.
-    pub fd: RawFd,
-    /// Total size of this object (may include regions which are not part of the surface).
-    pub size: u32,
-    /// Format modifier applied to this object.
-    pub drm_format_modifier: u64,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Default, Debug)]
-pub struct VaDrmPrimeSurfaceDescriptorLayer {
-    /// DRM format fourcc of this layer (DRM_FOURCC_*).
-    pub drm_format: u32,
-    /// Number of planes in this layer.
-    pub num_planes: u32,
-    /// Index in the objects array of the object containing each plane.
-    pub object_index: [u32; 4],
-    /// Offset within the object of each plane.
-    pub offset: [u32; 4],
-    /// Pitch of each plane.
-    pub pitch: [u32; 4],
-}
-
-/// External buffer descriptor for a DRM PRIME surface with flags
-///
-/// This structure is an extention for VADRMPRIMESurfaceDescriptor,
-/// it has the same behavior as if used with VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2.
-///
-/// The field "flags" is added, see "Surface external buffer descriptor flags".
-/// To use this structure, use VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_3 instead.
-#[repr(C)]
-#[derive(Clone, Copy, Default, Debug)]
-pub struct VaDrmPrimeDescriptor {
-    /// Pixel format fourcc of the whole surface (VA_FOURCC_*).
-    pub fourcc: u32,
-    /// Width of the surface in pixels.
-    pub width: u32,
-    /// Height of the surface in pixels.
-    pub height: u32,
-    /// Number of distinct DRM objects making up the surface.
-    pub num_objects: u32,
-    /// Description of each object.
-    pub objects: [VaDrmPrimeSurfaceDescriptorObject; 4],
-    /// Number of layers making up the surface.
-    pub num_layers: u32,
-    /// Description of each layer in the surface.
-    pub layers: [VaDrmPrimeSurfaceDescriptorLayer; 4],
-}
-
-
-/// VAAPI connection details.
-/// 
-/// Allocated as AVHWDeviceContext.hwctx
-#[repr(C)]
-#[derive(Clone, Copy, Debug)]
-pub struct AvVaApiDeviceContext {
-    /// The VADisplay handle, to be filled by the user.
-    pub display: VaDisplay,
-    /// Driver quirks to apply - this is filled by av_hwdevice_ctx_init(),
-    /// with reference to a table of known drivers, unless the
-    /// AV_VAAPI_DRIVER_QUIRK_USER_SET bit is already present. The user
-    /// may need to refer to this field when performing any later
-    /// operations using VAAPI with the same VADisplay.
-    pub driver_quirks: u32,
-}
-
-unsafe extern "C" {
-    pub fn vaExportSurfaceHandle(
-        display: VaDisplay,
-        surface_id: VaSurfaceId,
-        memory_type: u32,
-        flags: u32,
-        descriptor: *mut c_void,
-    ) -> VaStatus;
-
-    pub safe fn vaErrorStr(status: VaStatus) -> *const c_char;
-
-    pub fn vaSyncSurface(display: VaDisplay, render_target: VaSurfaceId) -> VaStatus;
 }

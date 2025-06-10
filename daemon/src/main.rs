@@ -11,12 +11,8 @@ use std::{mem::MaybeUninit, ptr, time::Duration};
 use tracing::error;
 use video::{
     BackendError, Codec, CodecContext, FormatContext, Frame, FrameDuration, MediaType, Packet,
-    RatioI32, VideoPixelFormat,
-    acceleration::{
-        AvVaApiDeviceContext, VaDrmPrimeDescriptor, VaError, VaSurfaceId, vaExportSurfaceHandle,
-        vaSyncSurface,
-    },
-    ffi::AVHWDeviceContext,
+    RatioI32, VaError, VideoPixelFormat,
+    ffi::{ffmpeg::AVHWDeviceContext, va},
 };
 use video_pipeline::VideoPipeline;
 use wgpu::hal::api;
@@ -84,15 +80,16 @@ impl App for VideoApp {
                     return;
                 }
 
-                let mut codec_context = match CodecContext::from_parameters_with_hw_accel(codec_parameters) {
-                    Ok(context) => context,
-                    Err(error) => {
-                        error!(?error, "failed to construct codec context");
-                        return;
-                    }
-                };
+                let mut codec_context =
+                    match CodecContext::from_parameters_with_hw_accel(codec_parameters) {
+                        Ok(context) => context,
+                        Err(error) => {
+                            error!(?error, "failed to construct codec context");
+                            return;
+                        }
+                    };
 
-                let Some(decoder) = Codec::find_for_id(codec_parameters.codec_id()) else {
+                let Some(decoder) = Codec::find_decoder_for_id(codec_parameters.codec_id()) else {
                     error!("failed to find decoder");
                     return;
                 };
@@ -182,19 +179,24 @@ impl App for VideoApp {
             unsafe { (*(*self.video.codec_context.as_raw().as_ptr()).hw_device_ctx).data }
                 .cast::<AVHWDeviceContext>();
 
-        let va_display =
-            unsafe { (*(*hw_device_context).hwctx.cast::<AvVaApiDeviceContext>()).display };
-        let surface_id = unsafe { (*self.frame.as_raw().as_ptr()).data[3] } as usize as VaSurfaceId;
+        let va_display = unsafe {
+            (*(*hw_device_context)
+                .hwctx
+                .cast::<va::AvVaApiDeviceContext>())
+            .display
+        };
+        let surface_id =
+            unsafe { (*self.frame.as_raw().as_ptr()).data[3] } as usize as va::SurfaceId;
 
-        VaError::result_of(unsafe { vaSyncSurface(va_display, surface_id) }).unwrap();
+        VaError::result_of(unsafe { va::sync_surface(va_display, surface_id) }).unwrap();
 
         const VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2: u32 = 0x40000000;
         const VA_EXPORT_SURFACE_READ_ONLY: u32 = 1;
         const VA_EXPORT_SURFACE_SEPARATE_LAYERS: u32 = 4;
 
-        let mut desc = MaybeUninit::<VaDrmPrimeDescriptor>::uninit();
+        let mut desc = MaybeUninit::<va::DrmPrimeDescriptor>::uninit();
         VaError::result_of(unsafe {
-            vaExportSurfaceHandle(
+            va::export_surface_handle(
                 va_display,
                 surface_id,
                 VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2,

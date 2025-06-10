@@ -130,6 +130,9 @@ impl Wgpu {
 
         let screen_size = wayland.client_state.monitor_size();
 
+        // TODO(hack3rmann): configure surface with
+        // `usage |= wgt::TextureUsages::STORAGE_BINDING`
+        // to render to it using compute shaders
         surface.configure(
             &device,
             &surface

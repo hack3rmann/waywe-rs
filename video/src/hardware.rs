@@ -1,6 +1,7 @@
-use crate::{BackendError, Codec, VideoPixelFormat};
+use crate::{BackendError, Codec, VideoPixelFormat, implement_raw};
 use ffmpeg_sys_next::{
-    av_buffer_ref, av_buffer_unref, av_hwdevice_ctx_create, av_hwdevice_get_type_name, av_hwdevice_iterate_types, AVBufferRef, AVCodecContext, AVCodecHWConfig, AVHWDeviceType, AVPixelFormat
+    AVBufferRef, AVCodecContext, AVCodecHWConfig, AVHWDeviceType, AVPixelFormat, av_buffer_unref,
+    av_hwdevice_ctx_create, av_hwdevice_get_type_name, av_hwdevice_iterate_types,
 };
 use std::{
     ffi::CStr,
@@ -8,6 +9,7 @@ use std::{
     ptr::{self, NonNull},
 };
 
+/// Type of hardware acceleration provider
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
 pub enum HardwareDeviceType {
     VdPau = 1,
@@ -80,15 +82,15 @@ impl From<HardwareDeviceType> for AVHWDeviceType {
     }
 }
 
-/// Iterate over supported device types.
+/// Iterator yieding supported [`HardwareDeviceType`]s
 pub struct HwDeviceTypeIterator {
-    ty: AVHWDeviceType,
+    current: AVHWDeviceType,
 }
 
 impl HwDeviceTypeIterator {
     pub const fn new() -> Self {
         Self {
-            ty: AVHWDeviceType::AV_HWDEVICE_TYPE_NONE,
+            current: AVHWDeviceType::AV_HWDEVICE_TYPE_NONE,
         }
     }
 }
@@ -103,8 +105,8 @@ impl Iterator for HwDeviceTypeIterator {
     type Item = HardwareDeviceType;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.ty = unsafe { av_hwdevice_iterate_types(self.ty) };
-        HardwareDeviceType::from_backend(self.ty)
+        self.current = unsafe { av_hwdevice_iterate_types(self.current) };
+        HardwareDeviceType::from_backend(self.current)
     }
 }
 
@@ -119,28 +121,41 @@ bitflags::bitflags! {
 }
 
 impl HardwareConfigMethods {
+    /// Contains either [`HardwareConfigMethods::HW_DEVICE_CONTEXT`]
+    /// or [`HardwareConfigMethods::HW_FRAMES_CONTEXT`]
     pub const fn is_hardware(self) -> bool {
         (self.bits() & Self::HW_DEVICE_CONTEXT.bits()) != 0
             || (self.bits() & Self::HW_FRAMES_CONTEXT.bits()) != 0
     }
 
+    /// Contains [`HardwareConfigMethods::INTERNAL`]
     pub const fn is_internal(self) -> bool {
         (self.bits() & Self::INTERNAL.bits()) != 0
     }
 }
 
 #[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct HardwareConfig(AVCodecHWConfig);
 
 impl HardwareConfig {
+    /// A hardware pixel format which that decoder may be
+    /// able to decode to if suitable hardware is available.
     pub const fn format(&self) -> Option<VideoPixelFormat> {
         VideoPixelFormat::from_backend(self.0.pix_fmt)
     }
 
+    /// Bit set, describing the possible setup methods
+    /// which can be used with this configuration.
     pub const fn methods(&self) -> HardwareConfigMethods {
         unsafe { HardwareConfigMethods::from_bits(self.0.methods).unwrap_unchecked() }
     }
 
+    /// The device type associated with the configuration.
+    ///
+    /// # Note
+    ///
+    /// Returns [`None`] if unused.
     pub const fn device_type(&self) -> Option<HardwareDeviceType> {
         if self.methods().is_hardware() {
             Some(unsafe { HardwareDeviceType::from_backend(self.0.device_type).unwrap_unchecked() })
@@ -160,12 +175,14 @@ impl fmt::Debug for HardwareConfig {
     }
 }
 
+/// Iterator yieding [`HardwareConfig`] for the given [`Codec`]
 pub struct HardwareConfigIterator<'s> {
     index: usize,
     codec: &'s Codec,
 }
 
 impl<'s> HardwareConfigIterator<'s> {
+    /// Construct new [`HardwareConfigIterator`] for the `codec`
     pub const fn new(codec: &'s Codec) -> Self {
         Self {
             index: usize::MAX,
@@ -183,14 +200,19 @@ impl<'s> Iterator for HardwareConfigIterator<'s> {
     }
 }
 
+/// Context for the hardware acceleration support
 pub struct HardwareDeviceContext {
     raw: NonNull<AVBufferRef>,
 }
 
+implement_raw!(HardwareDeviceContext: AVBufferRef);
+
 impl HardwareDeviceContext {
     /// # Safety
-    /// TODO(hack3rmann):safety
-    pub unsafe fn new_on_codec(codec_context: NonNull<AVCodecContext>) -> Result<Self, BackendError> {
+    ///
+    /// - should be called after [`avcodec_alloc_context3`](ffmpeg_sys_next::avcodec_alloc_context3)
+    /// - should be called before [`avcodec_parameters_to_context`](ffmpeg_sys_next::avcodec_parameters_to_context)
+    pub unsafe fn new_on_codec(codec_context: NonNull<AVCodecContext>) -> Result<(), BackendError> {
         let mut device_ctx_ptr = ptr::null_mut();
 
         BackendError::result_of(unsafe {
@@ -203,12 +225,11 @@ impl HardwareDeviceContext {
             )
         })?;
 
-        unsafe { (*codec_context.as_ptr()).hw_device_ctx = av_buffer_ref(device_ctx_ptr) };
+        // NOTE(hack3rmann): libav takes ownership of `Self` therefore we do not return `Self`
+        unsafe { (*codec_context.as_ptr()).hw_device_ctx = device_ctx_ptr };
         unsafe { (*codec_context.as_ptr()).get_format = Some(Self::get_hw_format) };
 
-        Ok(Self {
-            raw: unsafe { NonNull::new_unchecked(device_ctx_ptr) },
-        })
+        Ok(())
     }
 
     pub(crate) unsafe extern "C" fn get_hw_format(
@@ -243,6 +264,7 @@ mod tests {
     };
 
     #[test]
+    #[ignore = "no file provided"]
     fn hwdec() {
         let mut format_context = FormatContext::from_input(
             c"/home/hack3rmann/Downloads/alone-hollow-knight.3840x2160.mp4",
@@ -254,9 +276,10 @@ mod tests {
         let best_stream_index = best_stream.index();
         let codec_parameters = best_stream.codec_parameters();
 
-        let mut codec_context = CodecContext::from_parameters_with_hw_accel(codec_parameters).unwrap();
+        let mut codec_context =
+            CodecContext::from_parameters_with_hw_accel(codec_parameters).unwrap();
 
-        let decoder = Codec::find_for_id(codec_context.codec_id()).unwrap();
+        let decoder = Codec::find_decoder_for_id(codec_context.codec_id()).unwrap();
 
         for config in decoder.hardware_config() {
             dbg!(config);
