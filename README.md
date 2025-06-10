@@ -35,7 +35,7 @@ Start the daemon. For example, in hyprland, you run:
 hyprctl dispatch exec "waywe-daemon path/to/your/default/video"
 ```
 
-Then use the `waywe` cli tool to control deamon's behavior:
+Then use the `waywe` cli tool to control daemon's behavior:
 
 ```shell
 waywe video path/to/your/video.mp4
