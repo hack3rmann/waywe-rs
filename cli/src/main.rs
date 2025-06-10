@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 use runtime::{DaemonCommand, IpcSocket, ipc::Client};
+use rustix::io::Errno;
 use std::{
     ffi::{CStr, CString},
     io,
@@ -28,7 +29,18 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let socket = IpcSocket::<Client, DaemonCommand>::connect().unwrap();
+    let socket = match IpcSocket::<Client, DaemonCommand>::connect() {
+        Ok(socket) => socket,
+        Err(Errno::CONNREFUSED) => {
+            error!("no waywe-daemon is running");
+            return ExitCode::FAILURE;
+        }
+        Err(error) => {
+            error!(?error, "failed to connect to waywe-daemon");
+            return ExitCode::FAILURE;
+        }
+    };
+
     socket
         .send(DaemonCommand::SetVideo {
             path: absolute_path,
