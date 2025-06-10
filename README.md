@@ -1,21 +1,46 @@
-MIT License
+# Blazingly Fast Video Wallpapers in Rust
 
-Copyright (c) 2025 hack3rmann
+## Highly efficient wallpaper software with no overhead
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+- `waywe` stands for '**Way**land **W**allpaper **E**ngine'
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+### Warning
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+- This software is still in development, some major features may be unimplemented.
+- Special warning for the ones who concerned about unsafe code in Rust: this project contains a
+  lot of it and built upon it. Of course, to speed up a lot of processing code.
+
+![waywe usage demo](https://i.imgur.com/nUuwGKw.mp4)
+
+## Build
+
+```shell
+cargo build --release
+```
+
+## Install
+
+After build instructions run:
+
+```shell
+sudo cp /target/release/waywe /usr/bin/waywe
+sudo cp /target/release/waywe-daemon /usr/bin/waywe-daemon
+```
+
+## Usage
+
+Start the daemon. For example, in hyprland, you run:
+
+```shell
+hyprctl dispatch exec waywe-daemon
+```
+
+Then use the `waywe` cli tool to control deamon's behavior:
+
+```shell
+waywe video path/to/your/video.mp4
+```
+
+## Future directions
+
+- Using [Wallpaper Engine](https://www.wallpaperengine.io/en) assets for the future use with `waywe`.
