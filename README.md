@@ -10,7 +10,7 @@
 - Special warning for the ones who concerned about unsafe code in Rust: this project contains a
   lot of it and built upon it. Of course, to speed up a lot of processing code.
 
-![waywe usage demo](https://github.com/user-attachments/assets/e3ab05c0-3cb4-4fb3-911b-852020370cc8)
+https://github.com/user-attachments/assets/e3ab05c0-3cb4-4fb3-911b-852020370cc8
 
 ## Build
 
