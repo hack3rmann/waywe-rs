@@ -6,3 +6,6 @@ edition.workspace = true
 [dependencies]
 clap = { version = "4.5.40", features = ["derive"] }
 runtime.workspace = true
+video.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
