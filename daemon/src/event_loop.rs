@@ -172,7 +172,6 @@ impl<A: App> EventLoop<A> {
                 }
 
                 for event in self.event_queue.events.drain(..) {
-                    tracing::error!("new event!");
                     self.app.process_event(&mut self.runtime, event).await;
                 }
 

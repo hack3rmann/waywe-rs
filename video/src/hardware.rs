@@ -1,8 +1,12 @@
-use crate::{Codec, VideoPixelFormat};
+use crate::{BackendError, Codec, VideoPixelFormat};
 use ffmpeg_sys_next::{
-    AVCodecHWConfig, AVHWDeviceType, av_hwdevice_get_type_name, av_hwdevice_iterate_types,
+    av_buffer_ref, av_buffer_unref, av_hwdevice_ctx_create, av_hwdevice_get_type_name, av_hwdevice_iterate_types, AVBufferRef, AVCodecContext, AVCodecHWConfig, AVHWDeviceType, AVPixelFormat
 };
-use std::{ffi::CStr, fmt};
+use std::{
+    ffi::CStr,
+    fmt,
+    ptr::{self, NonNull},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
 pub enum HardwareDeviceType {
@@ -179,6 +183,59 @@ impl<'s> Iterator for HardwareConfigIterator<'s> {
     }
 }
 
+pub struct HardwareDeviceContext {
+    raw: NonNull<AVBufferRef>,
+}
+
+impl HardwareDeviceContext {
+    /// # Safety
+    /// TODO(hack3rmann):safety
+    pub unsafe fn new_on_codec(codec_context: NonNull<AVCodecContext>) -> Result<Self, BackendError> {
+        let mut device_ctx_ptr = ptr::null_mut();
+
+        BackendError::result_of(unsafe {
+            av_hwdevice_ctx_create(
+                &raw mut device_ctx_ptr,
+                HardwareDeviceType::VaApi.to_backend(),
+                ptr::null(),
+                ptr::null_mut(),
+                0,
+            )
+        })?;
+
+        unsafe { (*codec_context.as_ptr()).hw_device_ctx = av_buffer_ref(device_ctx_ptr) };
+        unsafe { (*codec_context.as_ptr()).get_format = Some(Self::get_hw_format) };
+
+        Ok(Self {
+            raw: unsafe { NonNull::new_unchecked(device_ctx_ptr) },
+        })
+    }
+
+    pub(crate) unsafe extern "C" fn get_hw_format(
+        _: *mut AVCodecContext,
+        formats: *const AVPixelFormat,
+    ) -> AVPixelFormat {
+        let mut format_ptr = formats;
+
+        loop {
+            let format = unsafe { format_ptr.read() };
+
+            if let AVPixelFormat::AV_PIX_FMT_VAAPI | AVPixelFormat::AV_PIX_FMT_NONE = format {
+                break format;
+            }
+
+            format_ptr = format_ptr.wrapping_add(1);
+        }
+    }
+}
+
+impl Drop for HardwareDeviceContext {
+    fn drop(&mut self) {
+        let mut ptr = self.raw.as_ptr();
+        unsafe { av_buffer_unref(&raw mut ptr) };
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{
@@ -197,7 +254,7 @@ mod tests {
         let best_stream_index = best_stream.index();
         let codec_parameters = best_stream.codec_parameters();
 
-        let mut codec_context = CodecContext::from_parameters(codec_parameters).unwrap();
+        let mut codec_context = CodecContext::from_parameters_with_hw_accel(codec_parameters).unwrap();
 
         let decoder = Codec::find_for_id(codec_context.codec_id()).unwrap();
 

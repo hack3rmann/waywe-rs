@@ -10,7 +10,8 @@ members = [
     "wayland-sys",
     "unite-json",
     "video",
-    "cli", "runtime",
+    "cli",
+    "runtime",
 ]
 
 [workspace.package]

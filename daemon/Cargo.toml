@@ -1,5 +1,5 @@
 [package]
-name = "daemon"
+name = "waywe-daemon"
 version.workspace = true
 edition.workspace = true
 

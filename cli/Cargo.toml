@@ -1,5 +1,5 @@
 [package]
-name = "cli"
+name = "waywe"
 version.workspace = true
 edition.workspace = true
 

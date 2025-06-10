@@ -1,16 +1,16 @@
 use crate::{
-    AudioVideoFormat, BackendError, Frame, HardwareDeviceType, MediaType, Packet, Profile,
-    ProfileIterator, RatioI32, Stream,
-    hardware::{HardwareConfig, HardwareConfigIterator},
+    AudioVideoFormat, BackendError, Frame, MediaType, Packet, Profile, ProfileIterator, RatioI32,
+    Stream,
+    hardware::{HardwareConfig, HardwareConfigIterator, HardwareDeviceContext},
     implement_raw,
 };
 use bitflags::bitflags;
 use ffmpeg_sys_next::{
-    AV_PROFILE_UNKNOWN, AVCodec, AVCodecContext, AVCodecID, AVCodecParameters, AVPixelFormat,
-    av_buffer_ref, av_codec_is_decoder, av_codec_is_encoder, av_hwdevice_ctx_create,
-    avcodec_alloc_context3, avcodec_find_decoder, avcodec_get_hw_config, avcodec_open2,
-    avcodec_parameters_alloc, avcodec_parameters_copy, avcodec_parameters_free,
-    avcodec_parameters_to_context, avcodec_receive_frame, avcodec_send_packet,
+    AV_PROFILE_UNKNOWN, AVCodec, AVCodecContext, AVCodecID, AVCodecParameters, av_codec_is_decoder,
+    av_codec_is_encoder, avcodec_alloc_context3, avcodec_find_decoder, avcodec_free_context,
+    avcodec_get_hw_config, avcodec_open2, avcodec_parameters_alloc, avcodec_parameters_copy,
+    avcodec_parameters_free, avcodec_parameters_to_context, avcodec_receive_frame,
+    avcodec_send_packet,
 };
 use glam::UVec2;
 use std::{
@@ -243,53 +243,37 @@ impl Default for OwnedCodecParameters {
 }
 
 pub struct CodecContext {
+    // NOTE(hack3rmann): drop order matters here
+    _hw_device_context: Option<HardwareDeviceContext>,
     raw: NonNull<AVCodecContext>,
 }
 
 unsafe impl Send for CodecContext {}
 
-implement_raw!(CodecContext: AVCodecContext);
-
 impl CodecContext {
-    pub fn from_parameters(parameters: &CodecParameters) -> Result<Self, BackendError> {
+    /// # Safety
+    /// TODO(hack3rmann):safety
+    pub const unsafe fn from_raw(raw: NonNull<AVCodecContext>) -> Self {
+        Self {
+            raw,
+            _hw_device_context: None,
+        }
+    }
+
+    pub const fn as_raw(&self) -> NonNull<AVCodecContext> {
+        self.raw
+    }
+
+    pub fn from_parameters_with_hw_accel(
+        parameters: &CodecParameters,
+    ) -> Result<Self, BackendError> {
         // FIXME(hack3rmann): may result in suboptimal behavior ((C) docs)
         let Some(codec_context_ptr) = NonNull::new(unsafe { avcodec_alloc_context3(ptr::null()) })
         else {
             panic!("unexpected libav error");
         };
 
-        let mut device_ctx_ptr = ptr::null_mut();
-
-        // FIXME(hack3rmann): memory leak here
-        BackendError::result_of(unsafe {
-            av_hwdevice_ctx_create(
-                &raw mut device_ctx_ptr,
-                HardwareDeviceType::VaApi.to_backend(),
-                ptr::null(),
-                ptr::null_mut(),
-                0,
-            )
-        })?;
-
-        unsafe extern "C" fn get_hw_format(
-            _: *mut AVCodecContext,
-            formats: *const AVPixelFormat,
-        ) -> AVPixelFormat {
-            let mut format_ptr = formats;
-
-            loop {
-                let format = unsafe { format_ptr.read() };
-
-                if let AVPixelFormat::AV_PIX_FMT_VAAPI | AVPixelFormat::AV_PIX_FMT_NONE = format {
-                    break format;
-                }
-
-                format_ptr = format_ptr.wrapping_add(1);
-            }
-        }
-
-        unsafe { (*codec_context_ptr.as_ptr()).hw_device_ctx = av_buffer_ref(device_ctx_ptr) };
-        unsafe { (*codec_context_ptr.as_ptr()).get_format = Some(get_hw_format) };
+        let hw_device_context = unsafe { HardwareDeviceContext::new_on_codec(codec_context_ptr)? };
 
         BackendError::result_of(unsafe {
             avcodec_parameters_to_context(
@@ -300,11 +284,12 @@ impl CodecContext {
 
         Ok(Self {
             raw: codec_context_ptr,
+            _hw_device_context: Some(hw_device_context),
         })
     }
 
     pub fn from_stream(stream: &Stream) -> Result<Self, BackendError> {
-        Self::from_parameters(stream.codec_parameters())
+        Self::from_parameters_with_hw_accel(stream.codec_parameters())
     }
 
     pub fn send_packet(&mut self, packet: &Packet) -> Result<(), BackendError> {
@@ -338,6 +323,13 @@ impl CodecContext {
         BackendError::result_of(unsafe {
             avcodec_receive_frame(self.as_raw().as_ptr(), frame.as_raw().as_ptr())
         })
+    }
+}
+
+impl Drop for CodecContext {
+    fn drop(&mut self) {
+        let mut ptr = self.as_raw().as_ptr();
+        unsafe { avcodec_free_context(&raw mut ptr) };
     }
 }
 

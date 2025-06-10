@@ -84,7 +84,7 @@ impl App for VideoApp {
                     return;
                 }
 
-                let mut codec_context = match CodecContext::from_parameters(codec_parameters) {
+                let mut codec_context = match CodecContext::from_parameters_with_hw_accel(codec_parameters) {
                     Ok(context) => context,
                     Err(error) => {
                         error!(?error, "failed to construct codec context");
