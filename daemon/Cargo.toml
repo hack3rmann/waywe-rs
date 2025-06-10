@@ -4,9 +4,9 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-bytemuck = { version = "1.21.0", features = ["extern_crate_alloc", "derive"] }
+bytemuck.workspace = true
 raw-window-handle = "0.6.2"
-rustix = { version = "0.38.44", features = ["fs", "net", "process"] }
+rustix.workspace = true
 thiserror = "2.0.11"
 tokio = { version = "1.43.0", features = ["full"] }
 wgpu = { version = "24.0.1", features = ["glsl"] }
@@ -16,6 +16,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 glam.workspace = true
 video.workspace = true
+runtime.workspace = true
 
 [dev-dependencies]
 libc = "0.2.171"

@@ -1,10 +1,12 @@
 use crate::almost::Almost;
 use gpu::Wgpu;
+use ipc::Ipc;
 use timer::Timer;
 use video::Video;
 use wayland::Wayland;
 
 pub mod gpu;
+pub mod ipc;
 pub mod timer;
 pub mod video;
 pub mod wayland;
@@ -14,6 +16,7 @@ pub struct Runtime {
     pub video: Almost<Video>,
     pub wgpu: Almost<Wgpu>,
     pub wayland: Wayland,
+    pub ipc: Ipc,
 }
 
 impl Runtime {
@@ -23,6 +26,10 @@ impl Runtime {
             wayland,
             wgpu: Almost::uninit(),
             video: Almost::uninit(),
+            ipc: match Ipc::new() {
+                Ok(ipc) => ipc,
+                Err(error) => panic!("failed to initialize ipc: {error:?}"),
+            },
         }
     }
 

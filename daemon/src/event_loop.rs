@@ -3,6 +3,7 @@ use crate::runtime::{
     wayland::{ClientState, Compositor, LayerShell, LayerSurface, Surface, WLR_NAMESPACE, Wayland},
 };
 use glam::UVec2;
+use runtime::{DaemonCommand, RecvError};
 use std::{
     env,
     ffi::{CStr, CString},
@@ -159,7 +160,19 @@ impl<A: App> EventLoop<A> {
             loop {
                 self.runtime.timer.mark_frame_start();
 
+                match self.runtime.ipc.socket.try_recv() {
+                    Ok(DaemonCommand::SetVideo { path }) => self
+                        .event_queue
+                        .events
+                        .push(Event::UpdateWallpaper { path }),
+                    Err(RecvError::Empty) => {}
+                    Err(error) => {
+                        tracing::error!(?error, "failed to recv from waywe-cli");
+                    }
+                }
+
                 for event in self.event_queue.events.drain(..) {
+                    tracing::error!("new event!");
                     self.app.process_event(&mut self.runtime, event).await;
                 }
 
