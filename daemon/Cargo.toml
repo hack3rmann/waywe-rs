@@ -1,7 +1,12 @@
 [package]
-name = "waywe-daemon"
+name = "daemon"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "waywe-daemon"
+path = "src/main.rs"
 
 [dependencies]
 bytemuck.workspace = true

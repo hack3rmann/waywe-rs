@@ -2,6 +2,7 @@
 name = "video"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 
 [dependencies]
 ffmpeg-sys-next = { version = "7.1.3", features = ["build-vaapi"] }

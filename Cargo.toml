@@ -17,6 +17,7 @@ members = [
 [workspace.package]
 version = "0.0.1"
 edition = "2024"
+license = "MIT"
 
 [workspace.dependencies]
 wayland-client = { path = "wayland-client", features = ["smallvec"] }
