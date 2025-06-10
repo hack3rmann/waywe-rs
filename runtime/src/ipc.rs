@@ -12,19 +12,39 @@ use std::{
     time::Duration,
 };
 use thiserror::Error;
-use tracing::warn;
+use tracing::{debug, error, warn};
 
 pub const BUFFER_SIZE: usize = 256;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd, Eq, Ord, Hash)]
+pub enum Side {
+    #[default]
+    Client,
+    Server,
+}
+
+pub trait SocketSide {
+    const SIDE: Side;
+}
+
 pub struct Client;
+
+impl SocketSide for Client {
+    const SIDE: Side = Side::Client;
+}
+
 pub struct Server;
 
-pub struct IpcSocket<Side, T> {
+impl SocketSide for Server {
+    const SIDE: Side = Side::Server;
+}
+
+pub struct IpcSocket<Side: SocketSide, T> {
     fd: OwnedFd,
     _p: PhantomData<(Side, T)>,
 }
 
-impl<Side, T> IpcSocket<Side, T> {
+impl<S: SocketSide, T> IpcSocket<S, T> {
     pub(crate) fn socket_file() -> String {
         let runtime = env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| {
             let uid = rustix::process::getuid();
@@ -125,7 +145,6 @@ impl<T> IpcSocket<Client, T> {
 
 impl<T> IpcSocket<Server, T> {
     pub fn server() -> Result<Self, Errno> {
-        _ = rustix::fs::unlink(Self::path());
         let path = Path::new(Self::path());
 
         if let Some(dir) = path.parent() {
@@ -133,6 +152,8 @@ impl<T> IpcSocket<Server, T> {
                 std::fs::create_dir_all(dir).unwrap();
             }
         }
+
+        debug!(?path, "creating daemon socket");
 
         let addr = SocketAddrUnix::new(Self::path()).expect("addr is correct");
 
@@ -143,13 +164,35 @@ impl<T> IpcSocket<Server, T> {
             None,
         )?;
 
-        net::bind_unix(&socket, &addr)?;
+        loop {
+            match net::bind_unix(&socket, &addr) {
+                Ok(()) => break,
+                Err(Errno::ADDRINUSE) => {
+                    error!(
+                        path = Self::path(),
+                        "socket address already in use, trying to remove",
+                    );
+                    rustix::fs::unlink(Self::path())?
+                }
+                Err(other) => return Err(other),
+            }
+        }
+
         net::listen(&socket, 0)?;
 
         Ok(Self {
             fd: socket,
             _p: PhantomData,
         })
+    }
+}
+
+impl<S: SocketSide, T> Drop for IpcSocket<S, T> {
+    fn drop(&mut self) {
+        if S::SIDE == Side::Server {
+            debug!(path = Self::path(), "removing daemon socket");
+            _ = rustix::fs::unlink(Self::path());
+        }
     }
 }
 
