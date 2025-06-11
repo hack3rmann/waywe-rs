@@ -5,7 +5,7 @@ use crate::{
     runtime::{Runtime, RuntimeFeatures},
 };
 use image::{ImageReader, error::ImageError};
-use std::{io, path::Path, time::Duration};
+use std::{io, path::Path};
 use thiserror::Error;
 
 pub struct ImageWallpaper {
@@ -13,7 +13,10 @@ pub struct ImageWallpaper {
 }
 
 impl ImageWallpaper {
-    pub fn new(runtime: &Runtime, path: impl AsRef<Path>) -> Result<Self, ImageWallpaperCreationError> {
+    pub fn new(
+        runtime: &Runtime,
+        path: impl AsRef<Path>,
+    ) -> Result<Self, ImageWallpaperCreationError> {
         let path = path.as_ref();
         let reader = ImageReader::open(path)?;
         let image = reader.decode()?.into_rgba8();
@@ -57,7 +60,7 @@ impl Wallpaper for ImageWallpaper {
         runtime.control_flow.idle();
 
         Ok(FrameInfo {
-            target_frame_time: Duration::ZERO,
+            target_frame_time: None,
         })
     }
 }

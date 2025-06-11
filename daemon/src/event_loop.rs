@@ -7,13 +7,11 @@ use std::{
     ffi::CString,
     path::PathBuf,
     sync::{Once, atomic::Ordering},
-    thread,
     time::Duration,
 };
 use thiserror::Error;
 use tokio::runtime::Builder as AsyncRuntimeBuilder;
 use tracing::debug;
-use video::RatioI32;
 
 pub struct EventLoop<A> {
     runtime: Runtime,
@@ -93,7 +91,9 @@ impl<A: App> EventLoop<A> {
                             .extend(events.into_iter().map(|command| match command {
                                 DaemonCommand::SetVideo { path } => Event::NewVideo { path },
                                 DaemonCommand::SetImage { path } => Event::NewImage { path },
-                            }))
+                            }));
+
+                        self.runtime.timer.mark_wallpaper_start_time();
                     }
                     Err(RecvError::Empty) => {}
                     Err(error) => {
@@ -119,27 +119,8 @@ impl<A: App> EventLoop<A> {
                     self.runtime.wayland.client_state.as_ref(),
                 );
 
-                let render_time = self.runtime.timer.current_frame_duration();
-                let sleep_time = info.target_frame_time.saturating_sub(render_time);
-
-                // TODO(hack3rmann): skip a frame if `time_borrow >= target_frame_time`
-                if !sleep_time.is_zero() {
-                    let unborrowed_time = sleep_time.saturating_sub(self.runtime.timer.time_borrow);
-
-                    if !unborrowed_time.is_zero() {
-                        self.runtime.timer.time_borrow = Duration::default();
-                        thread::sleep(unborrowed_time);
-                    } else {
-                        self.runtime.timer.time_borrow -= sleep_time;
-                        tracing::warn!(
-                            ?render_time,
-                            "speeding up current frame due to time borrow"
-                        );
-                    }
-                // ignore first frame lag
-                } else if !self.runtime.timer.is_first_frame() {
-                    self.runtime.timer.time_borrow += render_time - info.target_frame_time;
-                    tracing::warn!(?render_time, "frame took too long to prepare");
+                if let Some(target_frame_time) = info.target_frame_time {
+                    self.runtime.timer.sleep_enough(target_frame_time);
                 }
 
                 self.event_queue
@@ -179,17 +160,9 @@ pub trait App {
     ) -> impl Future<Output = Result<FrameInfo, FrameError>> + Send;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct FrameInfo {
-    pub target_frame_time: Duration,
-}
-
-impl Default for FrameInfo {
-    fn default() -> Self {
-        Self {
-            target_frame_time: RatioI32::new(1, 60).unwrap().to_duration_seconds(),
-        }
-    }
+    pub target_frame_time: Option<Duration>,
 }
 
 #[derive(Error, Debug)]

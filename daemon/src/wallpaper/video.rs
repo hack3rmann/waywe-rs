@@ -462,7 +462,9 @@ impl Wallpaper for VideoWallpaper {
 
         surface_texture.present();
 
-        Ok(FrameInfo { target_frame_time })
+        Ok(FrameInfo {
+            target_frame_time: Some(target_frame_time),
+        })
     }
 }
 

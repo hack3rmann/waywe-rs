@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use std::{thread, time::{Duration, Instant}};
 
 #[allow(unused)]
 pub struct Timer {
@@ -37,11 +37,12 @@ impl Default for Timer {
 
 impl Timer {
     pub fn mark_event_loop_start_time(&mut self) {
-        _ = self.event_loop_start_time.insert(Instant::now());
+        self.event_loop_start_time = Some(Instant::now());
     }
 
     pub fn mark_wallpaper_start_time(&mut self) {
-        _ = self.wallpaper_start_time.insert(Instant::now());
+        self.frame_index = 0;
+        self.wallpaper_start_time = Some(Instant::now());
     }
 
     pub fn mark_frame_start(&mut self) {
@@ -80,5 +81,31 @@ impl Timer {
         };
 
         start_time.elapsed().saturating_sub(self.block_duration)
+    }
+
+    pub fn sleep_enough(&mut self, target_frame_time: Duration) {
+        let render_time = self.current_frame_duration();
+        let sleep_time = target_frame_time.saturating_sub(render_time);
+
+        // TODO(hack3rmann): skip a frame if `time_borrow >= target_frame_time`
+        if !sleep_time.is_zero() {
+            let unborrowed_time =
+                sleep_time.saturating_sub(self.time_borrow);
+
+            if !unborrowed_time.is_zero() {
+                self.time_borrow = Duration::default();
+                thread::sleep(unborrowed_time);
+            } else {
+                self.time_borrow -= sleep_time;
+                tracing::warn!(
+                    ?render_time,
+                    "speeding up current frame due to time borrow"
+                );
+            }
+        // ignore first frame lag
+        } else if !self.is_first_frame() {
+            self.time_borrow += render_time - target_frame_time;
+            tracing::warn!(?render_time, "frame took too long to prepare");
+        }
     }
 }
