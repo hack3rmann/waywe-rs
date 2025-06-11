@@ -83,9 +83,11 @@ impl From<HardwareDeviceType> for AVHWDeviceType {
 }
 
 /// Iterator yieding supported [`HardwareDeviceType`]s
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct HwDeviceTypeIterator {
     current: AVHWDeviceType,
 }
+static_assertions::assert_impl_all!(HwDeviceTypeIterator: Send, Sync);
 
 impl HwDeviceTypeIterator {
     pub const fn new() -> Self {
@@ -137,6 +139,7 @@ impl HardwareConfigMethods {
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct HardwareConfig(AVCodecHWConfig);
+static_assertions::assert_impl_all!(HardwareConfig: Send, Sync);
 
 impl HardwareConfig {
     /// A hardware pixel format which that decoder may be
@@ -180,6 +183,7 @@ pub struct HardwareConfigIterator<'s> {
     index: usize,
     codec: &'s Codec,
 }
+static_assertions::assert_impl_all!(HardwareConfigIterator<'_>: Send, Sync);
 
 impl<'s> HardwareConfigIterator<'s> {
     /// Construct new [`HardwareConfigIterator`] for the `codec`
@@ -204,6 +208,9 @@ impl<'s> Iterator for HardwareConfigIterator<'s> {
 pub struct HardwareDeviceContext {
     raw: NonNull<AVBufferRef>,
 }
+
+unsafe impl Send for HardwareDeviceContext {}
+unsafe impl Sync for HardwareDeviceContext {}
 
 implement_raw!(HardwareDeviceContext: AVBufferRef);
 

@@ -370,6 +370,9 @@ pub struct Stream {
 
 implement_raw!(Stream: AVStream);
 
+unsafe impl Send for Stream {}
+unsafe impl Sync for Stream {}
+
 impl Stream {
     /// Stream index in [`FormatContext`]
     pub const fn index(&self) -> usize {
@@ -463,6 +466,8 @@ impl fmt::Debug for Stream {
 
 #[repr(transparent)]
 pub struct VideoPixelDescriptor(AVPixFmtDescriptor);
+
+unsafe impl Sync for VideoPixelDescriptor {}
 
 impl VideoPixelDescriptor {
     /// Format name string
@@ -741,7 +746,6 @@ pub struct Packet {
 
 implement_raw!(Packet: AVPacket);
 
-// FIXME(hack3rmann): make all libav stuff Send + Sync indeed
 unsafe impl Send for Packet {}
 unsafe impl Sync for Packet {}
 
@@ -881,9 +885,15 @@ pub struct ProfileIterator<'s> {
     _p: PhantomData<&'s Codec>,
 }
 
+// Safety: `Codec` is `Sync` therefore `ProfileIterator` is `Send` and `Sync`
+unsafe impl Send for ProfileIterator<'_> {}
+unsafe impl Sync for ProfileIterator<'_> {}
+
 impl<'s> ProfileIterator<'s> {
     /// # Safety
-    /// FIXME(hack3rmann): safety
+    ///
+    /// - `ptr` should point to a valid [`AVProfile`] value
+    /// - lifetime of `Self` should be appropriate
     pub const unsafe fn from_raw(ptr: NonNull<AVProfile>) -> Self {
         Self {
             ptr,
@@ -911,6 +921,9 @@ impl<'s> Iterator for ProfileIterator<'s> {
 pub struct CodecIterator {
     raw: *mut c_void,
 }
+
+unsafe impl Send for CodecIterator {}
+unsafe impl Sync for CodecIterator {}
 
 impl CodecIterator {
     /// Constructs new [`CodecIterator`]
@@ -946,6 +959,7 @@ impl Iterator for CodecIterator {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ScalerFormat {
     pub size: UVec2,
     pub format: VideoPixelFormat,
@@ -983,6 +997,9 @@ pub struct SoftwareScaler {
     source_format: ScalerFormat,
     destination_format: ScalerFormat,
 }
+
+unsafe impl Send for SoftwareScaler {}
+unsafe impl Sync for SoftwareScaler {}
 
 impl SoftwareScaler {
     pub const fn as_raw(&self) -> NonNull<SwsContext> {
@@ -1027,7 +1044,7 @@ impl SoftwareScaler {
             return Err(BackendError::INVALID_DATA);
         }
 
-        // FIXME(hacl3rmann): reallocate better
+        // FIXME(hack3rmann): reallocate better
         if unsafe { output.is_empty() } {
             unsafe { output.alloc(self.destination_format.format, self.destination_format.size) }?;
         }

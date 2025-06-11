@@ -447,6 +447,8 @@ bitflags! {
 #[repr(transparent)]
 pub struct Codec(AVCodec);
 
+unsafe impl Sync for Codec {}
+
 impl Codec {
     /// Find a registered decoder with a matching codec ID.
     pub fn find_decoder_for_id(id: CodecId) -> Option<&'static Self> {

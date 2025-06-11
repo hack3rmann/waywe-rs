@@ -18,7 +18,7 @@ use std::mem;
 /// planes must be the same size. For packed sample formats, only the first data
 /// plane is used, and samples for each channel are interleaved. In this case,
 /// linesize is the buffer size, in bytes, for the 1 plane.
-#[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
+#[derive(Debug, PartialEq, PartialOrd, Clone, Copy, Eq, Ord, Hash)]
 pub enum AudioSampleFormat {
     /// Unsigned 8 bits
     U8 = 0,
@@ -629,7 +629,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub enum AudioVideoFormat {
     Audio(AudioSampleFormat),
     Video(VideoPixelFormat),

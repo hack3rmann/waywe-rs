@@ -10,7 +10,7 @@ use ffmpeg_sys_next::{
 use std::{error::Error, ffi::CStr, fmt, num::NonZeroI32};
 
 /// Backend error from libav
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub struct BackendError {
     encoded_code: NonZeroI32,
 }
@@ -149,6 +149,12 @@ impl BackendError {
         }
 
         Some(unsafe { String::from_utf8_unchecked(buffer) })
+    }
+}
+
+impl Default for BackendError {
+    fn default() -> Self {
+        Self::UNKNOWN
     }
 }
 
