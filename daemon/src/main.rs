@@ -1,12 +1,14 @@
 pub mod almost;
 pub mod event_loop;
+pub mod image_pipeline;
 pub mod runtime;
 pub mod video_pipeline;
 
-use almost::Almost;
 use ash::vk;
 use event_loop::{App, Event, EventLoop, FrameError, FrameInfo};
-use runtime::Runtime;
+use image::ImageReader;
+use image_pipeline::ImagePipeline;
+use runtime::{Runtime, RuntimeFeatures};
 use std::{mem::MaybeUninit, ptr, time::Duration};
 use tracing::error;
 use video::{
@@ -17,135 +19,37 @@ use video::{
 use video_pipeline::VideoPipeline;
 use wgpu::hal::api;
 
-struct Video {
+pub trait Wallpaper: Send + Sync + 'static {
+    fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError>;
+}
+
+struct VideoWallpaper {
+    pub do_loop_video: bool,
     pub pipeline: VideoPipeline,
     pub format_context: FormatContext,
     pub time_base: RatioI32,
     pub best_stream_index: usize,
     pub codec_context: CodecContext,
     pub frame_time_fallback: Duration,
-}
-
-struct VideoApp {
-    pub do_loop_video: bool,
-    pub video: Almost<Video>,
     pub packet: Option<Packet>,
     pub frame: Frame,
 }
 
-impl Default for VideoApp {
-    fn default() -> Self {
-        Self {
-            do_loop_video: true,
-            video: Almost::uninit(),
-            packet: None,
-            frame: Frame::new(),
-        }
-    }
-}
-
-impl App for VideoApp {
-    async fn process_event(&mut self, runtime: &mut Runtime, event: Event) {
-        match event {
-            Event::UpdateWallpaper { path } => {
-                runtime.init_wgpu().await;
-                runtime.init_video();
-
-                let format_context = match FormatContext::from_input(&path) {
-                    Ok(context) => context,
-                    Err(error) => {
-                        error!(?error, ?path, "failed to open file");
-                        return;
-                    }
-                };
-
-                let best_stream = match format_context.find_best_stream(MediaType::Video) {
-                    Ok(stream) => stream,
-                    Err(error) => {
-                        error!(?error, ?path, "failed to find video stream");
-                        return;
-                    }
-                };
-
-                let time_base = best_stream.time_base();
-                let best_stream_index = best_stream.index();
-                let codec_parameters = best_stream.codec_parameters();
-                let frame_rate = codec_parameters.frame_rate().unwrap();
-
-                if !matches!(
-                    codec_parameters.format(),
-                    Some(video::AudioVideoFormat::Video(VideoPixelFormat::Yuv420p))
-                ) {
-                    error!(format = ?codec_parameters.format(), "invalid_video_format");
-                    return;
-                }
-
-                let mut codec_context =
-                    match CodecContext::from_parameters_with_hw_accel(codec_parameters) {
-                        Ok(context) => context,
-                        Err(error) => {
-                            error!(?error, "failed to construct codec context");
-                            return;
-                        }
-                    };
-
-                let Some(decoder) = Codec::find_decoder_for_id(codec_parameters.codec_id()) else {
-                    error!("failed to find decoder");
-                    return;
-                };
-
-                if let Err(error) = codec_context.open(decoder) {
-                    error!(?error, "failed to open codec context");
-                }
-
-                const FRAME_DURATION_60_FPS: Duration =
-                    RatioI32::new(1, 60).unwrap().to_duration_seconds();
-
-                let frame_time_fallback = match frame_rate.inv() {
-                    Some(duration) => duration.to_duration_seconds(),
-                    None => FRAME_DURATION_60_FPS,
-                };
-
-                runtime.control_flow.busy();
-
-                Almost::init(
-                    &mut self.video,
-                    Video {
-                        pipeline: VideoPipeline::new(
-                            &runtime.wgpu.device,
-                            runtime.wgpu.surface_format,
-                            runtime.wayland.client_state.monitor_size(),
-                        ),
-                        format_context,
-                        time_base,
-                        best_stream_index,
-                        codec_context,
-                        frame_time_fallback,
-                    },
-                );
-            }
-        }
-    }
-
-    async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
-        if Almost::is_uninit(&self.video) {
-            return Err(FrameError::Skip);
-        }
-
+impl Wallpaper for VideoWallpaper {
+    fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
         loop {
             if self.packet.is_none() {
                 let packet = loop {
-                    let packet = match self.video.format_context.read_packet() {
+                    let packet = match self.format_context.read_packet() {
                         Ok(packet) => packet,
                         Err(BackendError::EOF) => {
                             if !self.do_loop_video {
                                 return Err(FrameError::StopRequested);
                             }
 
-                            let best_index = self.video.best_stream_index;
+                            let best_index = self.best_stream_index;
 
-                            if let Err(error) = self.video.format_context.repeat_stream(best_index)
-                            {
+                            if let Err(error) = self.format_context.repeat_stream(best_index) {
                                 error!(?error, "failed to reapead video stream");
                                 return Err(FrameError::Skip);
                             }
@@ -158,17 +62,17 @@ impl App for VideoApp {
                         }
                     };
 
-                    if packet.stream_index() == self.video.best_stream_index {
+                    if packet.stream_index() == self.best_stream_index {
                         break packet;
                     }
                 };
 
-                self.video.codec_context.send_packet(&packet).unwrap();
+                self.codec_context.send_packet(&packet).unwrap();
 
                 _ = self.packet.insert(packet);
             }
 
-            match self.video.codec_context.receive_frame(&mut self.frame) {
+            match self.codec_context.receive_frame(&mut self.frame) {
                 Ok(()) => break,
                 Err(..) => {
                     self.packet = None;
@@ -178,7 +82,7 @@ impl App for VideoApp {
         }
 
         let hw_device_context_buffer =
-            unsafe { (*self.video.codec_context.as_raw().as_ptr()).hw_device_ctx };
+            unsafe { (*self.codec_context.as_raw().as_ptr()).hw_device_ctx };
 
         assert!(!hw_device_context_buffer.is_null());
 
@@ -466,7 +370,7 @@ impl App for VideoApp {
             .device
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("video-bind-group"),
-                layout: &self.video.pipeline.bind_group_layout,
+                layout: &self.pipeline.bind_group_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
@@ -478,16 +382,16 @@ impl App for VideoApp {
                     },
                     wgpu::BindGroupEntry {
                         binding: 2,
-                        resource: wgpu::BindingResource::Sampler(&self.video.pipeline.sampler),
+                        resource: wgpu::BindingResource::Sampler(&self.pipeline.sampler),
                     },
                 ],
             });
 
         let target_frame_time = self
             .frame
-            .duration_in(self.video.time_base)
+            .duration_in(self.time_base)
             .map(FrameDuration::to_duration)
-            .unwrap_or(self.video.frame_time_fallback);
+            .unwrap_or(self.frame_time_fallback);
 
         let surface_texture = runtime.wgpu.surface.get_current_texture().unwrap();
         let surface_view = surface_texture.texture.create_view(&Default::default());
@@ -497,8 +401,7 @@ impl App for VideoApp {
             .device
             .create_command_encoder(&Default::default());
 
-        self.video
-            .pipeline
+        self.pipeline
             .render(&mut encoder, &surface_view, &bind_group);
 
         _ = runtime.wgpu.queue.submit([encoder.finish()]);
@@ -506,6 +409,174 @@ impl App for VideoApp {
         surface_texture.present();
 
         Ok(FrameInfo { target_frame_time })
+    }
+}
+
+pub struct ImageWallpaper {
+    pipeline: ImagePipeline,
+}
+
+impl Wallpaper for ImageWallpaper {
+    fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
+        let surface_texture = runtime.wgpu.surface.get_current_texture().unwrap();
+        let surface_view = surface_texture.texture.create_view(&Default::default());
+
+        let mut encoder = runtime
+            .wgpu
+            .device
+            .create_command_encoder(&Default::default());
+
+        self.pipeline.render(&mut encoder, &surface_view);
+
+        let submission_index = runtime.wgpu.queue.submit([encoder.finish()]);
+        _ = runtime
+            .wgpu
+            .device
+            .poll(wgpu::Maintain::wait_for(submission_index));
+
+        surface_texture.present();
+
+        runtime.control_flow.idle();
+
+        Ok(FrameInfo {
+            target_frame_time: Duration::ZERO,
+        })
+    }
+}
+
+#[derive(Default)]
+struct VideoApp {
+    pub wallpaper: Option<Box<dyn Wallpaper>>,
+}
+
+impl VideoApp {
+    pub fn set_wallpaper(&mut self, wallpaper: impl Wallpaper) {
+        self.wallpaper = Some(Box::new(wallpaper));
+    }
+}
+
+impl App for VideoApp {
+    async fn process_event(&mut self, runtime: &mut Runtime, event: Event) {
+        match event {
+            Event::NewImage { path } => {
+                runtime.enable(RuntimeFeatures::GPU).await;
+
+                let reader = match ImageReader::open(&path) {
+                    Ok(image) => image,
+                    Err(error) => {
+                        error!(?error, "failed to open image");
+                        return;
+                    }
+                };
+
+                let image = match reader.decode() {
+                    Ok(image) => image.into_rgba8(),
+                    Err(error) => {
+                        error!(?error, "failed to decode image");
+                        return;
+                    }
+                };
+
+                runtime.control_flow.busy();
+
+                self.set_wallpaper(ImageWallpaper {
+                    pipeline: ImagePipeline::new(
+                        &runtime.wgpu.device,
+                        &runtime.wgpu.queue,
+                        runtime.wgpu.surface_format,
+                        &image,
+                        runtime.wayland.client_state.monitor_size(),
+                    ),
+                });
+            }
+            Event::NewVideo { path } => {
+                runtime
+                    .enable(RuntimeFeatures::VIDEO | RuntimeFeatures::GPU)
+                    .await;
+
+                let format_context = match FormatContext::from_input(&path) {
+                    Ok(context) => context,
+                    Err(error) => {
+                        error!(?error, ?path, "failed to open file");
+                        return;
+                    }
+                };
+
+                let best_stream = match format_context.find_best_stream(MediaType::Video) {
+                    Ok(stream) => stream,
+                    Err(error) => {
+                        error!(?error, ?path, "failed to find video stream");
+                        return;
+                    }
+                };
+
+                let time_base = best_stream.time_base();
+                let best_stream_index = best_stream.index();
+                let codec_parameters = best_stream.codec_parameters();
+                let frame_rate = codec_parameters.frame_rate().unwrap();
+
+                if !matches!(
+                    codec_parameters.format(),
+                    Some(video::AudioVideoFormat::Video(VideoPixelFormat::Yuv420p))
+                ) {
+                    error!(format = ?codec_parameters.format(), "invalid_video_format");
+                    return;
+                }
+
+                let mut codec_context =
+                    match CodecContext::from_parameters_with_hw_accel(codec_parameters) {
+                        Ok(context) => context,
+                        Err(error) => {
+                            error!(?error, "failed to construct codec context");
+                            return;
+                        }
+                    };
+
+                let Some(decoder) = Codec::find_decoder_for_id(codec_parameters.codec_id()) else {
+                    error!("failed to find decoder");
+                    return;
+                };
+
+                if let Err(error) = codec_context.open(decoder) {
+                    error!(?error, "failed to open codec context");
+                }
+
+                const FRAME_DURATION_60_FPS: Duration =
+                    RatioI32::new(1, 60).unwrap().to_duration_seconds();
+
+                let frame_time_fallback = match frame_rate.inv() {
+                    Some(duration) => duration.to_duration_seconds(),
+                    None => FRAME_DURATION_60_FPS,
+                };
+
+                runtime.control_flow.busy();
+
+                self.set_wallpaper(VideoWallpaper {
+                    pipeline: VideoPipeline::new(
+                        &runtime.wgpu.device,
+                        runtime.wgpu.surface_format,
+                        runtime.wayland.client_state.monitor_size(),
+                    ),
+                    format_context,
+                    time_base,
+                    best_stream_index,
+                    codec_context,
+                    frame_time_fallback,
+                    do_loop_video: true,
+                    packet: None,
+                    frame: Frame::new(),
+                });
+            }
+        }
+    }
+
+    async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
+        let Some(generator) = self.wallpaper.as_mut() else {
+            runtime.control_flow.idle();
+            return Err(FrameError::Skip);
+        };
+
+        generator.frame(runtime)
     }
 }
 

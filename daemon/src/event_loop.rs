@@ -3,16 +3,20 @@ use crate::runtime::{
     wayland::{ClientState, Compositor, LayerShell, LayerSurface, Surface, WLR_NAMESPACE, Wayland},
 };
 use glam::UVec2;
-use runtime::{ipc::RecvMode, signals, DaemonCommand, RecvError};
-use tracing::debug;
+use runtime::{DaemonCommand, RecvError, ipc::RecvMode, signals};
 use std::{
     ffi::CString,
-    sync::{atomic::Ordering::{self, Relaxed}, Once},
+    path::PathBuf,
+    sync::{
+        Once,
+        atomic::Ordering::{self, Relaxed},
+    },
     thread,
     time::Duration,
 };
 use thiserror::Error;
 use tokio::runtime::Builder as AsyncRuntimeBuilder;
+use tracing::debug;
 use video::RatioI32;
 use wayland_client::{
     interface::{
@@ -177,24 +181,33 @@ impl<A: App> EventLoop<A> {
                     ControlFlow::Idle => {
                         debug!("daemon is waiting for incoming requests");
                         RecvMode::Blocking
-                    },
+                    }
                     ControlFlow::ShouldStop => {
                         debug!("shutdowning daemon");
                         break 'event_loop;
                     }
                 };
 
+                self.runtime.timer.mark_block_start();
+
                 match self.runtime.ipc.socket.recv(recv_mode) {
                     Ok(events) => {
-                        self.event_queue.events.extend(events.into_iter().map(
-                            |DaemonCommand::SetVideo { path }| Event::UpdateWallpaper { path },
-                        ))
+                        debug!(n_events = events.len(), "cli commands received");
+
+                        self.event_queue
+                            .events
+                            .extend(events.into_iter().map(|command| match command {
+                                DaemonCommand::SetVideo { path } => Event::NewVideo { path },
+                                DaemonCommand::SetImage { path } => Event::NewImage { path },
+                            }))
                     }
-                    Err(RecvError::Empty) => {},
+                    Err(RecvError::Empty) => {}
                     Err(error) => {
                         tracing::error!(?error, "failed to recv from waywe-cli");
                     }
                 }
+
+                self.runtime.timer.mark_block_end();
 
                 for event in self.event_queue.events.drain(..) {
                     self.app.process_event(&mut self.runtime, event).await;
@@ -235,7 +248,6 @@ impl<A: App> EventLoop<A> {
                     tracing::warn!(?render_time, "frame took too long to prepare");
                 }
 
-                // the modify `event_queue`
                 self.event_queue
                     .populate_from_wayland_client_state(&self.runtime.wayland.client_state);
             }
@@ -245,7 +257,8 @@ impl<A: App> EventLoop<A> {
 
 #[derive(Debug)]
 pub enum Event {
-    UpdateWallpaper { path: CString },
+    NewVideo { path: CString },
+    NewImage { path: PathBuf },
 }
 
 #[derive(Debug, Default)]

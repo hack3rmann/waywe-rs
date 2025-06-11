@@ -9,6 +9,8 @@ pub struct Timer {
     pub duration_since_last_frame: Duration,
     pub time_borrow: Duration,
     pub frame_index: usize,
+    pub block_start: Option<Instant>,
+    pub block_duration: Duration,
 }
 
 impl Timer {
@@ -24,9 +26,11 @@ impl Default for Timer {
             event_loop_start_time: None,
             wallpaper_start_time: None,
             current_frame_start_time: None,
-            duration_since_last_frame: Duration::default(),
-            time_borrow: Duration::default(),
+            duration_since_last_frame: Duration::ZERO,
+            time_borrow: Duration::ZERO,
             frame_index: usize::MAX,
+            block_start: None,
+            block_duration: Duration::ZERO,
         }
     }
 }
@@ -41,6 +45,9 @@ impl Timer {
     }
 
     pub fn mark_frame_start(&mut self) {
+        self.block_start = None;
+        self.block_duration = Duration::ZERO;
+
         let now = Instant::now();
         let frame_start = self.current_frame_start_time.get_or_insert(now);
 
@@ -50,8 +57,21 @@ impl Timer {
         self.frame_index = self.frame_index.wrapping_add(1);
     }
 
+    pub fn mark_block_start(&mut self) {
+        self.block_start = Some(Instant::now());
+    }
+
+    pub fn mark_block_end(&mut self) -> Duration {
+        let Some(start) = self.block_start else {
+            return Duration::ZERO;
+        };
+
+        self.block_duration = start.elapsed();
+        self.block_duration
+    }
+
     pub fn last_frame_duration(&self) -> Duration {
-        self.duration_since_last_frame
+        self.duration_since_last_frame.saturating_sub(self.block_duration)
     }
 
     pub fn current_frame_duration(&self) -> Duration {
@@ -59,6 +79,6 @@ impl Timer {
             return Duration::default();
         };
 
-        Instant::now().duration_since(start_time)
+        start_time.elapsed().saturating_sub(self.block_duration)
     }
 }

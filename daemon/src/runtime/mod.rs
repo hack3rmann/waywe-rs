@@ -1,4 +1,5 @@
 use crate::almost::Almost;
+use bitflags::bitflags;
 use gpu::Wgpu;
 use ipc::Ipc;
 use timer::Timer;
@@ -30,6 +31,14 @@ impl ControlFlow {
 
     pub fn stop(&mut self) {
         *self = Self::ShouldStop;
+    }
+}
+
+bitflags! {
+    #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord, Default, Hash)]
+    pub struct RuntimeFeatures: u32 {
+        const GPU = 0x1;
+        const VIDEO = 0x2;
     }
 }
 
@@ -66,6 +75,16 @@ impl Runtime {
     pub async fn init_wgpu(&mut self) {
         if Almost::is_uninit(&self.wgpu) {
             Almost::init(&mut self.wgpu, Wgpu::new(&self.wayland).await);
+        }
+    }
+
+    pub async fn enable(&mut self, features: RuntimeFeatures) {
+        if features.contains(RuntimeFeatures::VIDEO) {
+            self.init_video();
+        }
+
+        if features.contains(RuntimeFeatures::GPU) {
+            self.init_wgpu().await;
         }
     }
 }

@@ -1,10 +1,11 @@
 use clap::{Parser, Subcommand};
+use image::ImageReader;
 use runtime::{DaemonCommand, IpcSocket, ipc::Client};
 use rustix::io::Errno;
 use std::{
     ffi::{CStr, CString},
     io,
-    path::Path,
+    path::{Path, PathBuf},
     process::ExitCode,
 };
 use tracing::error;
@@ -14,20 +15,35 @@ fn main() -> ExitCode {
     tracing_subscriber::fmt::init();
     video::init();
 
-    let Command::Video { path } = Args::parse().command;
+    let daemon_command = match Args::parse().command {
+        Command::Video { path } => {
+            let absolute_path = match absolutize_path(&path) {
+                Ok(path) => path,
+                Err(error) => {
+                    error!(?error, "failed to construct absolute path");
+                    return ExitCode::FAILURE;
+                }
+            };
 
-    let absolute_path = match absolutize_path(&path) {
-        Ok(path) => path,
-        Err(error) => {
-            error!(?error, "failed to construct absolute path");
-            return ExitCode::FAILURE;
+            if !is_path_valid(&absolute_path) {
+                error!(?absolute_path, "can not send video to the daemon");
+                return ExitCode::FAILURE;
+            }
+
+            DaemonCommand::SetVideo { path }
+        }
+        Command::Image { path } => {
+            let _reader = match ImageReader::open(&path) {
+                Ok(image) => image,
+                Err(error) => {
+                    error!(?error, "failed to open image");
+                    return ExitCode::FAILURE;
+                }
+            };
+
+            DaemonCommand::SetImage { path }
         }
     };
-
-    if !is_path_valid(&absolute_path) {
-        error!(?absolute_path, "can not send video to the daemon");
-        return ExitCode::FAILURE;
-    }
 
     let socket = match IpcSocket::<Client, DaemonCommand>::connect() {
         Ok(socket) => socket,
@@ -41,11 +57,7 @@ fn main() -> ExitCode {
         }
     };
 
-    socket
-        .send(DaemonCommand::SetVideo {
-            path: absolute_path,
-        })
-        .unwrap();
+    socket.send(daemon_command).unwrap();
 
     ExitCode::SUCCESS
 }
@@ -62,6 +74,9 @@ enum Command {
     Video {
         /// Path/URL to the video
         path: CString,
+    },
+    Image {
+        path: PathBuf,
     },
 }
 

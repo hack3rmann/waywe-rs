@@ -128,6 +128,7 @@ pub struct FormatContext {
 }
 
 unsafe impl Send for FormatContext {}
+unsafe impl Sync for FormatContext {}
 
 implement_raw!(FormatContext: AVFormatContext);
 
@@ -565,6 +566,7 @@ pub struct Frame {
 implement_raw!(Frame: AVFrame);
 
 unsafe impl Send for Frame {}
+unsafe impl Sync for Frame {}
 
 impl Frame {
     /// Allocate an [`Frame`] and set its fields to default values.
@@ -739,7 +741,9 @@ pub struct Packet {
 
 implement_raw!(Packet: AVPacket);
 
+// FIXME(hack3rmann): make all libav stuff Send + Sync indeed
 unsafe impl Send for Packet {}
+unsafe impl Sync for Packet {}
 
 impl Packet {
     /// Creates new empty [`Packet`]

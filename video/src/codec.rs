@@ -269,6 +269,7 @@ pub struct CodecContext {
 implement_raw!(CodecContext: AVCodecContext);
 
 unsafe impl Send for CodecContext {}
+unsafe impl Sync for CodecContext {}
 
 impl CodecContext {
     /// Fill the codec context based on the values from the supplied codec
