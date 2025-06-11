@@ -177,16 +177,28 @@ impl App for VideoApp {
             }
         }
 
-        let hw_device_context =
-            unsafe { (*(*self.video.codec_context.as_raw().as_ptr()).hw_device_ctx).data }
-                .cast::<AVHWDeviceContext>();
+        let hw_device_context_buffer =
+            unsafe { (*self.video.codec_context.as_raw().as_ptr()).hw_device_ctx };
 
-        let va_display = unsafe {
-            (*(*hw_device_context)
+        assert!(!hw_device_context_buffer.is_null());
+
+        let hw_device_context =
+            unsafe { (*hw_device_context_buffer).data }.cast::<AVHWDeviceContext>();
+
+        assert!(!hw_device_context.is_null());
+
+        let vaapi_device_context = unsafe {
+            (*hw_device_context)
                 .hwctx
-                .cast::<va::AvVaApiDeviceContext>())
-            .display
+                .cast::<va::AvVaApiDeviceContext>()
         };
+
+        assert!(!vaapi_device_context.is_null());
+
+        let va_display = unsafe { (*vaapi_device_context).display };
+
+        assert!(!va_display.is_null());
+
         let surface_id =
             unsafe { (*self.frame.as_raw().as_ptr()).data[3] } as usize as va::SurfaceId;
 
