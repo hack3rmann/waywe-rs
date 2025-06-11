@@ -124,7 +124,12 @@ impl<S: SocketSide, T> IpcSocket<S, T> {
         )?;
 
         let mut events = EventVec::with_capacity(1);
-        epoll::wait(&epoll_fd, &mut events, -1)?;
+        match epoll::wait(&epoll_fd, &mut events, -1) {
+            Ok(()) => {},
+            // user has interrupted the daemon => no events to process
+            Err(Errno::INTR) => return Err(RecvError::Empty),
+            Err(error) => return Err(RecvError::Os(error)),
+        }
 
         events
             .iter()

@@ -16,15 +16,20 @@ pub enum ControlFlow {
     #[default]
     Idle,
     Busy,
+    ShouldStop,
 }
 
 impl ControlFlow {
-    pub fn make_idle(&mut self) {
+    pub fn idle(&mut self) {
         *self = Self::Idle;
     }
 
-    pub fn make_busy(&mut self) {
+    pub fn busy(&mut self) {
         *self = Self::Busy;
+    }
+
+    pub fn stop(&mut self) {
+        *self = Self::ShouldStop;
     }
 }
 

@@ -38,6 +38,7 @@ glam = { version = "0.30.3", features = ["bytemuck"] }
 video = { path = "video" }
 rustix = { version = "0.38.44", features = ["fs", "net", "process", "mm", "shm", "event"] }
 bytemuck = { version = "1.21.0", features = ["extern_crate_alloc", "derive"] }
+libc = "0.2.170"
 
 [profile.release]
 lto = true

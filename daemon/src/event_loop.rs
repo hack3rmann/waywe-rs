@@ -3,11 +3,11 @@ use crate::runtime::{
     wayland::{ClientState, Compositor, LayerShell, LayerSurface, Surface, WLR_NAMESPACE, Wayland},
 };
 use glam::UVec2;
-use runtime::{DaemonCommand, RecvError, ipc::RecvMode};
+use runtime::{ipc::RecvMode, signals, DaemonCommand, RecvError};
 use tracing::debug;
 use std::{
     ffi::CString,
-    sync::{Once, atomic::Ordering::Relaxed},
+    sync::{atomic::Ordering::{self, Relaxed}, Once},
     thread,
     time::Duration,
 };
@@ -41,6 +41,9 @@ impl<A: App> EventLoop<A> {
     pub fn new(app: A) -> Self {
         static TRACING_ONCE: Once = Once::new();
         TRACING_ONCE.call_once(tracing_subscriber::fmt::init);
+
+        static SIGNALS_ONCE: Once = Once::new();
+        SIGNALS_ONCE.call_once(signals::setup);
 
         let mut wayland = Wayland::new();
         let mut buf = WlStackMessageBuffer::new();
@@ -161,15 +164,24 @@ impl<A: App> EventLoop<A> {
         async_runtime.block_on(async {
             self.runtime.timer.mark_event_loop_start_time();
 
-            loop {
+            'event_loop: loop {
                 self.runtime.timer.mark_frame_start();
+
+                if signals::SHOULD_EXIT.load(Ordering::Relaxed) {
+                    debug!("caught stop signal");
+                    break self.runtime.control_flow.stop();
+                }
 
                 let recv_mode = match self.runtime.control_flow {
                     ControlFlow::Busy => RecvMode::NonBlocking,
                     ControlFlow::Idle => {
-                        debug!("daemon waiting for incoming requests");
+                        debug!("daemon is waiting for incoming requests");
                         RecvMode::Blocking
                     },
+                    ControlFlow::ShouldStop => {
+                        debug!("shutdowning daemon");
+                        break 'event_loop;
+                    }
                 };
 
                 match self.runtime.ipc.socket.recv(recv_mode) {
@@ -190,7 +202,7 @@ impl<A: App> EventLoop<A> {
 
                 let info = match self.app.frame(&mut self.runtime).await {
                     Ok(info) => info,
-                    Err(FrameError::StopRequested) => return,
+                    Err(FrameError::StopRequested) => break 'event_loop,
                     Err(FrameError::Skip) => continue,
                 };
 

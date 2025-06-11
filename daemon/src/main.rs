@@ -106,7 +106,7 @@ impl App for VideoApp {
                     None => FRAME_DURATION_60_FPS,
                 };
 
-                runtime.control_flow.make_busy();
+                runtime.control_flow.busy();
 
                 Almost::init(
                     &mut self.video,

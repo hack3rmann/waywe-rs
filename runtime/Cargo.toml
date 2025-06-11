@@ -11,3 +11,4 @@ bincode = "2.0.1"
 tracing.workspace = true
 bytemuck.workspace = true
 smallvec.workspace = true
+libc.workspace = true
