@@ -761,6 +761,8 @@ impl fmt::Debug for Frame {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Frame")
             .field("size", &self.size())
+            .field("format", &self.format())
+            .field("plane_count", &self.count_planes())
             .finish_non_exhaustive()
     }
 }

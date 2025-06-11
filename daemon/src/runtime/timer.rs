@@ -46,6 +46,7 @@ impl Timer {
     pub fn mark_wallpaper_start_time(&mut self) {
         self.frame_index = 0;
         self.wallpaper_start_time = Some(Instant::now());
+        self.time_borrow = Duration::ZERO;
     }
 
     pub fn mark_frame_start(&mut self) {

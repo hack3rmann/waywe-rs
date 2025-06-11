@@ -163,23 +163,24 @@ impl Wallpaper for VideoWallpaper {
 
         VaError::result_of(unsafe { va::sync_surface(va_display, surface_id) }).unwrap();
 
-        const VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2: u32 = 0x40000000;
         const VA_EXPORT_SURFACE_READ_ONLY: u32 = 1;
         const VA_EXPORT_SURFACE_SEPARATE_LAYERS: u32 = 4;
 
-        let mut desc = MaybeUninit::<va::DrmPrimeDescriptor>::uninit();
-        VaError::result_of(unsafe {
-            va::export_surface_handle(
-                va_display,
-                surface_id,
-                VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2,
-                VA_EXPORT_SURFACE_READ_ONLY | VA_EXPORT_SURFACE_SEPARATE_LAYERS,
-                desc.as_mut_ptr().cast(),
-            )
-        })
-        .unwrap();
-
-        let va_surface_desc = unsafe { desc.assume_init() };
+        let va_surface_desc = {
+            // NOTE(hack3rmann): `desc` should be zero-initialized according to the docs
+            let mut desc = MaybeUninit::<va::DrmPrimeDescriptor>::zeroed();
+            VaError::result_of(unsafe {
+                va::export_surface_handle(
+                    va_display,
+                    surface_id,
+                    va::DrmPrimeDescriptor::MEMORY_TYPE,
+                    VA_EXPORT_SURFACE_READ_ONLY | VA_EXPORT_SURFACE_SEPARATE_LAYERS,
+                    desc.as_mut_ptr().cast(),
+                )
+            })
+            .unwrap();
+            unsafe { desc.assume_init() }
+        };
 
         let dma_buf_fd = va_surface_desc.objects[0].fd;
 

@@ -37,6 +37,8 @@ pub struct DrmPrimeSurfaceDescriptorLayer {
     pub pitch: [u32; 4],
 }
 
+pub const VA_PADDING_MEDIUM: usize = 8;
+
 /// External buffer descriptor for a DRM PRIME surface with flags
 ///
 /// This structure is an extention for VADRMPRIMESurfaceDescriptor,
@@ -61,6 +63,14 @@ pub struct DrmPrimeDescriptor {
     pub num_layers: u32,
     /// Description of each layer in the surface.
     pub layers: [DrmPrimeSurfaceDescriptorLayer; 4],
+    /// flags. See "Surface external buffer descriptor flags".
+    pub flags: u32,
+    /// Reserved bytes, must be zero
+    pub reserved: [u32; VA_PADDING_MEDIUM - 1],
+}
+
+impl DrmPrimeDescriptor {
+    pub const MEMORY_TYPE: u32 = 0x08000000;
 }
 
 /// VAAPI connection details.
