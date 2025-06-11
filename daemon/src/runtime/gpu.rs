@@ -1,5 +1,6 @@
 use super::wayland::Wayland;
 use ash::vk;
+use std::collections::HashMap;
 use wgpu::hal::{DeviceError, api};
 
 pub struct Wgpu {
@@ -9,6 +10,7 @@ pub struct Wgpu {
     pub queue: wgpu::Queue,
     pub surface: wgpu::Surface<'static>,
     pub surface_format: wgpu::TextureFormat,
+    pub shader_cache: HashMap<&'static str, wgpu::ShaderModule>,
 }
 
 impl Wgpu {
@@ -152,6 +154,7 @@ impl Wgpu {
             queue,
             surface,
             surface_format,
+            shader_cache: HashMap::new(),
         }
     }
 }

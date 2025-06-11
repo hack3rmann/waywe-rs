@@ -14,7 +14,7 @@ pub struct ImageWallpaper {
 
 impl ImageWallpaper {
     pub fn new(
-        runtime: &Runtime,
+        runtime: &mut Runtime,
         path: impl AsRef<Path>,
     ) -> Result<Self, ImageWallpaperCreationError> {
         let path = path.as_ref();
@@ -23,9 +23,7 @@ impl ImageWallpaper {
 
         Ok(Self {
             pipeline: ImagePipeline::new(
-                &runtime.wgpu.device,
-                &runtime.wgpu.queue,
-                runtime.wgpu.surface_format,
+                &mut runtime.wgpu,
                 &image,
                 runtime.wayland.client_state.monitor_size(),
             ),

@@ -1,6 +1,7 @@
+use crate::runtime::gpu::Wgpu;
 use glam::{UVec2, Vec2};
 use image::{ImageBuffer, Rgba};
-use std::{borrow::Cow, collections::HashMap, mem};
+use std::{collections::HashMap, mem};
 use wgpu::util::DeviceExt as _;
 
 const SCREEN_TRIANGLE: [Vec2; 3] = [
@@ -18,20 +19,20 @@ pub struct ImagePipeline {
 
 impl ImagePipeline {
     pub fn new(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        surface_format: wgpu::TextureFormat,
+        gpu: &mut Wgpu,
         image: &ImageBuffer<Rgba<u8>, Vec<u8>>,
-        screen_size: UVec2,
+        monitor_size: UVec2,
     ) -> Self {
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("screen-triangle"),
-            contents: bytemuck::bytes_of(&SCREEN_TRIANGLE),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
+        let vertex_buffer = gpu
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("screen-triangle"),
+                contents: bytemuck::bytes_of(&SCREEN_TRIANGLE),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
 
-        let texture = device.create_texture_with_data(
-            queue,
+        let texture = gpu.device.create_texture_with_data(
+            &gpu.queue,
             &wgpu::TextureDescriptor {
                 label: Some("image-texture"),
                 size: wgpu::Extent3d {
@@ -52,35 +53,37 @@ impl ImagePipeline {
 
         let texture_view = texture.create_view(&Default::default());
 
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        let sampler = gpu.device.create_sampler(&wgpu::SamplerDescriptor {
             min_filter: wgpu::FilterMode::Linear,
             mag_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
 
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("image-bind-group-layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
+        let bind_group_layout =
+            gpu.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("image-bind-group-layout"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                    ],
+                });
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("image-bind-group"),
             layout: &bind_group_layout,
             entries: &[
@@ -95,90 +98,107 @@ impl ImagePipeline {
             ],
         });
 
-        let vertex_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("image-vertex-shader"),
-            source: wgpu::ShaderSource::Glsl {
-                shader: Cow::Borrowed(include_str!("shaders/white-vertex.glsl")),
-                stage: wgpu::naga::ShaderStage::Vertex,
-                defines: HashMap::default(),
-            },
-        });
+        const VERTEX_SHADER_NAME: &str = "shaders/white-vertex.glsl";
+        const FRAGMENT_SHADER_NAME: &str = "shaders/image.glsl";
 
-        let fragment_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("image-vertex-shader"),
-            source: wgpu::ShaderSource::Glsl {
-                shader: Cow::Borrowed(include_str!("shaders/image.glsl")),
-                stage: wgpu::naga::ShaderStage::Fragment,
-                defines: HashMap::default(),
-            },
-        });
+        gpu.shader_cache
+            .entry(VERTEX_SHADER_NAME)
+            .or_insert_with(|| {
+                gpu.device
+                    .create_shader_module(wgpu::ShaderModuleDescriptor {
+                        label: None,
+                        source: wgpu::ShaderSource::Glsl {
+                            shader: include_str!("shaders/white-vertex.glsl").into(),
+                            stage: wgpu::naga::ShaderStage::Vertex,
+                            defines: Default::default(),
+                        },
+                    })
+            });
 
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("image-pipeline-layout"),
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[wgpu::PushConstantRange {
-                stages: wgpu::ShaderStages::FRAGMENT,
-                range: 0..mem::size_of::<Vec2>() as u32,
-            }],
-        });
+        gpu.shader_cache
+            .entry(FRAGMENT_SHADER_NAME)
+            .or_insert_with(|| {
+                gpu.device
+                    .create_shader_module(wgpu::ShaderModuleDescriptor {
+                        label: None,
+                        source: wgpu::ShaderSource::Glsl {
+                            shader: include_str!("shaders/image.glsl").into(),
+                            stage: wgpu::naga::ShaderStage::Fragment,
+                            defines: Default::default(),
+                        },
+                    })
+            });
 
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("image-pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &vertex_shader,
-                entry_point: Some("main"),
-                compilation_options: wgpu::PipelineCompilationOptions {
-                    constants: &HashMap::new(),
-                    zero_initialize_workgroup_memory: false,
-                },
-                buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: mem::size_of_val(&SCREEN_TRIANGLE[0]) as u64,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &[wgpu::VertexAttribute {
-                        format: wgpu::VertexFormat::Float32x2,
-                        offset: 0,
-                        shader_location: 0,
-                    }],
+        let pipeline_layout = gpu
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("image-pipeline-layout"),
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[wgpu::PushConstantRange {
+                    stages: wgpu::ShaderStages::FRAGMENT,
+                    range: 0..mem::size_of::<Vec2>() as u32,
                 }],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &fragment_shader,
-                entry_point: Some("main"),
-                compilation_options: wgpu::PipelineCompilationOptions {
-                    constants: &HashMap::new(),
-                    zero_initialize_workgroup_memory: false,
+            });
+
+        let pipeline = gpu
+            .device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("image-pipeline"),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &gpu.shader_cache[VERTEX_SHADER_NAME],
+                    entry_point: Some("main"),
+                    compilation_options: wgpu::PipelineCompilationOptions {
+                        constants: &HashMap::new(),
+                        zero_initialize_workgroup_memory: false,
+                    },
+                    buffers: &[wgpu::VertexBufferLayout {
+                        array_stride: mem::size_of_val(&SCREEN_TRIANGLE[0]) as u64,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &[wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Float32x2,
+                            offset: 0,
+                            shader_location: 0,
+                        }],
+                    }],
                 },
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: surface_format,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: None,
-                unclipped_depth: false,
-                polygon_mode: wgpu::PolygonMode::Fill,
-                conservative: false,
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview: None,
-            cache: None,
-        });
+                fragment: Some(wgpu::FragmentState {
+                    module: &gpu.shader_cache[FRAGMENT_SHADER_NAME],
+                    entry_point: Some("main"),
+                    compilation_options: wgpu::PipelineCompilationOptions {
+                        constants: &HashMap::new(),
+                        zero_initialize_workgroup_memory: false,
+                    },
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: gpu.surface_format,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    strip_index_format: None,
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: None,
+                    unclipped_depth: false,
+                    polygon_mode: wgpu::PolygonMode::Fill,
+                    conservative: false,
+                },
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState {
+                    count: 1,
+                    mask: !0,
+                    alpha_to_coverage_enabled: false,
+                },
+                multiview: None,
+                cache: None,
+            });
 
         Self {
             vertex_buffer,
             bind_group,
             pipeline,
-            screen_size,
+            screen_size: monitor_size,
         }
     }
 

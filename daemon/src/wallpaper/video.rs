@@ -28,7 +28,7 @@ pub struct VideoWallpaper {
 }
 
 impl VideoWallpaper {
-    pub fn new(runtime: &Runtime, path: &CStr) -> Result<Self, VideoWallpaperCreationError> {
+    pub fn new(runtime: &mut Runtime, path: &CStr) -> Result<Self, VideoWallpaperCreationError> {
         let format_context = FormatContext::from_input(path)?;
         let best_stream = format_context.find_best_stream(MediaType::Video)?;
 
@@ -68,8 +68,7 @@ impl VideoWallpaper {
 
         Ok(Self {
             pipeline: VideoPipeline::new(
-                &runtime.wgpu.device,
-                runtime.wgpu.surface_format,
+                &mut runtime.wgpu,
                 runtime.wayland.client_state.monitor_size(),
             ),
             format_context,
