@@ -46,13 +46,14 @@ impl VideoWallpaper {
             ));
         }
 
-        let mut codec_context = CodecContext::from_parameters_with_hw_accel(codec_parameters)?;
-
         let Some(decoder) = Codec::find_decoder_for_id(codec_parameters.codec_id()) else {
             return Err(VideoWallpaperCreationError::VideoBackend(
                 BackendError::DECODER_NOT_FOUND,
             ));
         };
+
+        let mut codec_context =
+            CodecContext::from_parameters_with_hw_accel(codec_parameters, Some(decoder))?;
 
         if let Err(error) = codec_context.open(decoder) {
             error!(?error, "failed to open codec context");

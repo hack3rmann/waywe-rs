@@ -283,10 +283,10 @@ mod tests {
         let best_stream_index = best_stream.index();
         let codec_parameters = best_stream.codec_parameters();
 
-        let mut codec_context =
-            CodecContext::from_parameters_with_hw_accel(codec_parameters).unwrap();
+        let decoder = Codec::find_decoder_for_id(codec_parameters.codec_id()).unwrap();
 
-        let decoder = Codec::find_decoder_for_id(codec_context.codec_id()).unwrap();
+        let mut codec_context =
+            CodecContext::from_parameters_with_hw_accel(codec_parameters, Some(decoder)).unwrap();
 
         for config in decoder.hardware_config() {
             dbg!(config);

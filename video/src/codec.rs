@@ -264,9 +264,10 @@ impl Default for OwnedCodecParameters {
 /// structure field names for historic reasons or brevity.
 pub struct CodecContext {
     raw: NonNull<AVCodecContext>,
+    codec_id: Option<CodecId>,
 }
 
-implement_raw!(CodecContext: AVCodecContext);
+implement_raw!(CodecContext { raw, codec_id: None }: AVCodecContext);
 
 unsafe impl Send for CodecContext {}
 unsafe impl Sync for CodecContext {}
@@ -278,11 +279,23 @@ impl CodecContext {
     /// Fields in codec that do not have a counterpart in par are not touched.
     ///
     /// Also, initializes hardware acceleration context on this [`CodecContext`]
+    ///
+    /// # Note
+    ///
+    /// - if `codec` is [`Some`], allocate private data and initialize defaults
+    ///   for the given codec. It is illegal to then call [`CodecContext::open`]
+    ///   with a different codec.
+    /// - if [`None`], then the codec-specific defaults won't be initialized,
+    ///   which may result in suboptimal default settings (this is
+    ///   important mainly for encoders, e.g. libx264).
     pub fn from_parameters_with_hw_accel(
         parameters: &CodecParameters,
+        codec: Option<&Codec>,
     ) -> Result<Self, BackendError> {
-        // FIXME(hack3rmann): may result in suboptimal behavior ((C) docs)
-        let Some(codec_context_ptr) = NonNull::new(unsafe { avcodec_alloc_context3(ptr::null()) })
+        let codec_ptr = codec.map(|codec| &raw const *codec).unwrap_or(ptr::null());
+
+        let Some(codec_context_ptr) =
+            NonNull::new(unsafe { avcodec_alloc_context3(codec_ptr.cast()) })
         else {
             panic!("unexpected libav error");
         };
@@ -299,6 +312,7 @@ impl CodecContext {
 
         Ok(Self {
             raw: codec_context_ptr,
+            codec_id: codec.map(Codec::id),
         })
     }
 
@@ -306,9 +320,23 @@ impl CodecContext {
     /// parameters. Any allocated fields in codec that have a corresponding field in
     /// par are freed and replaced with duplicates of the corresponding field in par.
     /// Fields in codec that do not have a counterpart in par are not touched.
-    pub fn from_parameters(parameters: &CodecParameters) -> Result<Self, BackendError> {
-        // FIXME(hack3rmann): may result in suboptimal behavior ((C) docs)
-        let Some(codec_context_ptr) = NonNull::new(unsafe { avcodec_alloc_context3(ptr::null()) })
+    ///
+    /// # Note
+    ///
+    /// - if `codec` is [`Some`], allocate private data and initialize defaults
+    ///   for the given codec. It is illegal to then call [`CodecContext::open`]
+    ///   with a different codec.
+    /// - if [`None`], then the codec-specific defaults won't be initialized,
+    ///   which may result in suboptimal default settings (this is
+    ///   important mainly for encoders, e.g. libx264).
+    pub fn from_parameters(
+        parameters: &CodecParameters,
+        codec: Option<&Codec>,
+    ) -> Result<Self, BackendError> {
+        let codec_ptr = codec.map(|codec| &raw const *codec).unwrap_or(ptr::null());
+
+        let Some(codec_context_ptr) =
+            NonNull::new(unsafe { avcodec_alloc_context3(codec_ptr.cast()) })
         else {
             panic!("unexpected libav error");
         };
@@ -322,12 +350,13 @@ impl CodecContext {
 
         Ok(Self {
             raw: codec_context_ptr,
+            codec_id: codec.map(Codec::id),
         })
     }
 
     /// Constructs [`CodecContext`] from [`CodecParameters`] provided be `stream`
     pub fn from_stream(stream: &Stream) -> Result<Self, BackendError> {
-        Self::from_parameters_with_hw_accel(stream.codec_parameters())
+        Self::from_parameters_with_hw_accel(stream.codec_parameters(), None)
     }
 
     // TODO(hack3rmann): provide `CodecContext::set_skip_frame` API based
@@ -378,12 +407,23 @@ impl CodecContext {
     ///
     /// # Note
     ///
-    /// Always call this function before using decoding routines.
+    /// - always call this function before using decoding routines.
+    /// - will return [`Err`] if [`CodecContext`] was initialized with another [`Codec`]
     ///
     /// # Parameter
     ///
     /// `codec` - The codec to open this context for. If a non-NULL codec has been
     pub fn open(&mut self, codec: &Codec) -> Result<(), BackendError> {
+        if let Some(id) = self.codec_id {
+            // NOTE(hack3rmann): if codec context was initialized with codec default values
+            // then it is invalid to open it with another codec
+            if codec.id() != id {
+                return Err(BackendError::INVALID_DATA);
+            }
+        } else {
+            self.codec_id = Some(codec.id());
+        }
+
         BackendError::result_of(unsafe {
             avcodec_open2(
                 self.as_raw().as_ptr(),
@@ -410,12 +450,34 @@ impl Drop for CodecContext {
 
 /// Codec ID
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CodecId(pub AVCodecID);
+
+impl CodecId {
+    pub const NONE: Self = Self(AVCodecID::AV_CODEC_ID_NONE);
+}
+
+impl Default for CodecId {
+    fn default() -> Self {
+        Self::NONE
+    }
+}
 
 impl fmt::Debug for CodecId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+impl PartialOrd for CodecId {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for CodecId {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        u32::cmp(&(self.0 as u32), &(other.0 as u32))
     }
 }
 
