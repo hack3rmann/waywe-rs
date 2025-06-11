@@ -1,16 +1,12 @@
 use crate::runtime::{
     ControlFlow, Runtime,
-    wayland::{ClientState, Compositor, LayerShell, LayerSurface, Surface, WLR_NAMESPACE, Wayland},
+    wayland::{ClientState, Wayland},
 };
-use glam::UVec2;
 use runtime::{DaemonCommand, RecvError, ipc::RecvMode, signals};
 use std::{
     ffi::CString,
     path::PathBuf,
-    sync::{
-        Once,
-        atomic::Ordering::{self, Relaxed},
-    },
+    sync::{Once, atomic::Ordering},
     thread,
     time::Duration,
 };
@@ -18,16 +14,6 @@ use thiserror::Error;
 use tokio::runtime::Builder as AsyncRuntimeBuilder;
 use tracing::debug;
 use video::RatioI32;
-use wayland_client::{
-    interface::{
-        WlCompositorCreateSurfaceRequest, WlSurfaceCommitRequest, WlSurfaceSetBufferScaleRequest,
-        ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellLayer, ZwlrLayerSurfaceAnchor,
-        ZwlrLayerSurfaceKeyboardInteractivity, ZwlrLayerSurfaceSetAnchorRequest,
-        ZwlrLayerSurfaceSetExclusiveZoneRequest, ZwlrLayerSurfaceSetKeyboardInteractivityRequest,
-        ZwlrLayerSurfaceSetMarginRequest,
-    },
-    sys::{object::WlObjectHandle, wire::WlStackMessageBuffer},
-};
 
 pub struct EventLoop<A> {
     runtime: Runtime,
@@ -49,99 +35,7 @@ impl<A: App> EventLoop<A> {
         static SIGNALS_ONCE: Once = Once::new();
         SIGNALS_ONCE.call_once(signals::setup);
 
-        let mut wayland = Wayland::new();
-        let mut buf = WlStackMessageBuffer::new();
-
-        let registry = wayland
-            .display
-            .create_registry(&mut buf, wayland.main_queue.as_mut().storage_mut());
-
-        wayland
-            .display
-            .roundtrip(wayland.main_queue.as_mut(), wayland.client_state.as_ref());
-
-        let compositor = registry
-            .bind::<Compositor>(&mut buf, wayland.main_queue.as_mut().storage_mut())
-            .unwrap();
-
-        let layer_shell = registry
-            .bind::<LayerShell>(&mut buf, wayland.main_queue.as_mut().storage_mut())
-            .unwrap();
-
-        let surface: WlObjectHandle<Surface> = compositor.create_object(
-            &mut buf,
-            wayland.main_queue.as_mut().storage_mut(),
-            WlCompositorCreateSurfaceRequest,
-        );
-
-        let layer_surface: WlObjectHandle<LayerSurface> = layer_shell.create_object(
-            &mut buf,
-            wayland.main_queue.as_mut().storage_mut(),
-            ZwlrLayerShellGetLayerSurfaceRequest {
-                surface: surface.id(),
-                output: None,
-                layer: ZwlrLayerShellLayer::Background,
-                namespace: WLR_NAMESPACE,
-            },
-        );
-
-        layer_surface.request(
-            &mut buf,
-            &wayland.main_queue.as_ref().storage(),
-            ZwlrLayerSurfaceSetAnchorRequest {
-                anchor: ZwlrLayerSurfaceAnchor::all(),
-            },
-        );
-
-        layer_surface.request(
-            &mut buf,
-            &wayland.main_queue.as_ref().storage(),
-            ZwlrLayerSurfaceSetExclusiveZoneRequest { zone: -1 },
-        );
-
-        layer_surface.request(
-            &mut buf,
-            &wayland.main_queue.as_ref().storage(),
-            ZwlrLayerSurfaceSetMarginRequest {
-                top: 0,
-                right: 0,
-                bottom: 0,
-                left: 0,
-            },
-        );
-
-        layer_surface.request(
-            &mut buf,
-            &wayland.main_queue.as_ref().storage(),
-            ZwlrLayerSurfaceSetKeyboardInteractivityRequest {
-                keyboard_interactivity: ZwlrLayerSurfaceKeyboardInteractivity::None,
-            },
-        );
-
-        surface.request(
-            &mut buf,
-            &wayland.main_queue.as_ref().storage(),
-            WlSurfaceSetBufferScaleRequest { scale: 1 },
-        );
-
-        surface.request(
-            &mut buf,
-            &wayland.main_queue.as_ref().storage(),
-            WlSurfaceCommitRequest,
-        );
-
-        wayland
-            .display
-            .roundtrip(wayland.main_queue.as_mut(), wayland.client_state.as_ref());
-
-        let screen_size = UVec2::new(
-            wayland.client_state.monitor_width.load(Relaxed),
-            wayland.client_state.monitor_height.load(Relaxed),
-        );
-
-        assert_ne!(screen_size.x, 0);
-        assert_ne!(screen_size.y, 0);
-
+        let wayland = Wayland::new();
         let event_queue = EventQueue::default();
 
         let control_flow = if event_queue.events.is_empty() {
