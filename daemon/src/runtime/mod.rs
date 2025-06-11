@@ -11,16 +11,34 @@ pub mod timer;
 pub mod video;
 pub mod wayland;
 
+#[derive(Clone, Copy, Default, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
+pub enum ControlFlow {
+    #[default]
+    Idle,
+    Busy,
+}
+
+impl ControlFlow {
+    pub fn make_idle(&mut self) {
+        *self = Self::Idle;
+    }
+
+    pub fn make_busy(&mut self) {
+        *self = Self::Busy;
+    }
+}
+
 pub struct Runtime {
     pub timer: Timer,
     pub video: Almost<Video>,
     pub wgpu: Almost<Wgpu>,
     pub wayland: Wayland,
     pub ipc: Ipc,
+    pub control_flow: ControlFlow,
 }
 
 impl Runtime {
-    pub fn new(wayland: Wayland) -> Self {
+    pub fn new(wayland: Wayland, control_flow: ControlFlow) -> Self {
         Self {
             timer: Timer::default(),
             wayland,
@@ -30,6 +48,7 @@ impl Runtime {
                 Ok(ipc) => ipc,
                 Err(error) => panic!("failed to initialize ipc: {error:?}"),
             },
+            control_flow,
         }
     }
 

@@ -36,7 +36,7 @@ smallvec = { version = "1.14.0", features = ["union", "serde", "const_generics",
 tracing-subscriber = "0.3.19"
 glam = { version = "0.30.3", features = ["bytemuck"] }
 video = { path = "video" }
-rustix = { version = "0.38.44", features = ["fs", "net", "process", "mm", "shm"] }
+rustix = { version = "0.38.44", features = ["fs", "net", "process", "mm", "shm", "event"] }
 bytemuck = { version = "1.21.0", features = ["extern_crate_alloc", "derive"] }
 
 [profile.release]

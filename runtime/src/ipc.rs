@@ -3,12 +3,20 @@ use bincode::{
     error::{DecodeError, EncodeError},
 };
 use rustix::{
+    event::epoll::{self, EventData, EventFlags, EventVec},
     io::{self, Errno},
-    net::{self, AddressFamily, SocketAddrUnix, SocketFlags, SocketType, sockopt::Timeout},
+    net::{
+        self, AddressFamily, RecvFlags, SocketAddrUnix, SocketFlags, SocketType, sockopt::Timeout,
+    },
 };
 use smallvec::{SmallVec, smallvec};
 use std::{
-    env, io::ErrorKind, marker::PhantomData, mem, os::fd::OwnedFd, path::Path, sync::OnceLock,
+    env,
+    marker::PhantomData,
+    mem,
+    os::fd::{AsRawFd, OwnedFd},
+    path::Path,
+    sync::OnceLock,
     time::Duration,
 };
 use thiserror::Error;
@@ -92,27 +100,69 @@ impl<S: SocketSide, T> IpcSocket<S, T> {
         Ok(())
     }
 
-    pub fn try_recv(&self) -> Result<T, RecvError>
+    pub fn recv(&self, mode: RecvMode) -> Result<SmallVec<[T; 1]>, RecvError>
     where
         T: Decode<()>,
     {
-        let fd = match net::accept(&self.fd) {
+        match mode {
+            RecvMode::Blocking => self.blocking_recv(),
+            RecvMode::NonBlocking => self.nonblocking_recv().map(|value| smallvec![value]),
+        }
+    }
+
+    pub fn blocking_recv(&self) -> Result<SmallVec<[T; 1]>, RecvError>
+    where
+        T: Decode<()>,
+    {
+        let epoll_fd = epoll::create(epoll::CreateFlags::CLOEXEC)?;
+
+        epoll::add(
+            &epoll_fd,
+            &self.fd,
+            EventData::new_u64(self.fd.as_raw_fd() as u64),
+            EventFlags::IN,
+        )?;
+
+        let mut events = EventVec::with_capacity(1);
+        epoll::wait(&epoll_fd, &mut events, -1)?;
+
+        events
+            .iter()
+            .filter(|event| {
+                // NOTE(hack3rmann): read from `event.flags` is unaligned,
+                // therefore we must make a copy into a local variable
+                let flags = event.flags;
+                flags.contains(EventFlags::IN)
+            })
+            .map(|_| self.nonblocking_recv())
+            // collecting into result lazily
+            .collect()
+    }
+
+    pub fn nonblocking_recv(&self) -> Result<T, RecvError>
+    where
+        T: Decode<()>,
+    {
+        let fd = match net::accept_with(&self.fd, SocketFlags::empty()) {
             Ok(fd) => fd,
             Err(Errno::INTR | Errno::WOULDBLOCK) => return Err(RecvError::Empty),
             Err(other) => return Err(RecvError::Os(other)),
         };
 
         let mut length = 0_u32;
-        match io::read(&fd, bytemuck::bytes_of_mut(&mut length)) {
+
+        match net::recv(
+            &fd,
+            bytemuck::bytes_of_mut(&mut length),
+            RecvFlags::DONTWAIT,
+        ) {
             Ok(n_bytes) => assert_eq!(n_bytes, mem::size_of_val(&length)),
-            Err(error) if matches!(error.kind(), ErrorKind::WouldBlock) => {
-                return Err(RecvError::Empty);
-            }
+            Err(Errno::WOULDBLOCK) => return Err(RecvError::Empty),
             Err(error) => return Err(RecvError::Os(error)),
         }
 
         let mut buf: SmallVec<[u8; BUFFER_SIZE]> = smallvec![0; length as usize];
-        io::read(&fd, &mut buf)?;
+        net::recv(&fd, &mut buf, RecvFlags::WAITALL)?;
 
         let (value, _n_bytes) = bincode::decode_from_slice(&buf, bincode::config::standard())?;
 
@@ -158,9 +208,9 @@ impl<T> IpcSocket<Server, T> {
         let addr = SocketAddrUnix::new(Self::path()).expect("addr is correct");
 
         let socket = net::socket_with(
-            net::AddressFamily::UNIX,
-            net::SocketType::STREAM,
-            net::SocketFlags::CLOEXEC | net::SocketFlags::NONBLOCK,
+            AddressFamily::UNIX,
+            SocketType::STREAM,
+            SocketFlags::CLOEXEC | SocketFlags::NONBLOCK,
             None,
         )?;
 
@@ -194,6 +244,13 @@ impl<S: SocketSide, T> Drop for IpcSocket<S, T> {
             _ = rustix::fs::unlink(Self::path());
         }
     }
+}
+
+#[derive(Clone, Copy, Default, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
+pub enum RecvMode {
+    #[default]
+    NonBlocking,
+    Blocking,
 }
 
 #[derive(Debug, Error)]

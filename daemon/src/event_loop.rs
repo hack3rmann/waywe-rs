@@ -1,18 +1,18 @@
 use crate::runtime::{
-    Runtime,
+    ControlFlow, Runtime,
     wayland::{ClientState, Compositor, LayerShell, LayerSurface, Surface, WLR_NAMESPACE, Wayland},
 };
 use glam::UVec2;
-use runtime::{DaemonCommand, RecvError};
+use runtime::{DaemonCommand, RecvError, ipc::RecvMode};
+use tracing::debug;
 use std::{
-    env,
-    ffi::{CStr, CString},
+    ffi::CString,
     sync::{Once, atomic::Ordering::Relaxed},
     thread,
     time::Duration,
 };
 use thiserror::Error;
-use tokio::runtime::{Builder as AsyncRuntimeBuilder, Runtime as AsyncRuntime};
+use tokio::runtime::Builder as AsyncRuntimeBuilder;
 use video::RatioI32;
 use wayland_client::{
     interface::{
@@ -26,7 +26,6 @@ use wayland_client::{
 };
 
 pub struct EventLoop<A> {
-    async_runtime: AsyncRuntime,
     runtime: Runtime,
     event_queue: EventQueue,
     app: A,
@@ -136,36 +135,50 @@ impl<A: App> EventLoop<A> {
         assert_ne!(screen_size.x, 0);
         assert_ne!(screen_size.y, 0);
 
-        let async_runtime = AsyncRuntimeBuilder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-
         let event_queue = EventQueue::default();
 
-        let runtime = Runtime::new(wayland);
+        let control_flow = if event_queue.events.is_empty() {
+            ControlFlow::Idle
+        } else {
+            ControlFlow::Busy
+        };
+
+        let runtime = Runtime::new(wayland, control_flow);
 
         Self {
             runtime,
             app,
-            async_runtime,
             event_queue,
         }
     }
 
     pub fn run(&mut self) {
-        self.async_runtime.block_on(async {
+        let async_runtime = AsyncRuntimeBuilder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        async_runtime.block_on(async {
             self.runtime.timer.mark_event_loop_start_time();
 
             loop {
                 self.runtime.timer.mark_frame_start();
 
-                match self.runtime.ipc.socket.try_recv() {
-                    Ok(DaemonCommand::SetVideo { path }) => self
-                        .event_queue
-                        .events
-                        .push(Event::UpdateWallpaper { path }),
-                    Err(RecvError::Empty) => {}
+                let recv_mode = match self.runtime.control_flow {
+                    ControlFlow::Busy => RecvMode::NonBlocking,
+                    ControlFlow::Idle => {
+                        debug!("daemon waiting for incoming requests");
+                        RecvMode::Blocking
+                    },
+                };
+
+                match self.runtime.ipc.socket.recv(recv_mode) {
+                    Ok(events) => {
+                        self.event_queue.events.extend(events.into_iter().map(
+                            |DaemonCommand::SetVideo { path }| Event::UpdateWallpaper { path },
+                        ))
+                    }
+                    Err(RecvError::Empty) => {},
                     Err(error) => {
                         tracing::error!(?error, "failed to recv from waywe-cli");
                     }
@@ -223,36 +236,9 @@ pub enum Event {
     UpdateWallpaper { path: CString },
 }
 
+#[derive(Debug, Default)]
 pub struct EventQueue {
     pub events: Vec<Event>,
-}
-
-impl Default for EventQueue {
-    fn default() -> Self {
-        const FILE_NAMES: &[&CStr] = &[
-            c"/home/hack3rmann/Downloads/Telegram Desktop/845514446/video.mp4",
-            c"/home/hack3rmann/Downloads/snowfall-in-forest.3840x2160.mp4",
-            c"/home/hack3rmann/Downloads/nailmaster-mato.3840x2160.mp4",
-            c"/home/hack3rmann/Downloads/alone-hollow-knight.3840x2160.mp4",
-            c"/home/hack3rmann/Downloads/queens-gardens-hollow-knight.3840x2160.mp4",
-            c"/home/hack3rmann/Videos/ObsRecordings/2025-05-16 15-51-50.mp4",
-            c"/home/hack3rmann/Pictures/Wallpapers/night-sky-purple-moon-clouds-3840x2160.mp4",
-            c"http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-        ];
-
-        let path = env::args()
-            .nth(1)
-            .map(|s| {
-                let mut bytes = s.into_bytes();
-                bytes.push(0);
-                unsafe { CString::from_vec_with_nul_unchecked(bytes) }
-            })
-            .unwrap_or_else(|| CString::from(FILE_NAMES[4]));
-
-        Self {
-            events: vec![Event::UpdateWallpaper { path }],
-        }
-    }
 }
 
 impl EventQueue {

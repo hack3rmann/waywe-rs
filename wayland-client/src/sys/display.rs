@@ -201,8 +201,6 @@ impl<S: State> WlDisplay<S> {
             let error_code = self.get_error_code().unwrap();
             panic!("WlDisplay::roundtrip_queue failed: {error_code:?}");
         }
-
-        tracing::debug!("WlDisplay::roundtrip dispatched {n_events_dispatched} events");
     }
 }
 
