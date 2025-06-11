@@ -51,7 +51,7 @@ pub trait Dispatch: HasObjectType + 'static {
     fn dispatch(
         &mut self,
         _state: &Self::State,
-        _storage: &mut WlObjectStorage<'_, Self::State>,
+        _storage: &mut WlObjectStorage<Self::State>,
         _message: WlMessage<'_>,
     ) {
         // do nothing
@@ -128,12 +128,12 @@ pub const fn is_empty_dispatch_data_allowed<T: Dispatch>() -> bool {
     T::ALLOW_EMPTY_DISPATCH && mem::size_of::<T>() == 0 && !mem::needs_drop::<T>()
 }
 
-pub(crate) type WlDispatchFn<T, S> = fn(&mut T, &S, &mut WlObjectStorage<'_, S>, WlMessage<'_>);
+pub(crate) type WlDispatchFn<T, S> = fn(&mut T, &S, &mut WlObjectStorage<S>, WlMessage<'_>);
 
 #[repr(C)]
-pub(crate) struct WlDispatchData<T: 'static, S: State> {
+pub(crate) struct WlDispatchData<T: 'static, S> {
     pub dispatch: WlDispatchFn<T, S>,
-    pub storage: Option<NonNull<WlObjectStorage<'static, S>>>,
+    pub storage: Option<NonNull<WlObjectStorage<S>>>,
     pub state: Option<NonNull<S>>,
     pub data: ThinData<T>,
 }

@@ -110,7 +110,7 @@ impl Dispatch for LayerSurface {
     fn dispatch(
         &mut self,
         state: &Self::State,
-        storage: &mut WlObjectStorage<'_, Self::State>,
+        storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
         let Some(ZwlrLayerSurfaceConfigureEvent {
@@ -165,9 +165,7 @@ pub struct WaylandHandle {
 
 pub struct Wayland {
     pub(crate) client_state: Pin<Box<ClientState>>,
-    // NOTE(hack3rmann): 'The fields of a struct are dropped in declaration order.'
-    // This is relevant, because `WlEventQueue` references `WlDisplay`
-    pub(crate) main_queue: Pin<Box<WlEventQueue<'static, ClientState>>>,
+    pub(crate) main_queue: Pin<Box<WlEventQueue<ClientState>>>,
     pub(crate) display: WlDisplay<ClientState>,
     pub handle: WaylandHandle,
 }
@@ -176,15 +174,7 @@ impl Wayland {
     pub fn new() -> Self {
         let client_state = Box::pin(ClientState::default());
         let display = WlDisplay::connect(client_state.as_ref()).unwrap();
-        let queue = Box::pin(display.take_main_queue().unwrap());
-
-        // remove thicky lifetime
-        let mut main_queue = unsafe {
-            std::mem::transmute::<
-                Pin<Box<WlEventQueue<ClientState>>>,
-                Pin<Box<WlEventQueue<'static, ClientState>>>,
-            >(queue)
-        };
+        let mut main_queue = Box::pin(display.take_main_queue().unwrap());
 
         let mut buf = WlStackMessageBuffer::new();
 

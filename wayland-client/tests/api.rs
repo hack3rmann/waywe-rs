@@ -49,7 +49,7 @@ macro_rules! define_empty_dispatchers {
                 fn dispatch(
                     &mut self,
                     _state: &Self::State,
-                    _storage: &mut wayland_client::WlObjectStorage<'_, Self::State>,
+                    _storage: &mut wayland_client::WlObjectStorage<Self::State>,
                     _message: wayland_client::WlMessage<'_>,
                 ) {
                     unreachable!()
@@ -98,7 +98,7 @@ impl Dispatch for WlLayerSurface {
     fn dispatch(
         &mut self,
         _: &Self::State,
-        storage: &mut WlObjectStorage<'_, Self::State>,
+        storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
         let Some(ZwlrLayerSurfaceConfigureEvent { serial, .. }) = message.as_event() else {

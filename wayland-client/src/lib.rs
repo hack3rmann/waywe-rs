@@ -73,7 +73,7 @@
 //!         // Global client state to be used
 //!         _state: &Self::State,
 //!         // Storage this object belongs to
-//!         _storage: &mut WlObjectStorage<'_, Self::State>,
+//!         _storage: &mut WlObjectStorage<Self::State>,
 //!         // Message to be dispatched
 //!         message: WlMessage<'_>,
 //!     ) {

@@ -42,7 +42,7 @@ impl Dispatch for WlCompositor {
     fn dispatch(
         &mut self,
         _state: &Self::State,
-        _storage: &mut WlObjectStorage<'_, Self::State>,
+        _storage: &mut WlObjectStorage<Self::State>,
         _message: WlMessage<'_>,
     ) {
         unreachable!()
@@ -71,7 +71,7 @@ impl Dispatch for WlWmBase {
     fn dispatch(
         &mut self,
         _state: &Self::State,
-        storage: &mut WlObjectStorage<'_, Self::State>,
+        storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
         let Some(XdgWmBasePingEvent { serial }) = message.as_event() else {
@@ -107,7 +107,7 @@ impl Dispatch for WlSurface {
     fn dispatch(
         &mut self,
         _state: &Self::State,
-        _storage: &mut WlObjectStorage<'_, Self::State>,
+        _storage: &mut WlObjectStorage<Self::State>,
         _message: WlMessage<'_>,
     ) {
         unreachable!()
@@ -136,7 +136,7 @@ impl Dispatch for WlXdgSurface {
     fn dispatch(
         &mut self,
         state: &Self::State,
-        storage: &mut WlObjectStorage<'_, Self::State>,
+        storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
         let Some(XdgSurfaceConfigureEvent { serial }) = message.as_event() else {
@@ -175,7 +175,7 @@ impl Dispatch for WlToplevel {
     fn dispatch(
         &mut self,
         state: &Self::State,
-        _storage: &mut WlObjectStorage<'_, Self::State>,
+        _storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
         match message.opcode {
