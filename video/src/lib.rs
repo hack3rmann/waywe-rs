@@ -625,10 +625,52 @@ impl Frame {
         Some(FrameDuration { base, duration })
     }
 
-    /// # Safety
+    /// Number of data planes in the [`Frame`]
+    pub fn count_planes(&self) -> usize {
+        const MAX_N_PLANES: usize = 8;
+
+        for i in 0..MAX_N_PLANES {
+            if unsafe { (*self.as_raw().as_ptr()).linesize[i] } == 0 {
+                return i;
+            }
+        }
+
+        MAX_N_PLANES
+    }
+
+    /// Width of `index`th data plane in pixels
     ///
-    /// FIXME(hack3rmann): unsafe, should rewrite
-    pub unsafe fn plane_height(&self, index: usize) -> u32 {
+    /// # Note
+    ///
+    /// Returns `0` if `index` is not smaller than number of planes
+    pub fn plane_width(&self, index: usize) -> u32 {
+        if index >= self.count_planes() {
+            return 0;
+        }
+
+        // Logic taken from image_get_linesize().
+        if index != 1 && index != 2 {
+            return self.width();
+        }
+
+        let Some(desc) = self.format().unwrap().descriptor() else {
+            return self.width();
+        };
+
+        let s = desc.log2_chroma_width();
+        (self.width() + (1 << s) - 1) >> s
+    }
+
+    /// Height of `index`th data plane in pixels
+    ///
+    /// # Note
+    ///
+    /// Returns `0` if `index` is not smaller than number of planes
+    pub fn plane_height(&self, index: usize) -> u32 {
+        if index >= self.count_planes() {
+            return 0;
+        }
+
         if index != 1 && index != 2 {
             return self.height();
         }
@@ -641,41 +683,60 @@ impl Frame {
         (self.height() + (1 << s) - 1) >> s
     }
 
-    /// # Safety
+    /// Number of bytes in each row of `index`th plane
     ///
-    /// FIXME(hack3rmann): unsafe, should rewrite
-    pub unsafe fn data(&self, index: usize) -> &[u8] {
+    /// # Panic
+    ///
+    /// Panics if `index` is not smaller than number of planes
+    pub fn stride(&self, index: usize) -> usize {
+        if index >= self.count_planes() {
+            panic!("out of bounds");
+        }
+
+        let line_size = unsafe { (*self.as_raw().as_ptr()).linesize[index] };
+        assert!(line_size > 0, "negative stride is unimplemented");
+
+        line_size as usize
+    }
+
+    /// Frame data at `index`th plane
+    ///
+    /// # Note
+    ///
+    /// Returns `&[]` if `index` is not smaller than number of planes
+    pub fn data(&self, index: usize) -> &[u8] {
+        if index >= self.count_planes() {
+            return &[];
+        }
+
         unsafe {
             slice::from_raw_parts(
                 (*self.as_raw().as_ptr()).data[index],
-                (*self.as_raw().as_ptr()).linesize[index] as usize
-                    * self.plane_height(index) as usize,
+                self.stride(index) * self.plane_height(index) as usize,
             )
         }
     }
 
-    /// # Safety
-    ///
-    /// FIXME(hack3rmann): unsafe, should rewrite
-    pub unsafe fn is_empty(&self) -> bool {
+    /// Frame is empty completely (no data in all planes)
+    pub fn is_empty(&self) -> bool {
         unsafe { (*self.as_raw().as_ptr()).data[0] }.is_null()
     }
 
     /// # Safety
     ///
-    /// FIXME(hack3rmann): unsafe, should rewrite
+    /// [`Frame`] should not be allocated, otherwise memory leak
     pub unsafe fn alloc(
         &mut self,
         format: VideoPixelFormat,
         size: UVec2,
     ) -> Result<(), BackendError> {
         let this = self.as_raw().as_ptr();
+
         unsafe { (*this).format = format as i32 };
         unsafe { (*this).width = size.x as i32 };
         unsafe { (*this).height = size.y as i32 };
 
-        // FIXME(hack3rmann): possible memory leak
-        BackendError::result_of(unsafe { av_frame_get_buffer(self.as_raw().as_ptr(), 32) })
+        BackendError::result_of(unsafe { av_frame_get_buffer(self.as_raw().as_ptr(), 0) })
     }
 
     /// Checks if [`Frame`] is not reference_counted
@@ -1044,8 +1105,8 @@ impl SoftwareScaler {
             return Err(BackendError::INVALID_DATA);
         }
 
-        // FIXME(hack3rmann): reallocate better
-        if unsafe { output.is_empty() } {
+        if output.is_empty() {
+            // Safety: frame is not allocated
             unsafe { output.alloc(self.destination_format.format, self.destination_format.size) }?;
         }
 
