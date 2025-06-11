@@ -110,7 +110,7 @@ impl<A: App> EventLoop<A> {
                 let info = match self.app.frame(&mut self.runtime).await {
                     Ok(info) => info,
                     Err(FrameError::StopRequested) => break 'event_loop,
-                    Err(FrameError::Skip) => continue,
+                    Err(FrameError::Skip) => continue 'event_loop,
                 };
 
                 // that modifies `client_state`
