@@ -1,12 +1,11 @@
+use glam::UVec2;
+use raw_window_handle::{
+    HasDisplayHandle as _, RawDisplayHandle, RawWindowHandle, WaylandWindowHandle,
+};
 use std::{
     ffi::CStr,
     pin::Pin,
     sync::atomic::{AtomicU32, Ordering::Relaxed},
-};
-
-use glam::UVec2;
-use raw_window_handle::{
-    HasDisplayHandle as _, RawDisplayHandle, RawWindowHandle, WaylandWindowHandle,
 };
 use wayland_client::{
     WlSmallVecMessageBuffer,

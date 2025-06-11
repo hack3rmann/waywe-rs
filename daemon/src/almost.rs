@@ -1,4 +1,7 @@
-use std::{fmt, ops::{Deref, DerefMut}};
+use std::{
+    fmt,
+    ops::{Deref, DerefMut},
+};
 
 #[repr(transparent)]
 #[derive(PartialEq, PartialOrd, Eq, Ord, Clone, Copy, Hash)]

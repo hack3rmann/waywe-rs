@@ -1,6 +1,6 @@
-pub mod ipc;
 pub mod command;
+pub mod ipc;
 pub mod signals;
 
-pub use ipc::{RecvError, SendError, IpcSocket};
 pub use command::DaemonCommand;
+pub use ipc::{IpcSocket, RecvError, SendError};

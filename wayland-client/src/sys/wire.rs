@@ -3,7 +3,11 @@
 use super::proxy::{WlProxy, WlProxyQuery};
 use crate::{interface::Event, object::InterfaceMessageArgument};
 use std::{
-    ffi::CStr, fmt, mem::{self, MaybeUninit}, os::fd::{AsRawFd, BorrowedFd, FromRawFd as _, OwnedFd}, ptr, slice
+    ffi::CStr,
+    fmt,
+    mem::{self, MaybeUninit},
+    os::fd::{AsRawFd, BorrowedFd, FromRawFd as _, OwnedFd},
+    ptr, slice,
 };
 use wayland_sys::{WlArgument, WlFixed, wl_fixed_t, wl_object, wl_proxy};
 

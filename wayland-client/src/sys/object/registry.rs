@@ -11,7 +11,7 @@ use crate::{
     sys::{
         object_storage::WlObjectStorage,
         proxy::WlProxy,
-        wire::{WlMessageBuffer, WlMessage},
+        wire::{WlMessage, WlMessageBuffer},
     },
 };
 use fxhash::FxHashMap;

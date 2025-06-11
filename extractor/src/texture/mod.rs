@@ -161,7 +161,7 @@ impl TexMipmap {
             _ => {
                 return Ok(
                     DecompressedTexMipmap::try_from(self).expect("expecting decompressed mipmap")
-                )
+                );
             }
         };
 

@@ -1,4 +1,7 @@
-use std::{thread, time::{Duration, Instant}};
+use std::{
+    thread,
+    time::{Duration, Instant},
+};
 
 #[allow(unused)]
 pub struct Timer {
@@ -72,7 +75,8 @@ impl Timer {
     }
 
     pub fn last_frame_duration(&self) -> Duration {
-        self.duration_since_last_frame.saturating_sub(self.block_duration)
+        self.duration_since_last_frame
+            .saturating_sub(self.block_duration)
     }
 
     pub fn current_frame_duration(&self) -> Duration {
@@ -89,18 +93,14 @@ impl Timer {
 
         // TODO(hack3rmann): skip a frame if `time_borrow >= target_frame_time`
         if !sleep_time.is_zero() {
-            let unborrowed_time =
-                sleep_time.saturating_sub(self.time_borrow);
+            let unborrowed_time = sleep_time.saturating_sub(self.time_borrow);
 
             if !unborrowed_time.is_zero() {
                 self.time_borrow = Duration::default();
                 thread::sleep(unborrowed_time);
             } else {
                 self.time_borrow -= sleep_time;
-                tracing::warn!(
-                    ?render_time,
-                    "speeding up current frame due to time borrow"
-                );
+                tracing::warn!(?render_time, "speeding up current frame due to time borrow");
             }
         // ignore first frame lag
         } else if !self.is_first_frame() {

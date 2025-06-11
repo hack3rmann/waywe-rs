@@ -1,7 +1,6 @@
 #![allow(non_camel_case_types)]
 
 use libc::{c_uint, free, malloc, realloc};
-use va_list::VaList;
 use std::{
     ffi::{CStr, c_char, c_int, c_void},
     mem::{self, offset_of},
@@ -10,6 +9,7 @@ use std::{
     ptr,
 };
 use thiserror::Error;
+use va_list::VaList;
 
 pub type wl_display = c_void;
 pub type wl_registry = c_void;
