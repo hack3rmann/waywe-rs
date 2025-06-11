@@ -576,10 +576,11 @@ unsafe impl Sync for Frame {}
 impl Frame {
     /// Allocate an [`Frame`] and set its fields to default values.
     pub fn new() -> Self {
-        let frame_ptr = unsafe { av_frame_alloc() };
-        Self {
-            raw: NonNull::new(frame_ptr).expect("av_frame_alloc() failed"),
-        }
+        let Some(raw) = NonNull::new(unsafe { av_frame_alloc() }) else {
+            panic!("av_frame_alloc() failed");
+        };
+
+        Self { raw }
     }
 
     /// Width of the video in pixels
@@ -752,7 +753,7 @@ impl Frame {
             ..0 => unsafe { hint::unreachable_unchecked() },
         };
 
-        reference_count == 1
+        reference_count <= 1
     }
 }
 
