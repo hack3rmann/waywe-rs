@@ -36,26 +36,13 @@ impl RequiresFeatures for ImageWallpaper {
 }
 
 impl Wallpaper for ImageWallpaper {
-    fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
-        let surface_texture = runtime.wgpu.surface.get_current_texture().unwrap();
-        let surface_view = surface_texture.texture.create_view(&Default::default());
-
-        let mut encoder = runtime
-            .wgpu
-            .device
-            .create_command_encoder(&Default::default());
-
-        self.pipeline.render(&mut encoder, &surface_view);
-
-        let submission_index = runtime.wgpu.queue.submit([encoder.finish()]);
-        _ = runtime
-            .wgpu
-            .device
-            .poll(wgpu::Maintain::wait_for(submission_index));
-
-        surface_texture.present();
-
-        runtime.control_flow.idle();
+    fn frame(
+        &mut self,
+        _: &Runtime,
+        encoder: &mut wgpu::CommandEncoder,
+        surface_view: &wgpu::TextureView,
+    ) -> Result<FrameInfo, FrameError> {
+        self.pipeline.render(encoder, surface_view);
 
         Ok(FrameInfo {
             target_frame_time: None,

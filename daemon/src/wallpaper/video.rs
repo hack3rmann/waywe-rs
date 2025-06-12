@@ -90,7 +90,12 @@ impl RequiresFeatures for VideoWallpaper {
 }
 
 impl Wallpaper for VideoWallpaper {
-    fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
+    fn frame(
+        &mut self,
+        runtime: &Runtime,
+        encoder: &mut wgpu::CommandEncoder,
+        surface_view: &wgpu::TextureView,
+    ) -> Result<FrameInfo, FrameError> {
         loop {
             if self.packet.is_none() {
                 let packet = loop {
@@ -448,20 +453,7 @@ impl Wallpaper for VideoWallpaper {
             .map(FrameDuration::to_duration)
             .unwrap_or(self.frame_time_fallback);
 
-        let surface_texture = runtime.wgpu.surface.get_current_texture().unwrap();
-        let surface_view = surface_texture.texture.create_view(&Default::default());
-
-        let mut encoder = runtime
-            .wgpu
-            .device
-            .create_command_encoder(&Default::default());
-
-        self.pipeline
-            .render(&mut encoder, &surface_view, &bind_group);
-
-        _ = runtime.wgpu.queue.submit([encoder.finish()]);
-
-        surface_texture.present();
+        self.pipeline.render(encoder, surface_view, &bind_group);
 
         Ok(FrameInfo {
             target_frame_time: Some(target_frame_time),

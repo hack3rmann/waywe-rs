@@ -1,18 +1,52 @@
+use std::any::Any;
+
 use crate::{
     event_loop::{App, Event, FrameError, FrameInfo},
     runtime::Runtime,
-    wallpaper::{RequiresFeatures, Wallpaper, image::ImageWallpaper, video::VideoWallpaper},
+    wallpaper::{
+        DynWallpaper, RequiresFeatures, Wallpaper, image::ImageWallpaper,
+        transition::TransitionWallpaper, video::VideoWallpaper,
+    },
 };
+use smallvec::SmallVec;
 use tracing::error;
 
 #[derive(Default)]
 pub struct VideoApp {
-    pub wallpaper: Option<Box<dyn Wallpaper>>,
+    pub wallpapers: SmallVec<[DynWallpaper; 3]>,
 }
 
 impl VideoApp {
-    pub fn set_wallpaper(&mut self, wallpaper: impl Wallpaper) {
-        self.wallpaper = Some(Box::new(wallpaper));
+    pub fn set_wallpaper(&mut self, runtime: &mut Runtime, wallpaper: impl Wallpaper) {
+        match self.wallpapers.len() {
+            0 => self.wallpapers.push(Box::new(wallpaper)),
+            1 => {
+                let from = self.wallpapers.drain(..).next().unwrap();
+                self.wallpapers.push(Box::new(TransitionWallpaper::new(
+                    runtime,
+                    from,
+                    Box::new(wallpaper),
+                )));
+            }
+            _ => {}
+        }
+    }
+
+    pub fn resolve_transitions(&mut self) {
+        if self.wallpapers.is_empty() {
+            return;
+        }
+
+        let first = self.wallpapers.first().unwrap().as_ref() as &dyn Any;
+
+        if !first.is::<TransitionWallpaper>() {
+            return;
+        }
+
+        let first = self.wallpapers.remove(0) as Box<dyn Any>;
+
+        let transition = first.downcast::<TransitionWallpaper>().unwrap();
+        self.wallpapers.insert(0, transition.try_resolve());
     }
 }
 
@@ -31,7 +65,7 @@ impl App for VideoApp {
                 };
 
                 runtime.control_flow.busy();
-                self.set_wallpaper(wallpaper);
+                self.set_wallpaper(runtime, wallpaper);
             }
             Event::NewVideo { path } => {
                 runtime.enable(VideoWallpaper::REQUIRED_FEATURES).await;
@@ -45,17 +79,31 @@ impl App for VideoApp {
                 };
 
                 runtime.control_flow.busy();
-                self.set_wallpaper(wallpaper);
+                self.set_wallpaper(runtime, wallpaper);
             }
         }
     }
 
     async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
-        let Some(generator) = self.wallpaper.as_mut() else {
+        self.resolve_transitions();
+
+        let Some(generator) = self.wallpapers.first_mut() else {
             runtime.control_flow.idle();
             return Err(FrameError::Skip);
         };
 
-        generator.frame(runtime)
+        let surface_texture = runtime.wgpu.surface.get_current_texture().unwrap();
+        let surface_view = surface_texture.texture.create_view(&Default::default());
+
+        let mut encoder = runtime
+            .wgpu
+            .device
+            .create_command_encoder(&Default::default());
+        let result = generator.frame(runtime, &mut encoder, &surface_view);
+        _ = runtime.wgpu.queue.submit([encoder.finish()]);
+
+        surface_texture.present();
+
+        result
     }
 }

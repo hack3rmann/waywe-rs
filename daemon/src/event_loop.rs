@@ -12,6 +12,7 @@ use std::{
 use thiserror::Error;
 use tokio::runtime::Builder as AsyncRuntimeBuilder;
 use tracing::debug;
+use video::RatioI32;
 
 pub struct EventLoop<A> {
     runtime: Runtime,
@@ -121,6 +122,8 @@ impl<A: App> EventLoop<A> {
 
                 if let Some(target_frame_time) = info.target_frame_time {
                     self.runtime.timer.sleep_enough(target_frame_time);
+                } else {
+                    self.runtime.control_flow.idle();
                 }
 
                 self.event_queue
@@ -160,9 +163,25 @@ pub trait App {
     ) -> impl Future<Output = Result<FrameInfo, FrameError>> + Send;
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FrameInfo {
     pub target_frame_time: Option<Duration>,
+}
+
+impl FrameInfo {
+    pub fn best_or_60_fps(self, other: Self) -> Self {
+        match (self.target_frame_time, other.target_frame_time) {
+            (Some(time1), Some(time2)) => Self {
+                target_frame_time: Some(time1.min(time2)),
+            },
+            (Some(time), None) | (None, Some(time)) => Self {
+                target_frame_time: Some(time),
+            },
+            (None, None) => Self {
+                target_frame_time: Some(RatioI32::new(1, 60).unwrap().to_duration_seconds()),
+            },
+        }
+    }
 }
 
 #[derive(Error, Debug)]
