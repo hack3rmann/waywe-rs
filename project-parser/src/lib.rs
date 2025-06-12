@@ -55,7 +55,7 @@ pub fn locate_we_assets() -> LocateResult<PathBuf> {
         return Err(LocateError::NotFound);
     };
 
-    Ok(PathBuf::from_str(&we_installation_path)
+    Ok(PathBuf::from_str(we_installation_path)
         .expect("infallible")
         .join("steamapps/workshop/content/431960"))
 }
