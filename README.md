@@ -25,10 +25,10 @@ https://github.com/user-attachments/assets/48a8b135-bbf2-4055-8453-19292a923939
 2. `wlroots`-based Wayland compositor (e.g. Hyprland or Sway).
 3. Support for `libva` hardware acceleration.
 4. Support for minor (yet unpopular) Vulkan features:
-  - VK_KHR_external_memory_fd
-  - VK_EXT_external_memory_dma_buf
-  - VK_EXT_image_drm_format_modifier
-  - vkImageDrmFormatModifierExplicitCreateInfoEXT (for some reason may be unavailable)
+    - VK_KHR_external_memory_fd
+    - VK_EXT_external_memory_dma_buf
+    - VK_EXT_image_drm_format_modifier
+    - vkImageDrmFormatModifierExplicitCreateInfoEXT (for some reason may be unavailable)
 
 ## Build
 
