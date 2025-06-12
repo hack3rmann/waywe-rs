@@ -10,9 +10,16 @@ out vec4 surface_color;
 
 void main() {
     ivec2 image_size = textureSize(sampler2D(image, image_sampler), 0);
-    float scale_factor = resolution.x * float(image_size.y) / (resolution.y * float(image_size.x));
 
+    float image_aspect_ratio = float(image_size.x) / float(image_size.y);
+    float screen_aspect_ratio = resolution.x / resolution.y;
+
+    float scale_factor = resolution.x * float(image_size.y) / (resolution.y * float(image_size.x));
     vec2 scaled_position = vec2(scale_factor * position.x, position.y);
+
+    if (image_aspect_ratio < screen_aspect_ratio) {
+        scaled_position /= scale_factor;
+    }
 
     vec2 texture_coordinates = 0.5 * scaled_position + 0.5;
     texture_coordinates.y = 1.0 - texture_coordinates.y;

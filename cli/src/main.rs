@@ -30,7 +30,7 @@ fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
 
-            DaemonCommand::SetVideo { path }
+            DaemonCommand::SetVideo { path: absolute_path }
         }
         Command::Image { path } => {
             let _reader = match ImageReader::open(&path) {
@@ -41,7 +41,15 @@ fn main() -> ExitCode {
                 }
             };
 
-            DaemonCommand::SetImage { path }
+            let absolute_path = match path.canonicalize() {
+                Ok(path) => path,
+                Err(error) => {
+                    error!(?error, "failed to construct absolute path");
+                    return ExitCode::FAILURE;
+                }
+            };
+
+            DaemonCommand::SetImage { path: absolute_path }
         }
     };
 
