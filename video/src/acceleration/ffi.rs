@@ -71,6 +71,7 @@ pub struct DrmPrimeDescriptor {
 
 impl DrmPrimeDescriptor {
     pub const MEMORY_TYPE: u32 = 0x08000000;
+    pub const LEGACY_MEMORY_TYPE: u32 = 0x40000000;
 }
 
 /// VAAPI connection details.

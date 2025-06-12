@@ -173,16 +173,17 @@ impl Wallpaper for VideoWallpaper {
         let va_surface_desc = {
             // NOTE(hack3rmann): `desc` should be zero-initialized according to the docs
             let mut desc = MaybeUninit::<va::DrmPrimeDescriptor>::zeroed();
-            VaError::result_of(unsafe {
+            if let Err(error) = VaError::result_of(unsafe {
                 va::export_surface_handle(
                     va_display,
                     surface_id,
-                    va::DrmPrimeDescriptor::MEMORY_TYPE,
+                    va::DrmPrimeDescriptor::LEGACY_MEMORY_TYPE,
                     VA_EXPORT_SURFACE_READ_ONLY | VA_EXPORT_SURFACE_SEPARATE_LAYERS,
                     desc.as_mut_ptr().cast(),
                 )
-            })
-            .unwrap();
+            }) {
+                panic!("failed to export libva surface handle: {error:?}");
+            }
             unsafe { desc.assume_init() }
         };
 
