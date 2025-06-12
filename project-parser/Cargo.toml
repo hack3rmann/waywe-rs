@@ -6,4 +6,3 @@ edition.workspace = true
 [dependencies]
 chumsky = "0.10.1"
 thiserror.workspace = true
-tracing.workspace = true

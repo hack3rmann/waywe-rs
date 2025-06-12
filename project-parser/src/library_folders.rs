@@ -5,7 +5,7 @@ use chumsky::prelude::*;
 use chumsky::text::digits;
 
 #[derive(Clone, Debug, Hash, Default, PartialEq, PartialOrd, Eq, Ord)]
-pub struct Table<'a> {
+pub struct LibraryFolder<'a> {
     pub path: Cow<'a, str>,
     pub label: Cow<'a, str>,
     pub contentid: usize,
@@ -15,7 +15,7 @@ pub struct Table<'a> {
     pub apps_ids: Vec<usize>,
 }
 
-fn elem<'a>(elem: &'a str) -> impl Parser<'a, &'a str, &'a str, extra::Err<Rich<'a, char>>> {
+fn elem<'a>(elem: &'a str) -> impl Parser<'a, &'a str, &'a str, extra::Err<EmptyErr>> {
     let quote = just("\"");
 
     just(elem).delimited_by(quote, quote).padded().ignore_then(
@@ -27,7 +27,7 @@ fn elem<'a>(elem: &'a str) -> impl Parser<'a, &'a str, &'a str, extra::Err<Rich<
     )
 }
 
-fn apps<'a>() -> impl Parser<'a, &'a str, Vec<usize>, extra::Err<Rich<'a, char>>> {
+fn apps<'a>() -> impl Parser<'a, &'a str, Vec<usize>, extra::Err<EmptyErr>> {
     let quote = just("\"");
 
     let first_line = just("apps").delimited_by(quote, quote).padded();
@@ -41,11 +41,11 @@ fn apps<'a>() -> impl Parser<'a, &'a str, Vec<usize>, extra::Err<Rich<'a, char>>
     let res = line
         .repeated()
         .collect::<Vec<_>>()
-        .try_map(|v, span| {
+        .try_map(|v, _| {
             v.into_iter()
                 .map(|elem: &str| elem.parse::<usize>())
                 .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| Rich::custom(span, e))
+                .map_err(|_| EmptyErr::default())
         })
         .padded()
         .delimited_by(just("{"), just("}"))
@@ -54,16 +54,16 @@ fn apps<'a>() -> impl Parser<'a, &'a str, Vec<usize>, extra::Err<Rich<'a, char>>
     first_line.ignore_then(res)
 }
 
-fn table<'a>() -> impl Parser<'a, &'a str, Table<'a>, extra::Err<Rich<'a, char>>> {
+fn table<'a>() -> impl Parser<'a, &'a str, LibraryFolder<'a>, extra::Err<EmptyErr>> {
     group((
         elem("path"),
         elem("label"),
-        elem("contentid").try_map(|v, span| v.parse::<usize>().map_err(|e| Rich::custom(span, e))),
-        elem("totalsize").try_map(|v, span| v.parse::<usize>().map_err(|e| Rich::custom(span, e))),
+        elem("contentid").try_map(|v, _| v.parse::<usize>().map_err(|_| EmptyErr::default())),
+        elem("totalsize").try_map(|v, _| v.parse::<usize>().map_err(|_| EmptyErr::default())),
         elem("update_clean_bytes_tally")
-            .try_map(|v, span| v.parse::<usize>().map_err(|e| Rich::custom(span, e))),
+            .try_map(|v, _| v.parse::<usize>().map_err(|_| EmptyErr::default())),
         elem("time_last_update_verified")
-            .try_map(|v, span| v.parse::<usize>().map_err(|e| Rich::custom(span, e))),
+            .try_map(|v, _| v.parse::<usize>().map_err(|_| EmptyErr::default())),
         apps(),
     ))
     .map(
@@ -76,7 +76,7 @@ fn table<'a>() -> impl Parser<'a, &'a str, Table<'a>, extra::Err<Rich<'a, char>>
             time_last_update_verified,
             apps,
         )| {
-            Table {
+            LibraryFolder {
                 path: Cow::Borrowed(path),
                 label: Cow::Borrowed(label),
                 contentid,
@@ -89,8 +89,8 @@ fn table<'a>() -> impl Parser<'a, &'a str, Table<'a>, extra::Err<Rich<'a, char>>
     )
 }
 
-pub fn library_folders<'a>() -> impl Parser<'a, &'a str, Vec<Table<'a>>, extra::Err<Rich<'a, char>>>
-{
+pub fn library_folders<'a>()
+-> impl Parser<'a, &'a str, Vec<LibraryFolder<'a>>, extra::Err<EmptyErr>> {
     let quote = just("\"");
 
     let first_line = just("libraryfolders").delimited_by(quote, quote).padded();
@@ -166,7 +166,7 @@ mod tests {
 
         let res = table().parse(&input).unwrap();
 
-        let gt = Table {
+        let gt = LibraryFolder {
             path: Cow::Borrowed("/home/arno/.local/share/Steam"),
             label: Cow::Borrowed(""),
             contentid: 2793914600858813338,
@@ -189,7 +189,7 @@ mod tests {
         let res = library_folders().parse(&input).unwrap();
 
         let gt = vec![
-            Table {
+            LibraryFolder {
                 path: Cow::Borrowed("/home/arno/.local/share/Steam"),
                 label: Cow::Borrowed(""),
                 contentid: 2793914600858813338,
@@ -198,7 +198,7 @@ mod tests {
                 time_last_update_verified: 1748464240,
                 apps_ids: vec![228980, 1070560, 1391110, 1493710, 1628350, 2180100],
             },
-            Table {
+            LibraryFolder {
                 path: Cow::Borrowed("/home/arno/Games"),
                 label: Cow::Borrowed(""),
                 contentid: 2997758956146613868,
