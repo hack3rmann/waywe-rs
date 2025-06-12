@@ -8,17 +8,23 @@ members = [
     "wayland-scanner",
     "wayland-client",
     "wayland-sys",
-    "unite-json"
-, "project-parser"]
+    "unite-json",
+    "video",
+    "cli",
+    "runtime",
+    "project-parser",
+]
 
 [workspace.package]
 version = "0.0.1"
 edition = "2024"
+license = "MIT"
 
 [workspace.dependencies]
 wayland-client = { path = "wayland-client", features = ["smallvec"] }
 waylnad-scanner = { path = "wayland-scanner" }
 wayland-sys = { path = "wayland-sys" }
+runtime = { path = "runtime" }
 thiserror = "2.0.11"
 safe-transmute = "0.11.3"
 rayon = "1.10.0"
@@ -27,5 +33,14 @@ tracing = "0.1.41"
 static_assertions = "1.1.0"
 tracing-test = "0.2.5"
 paste = "1.0.15"
-smallvec = { version = "1.14.0", features = ["union", "serde", "const_generics", "const_new"] }
+smallvec = { version = "1.14.0", features = ["union", "serde", "const_generics", "const_new", "write"] }
 tracing-subscriber = "0.3.19"
+glam = { version = "0.30.3", features = ["bytemuck"] }
+video = { path = "video" }
+rustix = { version = "0.38.44", features = ["fs", "net", "process", "mm", "shm", "event"] }
+bytemuck = { version = "1.21.0", features = ["extern_crate_alloc", "derive"] }
+libc = "0.2.170"
+image = "0.25.6"
+
+[profile.release]
+lto = true

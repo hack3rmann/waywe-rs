@@ -2,6 +2,7 @@
 name = "dxt"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 
 [dependencies]
 safe-transmute.workspace = true

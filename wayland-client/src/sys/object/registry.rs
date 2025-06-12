@@ -11,7 +11,7 @@ use crate::{
     sys::{
         object_storage::WlObjectStorage,
         proxy::WlProxy,
-        wire::{WlMessageBuffer, WlMessage},
+        wire::{WlMessage, WlMessageBuffer},
     },
 };
 use fxhash::FxHashMap;
@@ -35,7 +35,7 @@ pub struct WlRegistry<S> {
 }
 static_assertions::assert_impl_all!(WlRegistry<NoState>: Send, Sync);
 
-impl<S: State> WlRegistry<S> {
+impl<S> WlRegistry<S> {
     /// Constructs new [`WlRegistry`]
     pub fn new() -> Self {
         Self {
@@ -86,15 +86,16 @@ impl<S: State> WlRegistry<S> {
     }
 }
 
-impl<S: State> WlObjectHandle<WlRegistry<S>> {
+impl<S> WlObjectHandle<WlRegistry<S>> {
     /// Bind request on [`WlRegistry`]
     pub fn bind<T>(
         self,
         buf: &mut impl WlMessageBuffer,
-        storage: Pin<&mut WlObjectStorage<'_, S>>,
+        storage: Pin<&mut WlObjectStorage<S>>,
     ) -> Option<WlObjectHandle<T>>
     where
         T: Dispatch<State = S> + FromProxy,
+        S: State,
     {
         self.bind_from_fn(buf, storage, |_, _, proxy| T::from_proxy(proxy))
     }
@@ -103,11 +104,12 @@ impl<S: State> WlObjectHandle<WlRegistry<S>> {
     pub fn bind_value<T>(
         self,
         buf: &mut impl WlMessageBuffer,
-        storage: Pin<&mut WlObjectStorage<'_, S>>,
+        storage: Pin<&mut WlObjectStorage<S>>,
         object: T,
     ) -> Option<WlObjectHandle<T>>
     where
         T: Dispatch<State = S>,
+        S: State,
     {
         self.bind_from_fn(buf, storage, |_, _, _| object)
     }
@@ -116,13 +118,14 @@ impl<S: State> WlObjectHandle<WlRegistry<S>> {
     pub fn bind_from_fn<B, T, F>(
         self,
         buf: &mut B,
-        mut storage: Pin<&mut WlObjectStorage<'_, S>>,
+        mut storage: Pin<&mut WlObjectStorage<S>>,
         make_data: F,
     ) -> Option<WlObjectHandle<T>>
     where
         B: WlMessageBuffer,
         T: Dispatch<State = S>,
-        F: FnOnce(&mut B, Pin<&mut WlObjectStorage<'_, S>>, &WlProxy) -> T,
+        F: FnOnce(&mut B, Pin<&mut WlObjectStorage<S>>, &WlProxy) -> T,
+        S: State,
     {
         // Safety: `WlRegistry` is the parent for this request
         let proxy =
@@ -134,13 +137,13 @@ impl<S: State> WlObjectHandle<WlRegistry<S>> {
     }
 }
 
-impl<S: State> Default for WlRegistry<S> {
+impl<S> Default for WlRegistry<S> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<S: State> FromProxy for WlRegistry<S> {
+impl<S> FromProxy for WlRegistry<S> {
     fn from_proxy(_: &WlProxy) -> Self {
         Self::new()
     }
@@ -156,7 +159,7 @@ impl<S: State> Dispatch for WlRegistry<S> {
     fn dispatch(
         &mut self,
         _: &Self::State,
-        _: &mut WlObjectStorage<'_, Self::State>,
+        _: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
         match message.opcode {

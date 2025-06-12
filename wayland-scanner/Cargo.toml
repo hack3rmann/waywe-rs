@@ -2,6 +2,7 @@
 name = "wayland-scanner"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 
 [dependencies]
 proc-macro2 = "1.0.94"

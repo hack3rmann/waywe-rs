@@ -28,25 +28,49 @@ use std::{
     os::fd::{BorrowedFd, IntoRawFd, RawFd},
     pin::Pin,
     ptr::NonNull,
-    sync::atomic::{AtomicBool, Ordering::*},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering::*},
+    },
 };
 use thiserror::Error;
 use wayland_sys::{DisplayErrorCode, wl_display, wl_event_queue};
 
-/// A handle to the libwayland backend
-pub struct WlDisplay<S: State> {
-    proxy: ManuallyDrop<WlProxy>,
-    state: NonNull<S>,
-    main_queue_taken: AtomicBool,
-    raw_fd: RawFd,
+pub(crate) struct WlDisplayInternal<S> {
+    pub(crate) proxy: ManuallyDrop<WlProxy>,
+    pub(crate) state: NonNull<S>,
+    pub(crate) main_queue_taken: AtomicBool,
+    pub(crate) raw_fd: RawFd,
 }
 
-unsafe impl<S: State> Send for WlDisplay<S> {}
-unsafe impl<S: State> Sync for WlDisplay<S> {}
+impl<S> WlDisplayInternal<S> {
+    /// Raw display pointer
+    pub fn as_raw(&self) -> NonNull<wl_display> {
+        self.proxy.as_raw().cast()
+    }
+}
 
-impl<S: State> WlDisplay<S> {
+impl<S> Drop for WlDisplayInternal<S> {
+    fn drop(&mut self) {
+        // Safety: `self.as_raw_display_ptr()` is a valid display object
+        unsafe { ffi::wl_display_disconnect(self.as_raw().as_ptr()) };
+    }
+}
+
+/// A handle to the libwayland backend
+pub struct WlDisplay<S> {
+    pub(crate) shared: Arc<WlDisplayInternal<S>>,
+}
+
+unsafe impl<S> Send for WlDisplay<S> {}
+unsafe impl<S: Sync> Sync for WlDisplay<S> {}
+
+impl<S> WlDisplay<S> {
     /// Connect to libwayland backend
-    pub fn connect(state: Pin<&mut S>) -> Result<Self, DisplayConnectError> {
+    pub fn connect(state: Pin<&S>) -> Result<Self, DisplayConnectError>
+    where
+        S: State,
+    {
         let fd = unsafe { connect_wayland_socket()? };
         Ok(Self::connect_to_fd(state, fd)?)
     }
@@ -54,9 +78,12 @@ impl<S: State> WlDisplay<S> {
     /// Connect to Wayland display on an already open fd.
     /// The fd will be closed in case of failure.
     pub fn connect_to_fd(
-        state: Pin<&mut S>,
+        state: Pin<&S>,
         fd: impl IntoRawFd,
-    ) -> Result<Self, DisplayConnectToFdError> {
+    ) -> Result<Self, DisplayConnectToFdError>
+    where
+        S: State,
+    {
         let raw_fd = fd.into_raw_fd();
 
         // Safety: calling this function on a valid file descriptor is ok
@@ -69,35 +96,40 @@ impl<S: State> WlDisplay<S> {
         log::setup();
 
         Ok(Self {
-            proxy,
-            raw_fd,
-            // Safety: constructing NonNull from pinned pointer is safe
-            state: NonNull::from(unsafe { state.get_unchecked_mut() }),
-            main_queue_taken: AtomicBool::new(false),
+            shared: Arc::new(WlDisplayInternal {
+                proxy,
+                raw_fd,
+                // Safety: constructing NonNull from pinned pointer is safe
+                state: NonNull::from(state.get_ref()),
+                main_queue_taken: AtomicBool::new(false),
+            }),
         })
     }
 
     /// File descriptor associated with the display
     pub fn fd(&self) -> BorrowedFd<'_> {
         // display's file descriptor is valid
-        unsafe { BorrowedFd::borrow_raw(self.raw_fd) }
+        unsafe { BorrowedFd::borrow_raw(self.shared.raw_fd) }
     }
 
     /// Proxy corresponding to `wl_display` object
     pub fn proxy(&self) -> &WlProxy {
-        &self.proxy
+        &self.shared.proxy
     }
 
     /// Raw display pointer
     pub fn as_raw(&self) -> NonNull<wl_display> {
-        self.proxy.as_raw().cast()
+        self.shared.as_raw()
     }
 
     /// Creates a [`WlObjectStorage`] borrowing display for the lifetime of the storage
-    pub fn create_storage(&self) -> WlObjectStorage<'_, S> {
+    pub fn create_storage(&self) -> WlObjectStorage<S>
+    where
+        S: State,
+    {
         // Safety: storage has captured the lifetime of `&self`
         // therefore it will be dropped before the `WlDisplay`
-        unsafe { WlObjectStorage::new(self.state) }
+        WlObjectStorage::new(self.clone())
     }
 
     /// Takes the main event queue from this display
@@ -105,8 +137,11 @@ impl<S: State> WlDisplay<S> {
     /// # Error
     ///
     /// Returns [`Err`] with [`CreateQueueError::MainTakenTwice`] if called twice
-    pub fn take_main_queue(&self) -> Result<WlEventQueue<'_, S>, CreateQueueError> {
-        if !self.main_queue_taken.fetch_or(true, Relaxed) {
+    pub fn take_main_queue(&self) -> Result<WlEventQueue<S>, CreateQueueError>
+    where
+        S: State,
+    {
+        if !self.shared.main_queue_taken.fetch_or(true, Relaxed) {
             // Safety: we can ensure main queue is created once using `main_queue_taken` flag
             Ok(unsafe { WlEventQueue::main_from_display(self) })
         } else {
@@ -115,16 +150,22 @@ impl<S: State> WlDisplay<S> {
     }
 
     /// Creates event queue
-    pub fn create_queue(&self) -> Result<WlEventQueue<'_, S>, CreateQueueError> {
+    pub fn create_queue(&self) -> Result<WlEventQueue<S>, CreateQueueError>
+    where
+        S: State,
+    {
         WlEventQueue::side_from_display(self)
     }
 
     /// Creates `wl_registry` object and stores it in the storage
-    pub fn create_registry<'d>(
-        &'d self,
+    pub fn create_registry(
+        &self,
         buf: &mut impl WlMessageBuffer,
-        storage: Pin<&mut WlObjectStorage<'d, S>>,
-    ) -> WlObjectHandle<WlRegistry<S>> {
+        storage: Pin<&mut WlObjectStorage<S>>,
+    ) -> WlObjectHandle<WlRegistry<S>>
+    where
+        S: State,
+    {
         // Safety: parent interface matcher request's one
         let proxy = unsafe {
             send_request_raw(
@@ -157,10 +198,10 @@ impl<S: State> WlDisplay<S> {
     ///
     /// - anyone mustn't access the object storage during this call
     /// - anyone mustn't access the state during this call
-    pub(crate) unsafe fn roundtrip_queue_unchecked<'d>(
-        &'d self,
-        queue: &WlEventQueue<'d, S>,
-    ) -> i32 {
+    pub(crate) unsafe fn roundtrip_queue_unchecked(&self, queue: &WlEventQueue<S>) -> i32
+    where
+        S: State,
+    {
         if let Some(queue_ptr) = queue.as_raw() {
             unsafe { ffi::wl_display_roundtrip_queue(self.as_raw().as_ptr(), queue_ptr.as_ptr()) }
         } else {
@@ -188,8 +229,11 @@ impl<S: State> WlDisplay<S> {
     /// This function blocks until the server has processed all currently
     /// issued requests by sending a request to the display server
     /// and waiting for a reply before returning.
-    pub fn roundtrip<'d>(&'d self, queue: Pin<&mut WlEventQueue<'d, S>>, state: Pin<&S>) {
-        assert_eq!(&raw const *state, self.state.as_ptr().cast_const());
+    pub fn roundtrip(&self, queue: Pin<&mut WlEventQueue<S>>, state: Pin<&S>)
+    where
+        S: State,
+    {
+        assert_eq!(&raw const *state, self.shared.state.as_ptr().cast_const());
 
         let n_events_dispatched = unsafe { self.roundtrip_queue_unchecked(&queue) };
 
@@ -199,8 +243,14 @@ impl<S: State> WlDisplay<S> {
             let error_code = self.get_error_code().unwrap();
             panic!("WlDisplay::roundtrip_queue failed: {error_code:?}");
         }
+    }
+}
 
-        tracing::debug!("WlDisplay::roundtrip dispatched {n_events_dispatched} events");
+impl<S> Clone for WlDisplay<S> {
+    fn clone(&self) -> Self {
+        Self {
+            shared: Arc::clone(&self.shared),
+        }
     }
 }
 
@@ -220,26 +270,19 @@ pub enum DisplayConnectError {
 #[error("failed to connect to wayland's socket")]
 pub struct DisplayConnectToFdError;
 
-impl<S: State> HasObjectType for WlDisplay<S> {
+impl<S> HasObjectType for WlDisplay<S> {
     const OBJECT_TYPE: WlObjectType = WlObjectType::Display;
 }
 
-impl<S: State> Drop for WlDisplay<S> {
-    fn drop(&mut self) {
-        // Safety: `self.as_raw_display_ptr()` is a valid display object
-        unsafe { ffi::wl_display_disconnect(self.as_raw().as_ptr()) };
-    }
-}
-
-impl<S: State> fmt::Debug for WlDisplay<S> {
+impl<S> fmt::Debug for WlDisplay<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("WlDisplay")
-            .field("proxy", &*self.proxy)
+            .field("proxy", &*self.shared.proxy)
             .finish_non_exhaustive()
     }
 }
 
-impl<S: State> HasDisplayHandle for WlDisplay<S> {
+impl<S> HasDisplayHandle for WlDisplay<S> {
     fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
         Ok(unsafe {
             DisplayHandle::borrow_raw(RawDisplayHandle::Wayland(WaylandDisplayHandle::new(

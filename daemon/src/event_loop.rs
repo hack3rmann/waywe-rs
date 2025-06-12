@@ -1,0 +1,193 @@
+use crate::runtime::{
+    ControlFlow, Runtime,
+    wayland::{ClientState, Wayland},
+};
+use runtime::{DaemonCommand, RecvError, ipc::RecvMode, signals};
+use std::{
+    ffi::CString,
+    path::PathBuf,
+    sync::{Once, atomic::Ordering},
+    time::Duration,
+};
+use thiserror::Error;
+use tokio::runtime::Builder as AsyncRuntimeBuilder;
+use tracing::debug;
+use video::RatioI32;
+
+pub struct EventLoop<A> {
+    runtime: Runtime,
+    event_queue: EventQueue,
+    app: A,
+}
+
+impl<A: App + Default> Default for EventLoop<A> {
+    fn default() -> Self {
+        Self::new(A::default())
+    }
+}
+
+impl<A: App> EventLoop<A> {
+    pub fn new(app: A) -> Self {
+        static TRACING_ONCE: Once = Once::new();
+        TRACING_ONCE.call_once(tracing_subscriber::fmt::init);
+
+        static SIGNALS_ONCE: Once = Once::new();
+        SIGNALS_ONCE.call_once(signals::setup);
+
+        let wayland = Wayland::new();
+        let event_queue = EventQueue::default();
+
+        let control_flow = if event_queue.events.is_empty() {
+            ControlFlow::Idle
+        } else {
+            ControlFlow::Busy
+        };
+
+        let runtime = Runtime::new(wayland, control_flow);
+
+        Self {
+            runtime,
+            app,
+            event_queue,
+        }
+    }
+
+    pub fn run(&mut self) {
+        let async_runtime = AsyncRuntimeBuilder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        async_runtime.block_on(async {
+            self.runtime.timer.mark_event_loop_start_time();
+
+            'event_loop: loop {
+                self.runtime.timer.mark_frame_start();
+
+                if signals::SHOULD_EXIT.load(Ordering::Relaxed) {
+                    debug!("caught stop signal");
+                    break self.runtime.control_flow.stop();
+                }
+
+                let recv_mode = match self.runtime.control_flow {
+                    ControlFlow::Busy => RecvMode::NonBlocking,
+                    ControlFlow::Idle => {
+                        debug!("daemon is waiting for incoming requests");
+                        RecvMode::Blocking
+                    }
+                    ControlFlow::ShouldStop => {
+                        debug!("shutdowning daemon");
+                        break 'event_loop;
+                    }
+                };
+
+                self.runtime.timer.mark_block_start();
+
+                match self.runtime.ipc.socket.recv(recv_mode) {
+                    Ok(events) => {
+                        debug!(n_events = events.len(), "cli commands received");
+
+                        self.event_queue
+                            .events
+                            .extend(events.into_iter().map(|command| match command {
+                                DaemonCommand::SetVideo { path } => Event::NewVideo { path },
+                                DaemonCommand::SetImage { path } => Event::NewImage { path },
+                            }));
+
+                        self.runtime.timer.mark_wallpaper_start_time();
+                    }
+                    Err(RecvError::Empty) => {}
+                    Err(error) => {
+                        tracing::error!(?error, "failed to recv from waywe-cli");
+                    }
+                }
+
+                self.runtime.timer.mark_block_end();
+
+                for event in self.event_queue.events.drain(..) {
+                    self.app.process_event(&mut self.runtime, event).await;
+                }
+
+                let info = match self.app.frame(&mut self.runtime).await {
+                    Ok(info) => info,
+                    Err(FrameError::StopRequested) => break 'event_loop,
+                    Err(FrameError::Skip) => continue 'event_loop,
+                };
+
+                // that modifies `client_state`
+                self.runtime.wayland.display.roundtrip(
+                    self.runtime.wayland.main_queue.as_mut(),
+                    self.runtime.wayland.client_state.as_ref(),
+                );
+
+                if let Some(target_frame_time) = info.target_frame_time {
+                    self.runtime.timer.sleep_enough(target_frame_time);
+                } else {
+                    self.runtime.control_flow.idle();
+                }
+
+                self.event_queue
+                    .populate_from_wayland_client_state(&self.runtime.wayland.client_state);
+            }
+        });
+    }
+}
+
+#[derive(Debug)]
+pub enum Event {
+    NewVideo { path: CString },
+    NewImage { path: PathBuf },
+}
+
+#[derive(Debug, Default)]
+pub struct EventQueue {
+    pub events: Vec<Event>,
+}
+
+impl EventQueue {
+    pub fn populate_from_wayland_client_state(&mut self, _state: &ClientState) {
+        // nothing
+    }
+}
+
+pub trait App {
+    fn process_event(
+        &mut self,
+        runtime: &mut Runtime,
+        event: Event,
+    ) -> impl Future<Output = ()> + Send;
+
+    fn frame(
+        &mut self,
+        runtime: &mut Runtime,
+    ) -> impl Future<Output = Result<FrameInfo, FrameError>> + Send;
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct FrameInfo {
+    pub target_frame_time: Option<Duration>,
+}
+
+impl FrameInfo {
+    pub fn best_or_60_fps(self, other: Self) -> Self {
+        match (self.target_frame_time, other.target_frame_time) {
+            (Some(time1), Some(time2)) => Self {
+                target_frame_time: Some(time1.min(time2)),
+            },
+            (Some(time), None) | (None, Some(time)) => Self {
+                target_frame_time: Some(time),
+            },
+            (None, None) => Self {
+                target_frame_time: Some(RatioI32::new(1, 60).unwrap().to_duration_seconds()),
+            },
+        }
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum FrameError {
+    #[error("event loop stop requested")]
+    StopRequested,
+    #[error("frame skipped due to error")]
+    Skip,
+}

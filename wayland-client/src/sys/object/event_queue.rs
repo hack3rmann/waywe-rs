@@ -7,18 +7,21 @@ use thiserror::Error;
 use wayland_sys::{DisplayErrorCode, wl_event_queue, wl_event_queue_destroy};
 
 /// Owned event queue
-pub struct WlEventQueue<'d, S: State> {
+pub struct WlEventQueue<S> {
     /// `None` for main event queue, `Some` for different event queue
     raw: Option<NonNull<wl_event_queue>>,
-    storage: ManuallyDrop<WlObjectStorage<'d, S>>,
+    storage: ManuallyDrop<WlObjectStorage<S>>,
 }
 
-unsafe impl<S: State> Send for WlEventQueue<'_, S> {}
-unsafe impl<S: State> Sync for WlEventQueue<'_, S> {}
+unsafe impl<S> Send for WlEventQueue<S> {}
+unsafe impl<S: Sync> Sync for WlEventQueue<S> {}
 
-impl<'d, S: State> WlEventQueue<'d, S> {
+impl<S> WlEventQueue<S> {
     /// Creates side event queue
-    pub fn side_from_display(display: &'d WlDisplay<S>) -> Result<Self, CreateQueueError> {
+    pub fn side_from_display(display: &WlDisplay<S>) -> Result<Self, CreateQueueError>
+    where
+        S: State,
+    {
         let raw = NonNull::new(display.create_event_queue_raw())
             .ok_or_else(|| CreateQueueError::BackendFailed(display.get_error_code().unwrap()))?;
 
@@ -37,7 +40,10 @@ impl<'d, S: State> WlEventQueue<'d, S> {
     /// # Safety
     ///
     /// Should be called only once
-    pub unsafe fn main_from_display(display: &'d WlDisplay<S>) -> Self {
+    pub unsafe fn main_from_display(display: &WlDisplay<S>) -> Self
+    where
+        S: State,
+    {
         Self {
             raw: None,
             storage: ManuallyDrop::new(display.create_storage()),
@@ -59,17 +65,17 @@ impl<'d, S: State> WlEventQueue<'d, S> {
     }
 
     /// Projects pin of [`WlEventQueue`] to [`WlObjectStorage`]
-    pub fn storage(self: Pin<&Self>) -> Pin<&WlObjectStorage<'d, S>> {
+    pub fn storage(self: Pin<&Self>) -> Pin<&WlObjectStorage<S>> {
         unsafe { Pin::map_unchecked(self, |this| &*this.storage) }
     }
 
     /// Projects mutable pin of [`WlEventQueue`] to [`WlObjectStorage`]
-    pub fn storage_mut(self: Pin<&mut Self>) -> Pin<&mut WlObjectStorage<'d, S>> {
+    pub fn storage_mut(self: Pin<&mut Self>) -> Pin<&mut WlObjectStorage<S>> {
         unsafe { Pin::map_unchecked_mut(self, |this| &mut *this.storage) }
     }
 }
 
-impl<S: State> Drop for WlEventQueue<'_, S> {
+impl<S> Drop for WlEventQueue<S> {
     fn drop(&mut self) {
         // drop all proxies first
         unsafe { ManuallyDrop::drop(&mut self.storage) };
@@ -80,7 +86,7 @@ impl<S: State> Drop for WlEventQueue<'_, S> {
     }
 }
 
-impl<S: State> fmt::Debug for WlEventQueue<'_, S> {
+impl<S> fmt::Debug for WlEventQueue<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("WlEventQueue")
             .field("storage", &*self.storage)

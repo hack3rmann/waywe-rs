@@ -42,7 +42,7 @@ impl Dispatch for WlCompositor {
     fn dispatch(
         &mut self,
         _state: &Self::State,
-        _storage: &mut WlObjectStorage<'_, Self::State>,
+        _storage: &mut WlObjectStorage<Self::State>,
         _message: WlMessage<'_>,
     ) {
         unreachable!()
@@ -71,7 +71,7 @@ impl Dispatch for WlWmBase {
     fn dispatch(
         &mut self,
         _state: &Self::State,
-        storage: &mut WlObjectStorage<'_, Self::State>,
+        storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
         let Some(XdgWmBasePingEvent { serial }) = message.as_event() else {
@@ -107,7 +107,7 @@ impl Dispatch for WlSurface {
     fn dispatch(
         &mut self,
         _state: &Self::State,
-        _storage: &mut WlObjectStorage<'_, Self::State>,
+        _storage: &mut WlObjectStorage<Self::State>,
         _message: WlMessage<'_>,
     ) {
         unreachable!()
@@ -136,7 +136,7 @@ impl Dispatch for WlXdgSurface {
     fn dispatch(
         &mut self,
         state: &Self::State,
-        storage: &mut WlObjectStorage<'_, Self::State>,
+        storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
         let Some(XdgSurfaceConfigureEvent { serial }) = message.as_event() else {
@@ -175,7 +175,7 @@ impl Dispatch for WlToplevel {
     fn dispatch(
         &mut self,
         state: &Self::State,
-        _storage: &mut WlObjectStorage<'_, Self::State>,
+        _storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
         match message.opcode {
@@ -283,9 +283,9 @@ impl Swapchain {
 fn simple_wayland_client() {
     _ = tracing_subscriber::fmt::try_init();
 
-    let mut client_state = pin!(ClientState::default());
+    let client_state = pin!(ClientState::default());
 
-    let display = WlDisplay::connect(client_state.as_mut()).unwrap();
+    let display = WlDisplay::connect(client_state.as_ref()).unwrap();
 
     let mut buf = WlStackMessageBuffer::new();
     let mut queue = pin!(display.take_main_queue().unwrap());
@@ -536,10 +536,10 @@ unsafe fn wait_for_segv() {
 fn multithread_client() {
     _ = tracing_subscriber::fmt::try_init();
 
-    let mut client_state = pin!(ClientState::default());
+    let client_state = pin!(ClientState::default());
     let mut buf = WlStackMessageBuffer::new();
 
-    let display = WlDisplay::connect(client_state.as_mut()).unwrap();
+    let display = WlDisplay::connect(client_state.as_ref()).unwrap();
 
     let mut main_queue = pin!(display.take_main_queue().unwrap());
     let mut side_queue = pin!(display.create_queue().unwrap());

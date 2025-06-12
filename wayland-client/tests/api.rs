@@ -49,7 +49,7 @@ macro_rules! define_empty_dispatchers {
                 fn dispatch(
                     &mut self,
                     _state: &Self::State,
-                    _storage: &mut wayland_client::WlObjectStorage<'_, Self::State>,
+                    _storage: &mut wayland_client::WlObjectStorage<Self::State>,
                     _message: wayland_client::WlMessage<'_>,
                 ) {
                     unreachable!()
@@ -98,7 +98,7 @@ impl Dispatch for WlLayerSurface {
     fn dispatch(
         &mut self,
         _: &Self::State,
-        storage: &mut WlObjectStorage<'_, Self::State>,
+        storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
         let Some(ZwlrLayerSurfaceConfigureEvent { serial, .. }) = message.as_event() else {
@@ -119,8 +119,8 @@ impl Dispatch for WlLayerSurface {
 fn just_connect_display() {
     _ = tracing_subscriber::fmt::try_init();
 
-    let mut state = pin!(NoState);
-    WlDisplay::connect(state.as_mut()).unwrap();
+    let state = pin!(NoState);
+    WlDisplay::connect(state.as_ref()).unwrap();
 }
 
 #[test]
@@ -130,8 +130,8 @@ fn get_protocol_error() {
 
     let mut buf = WlStackMessageBuffer::new();
 
-    let mut state = pin!(NoState);
-    let display = WlDisplay::connect(state.as_mut()).unwrap();
+    let state = pin!(NoState);
+    let display = WlDisplay::connect(state.as_ref()).unwrap();
     let mut queue = pin!(display.take_main_queue().unwrap());
     let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 
@@ -152,7 +152,6 @@ fn get_protocol_error() {
         }
     }
 
-    // TODO(hack3rmann): replace with different request
     let _wrong_global: WlObjectHandle<WrongGlobal> = registry
         .bind(&mut buf, queue.as_mut().storage_mut())
         .unwrap();
@@ -175,8 +174,8 @@ fn get_registry() {
 
     let mut buf = WlStackMessageBuffer::new();
 
-    let mut state = pin!(NoState);
-    let display = WlDisplay::connect(state.as_mut()).unwrap();
+    let state = pin!(NoState);
+    let display = WlDisplay::connect(state.as_ref()).unwrap();
     let mut queue = pin!(display.take_main_queue().unwrap());
     let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 
@@ -198,8 +197,8 @@ fn create_surface() {
 
     let mut buf = WlStackMessageBuffer::new();
 
-    let mut state = pin!(NoState);
-    let display = WlDisplay::connect(state.as_mut()).unwrap();
+    let state = pin!(NoState);
+    let display = WlDisplay::connect(state.as_ref()).unwrap();
     let mut queue = pin!(display.take_main_queue().unwrap());
     let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 
@@ -232,8 +231,8 @@ fn bind_wlr_shell() {
 
     let mut buf = WlStackMessageBuffer::new();
 
-    let mut state = pin!(NoState);
-    let display = WlDisplay::connect(state.as_mut()).unwrap();
+    let state = pin!(NoState);
+    let display = WlDisplay::connect(state.as_ref()).unwrap();
     let mut queue = pin!(display.take_main_queue().unwrap());
     let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 
@@ -270,8 +269,8 @@ fn white_rect() {
 
     let mut buf = WlStackMessageBuffer::new();
 
-    let mut state = pin!(NoState);
-    let display = WlDisplay::connect(state.as_mut()).unwrap();
+    let state = pin!(NoState);
+    let display = WlDisplay::connect(state.as_ref()).unwrap();
     let mut queue = pin!(display.take_main_queue().unwrap());
     let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
 

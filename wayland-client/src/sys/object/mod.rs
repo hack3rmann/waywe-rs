@@ -61,7 +61,7 @@ impl<T> WlObjectHandle<T> {
     pub fn request<'r, R>(
         self,
         buf: &mut impl WlMessageBuffer,
-        storage: &WlObjectStorage<'_, T::State>,
+        storage: &WlObjectStorage<T::State>,
         request: R,
     ) where
         T: Dispatch,
@@ -93,7 +93,7 @@ impl<T> WlObjectHandle<T> {
     pub fn create_object<'r, D, R>(
         self,
         buf: &mut impl WlMessageBuffer,
-        storage: Pin<&mut WlObjectStorage<'_, D::State>>,
+        storage: Pin<&mut WlObjectStorage<D::State>>,
         request: R,
     ) -> WlObjectHandle<D>
     where
@@ -300,7 +300,7 @@ impl<T: Dispatch> WlObject<T> {
 
     pub(crate) fn write_storage_location(
         &mut self,
-        storage: Pin<&mut WlObjectStorage<'_, T::State>>,
+        storage: Pin<&mut WlObjectStorage<T::State>>,
     ) {
         let user_data_ptr = self
             .proxy()
@@ -318,7 +318,7 @@ impl<T: Dispatch> WlObject<T> {
         user_data.storage = Some(NonNull::from(unsafe { storage.get_unchecked_mut() }).cast());
     }
 
-    pub(crate) fn write_state_location(&mut self, state: Pin<&mut T::State>) {
+    pub(crate) fn write_state_location(&mut self, state: Pin<&T::State>) {
         let user_data_ptr = self
             .proxy()
             .get_user_data()
@@ -332,7 +332,7 @@ impl<T: Dispatch> WlObject<T> {
             return;
         };
 
-        user_data.state = Some(NonNull::from(unsafe { state.get_unchecked_mut() }));
+        user_data.state = Some(NonNull::from(state.get_ref()));
     }
 
     /// Proxy

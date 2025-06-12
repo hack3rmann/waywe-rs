@@ -2,11 +2,12 @@
 name = "wayland-client"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 
 [dependencies]
 bytemuck = { version = "1.21.0", features = ["extern_crate_alloc", "derive"] }
 raw-window-handle = "0.6.2"
-rustix = { version = "0.38.44", features = ["fs", "net", "process", "mm", "shm"] }
+rustix.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 bitflags = "2.8.0"

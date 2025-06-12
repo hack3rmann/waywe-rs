@@ -2,17 +2,13 @@
 
 use super::{
     display::WlDisplay,
-    object::{
-        WlDynObject, WlObject, WlObjectHandle,
-        dispatch::{Dispatch, State},
-    },
+    object::{WlDynObject, WlObject, WlObjectHandle, dispatch::Dispatch},
     proxy::WlProxy,
 };
 use crate::object::WlObjectId;
 use fxhash::FxHashMap;
 use std::{
     fmt,
-    marker::PhantomData,
     panic::{self, AssertUnwindSafe},
     pin::Pin,
     ptr::{self, NonNull},
@@ -27,24 +23,17 @@ pub(crate) struct WlObjectStorageEntry {
 static_assertions::assert_impl_all!(WlObjectStorageEntry: Send, Sync);
 
 /// A storage for wayland's objects
-pub struct WlObjectStorage<'d, S: State> {
+pub struct WlObjectStorage<S> {
     objects: FxHashMap<WlObjectId, WlObjectStorageEntry>,
     acquired_object: Option<WlObjectId>,
-    state: NonNull<S>,
     queue: Option<NonNull<wl_event_queue>>,
-    _display: PhantomData<&'d WlDisplay<S>>,
+    display: WlDisplay<S>,
 }
 
-unsafe impl<S: State> Send for WlObjectStorage<'_, S> {}
-unsafe impl<S: State> Sync for WlObjectStorage<'_, S> {}
+unsafe impl<S> Send for WlObjectStorage<S> {}
+unsafe impl<S: Sync> Sync for WlObjectStorage<S> {}
 
-// Safety: empty drop implementation ensures that `WlObjectStorage` uses
-// `_display` reference
-impl<S: State> Drop for WlObjectStorage<'_, S> {
-    fn drop(&mut self) {}
-}
-
-impl<S: State> WlObjectStorage<'_, S> {
+impl<S> WlObjectStorage<S> {
     /// # Safety
     ///
     /// `WlObjectStorage` should be dropped before `WlDisplay`
@@ -52,13 +41,12 @@ impl<S: State> WlObjectStorage<'_, S> {
     /// # Note
     ///
     /// The returned lifetime should be adjusted properly.
-    pub unsafe fn new(state: NonNull<S>) -> Self {
+    pub fn new(display: WlDisplay<S>) -> Self {
         Self {
             objects: FxHashMap::default(),
             acquired_object: None,
-            state,
+            display,
             queue: None,
-            _display: PhantomData,
         }
     }
 
@@ -93,7 +81,9 @@ impl<S: State> WlObjectStorage<'_, S> {
         }
 
         object.write_storage_location(self.as_mut());
-        object.write_state_location(unsafe { Pin::new_unchecked(self.state.as_mut()) });
+        object.write_state_location(unsafe {
+            Pin::new_unchecked(self.display.shared.state.as_ref())
+        });
 
         if self
             .objects
@@ -267,7 +257,7 @@ impl<S: State> WlObjectStorage<'_, S> {
     }
 }
 
-impl<S: State> fmt::Debug for WlObjectStorage<'_, S> {
+impl<S> fmt::Debug for WlObjectStorage<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("WlObjectStorage")
             .field("objects", &self.objects)

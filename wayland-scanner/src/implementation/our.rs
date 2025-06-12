@@ -480,7 +480,7 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
                 self,
                 buf: &'m mut impl crate::sys::wire::WlMessageBuffer,
                 #[allow(dead_code)]
-                storage: &'m crate::sys::object_storage::WlObjectStorage<'_, S>,
+                storage: &'m crate::sys::object_storage::WlObjectStorage<S>,
             ) -> crate::sys::wire::WlMessage<'m>
             where
                 's: 'm,

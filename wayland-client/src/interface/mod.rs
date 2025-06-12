@@ -87,7 +87,7 @@ pub trait Request<'s>: Sized + HasObjectType {
     fn build_message<'m, S: State>(
         self,
         buf: &'m mut impl WlMessageBuffer,
-        storage: &'m WlObjectStorage<'_, S>,
+        storage: &'m WlObjectStorage<S>,
     ) -> WlMessage<'m>
     where
         's: 'm;
@@ -109,7 +109,7 @@ pub trait Event<'s>: Sized {
 pub(crate) unsafe fn send_request_raw<'s, S: State, R: Request<'s>>(
     request: R,
     buf: &mut impl WlMessageBuffer,
-    storage: &WlObjectStorage<'_, S>,
+    storage: &WlObjectStorage<S>,
     parent: &WlProxy,
 ) -> Option<WlProxy> {
     let message = request.build_message(buf, storage);
