@@ -4,7 +4,7 @@
 
 - `waywe` stands for '**Way**land **W**allpaper **E**ngine'
 
-https://github.com/user-attachments/assets/856c4584-671f-474d-b8da-f07a680dd62a
+https://github.com/user-attachments/assets/48a8b135-bbf2-4055-8453-19292a923939
 
 ### Warning
 
