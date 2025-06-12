@@ -251,6 +251,22 @@ impl Wallpaper for VideoWallpaper {
             })
         };
 
+        let memory_types = memory_properties.memory_types_as_slice();
+
+        let get_memory_type_index = move |memory_type_bits: u32| {
+            memory_types
+                .iter()
+                .enumerate()
+                .find(|&(i, memory_type)| {
+                    memory_type
+                        .property_flags
+                        .contains(vk::MemoryPropertyFlags::DEVICE_LOCAL)
+                        && (memory_type_bits & (1 << i as u32)) != 0
+                })
+                .map(|(i, _)| i as u32)
+                .unwrap()
+        };
+
         let texture_hal = unsafe {
             runtime
                 .wgpu
@@ -270,22 +286,22 @@ impl Wallpaper for VideoWallpaper {
                         _marker: std::marker::PhantomData,
                     };
 
-                    let plane_layouts = [
-                        vk::SubresourceLayout {
-                            offset: va_surface_desc.layers[0].offset[0] as u64,
-                            size: 0,
-                            row_pitch: va_surface_desc.layers[0].pitch[0] as u64,
-                            array_pitch: 0,
-                            depth_pitch: 0,
-                        },
-                        vk::SubresourceLayout {
-                            offset: va_surface_desc.layers[1].offset[0] as u64,
-                            size: 0,
-                            row_pitch: va_surface_desc.layers[1].pitch[0] as u64,
-                            array_pitch: 0,
-                            depth_pitch: 0,
-                        },
-                    ];
+                    // let plane_layouts = [
+                    //     vk::SubresourceLayout {
+                    //         offset: va_surface_desc.layers[0].offset[0] as u64,
+                    //         size: 0,
+                    //         row_pitch: va_surface_desc.layers[0].pitch[0] as u64,
+                    //         array_pitch: 0,
+                    //         depth_pitch: 0,
+                    //     },
+                    //     vk::SubresourceLayout {
+                    //         offset: va_surface_desc.layers[1].offset[0] as u64,
+                    //         size: 0,
+                    //         row_pitch: va_surface_desc.layers[1].pitch[0] as u64,
+                    //         array_pitch: 0,
+                    //         depth_pitch: 0,
+                    //     },
+                    // ];
 
                     let formats = [vk::Format::R8_UNORM, vk::Format::R8G8_UNORM];
 
@@ -297,15 +313,15 @@ impl Wallpaper for VideoWallpaper {
                         _marker: std::marker::PhantomData,
                     };
 
-                    let drm_create_info = vk::ImageDrmFormatModifierExplicitCreateInfoEXT {
-                        s_type:
-                            vk::StructureType::IMAGE_DRM_FORMAT_MODIFIER_EXPLICIT_CREATE_INFO_EXT,
-                        p_next: (&raw const format_list_info).cast(),
-                        drm_format_modifier: va_surface_desc.objects[0].drm_format_modifier,
-                        drm_format_modifier_plane_count: va_surface_desc.num_layers,
-                        p_plane_layouts: plane_layouts.as_ptr(),
-                        _marker: std::marker::PhantomData,
-                    };
+                    // let drm_create_info = vk::ImageDrmFormatModifierExplicitCreateInfoEXT {
+                    //     s_type:
+                    //         vk::StructureType::IMAGE_DRM_FORMAT_MODIFIER_EXPLICIT_CREATE_INFO_EXT,
+                    //     p_next: (&raw const format_list_info).cast(),
+                    //     drm_format_modifier: va_surface_desc.objects[0].drm_format_modifier,
+                    //     drm_format_modifier_plane_count: va_surface_desc.num_layers,
+                    //     p_plane_layouts: plane_layouts.as_ptr(),
+                    //     _marker: std::marker::PhantomData,
+                    // };
 
                     let image_info = vk::ImageCreateInfo {
                         s_type: vk::StructureType::IMAGE_CREATE_INFO,
@@ -316,13 +332,16 @@ impl Wallpaper for VideoWallpaper {
                             height: va_surface_desc.height,
                             depth: 1,
                         },
-                        p_next: (&raw const drm_create_info).cast(),
+                        // p_next: (&raw const drm_create_info).cast(),
+                        p_next: (&raw const format_list_info).cast(),
                         image_type: vk::ImageType::TYPE_2D,
-                        flags: vk::ImageCreateFlags::MUTABLE_FORMAT,
+                        flags: vk::ImageCreateFlags::MUTABLE_FORMAT
+                            | vk::ImageCreateFlags::DISJOINT,
                         mip_levels: 1,
                         array_layers: 1,
                         samples: vk::SampleCountFlags::TYPE_1,
-                        tiling: vk::ImageTiling::DRM_FORMAT_MODIFIER_EXT,
+                        // tiling: vk::ImageTiling::DRM_FORMAT_MODIFIER_EXT,
+                        tiling: vk::ImageTiling::LINEAR,
                         sharing_mode: vk::SharingMode::EXCLUSIVE,
                         queue_family_index_count: 0,
                         p_queue_family_indices: ptr::null(),
@@ -331,20 +350,59 @@ impl Wallpaper for VideoWallpaper {
                     };
 
                     let vk_image = vk_device.create_image(&image_info, None).unwrap();
-                    let memory_requirements = vk_device.get_image_memory_requirements(vk_image);
 
-                    let memory_type_index = memory_properties.memory_types
-                        [..memory_properties.memory_type_count as usize]
-                        .iter()
-                        .enumerate()
-                        .find(|&(i, memory_type)| {
-                            memory_type
-                                .property_flags
-                                .contains(vk::MemoryPropertyFlags::DEVICE_LOCAL)
-                                && (memory_requirements.memory_type_bits & (1 << i as u32)) != 0
-                        })
-                        .map(|(i, _)| i as u32)
-                        .unwrap();
+                    let plane_requirements = [
+                        vk::ImagePlaneMemoryRequirementsInfo {
+                            s_type: vk::StructureType::IMAGE_PLANE_MEMORY_REQUIREMENTS_INFO,
+                            p_next: ptr::null(),
+                            plane_aspect: vk::ImageAspectFlags::PLANE_0,
+                            _marker: std::marker::PhantomData,
+                        },
+                        vk::ImagePlaneMemoryRequirementsInfo {
+                            s_type: vk::StructureType::IMAGE_PLANE_MEMORY_REQUIREMENTS_INFO,
+                            p_next: ptr::null(),
+                            plane_aspect: vk::ImageAspectFlags::PLANE_1,
+                            _marker: std::marker::PhantomData,
+                        },
+                    ];
+
+                    let mut memory_requirements2 = [
+                        vk::MemoryRequirements2 {
+                            s_type: vk::StructureType::MEMORY_REQUIREMENTS_2,
+                            p_next: ptr::null_mut(),
+                            memory_requirements: Default::default(),
+                            _marker: std::marker::PhantomData,
+                        },
+                        vk::MemoryRequirements2 {
+                            s_type: vk::StructureType::MEMORY_REQUIREMENTS_2,
+                            p_next: ptr::null_mut(),
+                            memory_requirements: Default::default(),
+                            _marker: std::marker::PhantomData,
+                        },
+                    ];
+
+                    vk_device.get_image_memory_requirements2(
+                        &vk::ImageMemoryRequirementsInfo2 {
+                            s_type: vk::StructureType::IMAGE_MEMORY_REQUIREMENTS_INFO_2,
+                            p_next: (&raw const plane_requirements[0]).cast(),
+                            image: vk_image,
+                            _marker: std::marker::PhantomData,
+                        },
+                        &mut memory_requirements2[0],
+                    );
+
+                    vk_device.get_image_memory_requirements2(
+                        &vk::ImageMemoryRequirementsInfo2 {
+                            s_type: vk::StructureType::IMAGE_MEMORY_REQUIREMENTS_INFO_2,
+                            p_next: (&raw const plane_requirements[1]).cast(),
+                            image: vk_image,
+                            _marker: std::marker::PhantomData,
+                        },
+                        &mut memory_requirements2[1],
+                    );
+
+                    let memory_requirements =
+                        memory_requirements2.map(|req| req.memory_requirements);
 
                     let import_info = vk::ImportMemoryFdInfoKHR {
                         s_type: vk::StructureType::IMPORT_MEMORY_FD_INFO_KHR,
@@ -354,18 +412,44 @@ impl Wallpaper for VideoWallpaper {
                         _marker: std::marker::PhantomData,
                     };
 
-                    let alloc_info = vk::MemoryAllocateInfo {
+                    let alloc_infos = memory_requirements.map(|req| vk::MemoryAllocateInfo {
                         s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,
                         p_next: (&raw const import_info).cast(),
-                        allocation_size: memory_requirements.size,
-                        memory_type_index,
+                        allocation_size: req.size,
+                        memory_type_index: get_memory_type_index(req.memory_type_bits),
+                        _marker: std::marker::PhantomData,
+                    });
+
+                    let device_memory =
+                        alloc_infos.map(|info| vk_device.allocate_memory(&info, None).unwrap());
+
+                    let bind_plane_info = vk::BindImagePlaneMemoryInfo {
+                        s_type: vk::StructureType::BIND_IMAGE_PLANE_MEMORY_INFO,
+                        p_next: ptr::null(),
+                        plane_aspect: vk::ImageAspectFlags::PLANE_1,
                         _marker: std::marker::PhantomData,
                     };
 
-                    let device_memory = vk_device.allocate_memory(&alloc_info, None).unwrap();
-                    vk_device
-                        .bind_image_memory(vk_image, device_memory, 0)
-                        .unwrap();
+                    let bind_infos = [
+                        vk::BindImageMemoryInfo {
+                            s_type: vk::StructureType::BIND_IMAGE_MEMORY_INFO,
+                            p_next: ptr::null(),
+                            image: vk_image,
+                            memory: device_memory[0],
+                            memory_offset: 0,
+                            _marker: std::marker::PhantomData,
+                        },
+                        vk::BindImageMemoryInfo {
+                            s_type: vk::StructureType::BIND_IMAGE_MEMORY_INFO,
+                            p_next: (&raw const bind_plane_info).cast(),
+                            image: vk_image,
+                            memory: device_memory[1],
+                            memory_offset: 0,
+                            _marker: std::marker::PhantomData,
+                        },
+                    ];
+
+                    vk_device.bind_image_memory2(&bind_infos).unwrap();
 
                     wgpu::hal::vulkan::Device::texture_from_raw(
                         vk_image,
@@ -390,7 +474,9 @@ impl Wallpaper for VideoWallpaper {
                             vk_destroy_image(vk_device_raw, vk_image, ptr::null());
                             // NOTE(hack3rmann): we have to manually deallocate the memory
                             // because wgpu does not do this due to call to `texture_from_raw`
-                            vk_free_memory(vk_device_raw, device_memory, ptr::null());
+                            for memory in device_memory {
+                                vk_free_memory(vk_device_raw, memory, ptr::null());
+                            }
                         })),
                     )
                 })
