@@ -50,7 +50,7 @@ sudo cp /target/release/waywe-daemon /usr/bin/waywe-daemon
 Start the daemon. For example, in hyprland, you run:
 
 ```shell
-hyprctl dispatch exec "waywe-daemon path/to/your/default/video"
+hyprctl dispatch exec waywe-daemon
 ```
 
 Then use the `waywe` cli tool to control daemon's behavior:
