@@ -2,14 +2,15 @@
 
 layout(push_constant) uniform float time;
 
-layout(set = 0, binding = 0) uniform texture2D image;
-layout(set = 0, binding = 1) uniform sampler image_sampler;
+layout(set = 0, binding = 0) uniform texture2D from_image;
+layout(set = 0, binding = 1) uniform texture2D to_image;
+layout(set = 0, binding = 2) uniform sampler image_sampler;
 
 in vec2 position;
 out vec4 surface_color;
 
 void main() {
-    ivec2 image_size = textureSize(sampler2D(image, image_sampler), 0);
+    ivec2 image_size = textureSize(sampler2D(from_image, image_sampler), 0);
     float aspect_ratio = float(image_size.x) / float(image_size.y);
 
     vec2 texture_coordinates = 0.5 * position + 0.5;
@@ -20,9 +21,10 @@ void main() {
     float radius = log(1.0 + time);
 
     if (dot(offset, offset) < radius * radius) {
-        discard;
+        surface_color.rgb = texture(sampler2D(to_image, image_sampler), texture_coordinates).rgb;
+    } else {
+        surface_color.rgb = texture(sampler2D(from_image, image_sampler), texture_coordinates).rgb;
     }
 
-    surface_color.rgb = texture(sampler2D(image, image_sampler), texture_coordinates).rgb;
     surface_color.a = 1.0;
 }

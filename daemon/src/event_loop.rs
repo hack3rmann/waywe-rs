@@ -192,16 +192,18 @@ pub struct FrameInfo {
 }
 
 impl FrameInfo {
-    pub fn best_or_60_fps(self, other: Self) -> Self {
+    pub fn best_with_60_fps(self, other: Self) -> Self {
+        const MAX_FPS: Duration = RatioI32::new(1, 60).unwrap().to_duration_seconds();
+
         match (self.target_frame_time, other.target_frame_time) {
             (Some(time1), Some(time2)) => Self {
-                target_frame_time: Some(time1.min(time2)),
+                target_frame_time: Some(time1.min(time2).min(MAX_FPS)),
             },
             (Some(time), None) | (None, Some(time)) => Self {
-                target_frame_time: Some(time),
+                target_frame_time: Some(time.min(MAX_FPS)),
             },
             (None, None) => Self {
-                target_frame_time: Some(RatioI32::new(1, 60).unwrap().to_duration_seconds()),
+                target_frame_time: Some(MAX_FPS),
             },
         }
     }

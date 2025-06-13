@@ -5,7 +5,11 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use glam::{UVec2, Vec2};
-use std::{collections::HashMap, mem, time::Instant};
+use std::{
+    collections::HashMap,
+    mem,
+    time::{Duration, Instant},
+};
 use wgpu::util::DeviceExt as _;
 
 pub struct TransitionWallpaper {
@@ -66,9 +70,13 @@ pub struct TransitionPipeline {
     to: DynWallpaper,
     vertex_buffer: wgpu::Buffer,
     from_texture_view: wgpu::TextureView,
+    to_texture_view: wgpu::TextureView,
     bind_group: wgpu::BindGroup,
     pipeline: wgpu::RenderPipeline,
     animation_start: Option<Instant>,
+    target_frame_times: [Option<Duration>; 2],
+    last_frame_time: Option<Instant>,
+    frame_index: usize,
 }
 
 impl TransitionPipeline {
@@ -96,7 +104,23 @@ impl TransitionPipeline {
             view_formats: &[],
         });
 
+        let to_texture = gpu.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("from-texture-target"),
+            size: wgpu::Extent3d {
+                width: screen_size.x,
+                height: screen_size.y,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: gpu.surface_format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+
         let from_texture_view = from_texture.create_view(&Default::default());
+        let to_texture_view = to_texture.create_view(&Default::default());
 
         let sampler = gpu.device.create_sampler(&wgpu::SamplerDescriptor {
             min_filter: wgpu::FilterMode::Linear,
@@ -122,6 +146,16 @@ impl TransitionPipeline {
                         wgpu::BindGroupLayoutEntry {
                             binding: 1,
                             visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
                             ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                             count: None,
                         },
@@ -138,6 +172,10 @@ impl TransitionPipeline {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&to_texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
             ],
@@ -244,9 +282,13 @@ impl TransitionPipeline {
             to,
             vertex_buffer,
             from_texture_view,
+            to_texture_view,
             bind_group,
             pipeline,
             animation_start: None,
+            target_frame_times: [None; 2],
+            last_frame_time: None,
+            frame_index: 0,
         }
     }
 
@@ -261,8 +303,43 @@ impl TransitionPipeline {
             .get_or_insert_with(Instant::now)
             .elapsed();
 
-        let first_info = self.from.frame(runtime, encoder, &self.from_texture_view)?;
-        let second_info = self.to.frame(runtime, encoder, surface_view)?;
+        let last_frame_time = self
+            .last_frame_time
+            .get_or_insert_with(Instant::now)
+            .elapsed();
+
+        let time_remainders = self.target_frame_times.map(|maybe_time| {
+            maybe_time
+                .map(|target| target.saturating_sub(last_frame_time))
+                .unwrap_or(Duration::ZERO)
+        });
+
+        let do_render =
+            time_remainders.map(|remainder| remainder <= last_frame_time || self.frame_index == 0);
+
+        let first_info = if do_render[0] {
+            self.from.frame(runtime, encoder, &self.from_texture_view)?
+        } else {
+            FrameInfo {
+                target_frame_time: self.target_frame_times[0],
+            }
+        };
+
+        let second_info = if do_render[1] {
+            self.to.frame(runtime, encoder, &self.to_texture_view)?
+        } else {
+            FrameInfo {
+                target_frame_time: self.target_frame_times[1],
+            }
+        };
+
+        self.target_frame_times = [first_info.target_frame_time, second_info.target_frame_time];
+
+        for (time, remainder) in self.target_frame_times.iter_mut().zip(time_remainders) {
+            if let Some(time) = time {
+                *time = time.saturating_sub(remainder);
+            }
+        }
 
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
@@ -291,7 +368,10 @@ impl TransitionPipeline {
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.draw(0..SCREEN_TRIANGLE.len() as u32, 0..1);
 
-        Ok(first_info.best_or_60_fps(second_info))
+        self.last_frame_time = Some(Instant::now());
+        self.frame_index += 1;
+
+        Ok(first_info.best_with_60_fps(second_info))
     }
 }
 
