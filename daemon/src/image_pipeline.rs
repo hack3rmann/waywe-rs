@@ -1,4 +1,5 @@
 use crate::runtime::gpu::Wgpu;
+use bytemuck::{Pod, Zeroable};
 use glam::{UVec2, Vec2};
 use image::{ImageBuffer, Rgba};
 use std::{collections::HashMap, mem};
@@ -10,17 +11,30 @@ const SCREEN_TRIANGLE: [Vec2; 3] = [
     Vec2::new(-1.0, 3.0),
 ];
 
+pub type Color = u32;
+
+pub const COLOR_WHITE: Color = u32::MAX;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
+pub struct PushConst {
+    pub resolution: Vec2,
+    pub transparency_color: u32,
+}
+
 pub struct ImagePipeline {
     vertex_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     pipeline: wgpu::RenderPipeline,
     screen_size: UVec2,
+    transparency_color: Color,
 }
 
 impl ImagePipeline {
     pub fn new(
         gpu: &mut Wgpu,
         image: &ImageBuffer<Rgba<u8>, Vec<u8>>,
+        transparency_color: Color,
         monitor_size: UVec2,
     ) -> Self {
         let vertex_buffer = gpu
@@ -136,7 +150,7 @@ impl ImagePipeline {
                 bind_group_layouts: &[&bind_group_layout],
                 push_constant_ranges: &[wgpu::PushConstantRange {
                     stages: wgpu::ShaderStages::FRAGMENT,
-                    range: 0..mem::size_of::<Vec2>() as u32,
+                    range: 0..mem::size_of::<PushConst>() as u32,
                 }],
             });
 
@@ -199,6 +213,7 @@ impl ImagePipeline {
             bind_group,
             pipeline,
             screen_size: monitor_size,
+            transparency_color,
         }
     }
 
@@ -223,10 +238,10 @@ impl ImagePipeline {
         pass.set_push_constants(
             wgpu::ShaderStages::FRAGMENT,
             0,
-            bytemuck::bytes_of(&Vec2::new(
-                self.screen_size.x as f32,
-                self.screen_size.y as f32,
-            )),
+            bytemuck::bytes_of(&PushConst {
+                resolution: Vec2::new(self.screen_size.x as f32, self.screen_size.y as f32),
+                transparency_color: self.transparency_color,
+            }),
         );
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.draw(0..SCREEN_TRIANGLE.len() as u32, 0..1);

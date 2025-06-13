@@ -1,7 +1,7 @@
 use super::Wallpaper;
 use crate::{
     event_loop::{FrameError, FrameInfo},
-    image_pipeline::ImagePipeline,
+    image_pipeline::{ImagePipeline, COLOR_WHITE},
     runtime::{Runtime, RuntimeFeatures},
 };
 use image::{ImageReader, error::ImageError};
@@ -25,6 +25,8 @@ impl ImageWallpaper {
             pipeline: ImagePipeline::new(
                 &mut runtime.wgpu,
                 &image,
+                // TODO(hack3rmann): let the user decide
+                COLOR_WHITE,
                 runtime.wayland.client_state.monitor_size(),
             ),
         })
