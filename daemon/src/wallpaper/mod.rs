@@ -3,13 +3,14 @@ pub mod transition;
 pub mod video;
 
 use crate::{
-    event_loop::{FrameError, FrameInfo, WallpaperType},
+    event_loop::{FrameError, FrameInfo},
     runtime::{Runtime, RuntimeFeatures},
 };
 use image::{ImageWallpaper, ImageWallpaperCreationError};
-use transmute_extra::pathbuf_into_cstring;
+use runtime::WallpaperType;
 use std::{any::Any, path::Path};
 use thiserror::Error;
+use transmute_extra::pathbuf_into_cstring;
 use video::{VideoWallpaper, VideoWallpaperCreationError};
 
 pub trait Wallpaper: Any + Send + Sync {
@@ -58,12 +59,27 @@ pub fn create(
     ty: WallpaperType,
 ) -> Result<DynWallpaper, WallpaperCreationError> {
     match ty {
-        WallpaperType::Video => VideoWallpaper::new(runtime, &pathbuf_into_cstring(path.to_owned()))
-            .map(IntoDynWallpaper::into_dyn_wallpaper)
-            .map_err(WallpaperCreationError::from),
+        WallpaperType::Video => {
+            VideoWallpaper::new(runtime, &pathbuf_into_cstring(path.to_owned()))
+                .map(IntoDynWallpaper::into_dyn_wallpaper)
+                .map_err(WallpaperCreationError::from)
+        }
         WallpaperType::Image => ImageWallpaper::new(runtime, path)
             .map(IntoDynWallpaper::into_dyn_wallpaper)
             .map_err(WallpaperCreationError::from),
+    }
+}
+
+pub trait RequiredFeaturesExt {
+    fn required_features(self) -> RuntimeFeatures;
+}
+
+impl RequiredFeaturesExt for WallpaperType {
+    fn required_features(self) -> RuntimeFeatures {
+        match self {
+            Self::Video => VideoWallpaper::required_features(),
+            Self::Image => ImageWallpaper::required_features(),
+        }
     }
 }
 

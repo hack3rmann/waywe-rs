@@ -1,19 +1,22 @@
-use crate::{
-    runtime::{
-        ControlFlow, Runtime, RuntimeFeatures,
-        wayland::{ClientState, Wayland},
-    },
-    wallpaper::{Wallpaper, image::ImageWallpaper, video::VideoWallpaper},
+use crate::runtime::{
+    ControlFlow, Runtime,
+    wayland::{ClientState, Wayland},
 };
-use runtime::{DaemonCommand, RecvError, ipc::RecvMode, signals};
+use runtime::{
+    DaemonCommand, RecvError, WallpaperType,
+    ipc::RecvMode,
+    profile::{SetupProfile, SetupProfileError},
+    signals,
+};
 use std::{
+    io::ErrorKind,
     path::PathBuf,
     sync::{Once, atomic::Ordering},
     time::Duration,
 };
 use thiserror::Error;
 use tokio::runtime::Builder as AsyncRuntimeBuilder;
-use tracing::debug;
+use tracing::{debug, error, info};
 use video::RatioI32;
 
 pub struct EventLoop<A> {
@@ -37,7 +40,20 @@ impl<A: App> EventLoop<A> {
         SIGNALS_ONCE.call_once(signals::setup);
 
         let wayland = Wayland::new();
-        let event_queue = EventQueue::default();
+        let mut event_queue = EventQueue::default();
+
+        match SetupProfile::read() {
+            Ok(profile) => {
+                debug!("found profile config");
+
+                event_queue.events.push(Event::NewWallpaper {
+                    path: profile.path.into_owned(),
+                    ty: profile.wallpaper_type,
+                });
+            }
+            Err(SetupProfileError::Io(error)) if error.kind() == ErrorKind::NotFound => {}
+            Err(error) => info!(?error, "can not read setup profile config"),
+        }
 
         let control_flow = if event_queue.events.is_empty() {
             ControlFlow::Idle
@@ -106,13 +122,19 @@ impl<A: App> EventLoop<A> {
                     }
                     Err(RecvError::Empty) => {}
                     Err(error) => {
-                        tracing::error!(?error, "failed to recv from waywe-cli");
+                        error!(?error, "failed to recv from waywe-cli");
                     }
                 }
 
                 self.runtime.timer.mark_block_end();
 
                 for event in self.event_queue.events.drain(..) {
+                    let Event::NewWallpaper { path, ty } = &event;
+
+                    if let Err(error) = SetupProfile::new(path, *ty).store() {
+                        error!(?error, "failed to save runtime profile");
+                    }
+
                     self.app.process_event(&mut self.runtime, event).await;
                 }
 
@@ -138,22 +160,6 @@ impl<A: App> EventLoop<A> {
                     .populate_from_wayland_client_state(&self.runtime.wayland.client_state);
             }
         });
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd, Eq, Ord, Hash)]
-pub enum WallpaperType {
-    #[default]
-    Video,
-    Image,
-}
-
-impl WallpaperType {
-    pub fn required_features(self) -> RuntimeFeatures {
-        match self {
-            Self::Video => VideoWallpaper::required_features(),
-            Self::Image => ImageWallpaper::required_features(),
-        }
     }
 }
 

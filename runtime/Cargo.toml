@@ -7,7 +7,7 @@ license.workspace = true
 [dependencies]
 rustix.workspace = true
 thiserror.workspace = true
-bincode = "2.0.1"
+bincode.workspace = true
 tracing.workspace = true
 bytemuck.workspace = true
 smallvec.workspace = true
