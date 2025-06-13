@@ -2,12 +2,7 @@ use clap::{Parser, Subcommand};
 use image::ImageReader;
 use runtime::{DaemonCommand, IpcSocket, ipc::Client};
 use rustix::io::Errno;
-use std::{
-    ffi::{CStr, CString},
-    io,
-    path::{Path, PathBuf},
-    process::ExitCode,
-};
+use std::{ffi::CStr, path::PathBuf, process::ExitCode};
 use tracing::error;
 use video::{FormatContext, MediaType, VideoPixelFormat};
 
@@ -17,7 +12,7 @@ fn main() -> ExitCode {
 
     let daemon_command = match Args::parse().command {
         Command::Video { path } => {
-            let absolute_path = match absolutize_path(&path) {
+            let absolute_path = match path.canonicalize() {
                 Ok(path) => path,
                 Err(error) => {
                     error!(?error, "failed to construct absolute path");
@@ -25,12 +20,14 @@ fn main() -> ExitCode {
                 }
             };
 
-            if !is_path_valid(&absolute_path) {
+            if !is_path_valid(absolute_path.clone()) {
                 error!(?absolute_path, "can not send video to the daemon");
                 return ExitCode::FAILURE;
             }
 
-            DaemonCommand::SetVideo { path: absolute_path }
+            DaemonCommand::SetVideo {
+                path: absolute_path,
+            }
         }
         Command::Image { path } => {
             let _reader = match ImageReader::open(&path) {
@@ -49,7 +46,9 @@ fn main() -> ExitCode {
                 }
             };
 
-            DaemonCommand::SetImage { path: absolute_path }
+            DaemonCommand::SetImage {
+                path: absolute_path,
+            }
         }
     };
 
@@ -80,21 +79,24 @@ struct Args {
 #[derive(Subcommand, Debug)]
 enum Command {
     Video {
-        /// Path/URL to the video
-        path: CString,
+        /// Path to the video
+        path: PathBuf,
     },
     Image {
+        /// Path to the image
         path: PathBuf,
     },
 }
 
-fn is_path_valid(path: &CStr) -> bool {
-    if !path_from(path).exists() {
+fn is_path_valid(path: PathBuf) -> bool {
+    if !path.exists() {
         error!(?path, "file does not exist");
         return false;
     }
 
-    if !is_video_valid(path) {
+    let path = transmute_extra::pathbuf_into_cstring(path);
+
+    if !is_video_valid(&path) {
         error!(?path, "video is invalid");
         return false;
     }
@@ -127,29 +129,10 @@ fn is_video_valid(path: &CStr) -> bool {
     ) {
         error!(
             format = ?codec_parameters.format(),
-            "unsupported video format (planar Y'CbCr 4:2:0 is expected)",
+            "unsupported video pixel format (planar Y'CbCr 4:2:0 is expected)",
         );
         return false;
     }
 
     true
-}
-
-fn absolutize_path(path: &CStr) -> Result<CString, io::Error> {
-    let path_str = std::str::from_utf8(path.to_bytes()).unwrap();
-    let path_value = Path::new(path_str);
-
-    if !path_value.is_relative() {
-        return Ok(path.to_owned());
-    }
-
-    let full_path = path_value.canonicalize()?;
-    let mut full_path_bytes = full_path.into_os_string().into_encoded_bytes();
-    full_path_bytes.push(0);
-    Ok(CString::from_vec_with_nul(full_path_bytes).unwrap())
-}
-
-fn path_from(path: &CStr) -> &Path {
-    let path_str = std::str::from_utf8(path.to_bytes()).unwrap();
-    Path::new(path_str)
 }

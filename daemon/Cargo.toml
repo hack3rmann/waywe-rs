@@ -26,6 +26,7 @@ bitflags.workspace = true
 image.workspace = true
 static_assertions.workspace = true
 smallvec.workspace = true
+transmute-extra.workspace = true
 
 [dev-dependencies]
 libc = "0.2.171"

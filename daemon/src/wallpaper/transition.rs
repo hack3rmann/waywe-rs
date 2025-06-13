@@ -1,4 +1,4 @@
-use super::{DynWallpaper, RequiresFeatures, Wallpaper};
+use super::{DynWallpaper, Wallpaper};
 use crate::{
     event_loop::{FrameError, FrameInfo},
     runtime::{Runtime, RuntimeFeatures, gpu::Wgpu},
@@ -37,12 +37,14 @@ impl TransitionWallpaper {
     }
 }
 
-impl RequiresFeatures for TransitionWallpaper {
-    // TODO(hack3rmann): make this lower
-    const REQUIRED_FEATURES: RuntimeFeatures = RuntimeFeatures::all();
-}
-
 impl Wallpaper for TransitionWallpaper {
+    fn required_features() -> RuntimeFeatures
+    where
+        Self: Sized,
+    {
+        RuntimeFeatures::VIDEO | RuntimeFeatures::GPU
+    }
+
     fn frame(
         &mut self,
         runtime: &Runtime,
@@ -254,7 +256,10 @@ impl TransitionPipeline {
         encoder: &mut wgpu::CommandEncoder,
         surface_view: &wgpu::TextureView,
     ) -> Result<FrameInfo, FrameError> {
-        let animantion_time = self.animation_start.get_or_insert_with(Instant::now).elapsed();
+        let animantion_time = self
+            .animation_start
+            .get_or_insert_with(Instant::now)
+            .elapsed();
 
         let first_info = self.from.frame(runtime, encoder, &self.from_texture_view)?;
         let second_info = self.to.frame(runtime, encoder, surface_view)?;

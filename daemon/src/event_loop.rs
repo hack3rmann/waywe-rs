@@ -1,10 +1,12 @@
-use crate::runtime::{
-    ControlFlow, Runtime,
-    wayland::{ClientState, Wayland},
+use crate::{
+    runtime::{
+        ControlFlow, Runtime, RuntimeFeatures,
+        wayland::{ClientState, Wayland},
+    },
+    wallpaper::{Wallpaper, image::ImageWallpaper, video::VideoWallpaper},
 };
 use runtime::{DaemonCommand, RecvError, ipc::RecvMode, signals};
 use std::{
-    ffi::CString,
     path::PathBuf,
     sync::{Once, atomic::Ordering},
     time::Duration,
@@ -90,8 +92,14 @@ impl<A: App> EventLoop<A> {
                         self.event_queue
                             .events
                             .extend(events.into_iter().map(|command| match command {
-                                DaemonCommand::SetVideo { path } => Event::NewVideo { path },
-                                DaemonCommand::SetImage { path } => Event::NewImage { path },
+                                DaemonCommand::SetVideo { path } => Event::NewWallpaper {
+                                    path,
+                                    ty: WallpaperType::Video,
+                                },
+                                DaemonCommand::SetImage { path } => Event::NewWallpaper {
+                                    path,
+                                    ty: WallpaperType::Image,
+                                },
                             }));
 
                         self.runtime.timer.mark_wallpaper_start_time();
@@ -133,10 +141,25 @@ impl<A: App> EventLoop<A> {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd, Eq, Ord, Hash)]
+pub enum WallpaperType {
+    #[default]
+    Video,
+    Image,
+}
+
+impl WallpaperType {
+    pub fn required_features(self) -> RuntimeFeatures {
+        match self {
+            Self::Video => VideoWallpaper::required_features(),
+            Self::Image => ImageWallpaper::required_features(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Event {
-    NewVideo { path: CString },
-    NewImage { path: PathBuf },
+    NewWallpaper { path: PathBuf, ty: WallpaperType },
 }
 
 #[derive(Debug, Default)]

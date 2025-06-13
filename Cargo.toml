@@ -25,6 +25,7 @@ wayland-client = { path = "wayland-client", features = ["smallvec"] }
 waylnad-scanner = { path = "wayland-scanner" }
 wayland-sys = { path = "wayland-sys" }
 runtime = { path = "runtime" }
+transmute-extra = { path = "transmute-extra" }
 thiserror = "2.0.11"
 safe-transmute = "0.11.3"
 rayon = "1.10.0"

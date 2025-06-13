@@ -1,4 +1,4 @@
-use super::{RequiresFeatures, Wallpaper};
+use super::Wallpaper;
 use crate::{
     event_loop::{FrameError, FrameInfo},
     runtime::{Runtime, RuntimeFeatures},
@@ -55,9 +55,7 @@ impl VideoWallpaper {
         let mut codec_context =
             CodecContext::from_parameters_with_hw_accel(codec_parameters, Some(decoder))?;
 
-        if let Err(error) = codec_context.open(decoder) {
-            error!(?error, "failed to open codec context");
-        }
+        codec_context.open(decoder)?;
 
         const FRAME_DURATION_60_FPS: Duration = RatioI32::new(1, 60).unwrap().to_duration_seconds();
 
@@ -83,13 +81,14 @@ impl VideoWallpaper {
     }
 }
 
-impl RequiresFeatures for VideoWallpaper {
-    const REQUIRED_FEATURES: RuntimeFeatures =
-        RuntimeFeatures::from_bits(RuntimeFeatures::GPU.bits() | RuntimeFeatures::VIDEO.bits())
-            .unwrap();
-}
-
 impl Wallpaper for VideoWallpaper {
+    fn required_features() -> RuntimeFeatures
+    where
+        Self: Sized,
+    {
+        RuntimeFeatures::GPU | RuntimeFeatures::VIDEO
+    }
+
     fn frame(
         &mut self,
         runtime: &Runtime,

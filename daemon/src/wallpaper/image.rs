@@ -1,4 +1,4 @@
-use super::{RequiresFeatures, Wallpaper};
+use super::Wallpaper;
 use crate::{
     event_loop::{FrameError, FrameInfo},
     image_pipeline::ImagePipeline,
@@ -31,11 +31,14 @@ impl ImageWallpaper {
     }
 }
 
-impl RequiresFeatures for ImageWallpaper {
-    const REQUIRED_FEATURES: RuntimeFeatures = RuntimeFeatures::GPU;
-}
-
 impl Wallpaper for ImageWallpaper {
+    fn required_features() -> RuntimeFeatures
+    where
+        Self: Sized,
+    {
+        RuntimeFeatures::GPU
+    }
+
     fn frame(
         &mut self,
         _: &Runtime,
