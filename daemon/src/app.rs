@@ -3,7 +3,6 @@ use crate::{
     runtime::Runtime,
     wallpaper::{self, DynWallpaper, IntoDynWallpaper, transition::TransitionWallpaper},
 };
-use std::any::Any;
 use tracing::error;
 
 #[derive(Default)]
@@ -22,18 +21,9 @@ impl VideoApp {
     }
 
     pub fn resolve_transitions(&mut self) {
-        let Some(wallpaper) = self.wallpaper.as_ref().map(|w| w.as_ref() as &dyn Any) else {
-            return;
-        };
-
-        if !wallpaper.is::<TransitionWallpaper>() {
-            return;
+        if let Some(wallpaper) = self.wallpaper.take() {
+            self.wallpaper = Some(TransitionWallpaper::try_resolve_any(wallpaper));
         }
-
-        let wallpaper = self.wallpaper.take().unwrap() as Box<dyn Any>;
-        let transition = wallpaper.downcast::<TransitionWallpaper>().unwrap();
-
-        self.wallpaper = Some(transition.try_resolve());
     }
 }
 
