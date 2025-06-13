@@ -22,7 +22,7 @@ impl VideoApp {
     }
 
     pub fn resolve_transitions(&mut self) {
-        let Some(wallpaper) = self.wallpaper.as_ref().map(|w| w as &dyn Any) else {
+        let Some(wallpaper) = self.wallpaper.as_ref().map(|w| w.as_ref() as &dyn Any) else {
             return;
         };
 
