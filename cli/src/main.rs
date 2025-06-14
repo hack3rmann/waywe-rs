@@ -11,6 +11,16 @@ fn main() -> ExitCode {
     video::init();
 
     let daemon_command = match Args::parse().command {
+        Command::Start => {
+            // NOTE(hack3rmann): waywe-daemon process will daemonize itself
+            #[allow(clippy::zombie_processes)]
+            let _child = std::process::Command::new("waywe-daemon")
+                .arg("--run-in-background")
+                .spawn()
+                .unwrap();
+
+            return ExitCode::SUCCESS;
+        }
         Command::Video { path } => {
             let absolute_path = match path.canonicalize() {
                 Ok(path) => path,
@@ -86,6 +96,7 @@ enum Command {
         /// Path to the image
         path: PathBuf,
     },
+    Start,
 }
 
 fn is_path_valid(path: PathBuf) -> bool {

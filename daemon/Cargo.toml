@@ -29,6 +29,8 @@ smallvec.workspace = true
 transmute-extra.workspace = true
 bincode.workspace = true
 rand = "0.9.1"
+daemonize = "0.5.0"
+clap.workspace = true
 
 [dev-dependencies]
 libc = "0.2.171"

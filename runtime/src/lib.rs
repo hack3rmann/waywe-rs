@@ -4,6 +4,7 @@ pub mod signals;
 pub mod profile;
 pub mod wallpaper;
 pub mod epoll;
+pub mod process;
 
 pub use command::DaemonCommand;
 pub use ipc::{IpcSocket, RecvError, SendError};
