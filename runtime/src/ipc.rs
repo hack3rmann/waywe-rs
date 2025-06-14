@@ -14,7 +14,7 @@ use std::{
     env,
     marker::PhantomData,
     mem,
-    os::fd::{AsRawFd, OwnedFd},
+    os::{fd::{AsFd, AsRawFd, OwnedFd}, unix::prelude::{BorrowedFd, RawFd}},
     path::Path,
     sync::OnceLock,
     time::{Duration, Instant},
@@ -50,6 +50,18 @@ impl SocketSide for Server {
 pub struct IpcSocket<Side: SocketSide, T> {
     fd: OwnedFd,
     _p: PhantomData<(Side, T)>,
+}
+
+impl<S: SocketSide, T> AsFd for IpcSocket<S, T> {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        self.fd.as_fd()
+    }
+}
+
+impl<S: SocketSide, T> AsRawFd for IpcSocket<S, T> {
+    fn as_raw_fd(&self) -> RawFd {
+        self.fd.as_raw_fd()
+    }
 }
 
 impl<S: SocketSide, T> IpcSocket<S, T> {

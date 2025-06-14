@@ -1,7 +1,7 @@
-use super::{RenderState, Wallpaper};
+use super::Wallpaper;
 use crate::{
     event_loop::{FrameError, FrameInfo},
-    image_pipeline::{ImagePipeline, COLOR_WHITE},
+    image_pipeline::{COLOR_WHITE, ImagePipeline},
     runtime::{Runtime, RuntimeFeatures},
 };
 use image::{ImageReader, error::ImageError};
@@ -41,14 +41,6 @@ impl Wallpaper for ImageWallpaper {
         Self: Sized,
     {
         RuntimeFeatures::GPU
-    }
-
-    fn render_state(&self) -> RenderState {
-        if self.is_render_done {
-            RenderState::Done
-        } else {
-            RenderState::NeedsFrame
-        }
     }
 
     fn frame(

@@ -13,13 +13,6 @@ use thiserror::Error;
 use transmute_extra::pathbuf_into_cstring;
 use video::{VideoWallpaper, VideoWallpaperCreationError};
 
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord, Hash, Default)]
-pub enum RenderState {
-    #[default]
-    NeedsFrame,
-    Done,
-}
-
 pub trait Wallpaper: Any + Send + Sync {
     fn frame(
         &mut self,
@@ -27,8 +20,6 @@ pub trait Wallpaper: Any + Send + Sync {
         encoder: &mut wgpu::CommandEncoder,
         surface_view: &wgpu::TextureView,
     ) -> Result<FrameInfo, FrameError>;
-
-    fn render_state(&self) -> RenderState;
 
     fn required_features() -> RuntimeFeatures
     where

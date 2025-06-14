@@ -4,13 +4,14 @@ use crate::runtime::{
 };
 use glam::UVec2;
 use runtime::{
-    DaemonCommand, RecvError, WallpaperType,
-    ipc::RecvMode,
+    DaemonCommand, Epoll, RecvError, WallpaperType,
     profile::{SetupProfile, SetupProfileError},
     signals,
 };
+use rustix::io::Errno;
 use std::{
     io::ErrorKind,
+    os::fd::AsFd as _,
     path::PathBuf,
     sync::{Once, atomic::Ordering},
     time::Duration,
@@ -24,6 +25,7 @@ pub struct EventLoop<A> {
     runtime: Runtime,
     event_queue: EventQueue,
     app: A,
+    epoll: Epoll,
 }
 
 impl<A: App + Default> Default for EventLoop<A> {
@@ -64,10 +66,18 @@ impl<A: App> EventLoop<A> {
 
         let runtime = Runtime::new(wayland, control_flow);
 
+        let fds = [runtime.wayland.display.as_fd(), runtime.ipc.socket.as_fd()];
+
+        let epoll = match Epoll::new(fds, None) {
+            Ok(epoll) => epoll,
+            Err(error) => panic!("failed to create epoll: {error:?}"),
+        };
+
         Self {
             runtime,
             app,
             event_queue,
+            epoll,
         }
     }
 
@@ -99,44 +109,45 @@ impl<A: App> EventLoop<A> {
                     break self.runtime.control_flow.stop();
                 }
 
-                let recv_mode = match self.runtime.control_flow {
-                    ControlFlow::Busy => RecvMode::NonBlocking,
+                match self.runtime.control_flow {
+                    ControlFlow::Busy => {}
                     ControlFlow::Idle => {
-                        debug!("daemon is waiting for incoming requests");
-                        RecvMode::Blocking
+                        match self.epoll.wait() {
+                            Ok(polled_fds) => {
+                                if polled_fds.contains(&self.runtime.wayland.display) {
+                                    self.populate_events_from_wayland();
+                                }
+                            }
+                            Err(Errno::INTR) => {}
+                            Err(error) => {
+                                error!(?error, "failed to wait on multiple sockets");
+                            }
+                        }
                     }
                     ControlFlow::ShouldStop => {
-                        debug!("shutdowning daemon");
+                        debug!("shutting down daemon");
                         break 'event_loop;
                     }
-                };
+                }
 
                 self.runtime.timer.mark_block_start();
-                let timeout = Some(Duration::from_millis(500));
 
-                match self.runtime.ipc.socket.recv(recv_mode, timeout) {
-                    Ok(events) => {
-                        debug!(n_events = events.len(), "cli commands received");
-
-                        self.event_queue
-                            .events
-                            .extend(events.into_iter().map(|command| match command {
-                                DaemonCommand::SetVideo { path } => Event::NewWallpaper {
-                                    path,
-                                    ty: WallpaperType::Video,
-                                },
-                                DaemonCommand::SetImage { path } => Event::NewWallpaper {
-                                    path,
-                                    ty: WallpaperType::Image,
-                                },
-                            }));
+                match self.runtime.ipc.socket.nonblocking_recv() {
+                    Ok(command) => {
+                        self.event_queue.events.push(match command {
+                            DaemonCommand::SetVideo { path } => Event::NewWallpaper {
+                                path,
+                                ty: WallpaperType::Video,
+                            },
+                            DaemonCommand::SetImage { path } => Event::NewWallpaper {
+                                path,
+                                ty: WallpaperType::Image,
+                            },
+                        });
 
                         self.runtime.timer.mark_wallpaper_start_time();
                     }
-                    Err(RecvError::Timeout) => {
-                        // we may have received some events from wayland during active wait
-                        self.populate_events_from_wayland();
-                    }
+                    Err(RecvError::Timeout) => unreachable!(),
                     Err(RecvError::Empty) => {}
                     Err(error) => {
                         error!(?error, "failed to recv from waywe-cli");

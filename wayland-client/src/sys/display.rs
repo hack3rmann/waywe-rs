@@ -25,12 +25,11 @@ use raw_window_handle::{
 use std::{
     fmt,
     mem::ManuallyDrop,
-    os::fd::{BorrowedFd, IntoRawFd, RawFd},
+    os::fd::{AsFd, AsRawFd, BorrowedFd, IntoRawFd, RawFd},
     pin::Pin,
     ptr::NonNull,
     sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering::*},
+        atomic::{AtomicBool, Ordering::*}, Arc
     },
 };
 use thiserror::Error;
@@ -109,12 +108,6 @@ impl<S> WlDisplay<S> {
             raw_display: internal.as_raw(),
             shared: Arc::new(internal),
         })
-    }
-
-    /// File descriptor associated with the display
-    pub fn fd(&self) -> BorrowedFd<'_> {
-        // display's file descriptor is valid
-        unsafe { BorrowedFd::borrow_raw(self.shared.raw_fd) }
     }
 
     /// Proxy corresponding to `wl_display` object
@@ -248,6 +241,20 @@ impl<S> WlDisplay<S> {
             let error_code = self.get_error_code().unwrap();
             panic!("WlDisplay::roundtrip_queue failed: {error_code:?}");
         }
+    }
+}
+
+impl<S> AsFd for WlDisplay<S> {
+    /// File descriptor associated with the display
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        // display's file descriptor is valid
+        unsafe { BorrowedFd::borrow_raw(self.shared.raw_fd) }
+    }
+}
+
+impl<S> AsRawFd for WlDisplay<S> {
+    fn as_raw_fd(&self) -> RawFd {
+        self.as_fd().as_raw_fd()
     }
 }
 

@@ -2,7 +2,7 @@ use crate::{
     event_loop::{App, Event, FrameError, FrameInfo},
     runtime::Runtime,
     wallpaper::{
-        self, transition::TransitionWallpaper, DynWallpaper, IntoDynWallpaper, RenderState, RequiredFeaturesExt as _
+        self, transition::TransitionWallpaper, DynWallpaper, IntoDynWallpaper, RequiredFeaturesExt as _
     },
 };
 use tracing::error;
@@ -61,15 +61,6 @@ impl App for VideoApp {
             runtime.control_flow.idle();
             return Err(FrameError::NoWorkToDo);
         };
-
-        if !self.size_changed {
-            if let RenderState::Done = wallpaper.render_state() {
-                runtime.control_flow.idle();
-                return Err(FrameError::NoWorkToDo);
-            }
-        } else {
-            self.size_changed = false;
-        }
 
         let surface_texture = runtime.wgpu.surface.get_current_texture().unwrap();
         let surface_view = surface_texture.texture.create_view(&Default::default());
