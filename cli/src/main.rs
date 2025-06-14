@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 use image::ImageReader;
 use runtime::{DaemonCommand, IpcSocket, ipc::Client};
 use rustix::io::Errno;
-use std::{ffi::CStr, path::PathBuf, process::ExitCode};
+use std::{ffi::CStr, path::PathBuf, process::{ExitCode, Stdio}};
 use tracing::error;
 use video::{FormatContext, MediaType, VideoPixelFormat};
 
@@ -16,6 +16,8 @@ fn main() -> ExitCode {
             #[allow(clippy::zombie_processes)]
             let _child = std::process::Command::new("waywe-daemon")
                 .arg("--run-in-background")
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
                 .spawn()
                 .unwrap();
 
