@@ -5,7 +5,7 @@ use raw_window_handle::{
 use std::{
     ffi::CStr,
     pin::Pin,
-    sync::atomic::{AtomicU32, Ordering::Relaxed},
+    sync::atomic::{AtomicBool, AtomicU32, Ordering::Relaxed},
 };
 use wayland_client::{
     WlSmallVecMessageBuffer,
@@ -34,6 +34,7 @@ use wayland_client::{
 pub struct ClientState {
     pub monitor_width: AtomicU32,
     pub monitor_height: AtomicU32,
+    pub resize_requested: AtomicBool,
 }
 
 impl ClientState {
@@ -122,6 +123,11 @@ impl Dispatch for LayerSurface {
             return;
         };
 
+        state.resize_requested.store(
+            state.monitor_size() != UVec2::ZERO
+                && state.monitor_size() != UVec2::new(width, height),
+            Relaxed,
+        );
         state.monitor_width.store(width, Relaxed);
         state.monitor_height.store(height, Relaxed);
 

@@ -1,4 +1,4 @@
-use super::{DynWallpaper, Wallpaper};
+use super::{DynWallpaper, RenderState, Wallpaper};
 use crate::{
     event_loop::{FrameError, FrameInfo},
     runtime::{Runtime, RuntimeFeatures, gpu::Wgpu},
@@ -6,7 +6,10 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use glam::{UVec2, Vec2};
 use std::{
-    any::Any, collections::HashMap, mem, time::{Duration, Instant}
+    any::Any,
+    collections::HashMap,
+    mem,
+    time::{Duration, Instant},
 };
 use wgpu::util::DeviceExt as _;
 
@@ -26,6 +29,14 @@ impl TransitionWallpaper {
         }
     }
 
+    pub fn finished(&self) -> bool {
+        let Some(start) = self.pipeline.animation_start else {
+            return false;
+        };
+
+        start.elapsed().as_secs_f32() >= 2.0
+    }
+
     pub fn try_resolve_any(dynamic: DynWallpaper) -> DynWallpaper {
         if !(dynamic.as_ref() as &dyn Any).is::<TransitionWallpaper>() {
             dynamic
@@ -38,12 +49,8 @@ impl TransitionWallpaper {
     }
 
     pub fn try_resolve(mut self: Box<Self>) -> DynWallpaper {
-        let Some(start) = self.pipeline.animation_start else {
-            return self;
-        };
-
         // animation is complete
-        if start.elapsed().as_secs_f32() >= 2.0 {
+        if self.finished() {
             self.pipeline.to.unwrap()
         // animation is incomplete, try to recurse into child wallpapers
         } else {
@@ -64,6 +71,21 @@ impl Wallpaper for TransitionWallpaper {
         Self: Sized,
     {
         RuntimeFeatures::VIDEO | RuntimeFeatures::GPU
+    }
+
+    fn render_state(&self) -> RenderState {
+        use RenderState::*;
+
+        let from_state = self.pipeline.from.as_ref().unwrap().render_state();
+        let to_state = self.pipeline.to.as_ref().unwrap().render_state();
+
+        match (self.finished(), from_state, to_state) {
+            (_, NeedsFrame, NeedsFrame)
+            | (_, NeedsFrame, Done)
+            | (_, Done, NeedsFrame)
+            | (false, ..) => NeedsFrame,
+            (true, Done, Done) => Done,
+        }
     }
 
     fn frame(
@@ -335,7 +357,10 @@ impl TransitionPipeline {
             time_remainders.map(|remainder| remainder <= last_frame_time || self.frame_index == 0);
 
         let first_info = if do_render[0] {
-            self.from.as_mut().unwrap().frame(runtime, encoder, &self.from_texture_view)?
+            self.from
+                .as_mut()
+                .unwrap()
+                .frame(runtime, encoder, &self.from_texture_view)?
         } else {
             FrameInfo {
                 target_frame_time: self.target_frame_times[0],
@@ -343,7 +368,10 @@ impl TransitionPipeline {
         };
 
         let second_info = if do_render[1] {
-            self.to.as_mut().unwrap().frame(runtime, encoder, &self.to_texture_view)?
+            self.to
+                .as_mut()
+                .unwrap()
+                .frame(runtime, encoder, &self.to_texture_view)?
         } else {
             FrameInfo {
                 target_frame_time: self.target_frame_times[1],

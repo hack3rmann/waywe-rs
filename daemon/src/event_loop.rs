@@ -2,6 +2,7 @@ use crate::runtime::{
     ControlFlow, Runtime,
     wayland::{ClientState, Wayland},
 };
+use glam::UVec2;
 use runtime::{
     DaemonCommand, RecvError, WallpaperType,
     ipc::RecvMode,
@@ -70,6 +71,17 @@ impl<A: App> EventLoop<A> {
         }
     }
 
+    pub(crate) fn populate_events_from_wayland(&mut self) {
+        // that modifies `client_state`
+        self.runtime.wayland.display.roundtrip(
+            self.runtime.wayland.main_queue.as_mut(),
+            self.runtime.wayland.client_state.as_ref(),
+        );
+
+        self.event_queue
+            .populate_from_wayland_client_state(&self.runtime.wayland.client_state);
+    }
+
     pub fn run(&mut self) {
         let async_runtime = AsyncRuntimeBuilder::new_multi_thread()
             .enable_all()
@@ -100,8 +112,9 @@ impl<A: App> EventLoop<A> {
                 };
 
                 self.runtime.timer.mark_block_start();
+                let timeout = Some(Duration::from_millis(500));
 
-                match self.runtime.ipc.socket.recv(recv_mode) {
+                match self.runtime.ipc.socket.recv(recv_mode, timeout) {
                     Ok(events) => {
                         debug!(n_events = events.len(), "cli commands received");
 
@@ -120,6 +133,10 @@ impl<A: App> EventLoop<A> {
 
                         self.runtime.timer.mark_wallpaper_start_time();
                     }
+                    Err(RecvError::Timeout) => {
+                        // we may have received some events from wayland during active wait
+                        self.populate_events_from_wayland();
+                    }
                     Err(RecvError::Empty) => {}
                     Err(error) => {
                         error!(?error, "failed to recv from waywe-cli");
@@ -129,10 +146,10 @@ impl<A: App> EventLoop<A> {
                 self.runtime.timer.mark_block_end();
 
                 for event in self.event_queue.events.drain(..) {
-                    let Event::NewWallpaper { path, ty } = &event;
-
-                    if let Err(error) = SetupProfile::new(path, *ty).store() {
-                        error!(?error, "failed to save runtime profile");
+                    if let Event::NewWallpaper { path, ty } = &event {
+                        if let Err(error) = SetupProfile::new(path, *ty).store() {
+                            error!(?error, "failed to save runtime profile");
+                        }
                     }
 
                     self.app.process_event(&mut self.runtime, event).await;
@@ -141,23 +158,19 @@ impl<A: App> EventLoop<A> {
                 let info = match self.app.frame(&mut self.runtime).await {
                     Ok(info) => info,
                     Err(FrameError::StopRequested) => break 'event_loop,
-                    Err(FrameError::Skip) => continue 'event_loop,
+                    Err(FrameError::Skip | FrameError::NoWorkToDo) => {
+                        self.populate_events_from_wayland();
+                        continue 'event_loop;
+                    }
                 };
 
-                // that modifies `client_state`
-                self.runtime.wayland.display.roundtrip(
-                    self.runtime.wayland.main_queue.as_mut(),
-                    self.runtime.wayland.client_state.as_ref(),
-                );
+                self.populate_events_from_wayland();
 
                 if let Some(target_frame_time) = info.target_frame_time {
                     self.runtime.timer.sleep_enough(target_frame_time);
                 } else {
                     self.runtime.control_flow.idle();
                 }
-
-                self.event_queue
-                    .populate_from_wayland_client_state(&self.runtime.wayland.client_state);
             }
         });
     }
@@ -166,6 +179,7 @@ impl<A: App> EventLoop<A> {
 #[derive(Debug)]
 pub enum Event {
     NewWallpaper { path: PathBuf, ty: WallpaperType },
+    ResizeRequested { size: UVec2 },
 }
 
 #[derive(Debug, Default)]
@@ -174,8 +188,13 @@ pub struct EventQueue {
 }
 
 impl EventQueue {
-    pub fn populate_from_wayland_client_state(&mut self, _state: &ClientState) {
-        // nothing
+    pub fn populate_from_wayland_client_state(&mut self, state: &ClientState) {
+        if state.resize_requested.load(Ordering::Relaxed) {
+            state.resize_requested.store(false, Ordering::Relaxed);
+            self.events.push(Event::ResizeRequested {
+                size: state.monitor_size(),
+            });
+        }
     }
 }
 
@@ -221,4 +240,6 @@ pub enum FrameError {
     StopRequested,
     #[error("frame skipped due to error")]
     Skip,
+    #[error("no work to do")]
+    NoWorkToDo,
 }

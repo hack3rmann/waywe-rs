@@ -1,4 +1,4 @@
-use super::Wallpaper;
+use super::{RenderState, Wallpaper};
 use crate::{
     event_loop::{FrameError, FrameInfo},
     image_pipeline::{ImagePipeline, COLOR_WHITE},
@@ -10,6 +10,7 @@ use thiserror::Error;
 
 pub struct ImageWallpaper {
     pipeline: ImagePipeline,
+    is_render_done: bool,
 }
 
 impl ImageWallpaper {
@@ -22,6 +23,7 @@ impl ImageWallpaper {
         let image = reader.decode()?.into_rgba8();
 
         Ok(Self {
+            is_render_done: false,
             pipeline: ImagePipeline::new(
                 &mut runtime.wgpu,
                 &image,
@@ -41,6 +43,14 @@ impl Wallpaper for ImageWallpaper {
         RuntimeFeatures::GPU
     }
 
+    fn render_state(&self) -> RenderState {
+        if self.is_render_done {
+            RenderState::Done
+        } else {
+            RenderState::NeedsFrame
+        }
+    }
+
     fn frame(
         &mut self,
         _: &Runtime,
@@ -48,6 +58,7 @@ impl Wallpaper for ImageWallpaper {
         surface_view: &wgpu::TextureView,
     ) -> Result<FrameInfo, FrameError> {
         self.pipeline.render(encoder, surface_view);
+        self.is_render_done = true;
 
         Ok(FrameInfo {
             target_frame_time: None,

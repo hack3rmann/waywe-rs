@@ -1,4 +1,4 @@
-use super::Wallpaper;
+use super::{RenderState, Wallpaper};
 use crate::{
     event_loop::{FrameError, FrameInfo},
     runtime::{Runtime, RuntimeFeatures},
@@ -87,6 +87,10 @@ impl Wallpaper for VideoWallpaper {
         Self: Sized,
     {
         RuntimeFeatures::GPU | RuntimeFeatures::VIDEO
+    }
+
+    fn render_state(&self) -> RenderState {
+        RenderState::NeedsFrame
     }
 
     fn frame(
