@@ -93,7 +93,7 @@ impl<A: App> EventLoop<A> {
     }
 
     pub fn run(&mut self) {
-        let async_runtime = AsyncRuntimeBuilder::new_multi_thread()
+        let async_runtime = AsyncRuntimeBuilder::new_current_thread()
             .enable_all()
             .build()
             .unwrap();
@@ -106,7 +106,7 @@ impl<A: App> EventLoop<A> {
 
                 if signals::SHOULD_EXIT.load(Ordering::Relaxed) {
                     debug!("caught stop signal");
-                    break self.runtime.control_flow.stop();
+                    self.runtime.control_flow.stop();
                 }
 
                 match self.runtime.control_flow {
