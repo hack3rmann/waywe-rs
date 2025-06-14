@@ -59,6 +59,8 @@ impl<S> Drop for WlDisplayInternal<S> {
 
 /// A handle to the libwayland backend
 pub struct WlDisplay<S> {
+    /// Raw display pointer. Used to reduce indirection.
+    pub(crate) raw_display: NonNull<wl_display>,
     pub(crate) shared: Arc<WlDisplayInternal<S>>,
 }
 
@@ -95,14 +97,17 @@ impl<S> WlDisplay<S> {
 
         log::setup();
 
+        let internal = WlDisplayInternal {
+            proxy,
+            raw_fd,
+            // Safety: constructing NonNull from pinned pointer is safe
+            state: NonNull::from(state.get_ref()),
+            main_queue_taken: AtomicBool::new(false),
+        };
+
         Ok(Self {
-            shared: Arc::new(WlDisplayInternal {
-                proxy,
-                raw_fd,
-                // Safety: constructing NonNull from pinned pointer is safe
-                state: NonNull::from(state.get_ref()),
-                main_queue_taken: AtomicBool::new(false),
-            }),
+            raw_display: internal.as_raw(),
+            shared: Arc::new(internal),
         })
     }
 
@@ -119,7 +124,7 @@ impl<S> WlDisplay<S> {
 
     /// Raw display pointer
     pub fn as_raw(&self) -> NonNull<wl_display> {
-        self.shared.as_raw()
+        self.raw_display
     }
 
     /// Creates a [`WlObjectStorage`] borrowing display for the lifetime of the storage
@@ -249,6 +254,7 @@ impl<S> WlDisplay<S> {
 impl<S> Clone for WlDisplay<S> {
     fn clone(&self) -> Self {
         Self {
+            raw_display: self.raw_display,
             shared: Arc::clone(&self.shared),
         }
     }
