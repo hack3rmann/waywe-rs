@@ -2,7 +2,7 @@ use crate::{
     event_loop::{App, Event, FrameError, FrameInfo},
     runtime::Runtime,
     wallpaper::{
-        self, transition::TransitionWallpaper, DynWallpaper, IntoDynWallpaper, RequiredFeaturesExt as _
+        self, transition::TransitionWallpaper, DynWallpaper, IntoDynWallpaper, RenderState, RequiredFeaturesExt as _
     },
 };
 use tracing::error;
@@ -10,7 +10,7 @@ use tracing::error;
 #[derive(Default)]
 pub struct VideoApp {
     pub wallpaper: Option<DynWallpaper>,
-    pub size_changed: bool,
+    pub do_force_frame: bool,
 }
 
 impl VideoApp {
@@ -49,7 +49,7 @@ impl App for VideoApp {
             }
             Event::ResizeRequested { size } => {
                 runtime.wgpu.resize_surface(size);
-                self.size_changed = true;
+                self.do_force_frame = true;
             }
         }
     }
@@ -62,6 +62,11 @@ impl App for VideoApp {
             return Err(FrameError::NoWorkToDo);
         };
 
+        if !self.do_force_frame && wallpaper.render_state() == RenderState::Done {
+            runtime.control_flow.idle();
+            return Err(FrameError::NoWorkToDo);
+        }
+
         let surface_texture = runtime.wgpu.surface.get_current_texture().unwrap();
         let surface_view = surface_texture.texture.create_view(&Default::default());
 
@@ -73,6 +78,7 @@ impl App for VideoApp {
         _ = runtime.wgpu.queue.submit([encoder.finish()]);
 
         surface_texture.present();
+        self.do_force_frame = false;
 
         result
     }

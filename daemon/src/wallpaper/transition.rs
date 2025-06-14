@@ -1,4 +1,4 @@
-use super::{DynWallpaper, Wallpaper};
+use super::{DynWallpaper, RenderState, Wallpaper};
 use crate::{
     event_loop::{FrameError, FrameInfo},
     runtime::{Runtime, RuntimeFeatures, gpu::Wgpu},
@@ -71,6 +71,18 @@ impl Wallpaper for TransitionWallpaper {
         Self: Sized,
     {
         RuntimeFeatures::VIDEO | RuntimeFeatures::GPU
+    }
+
+    fn render_state(&self) -> RenderState {
+        use RenderState::{Done, NeedFrame};
+
+        let from_state = self.pipeline.from.as_ref().unwrap().render_state();
+        let to_state = self.pipeline.to.as_ref().unwrap().render_state();
+
+        match (self.finished(), from_state, to_state) {
+            (true, Done, Done) => Done,
+            _ => NeedFrame,
+        }
     }
 
     fn frame(
