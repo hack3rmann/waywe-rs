@@ -1,6 +1,9 @@
 #version 460
 
-layout(push_constant) uniform float time;
+layout(push_constant) uniform struct Push {
+    vec2 centre;
+    float radius;
+} push;
 
 layout(set = 0, binding = 0) uniform texture2D from_image;
 layout(set = 0, binding = 1) uniform texture2D to_image;
@@ -16,11 +19,11 @@ void main() {
     vec2 texture_coordinates = 0.5 * position + 0.5;
     texture_coordinates.y = 1.0 - texture_coordinates.y;
 
-    vec2 offset = vec2(texture_coordinates) - vec2(0.5);
+    vec2 offset = position;
     offset.x *= aspect_ratio;
-    float radius = log(1.0 + time);
+    offset -= push.centre;
 
-    if (dot(offset, offset) < radius * radius) {
+    if (dot(offset, offset) < push.radius * push.radius) {
         surface_color.rgb = texture(sampler2D(to_image, image_sampler), texture_coordinates).rgb;
     } else {
         surface_color.rgb = texture(sampler2D(from_image, image_sampler), texture_coordinates).rgb;

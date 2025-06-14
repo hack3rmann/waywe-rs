@@ -44,6 +44,11 @@ impl ClientState {
             self.monitor_height.load(Relaxed),
         )
     }
+
+    pub fn aspect_ratio(&self) -> f32 {
+        let size = self.monitor_size();
+        size.x as f32 / size.y as f32
+    }
 }
 
 pub struct Compositor;

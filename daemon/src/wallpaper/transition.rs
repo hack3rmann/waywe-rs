@@ -1,10 +1,14 @@
-use super::{DynWallpaper, RenderState, Wallpaper};
+use super::{
+    DynWallpaper, RenderState, Wallpaper,
+    interpolation::{self, Interpolation},
+};
 use crate::{
     event_loop::{FrameError, FrameInfo},
     runtime::{Runtime, RuntimeFeatures, gpu::Wgpu},
 };
 use bytemuck::{Pod, Zeroable};
 use glam::{UVec2, Vec2};
+use rand::distr::{Distribution as _, Uniform};
 use std::{
     any::Any,
     collections::HashMap,
@@ -34,7 +38,7 @@ impl TransitionWallpaper {
             return false;
         };
 
-        start.elapsed().as_secs_f32() >= 2.0
+        start.elapsed().as_secs_f32() >= self.pipeline.animation_target_time.as_secs_f32()
     }
 
     pub fn try_resolve_any(dynamic: DynWallpaper) -> DynWallpaper {
@@ -113,6 +117,9 @@ pub struct TransitionPipeline {
     target_frame_times: [Option<Duration>; 2],
     last_frame_time: Option<Instant>,
     frame_index: usize,
+    animation_target_time: Duration,
+    interpolation: Interpolation,
+    centre: Vec2,
 }
 
 impl TransitionPipeline {
@@ -313,6 +320,14 @@ impl TransitionPipeline {
                 cache: None,
             });
 
+        let distribution = Uniform::new_inclusive(-1.0_f32, 1.0).unwrap();
+        let mut rng = rand::rng();
+
+        let centre = Vec2::new(
+            distribution.sample(&mut rng).powi(3),
+            distribution.sample(&mut rng).powi(3),
+        );
+
         Self {
             from: Some(from),
             to: Some(to),
@@ -325,6 +340,9 @@ impl TransitionPipeline {
             target_frame_times: [None; 2],
             last_frame_time: None,
             frame_index: 0,
+            animation_target_time: Duration::from_secs(2),
+            interpolation: interpolation::ease_in_out,
+            centre,
         }
     }
 
@@ -398,14 +416,32 @@ impl TransitionPipeline {
             occlusion_query_set: None,
         });
 
+        // TODO(hack3rmann): support for vertical monitors
+        let aspect_ratio = runtime.wayland.client_state.aspect_ratio();
+        let corners = [
+            Vec2::new(-aspect_ratio, -1.0),
+            Vec2::new(aspect_ratio, -1.0),
+            Vec2::new(aspect_ratio, 1.0),
+            Vec2::new(-aspect_ratio, 1.0),
+        ];
+
+        let centre = self.centre;
+        let radius_scale = centre
+            .distance(corners[0])
+            .max(centre.distance(corners[1]))
+            .max(centre.distance(corners[2]))
+            .max(centre.distance(corners[3]));
+        let radius = radius_scale
+            * (self.interpolation)(
+                animantion_time.as_secs_f32() / self.animation_target_time.as_secs_f32(),
+            );
+
         pass.set_pipeline(&self.pipeline);
         pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         pass.set_push_constants(
             wgpu::ShaderStages::FRAGMENT,
             0,
-            bytemuck::bytes_of(&PushConst {
-                time: animantion_time.as_secs_f32(),
-            }),
+            bytemuck::bytes_of(&PushConst { centre, radius }),
         );
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.draw(0..SCREEN_TRIANGLE.len() as u32, 0..1);
@@ -420,5 +456,6 @@ impl TransitionPipeline {
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub struct PushConst {
-    time: f32,
+    centre: Vec2,
+    radius: f32,
 }

@@ -1,6 +1,7 @@
 pub mod image;
 pub mod transition;
 pub mod video;
+pub mod interpolation;
 
 use crate::{
     event_loop::{FrameError, FrameInfo},
