@@ -13,6 +13,7 @@ members = [
     "cli",
     "runtime",
     "project-parser",
+    "deploy-tool",
 ]
 
 [workspace.package]
@@ -44,6 +45,7 @@ libc = "0.2.170"
 image = "0.25.6"
 bincode = "2.0.1"
 clap = { version = "4.5.40", features = ["derive"] }
+tokio = { version = "1.43.0", features = ["full"] }
 
 [profile.release]
 lto = true
