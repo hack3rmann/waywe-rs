@@ -3,6 +3,7 @@ use bincode::{
     Decode, Encode, config,
     error::{DecodeError, EncodeError},
 };
+use glam::UVec2;
 use std::{
     borrow::Cow,
     env,
@@ -16,14 +17,21 @@ use thiserror::Error;
 pub struct SetupProfile<'s> {
     pub wallpaper_type: WallpaperType,
     pub path: Cow<'s, Path>,
+    pub monitor_size: (u32, u32),
 }
 
 impl<'s> SetupProfile<'s> {
-    pub fn new(path: &'s Path, wallpaper_type: WallpaperType) -> Self {
+    pub fn new(path: &'s Path, wallpaper_type: WallpaperType, monitor_size: UVec2) -> Self {
         Self {
             path: Cow::Borrowed(path),
             wallpaper_type,
+            monitor_size: monitor_size.into(),
         }
+    }
+
+    pub const fn size(&self) -> UVec2 {
+        let (width, height) = self.monitor_size;
+        UVec2::new(width, height)
     }
 
     pub fn read() -> Result<Self, SetupProfileError> {

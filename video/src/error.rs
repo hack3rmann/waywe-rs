@@ -66,6 +66,8 @@ impl BackendError {
     pub const HTTP_OTHER_4XX: Self = Self::new(AVERROR_HTTP_OTHER_4XX).unwrap();
     /// Server returned 5XX Server Error reply
     pub const HTTP_SERVER_ERROR: Self = Self::new(AVERROR_HTTP_SERVER_ERROR).unwrap();
+    /// Resource temporarily unavailable
+    pub const EAGAIN: Self = Self::new(-11).unwrap();
 
     pub const ERROR_BUFFER_SIZE: usize = 128;
 

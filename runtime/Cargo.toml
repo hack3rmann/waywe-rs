@@ -12,3 +12,4 @@ tracing.workspace = true
 bytemuck.workspace = true
 smallvec.workspace = true
 libc.workspace = true
+glam.workspace = true

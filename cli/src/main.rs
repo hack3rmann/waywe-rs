@@ -1,23 +1,148 @@
 use clap::{Parser, Subcommand};
-use image::ImageReader;
-use runtime::{DaemonCommand, IpcSocket, ipc::Client, profile::SetupProfile};
+use image::{DynamicImage, ImageReader, RgbImage};
+use runtime::{
+    DaemonCommand, IpcSocket, WallpaperType,
+    ipc::Client,
+    profile::{SetupProfile, SetupProfileError},
+};
 use rustix::io::Errno;
 use std::{
     ffi::CStr,
+    io::ErrorKind,
     path::PathBuf,
     process::{ExitCode, Stdio},
 };
 use tracing::error;
-use video::{FormatContext, MediaType, VideoPixelFormat};
+use transmute_extra::pathbuf_into_cstring;
+use video::{
+    BackendError, Codec, CodecContext, FormatContext, Frame, MediaType, ScalerFlags, ScalerFormat, SoftwareScaler, VideoPixelFormat
+};
 
 fn main() -> ExitCode {
     tracing_subscriber::fmt::init();
     video::init();
 
     let daemon_command = match Args::parse().command {
+        Command::Preview { out } => {
+            let profile = match SetupProfile::read() {
+                Ok(profile) => profile,
+                Err(error) => {
+                    error!(?error, "failed to open profile file");
+                    return ExitCode::FAILURE;
+                }
+            };
+
+            let image = match profile.wallpaper_type {
+                WallpaperType::Video => {
+                    let c_path = pathbuf_into_cstring(profile.path.clone().into_owned());
+
+                    let mut format_context = match FormatContext::from_input(&c_path) {
+                        Ok(context) => context,
+                        Err(error) => {
+                            error!(?error, path = ?profile.path, "failed to open video");
+                            return ExitCode::FAILURE;
+                        }
+                    };
+
+                    let best_stream = match format_context.find_best_stream(MediaType::Video) {
+                        Ok(stream) => stream,
+                        Err(error) => {
+                            error!(?error, path = ?profile.path, "failed to find video stream");
+                            return ExitCode::FAILURE;
+                        }
+                    };
+
+                    let best_stream_index = best_stream.index();
+                    let codec_parameters = best_stream.codec_parameters();
+
+                    let Some(decoder) = Codec::find_decoder_for_id(codec_parameters.codec_id())
+                    else {
+                        error!(path = ?profile.path, "failed to find decoder");
+                        return ExitCode::FAILURE;
+                    };
+
+                    let mut codec_context =
+                        CodecContext::from_parameters(codec_parameters, Some(decoder)).unwrap();
+                    codec_context.open(decoder).unwrap();
+
+                    let frame = loop {
+                        let packet = format_context.read_packet().unwrap();
+
+                        if packet.stream_index() != best_stream_index {
+                            continue;
+                        }
+
+                        codec_context.send_packet(&packet).unwrap();
+
+                        let mut frame = Frame::new();
+
+                        match codec_context.receive_frame(&mut frame) {
+                            Ok(()) => break frame,
+                            Err(BackendError::EAGAIN) => continue,
+                            Err(error) => {
+                                error!(?error, "failed to receive a frame");
+                                return ExitCode::FAILURE;
+                            }
+                        }
+                    };
+
+                    let mut scaler = SoftwareScaler::new(
+                        ScalerFormat {
+                            size: frame.size(),
+                            format: frame.format().unwrap(),
+                        },
+                        ScalerFormat {
+                            // TODO(hack3rmann): scale appropriately
+                            size: frame.size(),
+                            format: VideoPixelFormat::Rgb24,
+                        },
+                        ScalerFlags::BILINEAR,
+                    ).unwrap();
+
+                    let mut scaled_frame = Frame::new();
+                    scaler.run(&frame, &mut scaled_frame).unwrap();
+
+                    let image = RgbImage::from_vec(
+                        scaled_frame.width(),
+                        scaled_frame.height(),
+                        scaled_frame.data(0).to_owned(),
+                    )
+                    .expect("buffer size expected to be `width * height * pixel_size`");
+
+                    DynamicImage::ImageRgb8(image)
+                }
+                WallpaperType::Image => {
+                    let reader = match ImageReader::open(&profile.path) {
+                        Ok(reader) => reader,
+                        Err(error) => {
+                            error!(?error, path = ?profile.path, "failed to open image file");
+                            return ExitCode::FAILURE;
+                        }
+                    };
+
+                    match reader.decode() {
+                        Ok(image) => image,
+                        Err(error) => {
+                            error!(?error, path = ?profile.path, "failed to decode image");
+                            return ExitCode::FAILURE;
+                        }
+                    }
+                }
+            };
+
+            if let Err(error) = image.save(&out) {
+                error!(?error, ?out, "failed to save preview image");
+                return ExitCode::FAILURE;
+            }
+
+            return ExitCode::SUCCESS;
+        }
         Command::Current => {
             let profile = match SetupProfile::read() {
                 Ok(profile) => profile,
+                Err(SetupProfileError::Io(error)) if error.kind() == ErrorKind::NotFound => {
+                    return ExitCode::FAILURE;
+                }
                 Err(error) => {
                     error!(?error, "failed to open profile file");
                     return ExitCode::FAILURE;
@@ -121,6 +246,11 @@ enum Command {
     Start,
     /// Get path to the current wallpaper
     Current,
+    /// Create a preview for the wallpaper
+    Preview {
+        /// Where to store the preview
+        out: PathBuf,
+    },
 }
 
 fn is_video_path_valid(path: PathBuf) -> bool {
