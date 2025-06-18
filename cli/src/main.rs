@@ -1,8 +1,12 @@
 use clap::{Parser, Subcommand};
 use image::ImageReader;
-use runtime::{DaemonCommand, IpcSocket, ipc::Client};
+use runtime::{DaemonCommand, IpcSocket, ipc::Client, profile::SetupProfile};
 use rustix::io::Errno;
-use std::{ffi::CStr, path::PathBuf, process::{ExitCode, Stdio}};
+use std::{
+    ffi::CStr,
+    path::PathBuf,
+    process::{ExitCode, Stdio},
+};
 use tracing::error;
 use video::{FormatContext, MediaType, VideoPixelFormat};
 
@@ -11,6 +15,19 @@ fn main() -> ExitCode {
     video::init();
 
     let daemon_command = match Args::parse().command {
+        Command::Current => {
+            let profile = match SetupProfile::read() {
+                Ok(profile) => profile,
+                Err(error) => {
+                    error!(?error, "failed to open profile file");
+                    return ExitCode::FAILURE;
+                }
+            };
+
+            println!("{}", profile.path.display());
+
+            return ExitCode::SUCCESS;
+        }
         Command::Start => {
             // NOTE(hack3rmann): waywe-daemon process will daemonize itself
             #[allow(clippy::zombie_processes)]
@@ -32,7 +49,7 @@ fn main() -> ExitCode {
                 }
             };
 
-            if !is_path_valid(absolute_path.clone()) {
+            if !is_video_path_valid(absolute_path.clone()) {
                 error!(?absolute_path, "can not send video to the daemon");
                 return ExitCode::FAILURE;
             }
@@ -90,18 +107,23 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Command {
+    /// Set a video as a wallpaper
     Video {
         /// Path to the video
         path: PathBuf,
     },
+    /// Set an image as a wallpaper
     Image {
         /// Path to the image
         path: PathBuf,
     },
+    /// Start the daemon process
     Start,
+    /// Get path to the current wallpaper
+    Current,
 }
 
-fn is_path_valid(path: PathBuf) -> bool {
+fn is_video_path_valid(path: PathBuf) -> bool {
     if !path.exists() {
         error!(?path, "file does not exist");
         return false;
