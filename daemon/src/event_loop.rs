@@ -111,19 +111,17 @@ impl<A: App> EventLoop<A> {
 
                 match self.runtime.control_flow {
                     ControlFlow::Busy => {}
-                    ControlFlow::Idle => {
-                        match self.epoll.wait() {
-                            Ok(polled_fds) => {
-                                if polled_fds.contains(&self.runtime.wayland.display) {
-                                    self.populate_events_from_wayland();
-                                }
-                            }
-                            Err(Errno::INTR) => {}
-                            Err(error) => {
-                                error!(?error, "failed to wait on multiple sockets");
+                    ControlFlow::Idle => match self.epoll.wait() {
+                        Ok(polled_fds) => {
+                            if polled_fds.contains(&self.runtime.wayland.display) {
+                                self.populate_events_from_wayland();
                             }
                         }
-                    }
+                        Err(Errno::INTR) => {}
+                        Err(error) => {
+                            error!(?error, "failed to wait on multiple sockets");
+                        }
+                    },
                     ControlFlow::ShouldStop => {
                         debug!("shutting down daemon");
                         break 'event_loop;
@@ -158,7 +156,9 @@ impl<A: App> EventLoop<A> {
 
                 for event in self.event_queue.events.drain(..) {
                     if let Event::NewWallpaper { path, ty } = &event {
-                        if let Err(error) = SetupProfile::new(path, *ty).store() {
+                        let size = self.runtime.wayland.client_state.monitor_size();
+
+                        if let Err(error) = SetupProfile::new(path, *ty, size).store() {
                             error!(?error, "failed to save runtime profile");
                         }
                     }

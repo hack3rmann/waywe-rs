@@ -17,3 +17,4 @@ tracing-subscriber.workspace = true
 rustix.workspace = true
 image.workspace = true
 transmute-extra.workspace = true
+glam.workspace = true
