@@ -200,8 +200,8 @@ pub struct EventQueue {
 
 impl EventQueue {
     pub fn populate_from_wayland_client_state(&mut self, state: &ClientState) {
-        if state.resize_requested.load(Ordering::Relaxed) {
-            state.resize_requested.store(false, Ordering::Relaxed);
+        if state.resize_requested.load(Ordering::Acquire) {
+            state.resize_requested.store(false, Ordering::Release);
             self.events.push(Event::ResizeRequested {
                 size: state.monitor_size(),
             });
