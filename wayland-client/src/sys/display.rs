@@ -25,12 +25,11 @@ use raw_window_handle::{
 use std::{
     fmt,
     mem::ManuallyDrop,
-    os::fd::{BorrowedFd, IntoRawFd, RawFd},
+    os::fd::{AsFd, AsRawFd, BorrowedFd, IntoRawFd, RawFd},
     pin::Pin,
     ptr::NonNull,
     sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering::*},
+        atomic::{AtomicBool, Ordering::*}, Arc
     },
 };
 use thiserror::Error;
@@ -59,6 +58,8 @@ impl<S> Drop for WlDisplayInternal<S> {
 
 /// A handle to the libwayland backend
 pub struct WlDisplay<S> {
+    /// Raw display pointer. Used to reduce indirection.
+    pub(crate) raw_display: NonNull<wl_display>,
     pub(crate) shared: Arc<WlDisplayInternal<S>>,
 }
 
@@ -95,21 +96,18 @@ impl<S> WlDisplay<S> {
 
         log::setup();
 
-        Ok(Self {
-            shared: Arc::new(WlDisplayInternal {
-                proxy,
-                raw_fd,
-                // Safety: constructing NonNull from pinned pointer is safe
-                state: NonNull::from(state.get_ref()),
-                main_queue_taken: AtomicBool::new(false),
-            }),
-        })
-    }
+        let internal = WlDisplayInternal {
+            proxy,
+            raw_fd,
+            // Safety: constructing NonNull from pinned pointer is safe
+            state: NonNull::from(state.get_ref()),
+            main_queue_taken: AtomicBool::new(false),
+        };
 
-    /// File descriptor associated with the display
-    pub fn fd(&self) -> BorrowedFd<'_> {
-        // display's file descriptor is valid
-        unsafe { BorrowedFd::borrow_raw(self.shared.raw_fd) }
+        Ok(Self {
+            raw_display: internal.as_raw(),
+            shared: Arc::new(internal),
+        })
     }
 
     /// Proxy corresponding to `wl_display` object
@@ -119,7 +117,7 @@ impl<S> WlDisplay<S> {
 
     /// Raw display pointer
     pub fn as_raw(&self) -> NonNull<wl_display> {
-        self.shared.as_raw()
+        self.raw_display
     }
 
     /// Creates a [`WlObjectStorage`] borrowing display for the lifetime of the storage
@@ -246,9 +244,24 @@ impl<S> WlDisplay<S> {
     }
 }
 
+impl<S> AsFd for WlDisplay<S> {
+    /// File descriptor associated with the display
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        // display's file descriptor is valid
+        unsafe { BorrowedFd::borrow_raw(self.shared.raw_fd) }
+    }
+}
+
+impl<S> AsRawFd for WlDisplay<S> {
+    fn as_raw_fd(&self) -> RawFd {
+        self.as_fd().as_raw_fd()
+    }
+}
+
 impl<S> Clone for WlDisplay<S> {
     fn clone(&self) -> Self {
         Self {
+            raw_display: self.raw_display,
             shared: Arc::clone(&self.shared),
         }
     }

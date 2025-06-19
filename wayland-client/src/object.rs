@@ -81,6 +81,7 @@ impl InterfaceMessageArgument {
     pub const fn min_supported_version(self) -> NonZeroU32 {
         match self.object_type {
             WlObjectType::Shm => const { NonZeroU32::new(1).unwrap() },
+            WlObjectType::LayerShell => const { NonZeroU32::new(4).unwrap() },
             _ => self.version(),
         }
     }

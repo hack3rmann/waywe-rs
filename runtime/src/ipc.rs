@@ -14,10 +14,10 @@ use std::{
     env,
     marker::PhantomData,
     mem,
-    os::fd::{AsRawFd, OwnedFd},
+    os::{fd::{AsFd, AsRawFd, OwnedFd}, unix::prelude::{BorrowedFd, RawFd}},
     path::Path,
     sync::OnceLock,
-    time::Duration,
+    time::{Duration, Instant},
 };
 use thiserror::Error;
 use tracing::{debug, error, warn};
@@ -50,6 +50,18 @@ impl SocketSide for Server {
 pub struct IpcSocket<Side: SocketSide, T> {
     fd: OwnedFd,
     _p: PhantomData<(Side, T)>,
+}
+
+impl<S: SocketSide, T> AsFd for IpcSocket<S, T> {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        self.fd.as_fd()
+    }
+}
+
+impl<S: SocketSide, T> AsRawFd for IpcSocket<S, T> {
+    fn as_raw_fd(&self) -> RawFd {
+        self.fd.as_raw_fd()
+    }
 }
 
 impl<S: SocketSide, T> IpcSocket<S, T> {
@@ -100,17 +112,21 @@ impl<S: SocketSide, T> IpcSocket<S, T> {
         Ok(())
     }
 
-    pub fn recv(&self, mode: RecvMode) -> Result<SmallVec<[T; 1]>, RecvError>
+    pub fn recv(
+        &self,
+        mode: RecvMode,
+        timeout: Option<Duration>,
+    ) -> Result<SmallVec<[T; 1]>, RecvError>
     where
         T: Decode<()>,
     {
         match mode {
-            RecvMode::Blocking => self.blocking_recv(),
+            RecvMode::Blocking => self.blocking_recv(timeout),
             RecvMode::NonBlocking => self.nonblocking_recv().map(|value| smallvec![value]),
         }
     }
 
-    pub fn blocking_recv(&self) -> Result<SmallVec<[T; 1]>, RecvError>
+    pub fn blocking_recv(&self, timeout: Option<Duration>) -> Result<SmallVec<[T; 1]>, RecvError>
     where
         T: Decode<()>,
     {
@@ -123,12 +139,25 @@ impl<S: SocketSide, T> IpcSocket<S, T> {
             EventFlags::IN,
         )?;
 
+        let wait_time = timeout
+            .and_then(|d| i32::try_from(d.as_millis()).ok())
+            .unwrap_or(-1);
+
         let mut events = EventVec::with_capacity(1);
-        match epoll::wait(&epoll_fd, &mut events, -1) {
+
+        let start = Instant::now();
+
+        // TODO(hack3rmann): sleep on both wayland and our sockets
+        match epoll::wait(&epoll_fd, &mut events, wait_time) {
             Ok(()) => {}
-            // user has interrupted the daemon => no events to process
             Err(Errno::INTR) => return Err(RecvError::Empty),
             Err(error) => return Err(RecvError::Os(error)),
+        }
+
+        if let Some(duration) = timeout {
+            if start.elapsed() >= duration {
+                return Err(RecvError::Timeout);
+            }
         }
 
         events
@@ -270,6 +299,8 @@ pub enum SendError {
 pub enum RecvError {
     #[error("socket is empty")]
     Empty,
+    #[error("timeout has reached")]
+    Timeout,
     #[error(transparent)]
     Os(#[from] Errno),
     #[error(transparent)]

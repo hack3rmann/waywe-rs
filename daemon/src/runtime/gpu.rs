@@ -1,5 +1,6 @@
 use super::wayland::Wayland;
 use ash::vk;
+use glam::UVec2;
 use std::collections::HashMap;
 use wgpu::hal::{DeviceError, api};
 
@@ -156,5 +157,14 @@ impl Wgpu {
             surface_format,
             shader_cache: HashMap::new(),
         }
+    }
+
+    pub fn resize_surface(&self, size: UVec2) {
+        self.surface.configure(
+            &self.device,
+            &self.surface
+                .get_default_config(&self.adapter, size.x, size.y)
+                .unwrap(),
+        );
     }
 }

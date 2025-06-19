@@ -13,7 +13,7 @@ bytemuck.workspace = true
 raw-window-handle = "0.6.2"
 rustix.workspace = true
 thiserror = "2.0.11"
-tokio = { version = "1.43.0", features = ["full"] }
+tokio.workspace = true
 wgpu = { version = "24.0.1", features = ["glsl"] }
 ash = "0.38.0"
 wayland-client.workspace = true
@@ -26,6 +26,11 @@ bitflags.workspace = true
 image.workspace = true
 static_assertions.workspace = true
 smallvec.workspace = true
+transmute-extra.workspace = true
+bincode.workspace = true
+rand = "0.9.1"
+daemonize = "0.5.0"
+clap.workspace = true
 
 [dev-dependencies]
 libc = "0.2.171"

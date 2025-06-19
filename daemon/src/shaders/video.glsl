@@ -21,9 +21,16 @@ vec3 yuv_to_rgb(float y, float u, float v) {
 
 void main() {
     ivec2 video_size = textureSize(sampler2D(video_y_plane, video_sampler), 0);
-    float scale_factor = resolution.x * float(video_size.y) / (resolution.y * float(video_size.x));
 
+    float video_aspect_ratio = float(video_size.x) / float(video_size.y);
+    float screen_aspect_ratio = resolution.x / resolution.y;
+
+    float scale_factor = resolution.x * float(video_size.y) / (resolution.y * float(video_size.x));
     vec2 scaled_position = vec2(scale_factor * position.x, position.y);
+
+    if (video_aspect_ratio < screen_aspect_ratio) {
+        scaled_position /= scale_factor;
+    }
 
     vec2 texture_coordinates = 0.5 * scaled_position + 0.5;
     texture_coordinates.y = 1.0 - texture_coordinates.y;

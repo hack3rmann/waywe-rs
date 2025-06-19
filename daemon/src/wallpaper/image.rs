@@ -1,7 +1,7 @@
-use super::{RequiresFeatures, Wallpaper};
+use super::{RenderState, Wallpaper};
 use crate::{
     event_loop::{FrameError, FrameInfo},
-    image_pipeline::ImagePipeline,
+    image_pipeline::{COLOR_WHITE, ImagePipeline},
     runtime::{Runtime, RuntimeFeatures},
 };
 use image::{ImageReader, error::ImageError};
@@ -10,6 +10,7 @@ use thiserror::Error;
 
 pub struct ImageWallpaper {
     pipeline: ImagePipeline,
+    is_render_done: bool,
 }
 
 impl ImageWallpaper {
@@ -22,20 +23,33 @@ impl ImageWallpaper {
         let image = reader.decode()?.into_rgba8();
 
         Ok(Self {
+            is_render_done: false,
             pipeline: ImagePipeline::new(
                 &mut runtime.wgpu,
                 &image,
+                // TODO(hack3rmann): let the user decide
+                COLOR_WHITE,
                 runtime.wayland.client_state.monitor_size(),
             ),
         })
     }
 }
 
-impl RequiresFeatures for ImageWallpaper {
-    const REQUIRED_FEATURES: RuntimeFeatures = RuntimeFeatures::GPU;
-}
-
 impl Wallpaper for ImageWallpaper {
+    fn required_features() -> RuntimeFeatures
+    where
+        Self: Sized,
+    {
+        RuntimeFeatures::GPU
+    }
+
+    fn render_state(&self) -> RenderState {
+        match self.is_render_done {
+            false => RenderState::NeedFrame,
+            true => RenderState::Done,
+        }
+    }
+
     fn frame(
         &mut self,
         _: &Runtime,
@@ -43,6 +57,7 @@ impl Wallpaper for ImageWallpaper {
         surface_view: &wgpu::TextureView,
     ) -> Result<FrameInfo, FrameError> {
         self.pipeline.render(encoder, surface_view);
+        self.is_render_done = true;
 
         Ok(FrameInfo {
             target_frame_time: None,

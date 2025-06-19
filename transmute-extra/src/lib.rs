@@ -1,5 +1,7 @@
 //! This crate contains useful functions that extend functionality of the safe_transmute crate
 
+use std::{ffi::CString, path::PathBuf};
+
 #[derive(thiserror::Error, Debug, Clone, Copy, Hash, Eq, PartialEq, Ord, PartialOrd, Default)]
 #[error("failed to transmute Vec<u8> to Vec<u32>, input data is likely corrupt")]
 pub struct TransmuteVecError;
@@ -64,4 +66,16 @@ pub fn transmute_vec_u32_to_vec_u8(mut src: Vec<u32>) -> Vec<u8> {
     // - capacity is not changed
     // - allocated size in bytes cannot exceed isize::MAX. This is ensured by the original vector
     unsafe { Vec::from_raw_parts(ptr.cast(), len * 4, capacity * 4) }
+}
+
+/// Converts [`PathBuf`] into [`CString`], adding `nul` character at the end.
+#[cfg(unix)]
+pub fn pathbuf_into_cstring(path: PathBuf) -> CString {
+    let mut path = path.into_os_string().into_encoded_bytes();
+    path.push(0);
+
+    // Safety:
+    // - has `nul` at the end
+    // - there is exactly one `nul` character, because it was valid unix-string
+    unsafe { CString::from_vec_with_nul_unchecked(path) }
 }

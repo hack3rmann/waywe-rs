@@ -1,8 +1,8 @@
 use bincode::{Decode, Encode};
-use std::{ffi::CString, path::PathBuf};
+use std::path::PathBuf;
 
 #[derive(Encode, Decode, Debug, PartialEq, PartialOrd, Hash, Eq, Ord, Clone)]
 pub enum DaemonCommand {
-    SetVideo { path: CString },
+    SetVideo { path: PathBuf },
     SetImage { path: PathBuf },
 }

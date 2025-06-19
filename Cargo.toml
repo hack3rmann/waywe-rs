@@ -12,10 +12,12 @@ members = [
     "video",
     "cli",
     "runtime",
+    "project-parser",
+    "deploy-tool",
 ]
 
 [workspace.package]
-version = "0.0.1"
+version = "0.0.3"
 edition = "2024"
 license = "MIT"
 
@@ -24,6 +26,7 @@ wayland-client = { path = "wayland-client", features = ["smallvec"] }
 waylnad-scanner = { path = "wayland-scanner" }
 wayland-sys = { path = "wayland-sys" }
 runtime = { path = "runtime" }
+transmute-extra = { path = "transmute-extra" }
 thiserror = "2.0.11"
 safe-transmute = "0.11.3"
 rayon = "1.10.0"
@@ -40,6 +43,9 @@ rustix = { version = "0.38.44", features = ["fs", "net", "process", "mm", "shm",
 bytemuck = { version = "1.21.0", features = ["extern_crate_alloc", "derive"] }
 libc = "0.2.170"
 image = "0.25.6"
+bincode = "2.0.1"
+clap = { version = "4.5.40", features = ["derive"] }
+tokio = { version = "1.43.0", features = ["full"] }
 
 [profile.release]
 lto = true
