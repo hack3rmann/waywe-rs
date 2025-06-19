@@ -5,10 +5,7 @@ use raw_window_handle::{
 use std::{
     ffi::CStr,
     pin::Pin,
-    sync::atomic::{
-        AtomicBool, AtomicU32,
-        Ordering::{Release, Relaxed},
-    },
+    sync::atomic::{AtomicBool, AtomicU32, Ordering::*},
 };
 use wayland_client::{
     WlSmallVecMessageBuffer,

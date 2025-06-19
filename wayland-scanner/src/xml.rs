@@ -115,6 +115,12 @@ impl Message<'_> {
         // - the last zero has pushed by us (see above)
         unsafe { CString::from_vec_with_nul_unchecked(bytes) }
     }
+
+    pub fn has_lifetime(&self) -> bool {
+        self.arg
+            .iter()
+            .any(|argument| matches!(argument.ty, ArgType::String | ArgType::Fd | ArgType::Array))
+    }
 }
 
 #[derive(Debug, PartialEq, Default, Clone, Copy, Eq, PartialOrd, Ord, Hash)]
