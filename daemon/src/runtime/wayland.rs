@@ -6,6 +6,7 @@ use std::{
     ffi::CStr,
     pin::Pin,
 <<<<<<< HEAD
+<<<<<<< HEAD
     sync::atomic::{AtomicBool, AtomicU32, Ordering::*},
 =======
     sync::atomic::{
@@ -13,6 +14,9 @@ use std::{
         Ordering::{Release, Relaxed},
     },
 >>>>>>> 1438b9c (improve atomic usage)
+=======
+    sync::atomic::{AtomicBool, AtomicU32, Ordering::*},
+>>>>>>> 7df978a (add composite events to wayland-scanner)
 };
 use wayland_client::{
     WlSmallVecMessageBuffer,
