@@ -148,9 +148,20 @@ pub fn include_interfaces(token_stream: TokenStream) -> TokenStream {
                 }
             });
 
+            let has_event = interface
+                .entries
+                .iter()
+                .any(|entry| matches!(entry, InterfaceEntry::Event(..)));
+
+            let event_export = has_event.then(|| {
+                let short_ident = format_ident!("{interface_prefix}Event");
+                quote! { event::Event as #short_ident }
+            });
+
             quote! {
                 #interface_module ::{
-                    #( #interface_items ),*
+                    #( #interface_items , )*
+                    #event_export
                 }
             }
         });
@@ -235,6 +246,17 @@ fn interface_to_module(interface: &Interface) -> TokenStream {
         .enumerate()
         .map(|(i, e)| event_to_impl(interface, e, i));
 
+    let composite_event_data = interface
+        .entries
+        .iter()
+        .filter_map(|e| match e {
+            InterfaceEntry::Event(e) => Some(e),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+
+    let composite_event = impl_composite_event(interface, &composite_event_data);
+
     let enums = interface
         .entries
         .iter()
@@ -254,6 +276,8 @@ fn interface_to_module(interface: &Interface) -> TokenStream {
 
             #[doc = #event_docs ]
             pub mod event {
+                #composite_event
+
                 #( #events )*
             }
 
@@ -504,18 +528,85 @@ fn derive_call_from_args(args: &[Arg<'_>]) -> TokenStream {
     }
 }
 
+fn impl_composite_event(interface: &Interface, events: &[&Message<'_>]) -> TokenStream {
+    if events.is_empty() {
+        return TokenStream::new();
+    }
+
+    let docs = format!("All events for {} interface", interface.name);
+
+    let event_names = events
+        .iter()
+        .map(|event| event.name.to_case(Case::Pascal))
+        .collect::<Vec<_>>();
+
+    let event_idents = event_names
+        .iter()
+        .map(|name| Ident::new(name, Span::call_site()))
+        .collect::<Vec<_>>();
+
+    let event_lifetimes = events
+        .iter()
+        .map(|event| event.has_lifetime().then(|| quote! { <'s> }))
+        .collect::<Vec<_>>();
+
+    let has_lifetime = events.iter().any(|event| event.has_lifetime());
+    let lifetime = has_lifetime.then(|| quote! { <'s> });
+
+    quote! {
+        #[doc = #docs ]
+        #[derive(Clone, Debug)]
+        pub enum Event #lifetime {
+            #(
+                #event_idents ( #event_idents #event_lifetimes ) ,
+            )*
+        }
+
+        impl #lifetime Event #lifetime {
+            /// [`OpCode`](crate::sys::wire::OpCode) of this [`Event`]
+            pub const fn code(&self) -> crate::sys::wire::OpCode {
+                match self {
+                    #(
+                        Self:: #event_idents (..) => < #event_idents as crate::interface::Event>::CODE,
+                    )*
+                }
+            }
+        }
+
+        #(
+            impl #lifetime ::core::convert::From< #event_idents #event_lifetimes > for Event #lifetime {
+                fn from(value: #event_idents #event_lifetimes) -> Self {
+                    Self:: #event_idents (value)
+                }
+            }
+        )*
+
+        impl<'s> crate::interface::Event<'s> for Event #lifetime {
+            const CODE: crate::sys::wire::OpCode = crate::sys::wire::OpCode::MAX ;
+
+            fn from_message(message: crate::sys::wire::WlMessage<'s>)
+                -> ::std::option::Option<Self>
+            {
+                Some(match message.opcode {
+                    #(
+                        < #event_idents as crate::interface::Event>::CODE => Self::from(
+                            < #event_idents as crate::interface::Event>::from_message(message)?,
+                        ),
+                    )*
+                    _ => return None,
+                })
+            }
+        }
+    }
+}
+
 fn event_to_impl(interface: &Interface, event: &Message, index: usize) -> TokenStream {
     let docs = format_doc_string(DocDescription::from_outer(event.description.as_ref()));
 
     let event_name_pascal = event.name.to_case(Case::Pascal);
     let event_ident = Ident::new(&event_name_pascal, Span::call_site());
 
-    let has_lifetime = event
-        .arg
-        .iter()
-        .any(|argument| matches!(argument.ty, ArgType::String | ArgType::Fd | ArgType::Array));
-
-    let event_lifetime = has_lifetime.then(|| quote! { <'s> });
+    let event_lifetime = event.has_lifetime().then(|| quote! { <'s> });
 
     let argument_type = |argument: &Arg<'_>, add_lifetime: bool| -> Option<TokenStream> {
         let lifetime = add_lifetime.then(|| quote! { 's });
