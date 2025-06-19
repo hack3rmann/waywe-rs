@@ -202,7 +202,7 @@ impl Wallpaper for VideoWallpaper {
                 let ext_format_info = vk::PhysicalDeviceExternalImageFormatInfo {
                     s_type: vk::StructureType::PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO,
                     p_next: ptr::null(),
-                    handle_type: vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT,
+                    handle_type: vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD,
                     _marker: std::marker::PhantomData,
                 };
 
@@ -264,7 +264,7 @@ impl Wallpaper for VideoWallpaper {
 
                     let ext_info = vk::ExternalMemoryImageCreateInfo {
                         s_type: vk::StructureType::EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-                        handle_types: vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT,
+                        handle_types: vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD,
                         p_next: ptr::null(),
                         _marker: std::marker::PhantomData,
                     };
@@ -296,15 +296,15 @@ impl Wallpaper for VideoWallpaper {
                         _marker: std::marker::PhantomData,
                     };
 
-                    let drm_create_info = vk::ImageDrmFormatModifierExplicitCreateInfoEXT {
-                        s_type:
-                            vk::StructureType::IMAGE_DRM_FORMAT_MODIFIER_EXPLICIT_CREATE_INFO_EXT,
-                        p_next: (&raw const format_list_info).cast(),
-                        drm_format_modifier: va_surface_desc.objects[0].drm_format_modifier,
-                        drm_format_modifier_plane_count: va_surface_desc.num_layers,
-                        p_plane_layouts: plane_layouts.as_ptr(),
-                        _marker: std::marker::PhantomData,
-                    };
+                    // let drm_create_info = vk::ImageDrmFormatModifierExplicitCreateInfoEXT {
+                    //     s_type:
+                    //         vk::StructureType::IMAGE_DRM_FORMAT_MODIFIER_EXPLICIT_CREATE_INFO_EXT,
+                    //     p_next: (&raw const format_list_info).cast(),
+                    //     drm_format_modifier: va_surface_desc.objects[0].drm_format_modifier,
+                    //     drm_format_modifier_plane_count: va_surface_desc.num_layers,
+                    //     p_plane_layouts: plane_layouts.as_ptr(),
+                    //     _marker: std::marker::PhantomData,
+                    // };
 
                     let image_info = vk::ImageCreateInfo {
                         s_type: vk::StructureType::IMAGE_CREATE_INFO,
@@ -315,13 +315,13 @@ impl Wallpaper for VideoWallpaper {
                             height: va_surface_desc.height,
                             depth: 1,
                         },
-                        p_next: (&raw const drm_create_info).cast(),
+                        p_next: (&raw const format_list_info).cast(),
                         image_type: vk::ImageType::TYPE_2D,
                         flags: vk::ImageCreateFlags::MUTABLE_FORMAT,
                         mip_levels: 1,
                         array_layers: 1,
                         samples: vk::SampleCountFlags::TYPE_1,
-                        tiling: vk::ImageTiling::DRM_FORMAT_MODIFIER_EXT,
+                        tiling: vk::ImageTiling::LINEAR,
                         sharing_mode: vk::SharingMode::EXCLUSIVE,
                         queue_family_index_count: 0,
                         p_queue_family_indices: ptr::null(),
@@ -348,7 +348,7 @@ impl Wallpaper for VideoWallpaper {
                     let import_info = vk::ImportMemoryFdInfoKHR {
                         s_type: vk::StructureType::IMPORT_MEMORY_FD_INFO_KHR,
                         p_next: ptr::null(),
-                        handle_type: vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT,
+                        handle_type: vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD,
                         fd: dma_buf_fd,
                         _marker: std::marker::PhantomData,
                     };
