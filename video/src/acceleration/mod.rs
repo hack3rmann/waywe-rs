@@ -1,7 +1,20 @@
 pub mod ffi;
 
-use std::{ffi::CStr, fmt, str};
+use crate::{CodecContext, implement_raw};
+use ffi::DrmPrimeDescriptor;
+use ffmpeg_sys_next::AVHWDeviceContext;
+use std::{
+    ffi::CStr,
+    fmt,
+    marker::PhantomData,
+    mem::MaybeUninit,
+    os::fd::{FromRawFd as _, OwnedFd},
+    ptr::NonNull,
+    str,
+};
 use thiserror::Error;
+
+pub use ffi::SurfaceId as VaSurfaceId;
 
 /// Error codes for libva backend
 #[derive(Clone, Copy, Error, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -156,5 +169,108 @@ impl fmt::Debug for VaError {
 impl fmt::Display for VaError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.description())
+    }
+}
+
+pub struct VaDisplay<'s> {
+    raw: NonNull<()>,
+    _p: PhantomData<&'s ()>,
+}
+
+implement_raw!(VaDisplay<'_> { raw, _p: PhantomData }: ());
+
+impl<'s> VaDisplay<'s> {
+    /// `libva` display associated with [`CodecContext`]
+    pub fn from_codec_context(context: &'s CodecContext) -> Option<Self> {
+        let hw_device_context_buffer = unsafe { (*context.as_raw().as_ptr()).hw_device_ctx };
+
+        if hw_device_context_buffer.is_null() {
+            return None;
+        }
+
+        let hw_device_context =
+            unsafe { (*hw_device_context_buffer).data }.cast::<AVHWDeviceContext>();
+
+        if hw_device_context.is_null() {
+            return None;
+        }
+
+        let vaapi_device_context = unsafe {
+            (*hw_device_context)
+                .hwctx
+                .cast::<ffi::AvVaApiDeviceContext>()
+        };
+
+        if vaapi_device_context.is_null() {
+            return None;
+        }
+
+        let raw = NonNull::new(unsafe { (*vaapi_device_context).display })?.cast::<()>();
+
+        Some(Self {
+            raw,
+            _p: PhantomData,
+        })
+    }
+
+    /// This function blocks until all pending operations on the render target
+    /// have been completed. Upon return it is safe to use the render target for a
+    /// different picture.
+    pub fn sync_surface(&self, id: VaSurfaceId) -> Result<(), VaError> {
+        VaError::result_of(unsafe { ffi::sync_surface(self.as_raw().as_ptr().cast(), id) })
+    }
+
+    /// Export a handle to a surface for use with an external API
+    ///
+    /// The exported handles are owned by the caller, and the caller is
+    /// responsible for freeing them when no longer needed (e.g. by closing
+    /// DRM PRIME file descriptors).
+    ///
+    /// This does not perform any synchronisation.  If the contents of the
+    /// surface will be read, vaSyncSurface() must be called before doing so.
+    /// If the contents of the surface are written, then all operations must
+    /// be completed externally before using the surface again by via VA-API
+    /// functions.
+    pub fn export_surface_handle(&self, id: VaSurfaceId) -> Result<VaSurfaceHandle, VaError> {
+        const VA_EXPORT_SURFACE_READ_ONLY: u32 = 1;
+        const VA_EXPORT_SURFACE_SEPARATE_LAYERS: u32 = 4;
+
+        let desc = {
+            // NOTE(hack3rmann): `desc` should be zero-initialized according to the docs
+            let mut desc = MaybeUninit::<ffi::DrmPrimeDescriptor>::zeroed();
+
+            VaError::result_of(unsafe {
+                ffi::export_surface_handle(
+                    self.as_raw().as_ptr().cast(),
+                    id,
+                    ffi::DrmPrimeDescriptor::LEGACY_MEMORY_TYPE,
+                    VA_EXPORT_SURFACE_READ_ONLY | VA_EXPORT_SURFACE_SEPARATE_LAYERS,
+                    desc.as_mut_ptr().cast(),
+                )
+            })?;
+
+            unsafe { desc.assume_init() }
+        };
+
+        let fd = unsafe { OwnedFd::from_raw_fd(desc.objects[0].fd) };
+
+        Ok(VaSurfaceHandle { fd, desc })
+    }
+}
+
+pub struct VaSurfaceHandle {
+    fd: OwnedFd,
+    desc: DrmPrimeDescriptor,
+}
+
+impl VaSurfaceHandle {
+    /// Consumes [`VaSurfaceHandle`] leaving only an [`OwnedFd`]
+    pub fn into_fd(self) -> OwnedFd {
+        self.fd
+    }
+
+    /// DRM PRIME descriptor
+    pub const fn desc(&self) -> &DrmPrimeDescriptor {
+        &self.desc
     }
 }

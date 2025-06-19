@@ -66,7 +66,7 @@ fn main() -> ExitCode {
                     codec_context.open(decoder).unwrap();
 
                     let frame = loop {
-                        let packet = format_context.read_packet().unwrap();
+                        let packet = format_context.read_any_packet().unwrap();
 
                         if packet.stream_index() != best_stream_index {
                             continue;

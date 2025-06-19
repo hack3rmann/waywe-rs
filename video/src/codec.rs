@@ -1,8 +1,5 @@
 use crate::{
-    AudioVideoFormat, BackendError, Frame, MediaType, PROFILE_UNKNOWN, Packet, Profile,
-    ProfileIterator, RatioI32, Stream,
-    hardware::{HardwareConfig, HardwareConfigIterator, HardwareDeviceContext},
-    implement_raw,
+    acceleration::VaDisplay, hardware::{HardwareConfig, HardwareConfigIterator, HardwareDeviceContext}, implement_raw, AudioVideoFormat, BackendError, Frame, MediaType, Packet, Profile, ProfileIterator, RatioI32, Stream, PROFILE_UNKNOWN
 };
 use bitflags::bitflags;
 use ffmpeg_sys_next::{
@@ -438,6 +435,11 @@ impl CodecContext {
         BackendError::result_of(unsafe {
             avcodec_receive_frame(self.as_raw().as_ptr(), frame.as_raw().as_ptr())
         })
+    }
+
+    /// `libva` display associated with [`CodecContext`]
+    pub fn va_display(&self) -> Option<VaDisplay<'_>> {
+        VaDisplay::from_codec_context(self)
     }
 }
 

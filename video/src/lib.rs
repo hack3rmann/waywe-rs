@@ -6,6 +6,7 @@ pub mod hardware;
 pub mod time;
 
 use bitflags::bitflags;
+use ffi::va;
 use ffmpeg_sys_next::{
     AV_PROFILE_UNKNOWN, AVDiscard, AVFormatContext, AVFrame, AVMediaType, AVPacket,
     AVPixFmtDescriptor, AVProfile, AVStream, SEEK_SET, SWS_ACCURATE_RND, SWS_AREA, SWS_BICUBIC,
@@ -250,12 +251,41 @@ impl FormatContext {
     /// provide them). pkt->pts can be AV_NOPTS_VALUE if the video format
     /// has B-frames, so it is better to rely on pkt->dts if you do not
     /// decompress the payload.
-    pub fn read_packet(&mut self) -> Result<Packet, BackendError> {
+    pub fn read_any_packet(&mut self) -> Result<Packet, BackendError> {
         let packet = Packet::new();
         BackendError::result_of(unsafe {
             av_read_frame(self.as_raw().as_ptr(), packet.as_raw().as_ptr())
         })
         .map(|()| packet)
+    }
+
+    /// Return the next frame of the concrete stream.
+    /// This function returns what is stored in the file, and does not validate
+    /// that what is there are valid frames for the decoder. It will split what is
+    /// stored in the file into frames and return one for each call. It will not
+    /// omit invalid data between valid frames so as to give the decoder the maximum
+    /// information possible for decoding.
+    ///
+    /// On success, the returned packet is reference-counted (pkt->buf is set) and
+    /// valid indefinitely. The packet must be freed with av_packet_unref() when
+    /// it is no longer needed. For video, the packet contains exactly one frame.
+    /// For audio, it contains an integer number of frames if each frame has
+    /// a known fixed size (e.g. PCM or ADPCM data). If the audio frames have
+    /// a variable size (e.g. MPEG audio), then it contains one frame.
+    ///
+    /// pkt->pts, pkt->dts and pkt->duration are always set to correct
+    /// values in AVStream.time_base units (and guessed if the format cannot
+    /// provide them). pkt->pts can be AV_NOPTS_VALUE if the video format
+    /// has B-frames, so it is better to rely on pkt->dts if you do not
+    /// decompress the payload.
+    pub fn read_packet(&mut self, stream_index: usize) -> Result<Packet, BackendError> {
+        Ok(loop {
+            let packet = self.read_any_packet()?;
+
+            if packet.stream_index() == stream_index {
+                break packet;
+            }
+        })
     }
 
     /// Seeks to the start of the input file
@@ -754,6 +784,13 @@ impl Frame {
         };
 
         reference_count <= 1
+    }
+
+    /// # Safety
+    ///
+    /// The frame is created by hardware-accelerated (by libva) [`CodecContext`]
+    pub unsafe fn surface_id(&self) -> va::SurfaceId {
+        unsafe { (*self.as_raw().as_ptr()).data[3] as usize as va::SurfaceId } 
     }
 }
 

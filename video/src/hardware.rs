@@ -300,7 +300,7 @@ mod tests {
         loop {
             if maybe_packet.is_none() {
                 let packet = loop {
-                    let packet = match format_context.read_packet() {
+                    let packet = match format_context.read_any_packet() {
                         Ok(packet) => packet,
                         Err(BackendError::EOF) => {
                             format_context.repeat_stream(best_stream_index).unwrap();

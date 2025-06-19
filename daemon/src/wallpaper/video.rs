@@ -5,13 +5,12 @@ use crate::{
     video_pipeline::VideoPipeline,
 };
 use ash::vk;
-use std::{ffi::CStr, mem::MaybeUninit, ptr, time::Duration};
+use std::{ffi::CStr, os::fd::IntoRawFd, ptr, time::Duration};
 use thiserror::Error;
 use tracing::error;
 use video::{
     AudioVideoFormat, BackendError, Codec, CodecContext, FormatContext, Frame, FrameDuration,
-    MediaType, Packet, RatioI32, VaError, VideoPixelFormat,
-    ffi::{ffmpeg::AVHWDeviceContext, va},
+    MediaType, Packet, RatioI32, VideoPixelFormat,
 };
 use wgpu::hal::api;
 
@@ -97,31 +96,25 @@ impl Wallpaper for VideoWallpaper {
     ) -> Result<FrameInfo, FrameError> {
         loop {
             if self.packet.is_none() {
-                let packet = loop {
-                    let packet = match self.format_context.read_packet() {
-                        Ok(packet) => packet,
-                        Err(BackendError::EOF) => {
-                            if !self.do_loop_video {
-                                return Err(FrameError::StopRequested);
-                            }
-
-                            let best_index = self.best_stream_index;
-
-                            if let Err(error) = self.format_context.repeat_stream(best_index) {
-                                error!(?error, "failed to reapead video stream");
-                                return Err(FrameError::Skip);
-                            }
-
-                            continue;
+                let packet = match self.format_context.read_packet(self.best_stream_index) {
+                    Ok(packet) => packet,
+                    Err(BackendError::EOF) => {
+                        if !self.do_loop_video {
+                            return Err(FrameError::StopRequested);
                         }
-                        Err(error) => {
-                            error!(?error, "failed to read next video packet");
+
+                        let best_index = self.best_stream_index;
+
+                        if let Err(error) = self.format_context.repeat_stream(best_index) {
+                            error!(?error, "failed to reapead video stream");
                             return Err(FrameError::Skip);
                         }
-                    };
 
-                    if packet.stream_index() == self.best_stream_index {
-                        break packet;
+                        continue;
+                    }
+                    Err(error) => {
+                        error!(?error, "failed to read next video packet");
+                        return Err(FrameError::Skip);
                     }
                 };
 
@@ -132,61 +125,34 @@ impl Wallpaper for VideoWallpaper {
 
             match self.codec_context.receive_frame(&mut self.frame) {
                 Ok(()) => break,
-                Err(..) => {
+                Err(BackendError::EAGAIN) => {
                     self.packet = None;
                     continue;
+                }
+                Err(error) => {
+                    error!(?error, "failed to receive frame from the decoder");
+                    return Err(FrameError::Skip);
                 }
             }
         }
 
-        let hw_device_context_buffer =
-            unsafe { (*self.codec_context.as_raw().as_ptr()).hw_device_ctx };
-
-        assert!(!hw_device_context_buffer.is_null());
-
-        let hw_device_context =
-            unsafe { (*hw_device_context_buffer).data }.cast::<AVHWDeviceContext>();
-
-        assert!(!hw_device_context.is_null());
-
-        let vaapi_device_context = unsafe {
-            (*hw_device_context)
-                .hwctx
-                .cast::<va::AvVaApiDeviceContext>()
+        let Some(va_display) = self.codec_context.va_display() else {
+            panic!("failed to retrieve libva display");
         };
 
-        assert!(!vaapi_device_context.is_null());
+        let surface_id = unsafe { self.frame.surface_id() };
 
-        let va_display = unsafe { (*vaapi_device_context).display };
+        if let Err(error) = va_display.sync_surface(surface_id) {
+            panic!("failed to sync libva surface: {error:?}");
+        }
 
-        assert!(!va_display.is_null());
-
-        let surface_id =
-            unsafe { (*self.frame.as_raw().as_ptr()).data[3] } as usize as va::SurfaceId;
-
-        VaError::result_of(unsafe { va::sync_surface(va_display, surface_id) }).unwrap();
-
-        const VA_EXPORT_SURFACE_READ_ONLY: u32 = 1;
-        const VA_EXPORT_SURFACE_SEPARATE_LAYERS: u32 = 4;
-
-        let va_surface_desc = {
-            // NOTE(hack3rmann): `desc` should be zero-initialized according to the docs
-            let mut desc = MaybeUninit::<va::DrmPrimeDescriptor>::zeroed();
-            if let Err(error) = VaError::result_of(unsafe {
-                va::export_surface_handle(
-                    va_display,
-                    surface_id,
-                    va::DrmPrimeDescriptor::LEGACY_MEMORY_TYPE,
-                    VA_EXPORT_SURFACE_READ_ONLY | VA_EXPORT_SURFACE_SEPARATE_LAYERS,
-                    desc.as_mut_ptr().cast(),
-                )
-            }) {
-                panic!("failed to export libva surface handle: {error:?}");
-            }
-            unsafe { desc.assume_init() }
+        let surface_handle = match va_display.export_surface_handle(surface_id) {
+            Ok(handle) => handle,
+            Err(error) => panic!("failed to export surface handle: {error:?}"),
         };
 
-        let dma_buf_fd = va_surface_desc.objects[0].fd;
+        let dma_desc = *surface_handle.desc();
+        let dma_buf_fd = surface_handle.into_fd().into_raw_fd();
 
         let memory_properties = unsafe {
             runtime.wgpu.adapter.as_hal::<api::Vulkan, _, _>(|adapter| {
@@ -271,16 +237,16 @@ impl Wallpaper for VideoWallpaper {
 
                     let plane_layouts = [
                         vk::SubresourceLayout {
-                            offset: va_surface_desc.layers[0].offset[0] as u64,
+                            offset: dma_desc.layers[0].offset[0] as u64,
                             size: 0,
-                            row_pitch: va_surface_desc.layers[0].pitch[0] as u64,
+                            row_pitch: dma_desc.layers[0].pitch[0] as u64,
                             array_pitch: 0,
                             depth_pitch: 0,
                         },
                         vk::SubresourceLayout {
-                            offset: va_surface_desc.layers[1].offset[0] as u64,
+                            offset: dma_desc.layers[1].offset[0] as u64,
                             size: 0,
-                            row_pitch: va_surface_desc.layers[1].pitch[0] as u64,
+                            row_pitch: dma_desc.layers[1].pitch[0] as u64,
                             array_pitch: 0,
                             depth_pitch: 0,
                         },
@@ -300,8 +266,8 @@ impl Wallpaper for VideoWallpaper {
                         s_type:
                             vk::StructureType::IMAGE_DRM_FORMAT_MODIFIER_EXPLICIT_CREATE_INFO_EXT,
                         p_next: (&raw const format_list_info).cast(),
-                        drm_format_modifier: va_surface_desc.objects[0].drm_format_modifier,
-                        drm_format_modifier_plane_count: va_surface_desc.num_layers,
+                        drm_format_modifier: dma_desc.objects[0].drm_format_modifier,
+                        drm_format_modifier_plane_count: dma_desc.num_layers,
                         p_plane_layouts: plane_layouts.as_ptr(),
                         _marker: std::marker::PhantomData,
                     };
@@ -311,8 +277,8 @@ impl Wallpaper for VideoWallpaper {
                         format: vk::Format::G8_B8R8_2PLANE_420_UNORM,
                         usage: vk::ImageUsageFlags::SAMPLED,
                         extent: vk::Extent3D {
-                            width: va_surface_desc.width,
-                            height: va_surface_desc.height,
+                            width: dma_desc.width,
+                            height: dma_desc.height,
                             depth: 1,
                         },
                         p_next: (&raw const drm_create_info).cast(),
@@ -371,8 +337,8 @@ impl Wallpaper for VideoWallpaper {
                         &wgpu::hal::TextureDescriptor {
                             label: Some("video-texture"),
                             size: wgpu::Extent3d {
-                                width: va_surface_desc.width,
-                                height: va_surface_desc.height,
+                                width: dma_desc.width,
+                                height: dma_desc.height,
                                 depth_or_array_layers: 1,
                             },
                             mip_level_count: 1,
@@ -401,8 +367,8 @@ impl Wallpaper for VideoWallpaper {
                 &wgpu::TextureDescriptor {
                     label: Some("video-texture"),
                     size: wgpu::Extent3d {
-                        width: va_surface_desc.width,
-                        height: va_surface_desc.height,
+                        width: dma_desc.width,
+                        height: dma_desc.height,
                         depth_or_array_layers: 1,
                     },
                     mip_level_count: 1,
