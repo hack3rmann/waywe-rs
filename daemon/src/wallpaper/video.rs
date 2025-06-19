@@ -296,15 +296,15 @@ impl Wallpaper for VideoWallpaper {
                         _marker: std::marker::PhantomData,
                     };
 
-                    // let drm_create_info = vk::ImageDrmFormatModifierExplicitCreateInfoEXT {
-                    //     s_type:
-                    //         vk::StructureType::IMAGE_DRM_FORMAT_MODIFIER_EXPLICIT_CREATE_INFO_EXT,
-                    //     p_next: (&raw const format_list_info).cast(),
-                    //     drm_format_modifier: va_surface_desc.objects[0].drm_format_modifier,
-                    //     drm_format_modifier_plane_count: va_surface_desc.num_layers,
-                    //     p_plane_layouts: plane_layouts.as_ptr(),
-                    //     _marker: std::marker::PhantomData,
-                    // };
+                    let drm_create_info = vk::ImageDrmFormatModifierExplicitCreateInfoEXT {
+                        s_type:
+                            vk::StructureType::IMAGE_DRM_FORMAT_MODIFIER_EXPLICIT_CREATE_INFO_EXT,
+                        p_next: (&raw const format_list_info).cast(),
+                        drm_format_modifier: va_surface_desc.objects[0].drm_format_modifier,
+                        drm_format_modifier_plane_count: va_surface_desc.num_layers,
+                        p_plane_layouts: plane_layouts.as_ptr(),
+                        _marker: std::marker::PhantomData,
+                    };
 
                     let image_info = vk::ImageCreateInfo {
                         s_type: vk::StructureType::IMAGE_CREATE_INFO,
@@ -315,13 +315,13 @@ impl Wallpaper for VideoWallpaper {
                             height: va_surface_desc.height,
                             depth: 1,
                         },
-                        p_next: (&raw const format_list_info).cast(),
+                        p_next: (&raw const drm_create_info).cast(),
                         image_type: vk::ImageType::TYPE_2D,
                         flags: vk::ImageCreateFlags::MUTABLE_FORMAT,
                         mip_levels: 1,
                         array_layers: 1,
                         samples: vk::SampleCountFlags::TYPE_1,
-                        tiling: vk::ImageTiling::LINEAR,
+                        tiling: vk::ImageTiling::DRM_FORMAT_MODIFIER_EXT,
                         sharing_mode: vk::SharingMode::EXCLUSIVE,
                         queue_family_index_count: 0,
                         p_queue_family_indices: ptr::null(),
