@@ -168,7 +168,7 @@ impl Wallpaper for VideoWallpaper {
                 let ext_format_info = vk::PhysicalDeviceExternalImageFormatInfo {
                     s_type: vk::StructureType::PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO,
                     p_next: ptr::null(),
-                    handle_type: vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT,
+                    handle_type: vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD,
                     _marker: std::marker::PhantomData,
                 };
 
@@ -230,7 +230,10 @@ impl Wallpaper for VideoWallpaper {
 
                     let ext_info = vk::ExternalMemoryImageCreateInfo {
                         s_type: vk::StructureType::EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-                        handle_types: vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT,
+                        // TODO(hack3rmann): use `DMA_BUF_EXT` whenever it is possible
+                        // The reason is it has no restrictions on the device that was
+                        // used to decode a video
+                        handle_types: vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD,
                         p_next: ptr::null(),
                         _marker: std::marker::PhantomData,
                     };
@@ -314,7 +317,7 @@ impl Wallpaper for VideoWallpaper {
                     let import_info = vk::ImportMemoryFdInfoKHR {
                         s_type: vk::StructureType::IMPORT_MEMORY_FD_INFO_KHR,
                         p_next: ptr::null(),
-                        handle_type: vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT,
+                        handle_type: vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD,
                         fd: dma_buf_fd,
                         _marker: std::marker::PhantomData,
                     };
