@@ -37,7 +37,11 @@ impl<A: App + Default> Default for EventLoop<A> {
 impl<A: App> EventLoop<A> {
     pub fn new(app: A) -> Self {
         static TRACING_ONCE: Once = Once::new();
-        TRACING_ONCE.call_once(tracing_subscriber::fmt::init);
+        TRACING_ONCE.call_once(|| {
+            tracing_subscriber::fmt()
+                .with_writer(std::io::stderr)
+                .init()
+        });
 
         static SIGNALS_ONCE: Once = Once::new();
         SIGNALS_ONCE.call_once(signals::setup);
