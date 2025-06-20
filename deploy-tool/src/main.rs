@@ -30,10 +30,12 @@ async fn main() -> Result<(), Error> {
     let package_tool_name = run_fun!(cat "deploy-tool/Cargo.toml" | rg "name = ")?;
     assert_eq!(package_tool_name, "name = \"deploy-tool\"");
 
-    let releases_path = Path::new("deploy-tool/releases/").join(&v_version);
+    let build_name = format!("waywe-{v_version}-linux-wayland-x86_64");
+
+    let releases_path = Path::new("deploy-tool/releases/").join(&build_name);
     fs::create_dir_all(&releases_path).await?;
 
-    let package = Path::new("/tmp/waywe/releases/").join(&v_version);
+    let package = Path::new("/tmp/waywe/releases/").join(&build_name);
     fs::create_dir_all(&package).await?;
 
     let bin = package.join("bin");
