@@ -62,9 +62,18 @@ waywe video path/to/your/video.mp4
 waywe image path/to/your/picture.jpg
 ```
 
+Also, you can create preview of currently running wallpaper:
+
+```shell
+waywe preview preview.png
+```
+
+For other handy commands run `waywe help`.
+
 ## Troubleshooting
 
-This project is tested only on several machines with Intel CPUs running Fedora 42.
+This project is tested only on several machines with Intel or AMD
+CPUs with integrated graphics running Fedora 42.
 
 ### Common issues
 
@@ -74,6 +83,7 @@ This project is tested only on several machines with Intel CPUs running Fedora 4
 2. You have both discrete and integrated graphics:
     - try `vainfo | grep Driver` - it will show the current driver name.
     - if you are on Intel, set `LIBVA_DRIVER_NAME=iHD` environment variable before you run the daemon.
+    - or for AMD, set `LIBVA_DRIVER_NAME=Gallium`
     - otherwise set it accordingly with your integrated graphics driver.
 
 ## Alternatives
