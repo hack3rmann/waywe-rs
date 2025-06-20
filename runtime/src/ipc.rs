@@ -14,7 +14,10 @@ use std::{
     env,
     marker::PhantomData,
     mem,
-    os::{fd::{AsFd, AsRawFd, OwnedFd}, unix::prelude::{BorrowedFd, RawFd}},
+    os::{
+        fd::{AsFd, AsRawFd, OwnedFd},
+        unix::prelude::{BorrowedFd, RawFd},
+    },
     path::Path,
     sync::OnceLock,
     time::{Duration, Instant},

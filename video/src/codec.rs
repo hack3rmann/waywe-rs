@@ -1,5 +1,9 @@
 use crate::{
-    acceleration::VaDisplay, hardware::{HardwareConfig, HardwareConfigIterator, HardwareDeviceContext}, implement_raw, AudioVideoFormat, BackendError, Frame, MediaType, Packet, Profile, ProfileIterator, RatioI32, Stream, PROFILE_UNKNOWN
+    AudioVideoFormat, BackendError, Frame, MediaType, PROFILE_UNKNOWN, Packet, Profile,
+    ProfileIterator, RatioI32, Stream,
+    acceleration::VaDisplay,
+    hardware::{HardwareConfig, HardwareConfigIterator, HardwareDeviceContext},
+    implement_raw,
 };
 use bitflags::bitflags;
 use ffmpeg_sys_next::{

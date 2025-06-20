@@ -1,6 +1,6 @@
 use anyhow::{Context, Error};
 use clap::Parser;
-use cmd_lib::{run_fun, run_cmd};
+use cmd_lib::{run_cmd, run_fun};
 use lazy_regex::regex_find;
 use std::path::{Path, PathBuf};
 use tokio::fs;

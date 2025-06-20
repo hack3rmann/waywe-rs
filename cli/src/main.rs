@@ -15,7 +15,8 @@ use std::{
 use tracing::error;
 use transmute_extra::pathbuf_into_cstring;
 use video::{
-    BackendError, Codec, CodecContext, FormatContext, Frame, MediaType, ScalerFlags, ScalerFormat, SoftwareScaler, VideoPixelFormat
+    BackendError, Codec, CodecContext, FormatContext, Frame, MediaType, ScalerFlags, ScalerFormat,
+    SoftwareScaler, VideoPixelFormat,
 };
 
 fn main() -> ExitCode {
@@ -97,7 +98,8 @@ fn main() -> ExitCode {
                             format: VideoPixelFormat::Rgb24,
                         },
                         ScalerFlags::BILINEAR,
-                    ).unwrap();
+                    )
+                    .unwrap();
 
                     let mut scaled_frame = Frame::new();
                     scaler.run(&frame, &mut scaled_frame).unwrap();
