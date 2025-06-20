@@ -18,7 +18,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::runtime::Builder as AsyncRuntimeBuilder;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use video::RatioI32;
 
 pub struct EventLoop<A> {
@@ -55,6 +55,12 @@ impl<A: App> EventLoop<A> {
                 });
             }
             Err(SetupProfileError::Io(error)) if error.kind() == ErrorKind::NotFound => {}
+            Err(SetupProfileError::Decode(message)) => {
+                warn!(
+                    ?message,
+                    "could not read setup profile cache, may be caused by outdated files",
+                );
+            }
             Err(error) => info!(?error, "can not read setup profile config"),
         }
 
