@@ -162,7 +162,8 @@ impl Wgpu {
     pub fn resize_surface(&self, size: UVec2) {
         self.surface.configure(
             &self.device,
-            &self.surface
+            &self
+                .surface
                 .get_default_config(&self.adapter, size.x, size.y)
                 .unwrap(),
         );

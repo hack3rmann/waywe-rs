@@ -2,7 +2,8 @@ use crate::{
     event_loop::{App, Event, FrameError, FrameInfo},
     runtime::Runtime,
     wallpaper::{
-        self, transition::TransitionWallpaper, DynWallpaper, IntoDynWallpaper, RenderState, RequiredFeaturesExt as _
+        self, DynWallpaper, IntoDynWallpaper, RenderState, RequiredFeaturesExt as _,
+        transition::TransitionWallpaper,
     },
 };
 use tracing::error;

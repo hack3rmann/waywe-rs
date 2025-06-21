@@ -790,7 +790,7 @@ impl Frame {
     ///
     /// The frame is created by hardware-accelerated (by libva) [`CodecContext`]
     pub unsafe fn surface_id(&self) -> va::SurfaceId {
-        unsafe { (*self.as_raw().as_ptr()).data[3] as usize as va::SurfaceId } 
+        unsafe { (*self.as_raw().as_ptr()).data[3] as usize as va::SurfaceId }
     }
 }
 

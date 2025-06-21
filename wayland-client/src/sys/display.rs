@@ -29,7 +29,8 @@ use std::{
     pin::Pin,
     ptr::NonNull,
     sync::{
-        atomic::{AtomicBool, Ordering::*}, Arc
+        Arc,
+        atomic::{AtomicBool, Ordering::*},
     },
 };
 use thiserror::Error;

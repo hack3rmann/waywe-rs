@@ -298,10 +298,7 @@ impl<T: Dispatch> WlObject<T> {
         }
     }
 
-    pub(crate) fn write_storage_location(
-        &mut self,
-        storage: Pin<&mut WlObjectStorage<T::State>>,
-    ) {
+    pub(crate) fn write_storage_location(&mut self, storage: Pin<&mut WlObjectStorage<T::State>>) {
         let user_data_ptr = self
             .proxy()
             .get_user_data()
