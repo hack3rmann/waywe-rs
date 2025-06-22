@@ -22,10 +22,10 @@ pub struct TransitionWallpaper {
 }
 
 impl TransitionWallpaper {
-    pub fn new(runtime: &mut Runtime, from: DynWallpaper, to: DynWallpaper) -> Self {
+    pub fn new(runtime: &Runtime, from: DynWallpaper, to: DynWallpaper) -> Self {
         Self {
             pipeline: TransitionPipeline::new(
-                &mut runtime.wgpu,
+                &runtime.wgpu,
                 runtime.wayland.client_state.monitor_size(),
                 from,
                 to,
@@ -123,7 +123,7 @@ pub struct TransitionPipeline {
 }
 
 impl TransitionPipeline {
-    pub fn new(gpu: &mut Wgpu, screen_size: UVec2, from: DynWallpaper, to: DynWallpaper) -> Self {
+    pub fn new(gpu: &Wgpu, screen_size: UVec2, from: DynWallpaper, to: DynWallpaper) -> Self {
         let vertex_buffer = gpu
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {

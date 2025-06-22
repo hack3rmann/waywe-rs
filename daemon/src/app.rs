@@ -15,7 +15,7 @@ pub struct VideoApp {
 }
 
 impl VideoApp {
-    pub fn set_wallpaper(&mut self, runtime: &mut Runtime, wallpaper: impl IntoDynWallpaper) {
+    pub fn set_wallpaper(&mut self, runtime: &Runtime, wallpaper: impl IntoDynWallpaper) {
         let wallpaper = wallpaper.into_dyn_wallpaper();
 
         self.wallpaper = Some(match self.wallpaper.take() {
