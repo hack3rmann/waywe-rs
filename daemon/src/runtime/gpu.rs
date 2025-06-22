@@ -1,8 +1,59 @@
 use super::wayland::Wayland;
 use ash::vk;
 use glam::UVec2;
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    ops::Deref,
+    sync::{RwLock, RwLockReadGuard},
+};
 use wgpu::hal::{DeviceError, api};
+
+#[derive(Default)]
+pub struct ShaderCache {
+    shaders: RwLock<HashMap<&'static str, wgpu::ShaderModule>>,
+}
+
+impl ShaderCache {
+    pub fn contains(&self, id: &str) -> bool {
+        self.shaders.read().unwrap().contains_key(id)
+    }
+
+    pub fn insert_with(
+        &self,
+        id: &'static str,
+        create_shader: impl FnOnce() -> wgpu::ShaderModule,
+    ) {
+        if self.contains(id) {
+            return;
+        }
+
+        let mut map = self.shaders.write().unwrap();
+        map.insert(id, create_shader());
+    }
+
+    pub fn get(&self, id: &'static str) -> Option<RwLockShaderReadGuard<'_>> {
+        let shaders = self.shaders.read().unwrap();
+
+        if !shaders.contains_key(id) {
+            return None;
+        }
+
+        Some(RwLockShaderReadGuard { shaders, id })
+    }
+}
+
+pub struct RwLockShaderReadGuard<'s> {
+    shaders: RwLockReadGuard<'s, HashMap<&'static str, wgpu::ShaderModule>>,
+    id: &'static str,
+}
+
+impl Deref for RwLockShaderReadGuard<'_> {
+    type Target = wgpu::ShaderModule;
+
+    fn deref(&self) -> &Self::Target {
+        &self.shaders[self.id]
+    }
+}
 
 pub struct Wgpu {
     pub adapter: wgpu::Adapter,
@@ -11,7 +62,7 @@ pub struct Wgpu {
     pub queue: wgpu::Queue,
     pub surface: wgpu::Surface<'static>,
     pub surface_format: wgpu::TextureFormat,
-    pub shader_cache: HashMap<&'static str, wgpu::ShaderModule>,
+    pub shader_cache: ShaderCache,
 }
 
 impl Wgpu {
@@ -154,7 +205,7 @@ impl Wgpu {
             queue,
             surface,
             surface_format,
-            shader_cache: HashMap::new(),
+            shader_cache: ShaderCache::default(),
         }
     }
 
@@ -166,5 +217,10 @@ impl Wgpu {
                 .get_default_config(&self.adapter, size.x, size.y)
                 .unwrap(),
         );
+    }
+
+    pub fn use_shader(&self, id: &'static str, desc: wgpu::ShaderModuleDescriptor) {
+        self.shader_cache
+            .insert_with(id, || self.device.create_shader_module(desc));
     }
 }

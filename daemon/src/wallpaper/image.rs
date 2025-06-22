@@ -15,7 +15,7 @@ pub struct ImageWallpaper {
 
 impl ImageWallpaper {
     pub fn new(
-        runtime: &mut Runtime,
+        runtime: &Runtime,
         path: impl AsRef<Path>,
     ) -> Result<Self, ImageWallpaperCreationError> {
         let path = path.as_ref();
@@ -25,7 +25,7 @@ impl ImageWallpaper {
         Ok(Self {
             is_render_done: false,
             pipeline: ImagePipeline::new(
-                &mut runtime.wgpu,
+                &runtime.wgpu,
                 &image,
                 // TODO(hack3rmann): let the user decide
                 COLOR_WHITE,

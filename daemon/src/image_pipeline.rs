@@ -32,7 +32,7 @@ pub struct ImagePipeline {
 
 impl ImagePipeline {
     pub fn new(
-        gpu: &mut Wgpu,
+        gpu: &Wgpu,
         image: &ImageBuffer<Rgba<u8>, Vec<u8>>,
         transparency_color: Color,
         monitor_size: UVec2,
@@ -115,33 +115,29 @@ impl ImagePipeline {
         const VERTEX_SHADER_NAME: &str = "shaders/white-vertex.glsl";
         const FRAGMENT_SHADER_NAME: &str = "shaders/image.glsl";
 
-        gpu.shader_cache
-            .entry(VERTEX_SHADER_NAME)
-            .or_insert_with(|| {
-                gpu.device
-                    .create_shader_module(wgpu::ShaderModuleDescriptor {
-                        label: None,
-                        source: wgpu::ShaderSource::Glsl {
-                            shader: include_str!("shaders/white-vertex.glsl").into(),
-                            stage: wgpu::naga::ShaderStage::Vertex,
-                            defines: Default::default(),
-                        },
-                    })
-            });
+        gpu.use_shader(
+            VERTEX_SHADER_NAME,
+            wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Glsl {
+                    shader: include_str!("shaders/white-vertex.glsl").into(),
+                    stage: wgpu::naga::ShaderStage::Vertex,
+                    defines: Default::default(),
+                },
+            },
+        );
 
-        gpu.shader_cache
-            .entry(FRAGMENT_SHADER_NAME)
-            .or_insert_with(|| {
-                gpu.device
-                    .create_shader_module(wgpu::ShaderModuleDescriptor {
-                        label: None,
-                        source: wgpu::ShaderSource::Glsl {
-                            shader: include_str!("shaders/image.glsl").into(),
-                            stage: wgpu::naga::ShaderStage::Fragment,
-                            defines: Default::default(),
-                        },
-                    })
-            });
+        gpu.use_shader(
+            FRAGMENT_SHADER_NAME,
+            wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Glsl {
+                    shader: include_str!("shaders/image.glsl").into(),
+                    stage: wgpu::naga::ShaderStage::Fragment,
+                    defines: Default::default(),
+                },
+            },
+        );
 
         let pipeline_layout = gpu
             .device
@@ -160,7 +156,7 @@ impl ImagePipeline {
                 label: Some("image-pipeline"),
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
-                    module: &gpu.shader_cache[VERTEX_SHADER_NAME],
+                    module: &gpu.shader_cache.get(VERTEX_SHADER_NAME).unwrap(),
                     entry_point: Some("main"),
                     compilation_options: wgpu::PipelineCompilationOptions {
                         constants: &HashMap::new(),
@@ -177,7 +173,7 @@ impl ImagePipeline {
                     }],
                 },
                 fragment: Some(wgpu::FragmentState {
-                    module: &gpu.shader_cache[FRAGMENT_SHADER_NAME],
+                    module: &gpu.shader_cache.get(FRAGMENT_SHADER_NAME).unwrap(),
                     entry_point: Some("main"),
                     compilation_options: wgpu::PipelineCompilationOptions {
                         constants: &HashMap::new(),

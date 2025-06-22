@@ -227,33 +227,29 @@ impl TransitionPipeline {
         const VERTEX_SHADER_NAME: &str = "shaders/white-vertex.glsl";
         const FRAGMENT_SHADER_NAME: &str = "shaders/transition.glsl";
 
-        gpu.shader_cache
-            .entry(VERTEX_SHADER_NAME)
-            .or_insert_with(|| {
-                gpu.device
-                    .create_shader_module(wgpu::ShaderModuleDescriptor {
-                        label: None,
-                        source: wgpu::ShaderSource::Glsl {
-                            shader: include_str!("../shaders/white-vertex.glsl").into(),
-                            stage: wgpu::naga::ShaderStage::Vertex,
-                            defines: Default::default(),
-                        },
-                    })
-            });
+        gpu.use_shader(
+            VERTEX_SHADER_NAME,
+            wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Glsl {
+                    shader: include_str!("../shaders/white-vertex.glsl").into(),
+                    stage: wgpu::naga::ShaderStage::Vertex,
+                    defines: Default::default(),
+                },
+            },
+        );
 
-        gpu.shader_cache
-            .entry(FRAGMENT_SHADER_NAME)
-            .or_insert_with(|| {
-                gpu.device
-                    .create_shader_module(wgpu::ShaderModuleDescriptor {
-                        label: None,
-                        source: wgpu::ShaderSource::Glsl {
-                            shader: include_str!("../shaders/transition.glsl").into(),
-                            stage: wgpu::naga::ShaderStage::Fragment,
-                            defines: Default::default(),
-                        },
-                    })
-            });
+        gpu.use_shader(
+            FRAGMENT_SHADER_NAME,
+            wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Glsl {
+                    shader: include_str!("../shaders/transition.glsl").into(),
+                    stage: wgpu::naga::ShaderStage::Fragment,
+                    defines: Default::default(),
+                },
+            },
+        );
 
         let pipeline_layout = gpu
             .device
@@ -272,7 +268,7 @@ impl TransitionPipeline {
                 label: Some("image-pipeline"),
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
-                    module: &gpu.shader_cache[VERTEX_SHADER_NAME],
+                    module: &gpu.shader_cache.get(VERTEX_SHADER_NAME).unwrap(),
                     entry_point: Some("main"),
                     compilation_options: wgpu::PipelineCompilationOptions {
                         constants: &HashMap::new(),
@@ -289,7 +285,7 @@ impl TransitionPipeline {
                     }],
                 },
                 fragment: Some(wgpu::FragmentState {
-                    module: &gpu.shader_cache[FRAGMENT_SHADER_NAME],
+                    module: &gpu.shader_cache.get(FRAGMENT_SHADER_NAME).unwrap(),
                     entry_point: Some("main"),
                     compilation_options: wgpu::PipelineCompilationOptions {
                         constants: &HashMap::new(),
