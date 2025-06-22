@@ -57,7 +57,6 @@ impl Wgpu {
 
                 let mut enabled_extensions = adapter.required_device_extensions(features);
                 enabled_extensions.extend_from_slice(&[
-                    c"VK_EXT_external_memory_dma_buf",
                     c"VK_KHR_external_memory_fd",
                     c"VK_EXT_image_drm_format_modifier",
                 ]);
