@@ -1,6 +1,9 @@
-use crate::runtime::{
-    ControlFlow, Runtime,
-    wayland::{ClientState, Wayland},
+use crate::{
+    event::{AbsorbError, CustomEvent, EventReceiver},
+    runtime::{
+        ControlFlow, Runtime,
+        wayland::{ClientState, Wayland},
+    },
 };
 use glam::UVec2;
 use runtime::{
@@ -10,7 +13,7 @@ use runtime::{
 };
 use rustix::io::Errno;
 use std::{
-    io::ErrorKind,
+    io::{self, ErrorKind},
     os::fd::AsFd as _,
     path::PathBuf,
     sync::{Once, atomic::Ordering},
@@ -21,9 +24,9 @@ use tokio::runtime::Builder as AsyncRuntimeBuilder;
 use tracing::{debug, error, info, warn};
 use video::RatioI32;
 
-pub struct EventLoop<A> {
+pub struct EventLoop<A: App> {
     runtime: Runtime,
-    event_queue: EventQueue,
+    event_queue: EventQueue<A::UserEvent>,
     app: A,
     epoll: Epoll,
 }
@@ -43,7 +46,11 @@ impl<A: App> EventLoop<A> {
         SIGNALS_ONCE.call_once(signals::setup);
 
         let wayland = Wayland::new();
-        let mut event_queue = EventQueue::default();
+
+        let mut event_queue = match EventQueue::<A::UserEvent>::new() {
+            Ok(queue) => queue,
+            Err(error) => panic!("failed to create event queue: {error:?}"),
+        };
 
         match SetupProfile::read() {
             Ok(profile) => {
@@ -72,7 +79,13 @@ impl<A: App> EventLoop<A> {
 
         let runtime = Runtime::new(wayland, control_flow);
 
-        let fds = [runtime.wayland.display.as_fd(), runtime.ipc.socket.as_fd()];
+        event_queue.events.clear();
+
+        let fds = [
+            runtime.wayland.display.as_fd(),
+            runtime.ipc.socket.as_fd(),
+            event_queue.custom_receiver.pipe_fd(),
+        ];
 
         let epoll = match Epoll::new(fds, None) {
             Ok(epoll) => epoll,
@@ -121,6 +134,13 @@ impl<A: App> EventLoop<A> {
                         Ok(polled_fds) => {
                             if polled_fds.contains(&self.runtime.wayland.display) {
                                 self.populate_events_from_wayland();
+                            }
+
+                            let custom_count =
+                                polled_fds.count_of(self.event_queue.custom_receiver.pipe_fd());
+
+                            if let Err(error) = self.event_queue.collect(custom_count) {
+                                error!(?error, "failed to collect custom events");
                             }
                         }
                         Err(Errno::INTR) => {}
@@ -194,17 +214,37 @@ impl<A: App> EventLoop<A> {
 }
 
 #[derive(Debug)]
-pub enum Event {
+pub enum Event<T> {
+    Custom(T),
     NewWallpaper { path: PathBuf, ty: WallpaperType },
     ResizeRequested { size: UVec2 },
 }
 
-#[derive(Debug, Default)]
-pub struct EventQueue {
-    pub events: Vec<Event>,
+#[derive(Debug)]
+pub struct EventQueue<T> {
+    pub events: Vec<Event<T>>,
+    pub custom_receiver: EventReceiver<T>,
 }
 
-impl EventQueue {
+impl<T: CustomEvent> EventQueue<T> {
+    pub fn new() -> Result<Self, io::Error> {
+        Ok(Self {
+            events: vec![],
+            custom_receiver: EventReceiver::new()?,
+        })
+    }
+
+    pub fn collect(&mut self, count: usize) -> Result<(), AbsorbError> {
+        self.events.reserve(count);
+
+        for _ in 0..count {
+            let event = self.custom_receiver.recv()?;
+            self.events.push(Event::Custom(event));
+        }
+
+        Ok(())
+    }
+
     pub fn populate_from_wayland_client_state(&mut self, state: &ClientState) {
         if state.resize_requested.load(Ordering::Acquire) {
             state.resize_requested.store(false, Ordering::Release);
@@ -216,10 +256,12 @@ impl EventQueue {
 }
 
 pub trait App {
+    type UserEvent: CustomEvent;
+
     fn process_event(
         &mut self,
         runtime: &mut Runtime,
-        event: Event,
+        event: Event<Self::UserEvent>,
     ) -> impl Future<Output = ()> + Send;
 
     fn frame(

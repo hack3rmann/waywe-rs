@@ -6,6 +6,7 @@ pub mod image_pipeline;
 pub mod runtime;
 pub mod video_pipeline;
 pub mod wallpaper;
+pub mod event;
 
 use app::VideoApp;
 use clap::Parser;

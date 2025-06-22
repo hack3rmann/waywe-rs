@@ -31,9 +31,15 @@ impl VideoApp {
     }
 }
 
+#[derive(Default)]
+pub struct CustomUserEvent;
+
 impl App for VideoApp {
-    async fn process_event(&mut self, runtime: &mut Runtime, event: Event) {
+    type UserEvent = CustomUserEvent;
+
+    async fn process_event(&mut self, runtime: &mut Runtime, event: Event<Self::UserEvent>) {
         match event {
+            Event::Custom(_custom) => {}
             Event::NewWallpaper { path, ty } => {
                 runtime.enable(ty.required_features()).await;
 

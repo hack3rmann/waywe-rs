@@ -62,4 +62,11 @@ impl PolledFds {
             .iter()
             .any(|event| event.data.u64() as i32 == fd.as_fd().as_raw_fd())
     }
+
+    pub fn count_of(&self, fd: impl AsFd) -> usize {
+        self.events
+            .iter()
+            .filter(|event| event.data.u64() as i32 == fd.as_fd().as_raw_fd())
+            .count()
+    }
 }
