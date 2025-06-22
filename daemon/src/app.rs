@@ -1,4 +1,5 @@
 use crate::{
+    event::EventEmitter,
     event_loop::{App, Event, FrameError, FrameInfo},
     runtime::Runtime,
     wallpaper::{
@@ -6,7 +7,7 @@ use crate::{
         transition::TransitionWallpaper,
     },
 };
-use tracing::error;
+use std::sync::Arc;
 
 #[derive(Default)]
 pub struct VideoApp {
@@ -15,7 +16,11 @@ pub struct VideoApp {
 }
 
 impl VideoApp {
-    pub fn set_wallpaper(&mut self, runtime: &Runtime, wallpaper: impl IntoDynWallpaper) {
+    pub fn set_wallpaper(
+        &mut self,
+        runtime: &Runtime<VideoAppEvent>,
+        wallpaper: impl IntoDynWallpaper,
+    ) {
         let wallpaper = wallpaper.into_dyn_wallpaper();
 
         self.wallpaper = Some(match self.wallpaper.take() {
@@ -31,28 +36,41 @@ impl VideoApp {
     }
 }
 
-#[derive(Default)]
-pub struct CustomUserEvent;
+pub enum VideoAppEvent {
+    WallpaperPrepared(DynWallpaper),
+    Error(Box<dyn std::error::Error + Send + 'static>),
+}
 
 impl App for VideoApp {
-    type UserEvent = CustomUserEvent;
+    type CustomEvent = VideoAppEvent;
 
-    async fn process_event(&mut self, runtime: &mut Runtime, event: Event<Self::UserEvent>) {
+    async fn process_event(
+        &mut self,
+        runtime: &mut Runtime<Self::CustomEvent>,
+        event: Event<Self::CustomEvent>,
+    ) {
         match event {
+            Event::Custom(VideoAppEvent::WallpaperPrepared(wallpaper)) => {
+                runtime.control_flow.busy();
+                self.set_wallpaper(runtime, wallpaper);
+            }
             Event::Custom(_custom) => {}
             Event::NewWallpaper { path, ty } => {
                 runtime.enable(ty.required_features()).await;
 
-                let wallpaper = match wallpaper::create(runtime, &path, ty) {
-                    Ok(wallpaper) => wallpaper,
-                    Err(error) => {
-                        error!(?error, ?path, ?ty, "failed to create a wallpaper");
-                        return;
-                    }
-                };
+                let gpu = Arc::clone(&runtime.wgpu);
+                let monitor_size = runtime.wayland.client_state.monitor_size();
 
-                runtime.control_flow.busy();
-                self.set_wallpaper(runtime, wallpaper);
+                runtime
+                    .task_pool
+                    .spawn(move |mut emitter: EventEmitter<VideoAppEvent>| {
+                        let event = match wallpaper::create(&gpu, monitor_size, &path, ty) {
+                            Ok(wallpaper) => VideoAppEvent::WallpaperPrepared(wallpaper),
+                            Err(error) => VideoAppEvent::Error(Box::new(error)),
+                        };
+
+                        emitter.emit(event).unwrap();
+                    });
             }
             Event::ResizeRequested { size } => {
                 runtime.wgpu.resize_surface(size);
@@ -61,7 +79,10 @@ impl App for VideoApp {
         }
     }
 
-    async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
+    async fn frame(
+        &mut self,
+        runtime: &mut Runtime<Self::CustomEvent>,
+    ) -> Result<FrameInfo, FrameError> {
         self.resolve_transitions();
 
         let Some(wallpaper) = self.wallpaper.as_mut() else {

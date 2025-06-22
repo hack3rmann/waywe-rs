@@ -3,6 +3,7 @@ use super::{
     interpolation::{self, Interpolation},
 };
 use crate::{
+    app::VideoAppEvent,
     event_loop::{FrameError, FrameInfo},
     runtime::{Runtime, RuntimeFeatures, gpu::Wgpu},
 };
@@ -22,7 +23,7 @@ pub struct TransitionWallpaper {
 }
 
 impl TransitionWallpaper {
-    pub fn new(runtime: &Runtime, from: DynWallpaper, to: DynWallpaper) -> Self {
+    pub fn new(runtime: &Runtime<VideoAppEvent>, from: DynWallpaper, to: DynWallpaper) -> Self {
         Self {
             pipeline: TransitionPipeline::new(
                 &runtime.wgpu,
@@ -91,7 +92,7 @@ impl Wallpaper for TransitionWallpaper {
 
     fn frame(
         &mut self,
-        runtime: &Runtime,
+        runtime: &Runtime<VideoAppEvent>,
         encoder: &mut wgpu::CommandEncoder,
         surface_view: &wgpu::TextureView,
     ) -> Result<FrameInfo, FrameError> {
@@ -344,7 +345,7 @@ impl TransitionPipeline {
 
     pub fn render(
         &mut self,
-        runtime: &Runtime,
+        runtime: &Runtime<VideoAppEvent>,
         encoder: &mut wgpu::CommandEncoder,
         surface_view: &wgpu::TextureView,
     ) -> Result<FrameInfo, FrameError> {

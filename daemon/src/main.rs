@@ -7,6 +7,7 @@ pub mod runtime;
 pub mod video_pipeline;
 pub mod wallpaper;
 pub mod event;
+pub mod task_pool;
 
 use app::VideoApp;
 use clap::Parser;

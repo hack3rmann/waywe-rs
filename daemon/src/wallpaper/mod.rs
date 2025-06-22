@@ -4,9 +4,9 @@ pub mod transition;
 pub mod video;
 
 use crate::{
-    event_loop::{FrameError, FrameInfo},
-    runtime::{Runtime, RuntimeFeatures},
+    app::VideoAppEvent, event_loop::{FrameError, FrameInfo}, runtime::{gpu::Wgpu, Runtime, RuntimeFeatures}
 };
+use glam::UVec2;
 use image::{ImageWallpaper, ImageWallpaperCreationError};
 use runtime::WallpaperType;
 use std::{any::Any, path::Path};
@@ -24,7 +24,7 @@ pub enum RenderState {
 pub trait Wallpaper: Any + Send + Sync {
     fn frame(
         &mut self,
-        runtime: &Runtime,
+        runtime: &Runtime<VideoAppEvent>,
         encoder: &mut wgpu::CommandEncoder,
         surface_view: &wgpu::TextureView,
     ) -> Result<FrameInfo, FrameError>;
@@ -66,17 +66,18 @@ impl IntoDynWallpaper for DynWallpaper {
 }
 
 pub fn create(
-    runtime: &mut Runtime,
+    gpu: &Wgpu,
+    monitor_size: UVec2,
     path: &Path,
     ty: WallpaperType,
 ) -> Result<DynWallpaper, WallpaperCreationError> {
     match ty {
         WallpaperType::Video => {
-            VideoWallpaper::new(runtime, &pathbuf_into_cstring(path.to_owned()))
+            VideoWallpaper::new(gpu, monitor_size, &pathbuf_into_cstring(path.to_owned()))
                 .map(IntoDynWallpaper::into_dyn_wallpaper)
                 .map_err(WallpaperCreationError::from)
         }
-        WallpaperType::Image => ImageWallpaper::new(runtime, path)
+        WallpaperType::Image => ImageWallpaper::new(gpu, monitor_size, path)
             .map(IntoDynWallpaper::into_dyn_wallpaper)
             .map_err(WallpaperCreationError::from),
     }

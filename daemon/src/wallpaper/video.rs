@@ -1,10 +1,12 @@
 use super::Wallpaper;
 use crate::{
+    app::VideoAppEvent,
     event_loop::{FrameError, FrameInfo},
-    runtime::{Runtime, RuntimeFeatures},
+    runtime::{Runtime, RuntimeFeatures, gpu::Wgpu},
     video_pipeline::VideoPipeline,
 };
 use ash::vk;
+use glam::UVec2;
 use std::{ffi::CStr, os::fd::IntoRawFd, ptr, time::Duration};
 use thiserror::Error;
 use tracing::error;
@@ -27,7 +29,11 @@ pub struct VideoWallpaper {
 }
 
 impl VideoWallpaper {
-    pub fn new(runtime: &Runtime, path: &CStr) -> Result<Self, VideoWallpaperCreationError> {
+    pub fn new(
+        gpu: &Wgpu,
+        monitor_size: UVec2,
+        path: &CStr,
+    ) -> Result<Self, VideoWallpaperCreationError> {
         let format_context = FormatContext::from_input(path)?;
         let best_stream = format_context.find_best_stream(MediaType::Video)?;
 
@@ -64,10 +70,7 @@ impl VideoWallpaper {
         };
 
         Ok(Self {
-            pipeline: VideoPipeline::new(
-                &runtime.wgpu,
-                runtime.wayland.client_state.monitor_size(),
-            ),
+            pipeline: VideoPipeline::new(gpu, monitor_size),
             format_context,
             time_base,
             best_stream_index,
@@ -90,7 +93,7 @@ impl Wallpaper for VideoWallpaper {
 
     fn frame(
         &mut self,
-        runtime: &Runtime,
+        runtime: &Runtime<VideoAppEvent>,
         encoder: &mut wgpu::CommandEncoder,
         surface_view: &wgpu::TextureView,
     ) -> Result<FrameInfo, FrameError> {

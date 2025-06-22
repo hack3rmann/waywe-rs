@@ -1,9 +1,11 @@
 use super::{RenderState, Wallpaper};
 use crate::{
+    app::VideoAppEvent,
     event_loop::{FrameError, FrameInfo},
     image_pipeline::{COLOR_WHITE, ImagePipeline},
-    runtime::{Runtime, RuntimeFeatures},
+    runtime::{Runtime, RuntimeFeatures, gpu::Wgpu},
 };
+use glam::UVec2;
 use image::{ImageReader, error::ImageError};
 use std::{io, path::Path};
 use thiserror::Error;
@@ -15,7 +17,8 @@ pub struct ImageWallpaper {
 
 impl ImageWallpaper {
     pub fn new(
-        runtime: &Runtime,
+        gpu: &Wgpu,
+        monitor_size: UVec2,
         path: impl AsRef<Path>,
     ) -> Result<Self, ImageWallpaperCreationError> {
         let path = path.as_ref();
@@ -25,11 +28,11 @@ impl ImageWallpaper {
         Ok(Self {
             is_render_done: false,
             pipeline: ImagePipeline::new(
-                &runtime.wgpu,
+                gpu,
                 &image,
                 // TODO(hack3rmann): let the user decide
                 COLOR_WHITE,
-                runtime.wayland.client_state.monitor_size(),
+                monitor_size,
             ),
         })
     }
@@ -52,7 +55,7 @@ impl Wallpaper for ImageWallpaper {
 
     fn frame(
         &mut self,
-        _: &Runtime,
+        _: &Runtime<VideoAppEvent>,
         encoder: &mut wgpu::CommandEncoder,
         surface_view: &wgpu::TextureView,
     ) -> Result<FrameInfo, FrameError> {

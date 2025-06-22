@@ -1,8 +1,9 @@
 use bytemuck::{Contiguous, NoUninit};
+use rustix::fs::OFlags;
 use std::{
-    io::{self, PipeReader, PipeWriter, Read as _, Write as _},
+    io::{self, ErrorKind, PipeReader, PipeWriter, Read as _, Write as _},
     os::fd::{AsFd, BorrowedFd},
-    sync::mpsc::{self, Receiver, RecvError, Sender},
+    sync::mpsc::{self, Receiver, RecvError, Sender, TryRecvError},
 };
 use thiserror::Error;
 
@@ -29,6 +30,13 @@ pub struct EventReceiver<T> {
 impl<T: CustomEvent> EventReceiver<T> {
     pub fn new() -> Result<Self, io::Error> {
         let (reader, writer) = io::pipe()?;
+
+        let read_flags = rustix::fs::fcntl_getfl(&reader).unwrap();
+        rustix::fs::fcntl_setfl(&reader, read_flags | OFlags::NONBLOCK).unwrap();
+
+        let write_flags = rustix::fs::fcntl_getfl(&writer).unwrap();
+        rustix::fs::fcntl_setfl(&writer, write_flags | OFlags::NONBLOCK).unwrap();
+
         let (sender, receiver) = mpsc::channel();
 
         Ok(Self {
@@ -53,6 +61,19 @@ impl<T: CustomEvent> EventReceiver<T> {
     pub fn recv(&mut self) -> Result<T, AbsorbError> {
         self.reader.read_exact(&mut [0_u8])?;
         Ok(self.receiver.recv()?)
+    }
+
+    pub fn try_recv(&mut self) -> Result<T, AbsorbError> {
+        match self.reader.read(&mut [0_u8]) {
+            Ok(1) => {}
+            Ok(..) => return Err(AbsorbError::WouldBlock),
+            Err(error) if error.kind() == ErrorKind::WouldBlock => {
+                return Err(AbsorbError::WouldBlock);
+            }
+            Err(error) => return Err(error.into()),
+        }
+
+        Ok(self.receiver.try_recv()?)
     }
 }
 
@@ -94,5 +115,9 @@ pub enum AbsorbError {
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]
+    TryRecv(#[from] TryRecvError),
+    #[error(transparent)]
     Recv(#[from] RecvError),
+    #[error("would block")]
+    WouldBlock,
 }

@@ -4,6 +4,7 @@ use crate::{
         ControlFlow, Runtime,
         wayland::{ClientState, Wayland},
     },
+    task_pool::TaskPool,
 };
 use glam::UVec2;
 use runtime::{
@@ -25,8 +26,8 @@ use tracing::{debug, error, info, warn};
 use video::RatioI32;
 
 pub struct EventLoop<A: App> {
-    runtime: Runtime,
-    event_queue: EventQueue<A::UserEvent>,
+    runtime: Runtime<A::CustomEvent>,
+    event_queue: EventQueue<A::CustomEvent>,
     app: A,
     epoll: Epoll,
 }
@@ -47,7 +48,7 @@ impl<A: App> EventLoop<A> {
 
         let wayland = Wayland::new();
 
-        let mut event_queue = match EventQueue::<A::UserEvent>::new() {
+        let mut event_queue = match EventQueue::<A::CustomEvent>::new() {
             Ok(queue) => queue,
             Err(error) => panic!("failed to create event queue: {error:?}"),
         };
@@ -77,9 +78,9 @@ impl<A: App> EventLoop<A> {
             ControlFlow::Busy
         };
 
-        let runtime = Runtime::new(wayland, control_flow);
+        let task_pool = TaskPool::new(event_queue.custom_receiver.make_emitter().unwrap());
 
-        event_queue.events.clear();
+        let runtime = Runtime::new(wayland, control_flow, task_pool);
 
         let fds = [
             runtime.wayland.display.as_fd(),
@@ -153,6 +154,8 @@ impl<A: App> EventLoop<A> {
                         break 'event_loop;
                     }
                 }
+
+                self.event_queue.collect_any().unwrap();
 
                 self.runtime.timer.mark_block_start();
 
@@ -245,6 +248,16 @@ impl<T: CustomEvent> EventQueue<T> {
         Ok(())
     }
 
+    pub fn collect_any(&mut self) -> Result<(), AbsorbError> {
+        loop {
+            match self.custom_receiver.try_recv() {
+                Ok(value) => self.events.push(Event::Custom(value)),
+                Err(AbsorbError::WouldBlock) => return Ok(()),
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
     pub fn populate_from_wayland_client_state(&mut self, state: &ClientState) {
         if state.resize_requested.load(Ordering::Acquire) {
             state.resize_requested.store(false, Ordering::Release);
@@ -256,17 +269,17 @@ impl<T: CustomEvent> EventQueue<T> {
 }
 
 pub trait App {
-    type UserEvent: CustomEvent;
+    type CustomEvent: CustomEvent;
 
     fn process_event(
         &mut self,
-        runtime: &mut Runtime,
-        event: Event<Self::UserEvent>,
+        runtime: &mut Runtime<Self::CustomEvent>,
+        event: Event<Self::CustomEvent>,
     ) -> impl Future<Output = ()> + Send;
 
     fn frame(
         &mut self,
-        runtime: &mut Runtime,
+        runtime: &mut Runtime<Self::CustomEvent>,
     ) -> impl Future<Output = Result<FrameInfo, FrameError>> + Send;
 }
 
