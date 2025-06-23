@@ -1,5 +1,4 @@
 pub mod image;
-pub mod interpolation;
 pub mod transition;
 pub mod video;
 

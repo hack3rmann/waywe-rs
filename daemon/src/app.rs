@@ -7,6 +7,7 @@ use crate::{
         transition::{TransitionConfig, TransitionWallpaper},
     },
 };
+use glam::Vec2;
 use runtime::config::Config;
 use std::{sync::Arc, time::Duration};
 
@@ -32,9 +33,13 @@ impl VideoApp {
     ) {
         let wallpaper = wallpaper.into_dyn_wallpaper();
 
+        let centre = self.config.animation.center_position.get();
+
         let config = TransitionConfig {
             duration: Duration::from_millis(self.config.animation.duration_milliseconds),
             direction: self.config.animation.direction,
+            interpolation: self.config.animation.easing,
+            centre: Vec2::new(centre.x * runtime.wayland.client_state.aspect_ratio(), centre.y),
         };
 
         self.wallpaper = Some(match self.wallpaper.take() {
