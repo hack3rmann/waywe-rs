@@ -4,18 +4,27 @@ use crate::{
     runtime::Runtime,
     wallpaper::{
         self, DynWallpaper, IntoDynWallpaper, RenderState, RequiredFeaturesExt as _,
-        transition::TransitionWallpaper,
+        transition::{TransitionConfig, TransitionWallpaper},
     },
 };
-use std::sync::Arc;
+use runtime::config::Config;
+use std::{sync::Arc, time::Duration};
 
 #[derive(Default)]
 pub struct VideoApp {
     pub wallpaper: Option<DynWallpaper>,
+    pub config: Config,
     pub do_force_frame: bool,
 }
 
 impl VideoApp {
+    pub fn from_config(config: Config) -> Self {
+        Self {
+            config,
+            ..Default::default()
+        }
+    }
+
     pub fn set_wallpaper(
         &mut self,
         runtime: &Runtime<VideoAppEvent>,
@@ -23,9 +32,16 @@ impl VideoApp {
     ) {
         let wallpaper = wallpaper.into_dyn_wallpaper();
 
+        let config = TransitionConfig {
+            duration: Duration::from_millis(self.config.animation.duration_milliseconds),
+            direction: self.config.animation.direction,
+        };
+
         self.wallpaper = Some(match self.wallpaper.take() {
             None => wallpaper,
-            Some(from) => TransitionWallpaper::new(runtime, from, wallpaper).into_dyn_wallpaper(),
+            Some(from) => {
+                TransitionWallpaper::new(runtime, from, wallpaper, config).into_dyn_wallpaper()
+            }
         });
     }
 

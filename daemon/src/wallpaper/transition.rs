@@ -10,6 +10,7 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use glam::{UVec2, Vec2};
 use rand::distr::{Distribution as _, Uniform};
+use runtime::config::AnimationDirection;
 use std::{
     any::Any,
     collections::HashMap,
@@ -18,18 +19,30 @@ use std::{
 };
 use wgpu::util::DeviceExt as _;
 
+#[derive(Debug, Clone)]
+pub struct TransitionConfig {
+    pub duration: Duration,
+    pub direction: AnimationDirection,
+}
+
 pub struct TransitionWallpaper {
     pipeline: TransitionPipeline,
 }
 
 impl TransitionWallpaper {
-    pub fn new(runtime: &Runtime<VideoAppEvent>, from: DynWallpaper, to: DynWallpaper) -> Self {
+    pub fn new(
+        runtime: &Runtime<VideoAppEvent>,
+        from: DynWallpaper,
+        to: DynWallpaper,
+        config: TransitionConfig,
+    ) -> Self {
         Self {
             pipeline: TransitionPipeline::new(
                 &runtime.wgpu,
                 runtime.wayland.client_state.monitor_size(),
                 from,
                 to,
+                config,
             ),
         }
     }
@@ -119,12 +132,19 @@ pub struct TransitionPipeline {
     last_frame_time: Option<Instant>,
     frame_index: usize,
     animation_target_time: Duration,
+    direction: AnimationDirection,
     interpolation: Interpolation,
     centre: Vec2,
 }
 
 impl TransitionPipeline {
-    pub fn new(gpu: &Wgpu, screen_size: UVec2, from: DynWallpaper, to: DynWallpaper) -> Self {
+    pub fn new(
+        gpu: &Wgpu,
+        screen_size: UVec2,
+        from: DynWallpaper,
+        to: DynWallpaper,
+        config: TransitionConfig,
+    ) -> Self {
         let vertex_buffer = gpu
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -337,7 +357,8 @@ impl TransitionPipeline {
             target_frame_times: [None; 2],
             last_frame_time: None,
             frame_index: 0,
-            animation_target_time: Duration::from_secs(2),
+            animation_target_time: config.duration,
+            direction: config.direction,
             interpolation: interpolation::ease_in_out,
             centre,
         }
@@ -428,17 +449,30 @@ impl TransitionPipeline {
             .max(centre.distance(corners[1]))
             .max(centre.distance(corners[2]))
             .max(centre.distance(corners[3]));
-        let radius = radius_scale
-            * (self.interpolation)(
-                animantion_time.as_secs_f32() / self.animation_target_time.as_secs_f32(),
-            );
+
+        let mut normalized_time = (self.interpolation)(
+            animantion_time.as_secs_f32() / self.animation_target_time.as_secs_f32(),
+        );
+
+        if let AnimationDirection::In = self.direction {
+            normalized_time = 1.0 - normalized_time;
+        }
+
+        let radius = radius_scale * normalized_time;
 
         pass.set_pipeline(&self.pipeline);
         pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         pass.set_push_constants(
             wgpu::ShaderStages::FRAGMENT,
             0,
-            bytemuck::bytes_of(&PushConst { centre, radius }),
+            bytemuck::bytes_of(&PushConst {
+                centre,
+                radius,
+                direction: match self.direction {
+                    AnimationDirection::Out => 1.0,
+                    AnimationDirection::In => -1.0,
+                },
+            }),
         );
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.draw(0..SCREEN_TRIANGLE.len() as u32, 0..1);
@@ -455,4 +489,5 @@ impl TransitionPipeline {
 pub struct PushConst {
     centre: Vec2,
     radius: f32,
+    direction: f32,
 }

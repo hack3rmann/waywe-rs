@@ -3,6 +3,7 @@
 layout(push_constant) uniform struct Push {
     vec2 centre;
     float radius;
+    float direction;
 } push;
 
 layout(set = 0, binding = 0) uniform texture2D from_image;
@@ -23,7 +24,7 @@ void main() {
     offset.x *= aspect_ratio;
     offset -= push.centre;
 
-    if (dot(offset, offset) < push.radius * push.radius) {
+    if (push.direction * dot(offset, offset) < push.direction * push.radius * push.radius) {
         surface_color.rgb = texture(sampler2D(to_image, image_sampler), texture_coordinates).rgb;
     } else {
         surface_color.rgb = texture(sampler2D(from_image, image_sampler), texture_coordinates).rgb;
