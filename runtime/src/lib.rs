@@ -1,7 +1,6 @@
 pub mod command;
 pub mod epoll;
 pub mod ipc;
-pub mod process;
 pub mod profile;
 pub mod signals;
 pub mod wallpaper;
