@@ -136,13 +136,6 @@ impl<A: App> EventLoop<A> {
                             if polled_fds.contains(&self.runtime.wayland.display) {
                                 self.populate_events_from_wayland();
                             }
-
-                            let custom_count =
-                                polled_fds.count_of(self.event_queue.custom_receiver.pipe_fd());
-
-                            if let Err(error) = self.event_queue.collect(custom_count) {
-                                error!(?error, "failed to collect custom events");
-                            }
                         }
                         Err(Errno::INTR) => {}
                         Err(error) => {
@@ -155,7 +148,9 @@ impl<A: App> EventLoop<A> {
                     }
                 }
 
-                self.event_queue.collect_any().unwrap();
+                if let Err(error) = self.event_queue.poll_custom() {
+                    error!(?error, "failed to poll custom events");
+                }
 
                 self.runtime.timer.mark_block_start();
 
@@ -237,18 +232,7 @@ impl<T: CustomEvent> EventQueue<T> {
         })
     }
 
-    pub fn collect(&mut self, count: usize) -> Result<(), AbsorbError> {
-        self.events.reserve(count);
-
-        for _ in 0..count {
-            let event = self.custom_receiver.recv()?;
-            self.events.push(Event::Custom(event));
-        }
-
-        Ok(())
-    }
-
-    pub fn collect_any(&mut self) -> Result<(), AbsorbError> {
+    pub fn poll_custom(&mut self) -> Result<(), AbsorbError> {
         loop {
             match self.custom_receiver.try_recv() {
                 Ok(value) => self.events.push(Event::Custom(value)),

@@ -1,15 +1,16 @@
 use crate::event::EventEmitter;
+use smallvec::{SmallVec, smallvec};
 use std::{panic, thread::JoinHandle};
 
 pub struct TaskPool<T> {
-    pub handles: Vec<JoinHandle<()>>,
+    pub handles: SmallVec<[JoinHandle<()>; 1]>,
     pub emitter: EventEmitter<T>,
 }
 
 impl<T> TaskPool<T> {
     pub fn new(emitter: EventEmitter<T>) -> Self {
         Self {
-            handles: vec![],
+            handles: smallvec![],
             emitter,
         }
     }
