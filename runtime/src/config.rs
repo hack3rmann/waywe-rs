@@ -68,7 +68,7 @@ impl Interpolation {
         match self {
             Interpolation::None => |x| x,
             Interpolation::EaseIn => |x| x * x,
-            Interpolation::EaseOut => |x| 1.0 - (x - 1.0) * (x - 1.0),
+            Interpolation::EaseOut => |x| 1.0 - (1.0 - x) * (1.0 - x),
             Interpolation::EaseInOut => |x| 3.0 * x * x - 2.0 * x * x * x,
         }
     }

@@ -17,7 +17,7 @@ https://github.com/user-attachments/assets/48a8b135-bbf2-4055-8453-19292a923939
 
 1. Image wallpapers in various formats.
 2. Video wallpapers in .mp4 (h.264 and h.265 -encoded formats)
-3. Change transition.
+3. Configurable transition animations.
 
 ## Dependencies
 
@@ -26,9 +26,7 @@ https://github.com/user-attachments/assets/48a8b135-bbf2-4055-8453-19292a923939
 3. Support for `libva` hardware acceleration.
 4. Support for minor (yet unpopular) Vulkan features:
     - VK_KHR_external_memory_fd
-    - VK_EXT_external_memory_dma_buf
     - VK_EXT_image_drm_format_modifier
-    - vkImageDrmFormatModifierExplicitCreateInfoEXT (for some reason may be unavailable)
 
 ## Build
 
@@ -69,6 +67,38 @@ waywe preview preview.png
 ```
 
 For other handy commands run `waywe help`.
+
+## Configuration
+
+You can configure your transition animations in `~/.config/waywe/config.toml`.
+Default config will be generated if user would not have one.
+
+Default configuration:
+
+```toml
+[animation]
+# Transition duration in milliseconds
+duration-milliseconds = 2000
+# Animation direction: "in" | "out"
+direction = "out"
+# Interpolation function: "none" | "ease-in" | "ease-out" | "ease-in-out"
+# 
+# - "none": f(t) = t
+# - "ease-in": f(t) = t**2
+# - "ease-out": f(t) = 1 - (1 - t)**2
+# - "ease-in-out": f(t) = 3 * x**2 - 2 * x**3
+easing = "ease-out"
+
+[animation.center-position]
+# Amination circle center position type: "random" | "point" [default="random"]
+#
+# - "random": center will be picked randomly on screen and `position` parameter will be ignored
+# - "point": center position will be at point `position` (see next)
+type = "random"
+# Exact center position of animation circle, used with `type = "point"`.
+# Describes position coordinares in range `-1.0..=1.0`
+position = [0.0, 0.0]
+```
 
 ## Troubleshooting
 
