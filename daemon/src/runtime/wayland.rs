@@ -8,10 +8,10 @@ use std::{
     sync::atomic::{AtomicBool, AtomicU32, Ordering::*},
 };
 use wayland_client::{
-    WlSmallVecMessageBuffer,
     interface::{
-        WlCompositorCreateSurfaceRequest, WlSurfaceCommitRequest, WlSurfaceSetBufferScaleRequest,
-        ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellLayer,
+        WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlRegionAddRequest,
+        WlRegionDestroyRequest, WlSurfaceCommitRequest, WlSurfaceSetBufferScaleRequest,
+        WlSurfaceSetOpaqueRegionRequest, ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellLayer,
         ZwlrLayerSurfaceAckConfigureRequest, ZwlrLayerSurfaceAnchor,
         ZwlrLayerSurfaceConfigureEvent, ZwlrLayerSurfaceKeyboardInteractivity,
         ZwlrLayerSurfaceSetAnchorRequest, ZwlrLayerSurfaceSetExclusiveZoneRequest,
@@ -104,6 +104,8 @@ impl FromProxy for Surface {
 
 pub struct LayerSurface {
     handle: WlObjectHandle<Self>,
+    surface: WlObjectHandle<Surface>,
+    compositor: WlObjectHandle<Compositor>,
 }
 
 impl HasObjectType for LayerSurface {
@@ -136,22 +138,65 @@ impl Dispatch for LayerSurface {
         state.monitor_width.store(width, Relaxed);
         state.monitor_height.store(height, Relaxed);
 
-        let mut buf = WlSmallVecMessageBuffer::<3>::new();
+        let mut buf = WlStackMessageBuffer::new();
 
         self.handle.request(
             &mut buf,
             storage,
             ZwlrLayerSurfaceAckConfigureRequest { serial },
         );
+
+        let mut storage = Pin::new(storage);
+
+        let region: WlObjectHandle<WlRegion> = self.compositor.create_object(
+            &mut buf,
+            storage.as_mut(),
+            WlCompositorCreateRegionRequest,
+        );
+
+        region.request(
+            &mut buf,
+            &storage.as_ref(),
+            WlRegionAddRequest {
+                x: 0,
+                y: 0,
+                width: width.cast_signed(),
+                height: height.cast_signed(),
+            },
+        );
+
+        self.surface.request(
+            &mut buf,
+            &storage.as_ref(),
+            WlSurfaceSetOpaqueRegionRequest {
+                region: Some(region.id()),
+            },
+        );
+
+        region.request(&mut buf, &storage.as_ref(), WlRegionDestroyRequest);
+
+        storage.as_mut().release(region).unwrap();
+
+        self.surface
+            .request(&mut buf, &storage.as_ref(), WlSurfaceCommitRequest);
     }
 }
 
-impl FromProxy for LayerSurface {
-    fn from_proxy(proxy: &WlProxy) -> Self {
-        Self {
-            handle: WlObjectHandle::new(proxy.id()),
-        }
+struct WlRegion;
+
+impl Dispatch for WlRegion {
+    type State = ClientState;
+    const ALLOW_EMPTY_DISPATCH: bool = true;
+}
+
+impl FromProxy for WlRegion {
+    fn from_proxy(_: &WlProxy) -> Self {
+        Self
     }
+}
+
+impl HasObjectType for WlRegion {
+    const OBJECT_TYPE: WlObjectType = WlObjectType::Region;
 }
 
 pub const WLR_NAMESPACE: &CStr = c"waywe-runtime";
@@ -207,7 +252,7 @@ impl Wayland {
             WlCompositorCreateSurfaceRequest,
         );
 
-        let layer_surface: WlObjectHandle<LayerSurface> = layer_shell.create_object(
+        let layer_surface: WlObjectHandle<LayerSurface> = layer_shell.create_object_with(
             &mut buf,
             main_queue.as_mut().storage_mut(),
             ZwlrLayerShellGetLayerSurfaceRequest {
@@ -215,6 +260,11 @@ impl Wayland {
                 output: None,
                 layer: ZwlrLayerShellLayer::Background,
                 namespace: WLR_NAMESPACE,
+            },
+            move |proxy| LayerSurface {
+                handle: WlObjectHandle::new(proxy.id()),
+                surface,
+                compositor,
             },
         );
 

@@ -182,21 +182,31 @@ impl Wgpu {
         };
 
         let screen_size = wayland.client_state.monitor_size();
-
-        // TODO(hack3rmann): configure surface with
-        // `usage |= wgt::TextureUsages::STORAGE_BINDING`
-        // to render to it using compute shaders
-        surface.configure(
-            &device,
-            &surface
-                .get_default_config(&adapter, screen_size.x, screen_size.y)
-                .unwrap(),
-        );
+        let capabilities = surface.get_capabilities(&adapter);
 
         let Some(surface_format) = surface.get_capabilities(&adapter).formats.first().copied()
         else {
             panic!("no surface format supported");
         };
+
+        // TODO(hack3rmann): configure surface with
+        // `usage |= wgt::TextureUsages::STORAGE_BINDING`
+        // to render to it using compute shaders
+        let surface_config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: surface_format,
+            width: screen_size.x,
+            height: screen_size.y,
+            desired_maximum_frame_latency: 2,
+            present_mode: *capabilities
+                .present_modes
+                .first()
+                .expect("should has at least one format"),
+            alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            view_formats: vec![],
+        };
+
+        surface.configure(&device, &surface_config);
 
         Self {
             adapter,

@@ -101,6 +101,26 @@ impl<T> WlObjectHandle<T> {
         T: HasObjectType,
         D: Dispatch + FromProxy,
     {
+        self.create_object_with(buf, storage, request, D::from_proxy)
+    }
+
+    /// Send the `request` to the server with several compile-time checks
+    ///
+    /// # Note
+    ///
+    /// Can be used only for object creating requests (e.g. wl_compositor::create_surface)
+    pub fn create_object_with<'r, D, R>(
+        self,
+        buf: &mut impl WlMessageBuffer,
+        storage: Pin<&mut WlObjectStorage<D::State>>,
+        request: R,
+        make_object: impl FnOnce(&WlProxy) -> D,
+    ) -> WlObjectHandle<D>
+    where
+        R: Request<'r> + ObjectParent,
+        T: HasObjectType,
+        D: Dispatch,
+    {
         const {
             assert!(
                 T::OBJECT_TYPE as u32 == R::OBJECT_TYPE as u32,
@@ -126,7 +146,7 @@ impl<T> WlObjectHandle<T> {
             .unwrap()
         };
 
-        let data = D::from_proxy(&proxy);
+        let data = make_object(&proxy);
 
         storage.insert(WlObject::new(proxy, data))
     }
