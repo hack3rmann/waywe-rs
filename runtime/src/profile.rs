@@ -21,9 +21,9 @@ pub struct SetupProfile<'s> {
 }
 
 impl<'s> SetupProfile<'s> {
-    pub fn new(path: &'s Path, wallpaper_type: WallpaperType, monitor_size: UVec2) -> Self {
+    pub fn new(path: impl Into<Cow<'s, Path>>, wallpaper_type: WallpaperType, monitor_size: UVec2) -> Self {
         Self {
-            path: Cow::Borrowed(path),
+            path: path.into(),
             wallpaper_type,
             monitor_size: monitor_size.into(),
         }

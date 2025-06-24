@@ -8,7 +8,8 @@ use crate::{
 };
 use glam::UVec2;
 use runtime::{
-    DaemonCommand, Epoll, RecvError, WallpaperType,
+    DaemonCommand, Epoll, IpcSocket, RecvError, WallpaperType,
+    ipc::Server,
     profile::{SetupProfile, SetupProfileError},
     signals,
 };
@@ -19,6 +20,7 @@ use std::{
     path::PathBuf,
     sync::{Once, atomic::Ordering},
     time::Duration,
+    vec::Drain,
 };
 use thiserror::Error;
 use tokio::runtime::Builder as AsyncRuntimeBuilder;
@@ -40,9 +42,6 @@ impl<A: App + Default> Default for EventLoop<A> {
 
 impl<A: App> EventLoop<A> {
     pub fn new(app: A) -> Self {
-        static TRACING_ONCE: Once = Once::new();
-        TRACING_ONCE.call_once(tracing_subscriber::fmt::init);
-
         static SIGNALS_ONCE: Once = Once::new();
         SIGNALS_ONCE.call_once(signals::setup);
 
@@ -88,7 +87,7 @@ impl<A: App> EventLoop<A> {
             event_queue.custom_receiver.pipe_fd(),
         ];
 
-        let epoll = match Epoll::new(fds, None) {
+        let epoll = match Epoll::new(fds) {
             Ok(epoll) => epoll,
             Err(error) => panic!("failed to create epoll: {error:?}"),
         };
@@ -101,15 +100,79 @@ impl<A: App> EventLoop<A> {
         }
     }
 
-    pub(crate) fn populate_events_from_wayland(&mut self) {
-        // that modifies `client_state`
-        self.runtime.wayland.display.roundtrip(
-            self.runtime.wayland.main_queue.as_mut(),
-            self.runtime.wayland.client_state.as_ref(),
-        );
+    async fn run_async(&mut self) {
+        self.runtime.timer.mark_event_loop_start_time();
 
-        self.event_queue
-            .populate_from_wayland_client_state(&self.runtime.wayland.client_state);
+        'event_loop: loop {
+            self.runtime.timer.mark_frame_start();
+
+            match self.runtime.control_flow {
+                ControlFlow::Busy => {
+                    if signals::SHOULD_EXIT.load(Ordering::Relaxed) {
+                        debug!("caught stop signal");
+                        break 'event_loop;
+                    }
+                }
+                ControlFlow::Idle => {
+                    self.runtime.timer.mark_block_start();
+
+                    match self.epoll.wait(None) {
+                        Ok(_polled_fds) => {}
+                        Err(Errno::INTR) => {
+                            if signals::SHOULD_EXIT.load(Ordering::Relaxed) {
+                                debug!("caught stop signal");
+                                break 'event_loop;
+                            }
+                        }
+                        Err(error) => {
+                            error!(?error, "failed to sleep on multiple sockets");
+                        }
+                    }
+
+                    self.runtime.timer.mark_block_end();
+                }
+                ControlFlow::ShouldStop => {
+                    debug!("shutting down daemon");
+                    break 'event_loop;
+                }
+            }
+
+            self.runtime.wayland.display.roundtrip(
+                self.runtime.wayland.main_queue.as_mut(),
+                self.runtime.wayland.client_state.as_ref(),
+            );
+
+            self.event_queue
+                .populate_from_wayland_client_state(&self.runtime.wayland.client_state);
+
+            if let Err(error) = self.event_queue.populate_events_from_custom() {
+                error!(?error, "failed to populate custom events");
+            }
+
+            if let Err(error) = self.event_queue.populate_from_cli(&self.runtime.ipc.socket) {
+                error!(?error, "can not recv from waywe-cli");
+            }
+
+            for event in self.event_queue.drain() {
+                self.app.process_event(&mut self.runtime, event).await;
+            }
+
+            self.runtime.timer.mark_wallpaper_start_time();
+
+            let info = match self.app.frame(&mut self.runtime).await {
+                Ok(info) => info,
+                Err(FrameError::StopRequested) => break 'event_loop,
+                Err(FrameError::Skip | FrameError::NoWorkToDo) => continue 'event_loop,
+            };
+
+            if let Some(target_frame_time) = info.target_frame_time {
+                self.runtime.timer.sleep_enough(target_frame_time);
+            } else {
+                self.runtime.control_flow.idle();
+            }
+        } // loop
+
+        self.app.exit(&mut self.runtime).await;
     }
 
     pub fn run(&mut self) {
@@ -118,96 +181,7 @@ impl<A: App> EventLoop<A> {
             .build()
             .unwrap();
 
-        async_runtime.block_on(async {
-            self.runtime.timer.mark_event_loop_start_time();
-
-            'event_loop: loop {
-                self.runtime.timer.mark_frame_start();
-
-                if signals::SHOULD_EXIT.load(Ordering::Relaxed) {
-                    debug!("caught stop signal");
-                    self.runtime.control_flow.stop();
-                }
-
-                match self.runtime.control_flow {
-                    ControlFlow::Busy => {}
-                    ControlFlow::Idle => match self.epoll.wait() {
-                        Ok(polled_fds) => {
-                            if polled_fds.contains(&self.runtime.wayland.display) {
-                                self.populate_events_from_wayland();
-                            }
-                        }
-                        Err(Errno::INTR) => {}
-                        Err(error) => {
-                            error!(?error, "failed to wait on multiple sockets");
-                        }
-                    },
-                    ControlFlow::ShouldStop => {
-                        debug!("shutting down daemon");
-                        break 'event_loop;
-                    }
-                }
-
-                if let Err(error) = self.event_queue.poll_custom() {
-                    error!(?error, "failed to poll custom events");
-                }
-
-                self.runtime.timer.mark_block_start();
-
-                match self.runtime.ipc.socket.nonblocking_recv() {
-                    Ok(command) => {
-                        self.event_queue.events.push(match command {
-                            DaemonCommand::SetVideo { path } => Event::NewWallpaper {
-                                path,
-                                ty: WallpaperType::Video,
-                            },
-                            DaemonCommand::SetImage { path } => Event::NewWallpaper {
-                                path,
-                                ty: WallpaperType::Image,
-                            },
-                        });
-
-                        self.runtime.timer.mark_wallpaper_start_time();
-                    }
-                    Err(RecvError::Timeout) => unreachable!(),
-                    Err(RecvError::Empty) => {}
-                    Err(error) => {
-                        error!(?error, "failed to recv from waywe-cli");
-                    }
-                }
-
-                self.runtime.timer.mark_block_end();
-
-                for event in self.event_queue.events.drain(..) {
-                    if let Event::NewWallpaper { path, ty } = &event {
-                        let size = self.runtime.wayland.client_state.monitor_size();
-
-                        if let Err(error) = SetupProfile::new(path, *ty, size).store() {
-                            error!(?error, "failed to save runtime profile");
-                        }
-                    }
-
-                    self.app.process_event(&mut self.runtime, event).await;
-                }
-
-                let info = match self.app.frame(&mut self.runtime).await {
-                    Ok(info) => info,
-                    Err(FrameError::StopRequested) => break 'event_loop,
-                    Err(FrameError::Skip | FrameError::NoWorkToDo) => {
-                        self.populate_events_from_wayland();
-                        continue 'event_loop;
-                    }
-                };
-
-                self.populate_events_from_wayland();
-
-                if let Some(target_frame_time) = info.target_frame_time {
-                    self.runtime.timer.sleep_enough(target_frame_time);
-                } else {
-                    self.runtime.control_flow.idle();
-                }
-            }
-        });
+        async_runtime.block_on(self.run_async());
     }
 }
 
@@ -232,13 +206,47 @@ impl<T: CustomEvent> EventQueue<T> {
         })
     }
 
-    pub fn poll_custom(&mut self) -> Result<(), AbsorbError> {
+    pub fn add(&mut self, event: Event<T>) {
+        self.events.push(event);
+    }
+
+    pub fn drain(&mut self) -> Drain<'_, Event<T>> {
+        self.events.drain(..)
+    }
+
+    pub fn populate_events_from_custom(&mut self) -> Result<(), AbsorbError> {
         loop {
             match self.custom_receiver.try_recv() {
                 Ok(value) => self.events.push(Event::Custom(value)),
                 Err(AbsorbError::WouldBlock) => return Ok(()),
                 Err(error) => return Err(error),
             }
+        }
+    }
+
+    pub fn populate_from_cli(
+        &mut self,
+        cli: &IpcSocket<Server, DaemonCommand>,
+    ) -> Result<(), RecvError> {
+        match cli.try_recv() {
+            Ok(command) => {
+                let event = match command {
+                    DaemonCommand::SetVideo { path } => Event::NewWallpaper {
+                        path,
+                        ty: WallpaperType::Video,
+                    },
+                    DaemonCommand::SetImage { path } => Event::NewWallpaper {
+                        path,
+                        ty: WallpaperType::Image,
+                    },
+                };
+
+                self.add(event);
+
+                Ok(())
+            }
+            Err(RecvError::Empty) => Ok(()),
+            Err(error) => Err(error),
         }
     }
 
@@ -265,6 +273,13 @@ pub trait App {
         &mut self,
         runtime: &mut Runtime<Self::CustomEvent>,
     ) -> impl Future<Output = Result<FrameInfo, FrameError>> + Send;
+
+    fn exit(
+        &mut self,
+        _runtime: &mut Runtime<Self::CustomEvent>,
+    ) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]

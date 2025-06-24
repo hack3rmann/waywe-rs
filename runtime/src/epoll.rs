@@ -9,14 +9,10 @@ use std::{
 
 pub struct Epoll {
     fd: OwnedFd,
-    timeout: Option<Duration>,
 }
 
 impl Epoll {
-    pub fn new<F: AsFd + AsRawFd>(
-        fds: impl IntoIterator<Item = F>,
-        timeout: Option<Duration>,
-    ) -> Result<Self, Errno> {
+    pub fn new<F: AsFd + AsRawFd>(fds: impl IntoIterator<Item = F>) -> Result<Self, Errno> {
         let epoll_fd = epoll::create(epoll::CreateFlags::CLOEXEC)?;
 
         for fd in fds {
@@ -28,15 +24,11 @@ impl Epoll {
             )?;
         }
 
-        Ok(Self {
-            fd: epoll_fd,
-            timeout,
-        })
+        Ok(Self { fd: epoll_fd })
     }
 
-    pub fn wait(&self) -> Result<PolledFds, Errno> {
-        let wait_time = self
-            .timeout
+    pub fn wait(&self, timeout: Option<Duration>) -> Result<PolledFds, Errno> {
+        let wait_time = timeout
             .and_then(|d| i32::try_from(d.as_millis()).ok())
             .unwrap_or(-1);
 

@@ -8,8 +8,9 @@ use crate::{
     },
 };
 use glam::Vec2;
-use runtime::config::Config;
+use runtime::{config::Config, profile::SetupProfile};
 use std::{sync::Arc, time::Duration};
+use tracing::error;
 
 #[derive(Default)]
 pub struct VideoApp {
@@ -39,7 +40,10 @@ impl VideoApp {
             duration: Duration::from_millis(self.config.animation.duration_milliseconds),
             direction: self.config.animation.direction,
             interpolation: self.config.animation.easing,
-            centre: Vec2::new(centre.x * runtime.wayland.client_state.aspect_ratio(), centre.y),
+            centre: Vec2::new(
+                centre.x * runtime.wayland.client_state.aspect_ratio(),
+                centre.y,
+            ),
         };
 
         self.wallpaper = Some(match self.wallpaper.take() {
@@ -81,6 +85,10 @@ impl App for VideoApp {
 
                 let gpu = Arc::clone(&runtime.wgpu);
                 let monitor_size = runtime.wayland.client_state.monitor_size();
+
+                if let Err(error) = SetupProfile::new(&path, ty, monitor_size).store() {
+                    error!(?error, "failed to save setup profile");
+                }
 
                 runtime
                     .task_pool

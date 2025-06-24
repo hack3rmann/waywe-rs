@@ -3,7 +3,6 @@ use bincode::{
     error::{DecodeError, EncodeError},
 };
 use rustix::{
-    event::epoll::{self, EventData, EventFlags, EventVec},
     io::{self, Errno},
     net::{
         self, AddressFamily, RecvFlags, SocketAddrUnix, SocketFlags, SocketType, sockopt::Timeout,
@@ -20,7 +19,7 @@ use std::{
     },
     path::Path,
     sync::OnceLock,
-    time::{Duration, Instant},
+    time::Duration,
 };
 use thiserror::Error;
 use tracing::{debug, error, warn};
@@ -115,68 +114,7 @@ impl<S: SocketSide, T> IpcSocket<S, T> {
         Ok(())
     }
 
-    pub fn recv(
-        &self,
-        mode: RecvMode,
-        timeout: Option<Duration>,
-    ) -> Result<SmallVec<[T; 1]>, RecvError>
-    where
-        T: Decode<()>,
-    {
-        match mode {
-            RecvMode::Blocking => self.blocking_recv(timeout),
-            RecvMode::NonBlocking => self.nonblocking_recv().map(|value| smallvec![value]),
-        }
-    }
-
-    pub fn blocking_recv(&self, timeout: Option<Duration>) -> Result<SmallVec<[T; 1]>, RecvError>
-    where
-        T: Decode<()>,
-    {
-        let epoll_fd = epoll::create(epoll::CreateFlags::CLOEXEC)?;
-
-        epoll::add(
-            &epoll_fd,
-            &self.fd,
-            EventData::new_u64(self.fd.as_raw_fd() as u64),
-            EventFlags::IN,
-        )?;
-
-        let wait_time = timeout
-            .and_then(|d| i32::try_from(d.as_millis()).ok())
-            .unwrap_or(-1);
-
-        let mut events = EventVec::with_capacity(1);
-
-        let start = Instant::now();
-
-        // TODO(hack3rmann): sleep on both wayland and our sockets
-        match epoll::wait(&epoll_fd, &mut events, wait_time) {
-            Ok(()) => {}
-            Err(Errno::INTR) => return Err(RecvError::Empty),
-            Err(error) => return Err(RecvError::Os(error)),
-        }
-
-        if let Some(duration) = timeout {
-            if start.elapsed() >= duration {
-                return Err(RecvError::Timeout);
-            }
-        }
-
-        events
-            .iter()
-            .filter(|event| {
-                // NOTE(hack3rmann): read from `event.flags` is unaligned,
-                // therefore we must make a copy into a local variable
-                let flags = event.flags;
-                flags.contains(EventFlags::IN)
-            })
-            .map(|_| self.nonblocking_recv())
-            // collecting into result lazily
-            .collect()
-    }
-
-    pub fn nonblocking_recv(&self) -> Result<T, RecvError>
+    pub fn try_recv(&self) -> Result<T, RecvError>
     where
         T: Decode<()>,
     {
@@ -302,8 +240,6 @@ pub enum SendError {
 pub enum RecvError {
     #[error("socket is empty")]
     Empty,
-    #[error("timeout has reached")]
-    Timeout,
     #[error(transparent)]
     Os(#[from] Errno),
     #[error(transparent)]

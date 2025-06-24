@@ -26,6 +26,8 @@ struct Args {
 }
 
 fn main() {
+    tracing_subscriber::fmt::init();
+
     let args = Args::parse();
 
     if args.run_in_background {
@@ -34,7 +36,6 @@ fn main() {
         }
     }
 
-    // FIXME(hack3rmann): tracing-subscriber is uninitialized here
     let config = 'config: {
         let Some(mut home_dir) = env::home_dir() else {
             error!("can not find home directory");

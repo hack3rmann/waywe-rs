@@ -1,9 +1,8 @@
-use std::sync::Arc;
-
 use crate::{almost::Almost, task_pool::TaskPool};
 use bitflags::bitflags;
 use gpu::Wgpu;
 use ipc::Ipc;
+use std::sync::Arc;
 use timer::Timer;
 use video::Video;
 use wayland::Wayland;
@@ -16,6 +15,7 @@ pub mod wayland;
 
 #[derive(Clone, Copy, Default, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
 pub enum ControlFlow {
+    // TODO(hack3rmann): add optional timeout here
     #[default]
     Idle,
     Busy,
