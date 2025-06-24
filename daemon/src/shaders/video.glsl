@@ -19,6 +19,8 @@ vec3 yuv_to_rgb(float y, float u, float v) {
     );
 }
 
+const vec3 LUMA_DIRECTION = vec3(0.2126, 0.7152, 0.0772);
+
 void main() {
     ivec2 video_size = textureSize(sampler2D(video_y_plane, video_sampler), 0);
 
