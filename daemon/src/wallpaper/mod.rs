@@ -3,7 +3,9 @@ pub mod transition;
 pub mod video;
 
 use crate::{
-    app::VideoAppEvent, event_loop::{FrameError, FrameInfo}, runtime::{gpu::Wgpu, Runtime, RuntimeFeatures}
+    app::VideoAppEvent,
+    event_loop::{FrameError, FrameInfo},
+    runtime::{Runtime, RuntimeFeatures, gpu::Wgpu},
 };
 use glam::UVec2;
 use image::{ImageWallpaper, ImageWallpaperCreationError};

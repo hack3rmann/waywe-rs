@@ -14,7 +14,10 @@ use app::VideoApp;
 use clap::Parser;
 use detach::detach;
 use event_loop::EventLoop;
-use std::{env, fs, io::ErrorKind};
+use std::{
+    env, fs,
+    io::{self, ErrorKind},
+};
 use tracing::error;
 
 #[derive(Parser, Debug)]
@@ -26,7 +29,7 @@ struct Args {
 }
 
 fn main() {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt().with_writer(io::stderr).init();
 
     let args = Args::parse();
 
