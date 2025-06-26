@@ -5,6 +5,7 @@ use std::{
     ffi::{CStr, c_char, c_int},
     mem::MaybeUninit,
     slice, str,
+    sync::Mutex,
 };
 use va_list::VaList;
 
@@ -75,9 +76,24 @@ fn trim_last_linebreak(source: &str) -> &str {
     }
 }
 
-/// Setup wayland client logger
-pub(crate) fn setup() {
+/// Setup wayland client logger withoung acquireing mutex lock.
+///
+/// # Safety
+///
+/// Should not be called concurrently.
+pub(crate) unsafe fn setup_non_block() {
     unsafe { ffi::wl_log_set_handler_client(wl_log_raw) };
+}
+
+/// Setup wayland client logger in a thread-safe manner.
+pub(crate) fn setup() {
+    static MUTEX: Mutex<()> = Mutex::new(());
+
+    {
+        let _lock = MUTEX.lock().unwrap();
+        // Safety: we are holding the lock therefore there is only 1 thread calling this function
+        unsafe { setup_non_block() };
+    }
 }
 
 // NOTE(hack3rmann): the crate `libc` does not provide this function se we do.
