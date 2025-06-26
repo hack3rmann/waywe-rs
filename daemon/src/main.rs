@@ -33,6 +33,7 @@ fn main() {
 
     let args = Args::parse();
 
+    // HACK(hack3ramann): if let chains
     if args.run_in_background {
         if let Err(error) = detach() {
             error!(?error, "failed to start daemon in the background");

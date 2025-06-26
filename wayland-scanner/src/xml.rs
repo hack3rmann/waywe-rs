@@ -185,6 +185,7 @@ impl FromStr for MaybeHexU32 {
     type Err = InvalidMaybeHexU32;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // HACK(hack3rmann): if let chains
         if s.len() >= 2 {
             if let Some(hex_prefix) = s.as_bytes().get(0..2) {
                 if hex_prefix == b"0x" {

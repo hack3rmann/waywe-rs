@@ -415,6 +415,7 @@ impl CodecContext {
     ///
     /// `codec` - The codec to open this context for. If a non-NULL codec has been
     pub fn open(&mut self, codec: &Codec) -> Result<(), BackendError> {
+        // HACK(hack3rmann): if let chains
         if let Some(id) = self.codec_id {
             // NOTE(hack3rmann): if codec context was initialized with codec default values
             // then it is invalid to open it with another codec
