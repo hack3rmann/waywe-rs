@@ -8,10 +8,7 @@ use crate::{
 };
 use glam::UVec2;
 use runtime::{
-    DaemonCommand, Epoll, IpcSocket, RecvError, WallpaperType,
-    ipc::Server,
-    profile::{SetupProfile, SetupProfileError},
-    signals,
+    epoll::PolledFds, ipc::Server, profile::{SetupProfile, SetupProfileError}, signals, DaemonCommand, Epoll, IpcSocket, RecvError, WallpaperType
 };
 use rustix::io::Errno;
 use std::{
@@ -106,6 +103,8 @@ impl<A: App> EventLoop<A> {
         'event_loop: loop {
             self.runtime.timer.mark_frame_start();
 
+            let mut polled_fds = PolledFds::with_capacity(1);
+
             match self.runtime.control_flow {
                 ControlFlow::Busy => {
                     if signals::SHOULD_EXIT.load(Ordering::Relaxed) {
@@ -116,8 +115,8 @@ impl<A: App> EventLoop<A> {
                 ControlFlow::Idle => {
                     self.runtime.timer.mark_block_start();
 
-                    match self.epoll.wait(None) {
-                        Ok(_polled_fds) => {}
+                    match self.epoll.wait(&mut polled_fds, None) {
+                        Ok(()) => {}
                         Err(Errno::INTR) => {
                             if signals::SHOULD_EXIT.load(Ordering::Relaxed) {
                                 debug!("caught stop signal");
