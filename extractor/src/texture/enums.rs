@@ -250,11 +250,8 @@ impl MipmapFormat {
         image_format: Option<FreeImageFormat>,
         tex_format: TexFormat,
     ) -> Self {
-        // HACK(hack3rmann): if let chains
-        if let Some(format) = image_format {
-            if let Ok(format) = Self::try_from(format) {
-                return format;
-            }
+        if let Some(format) = image_format && let Ok(format) = Self::try_from(format) {
+            return format;
         }
 
         Self::from(tex_format)

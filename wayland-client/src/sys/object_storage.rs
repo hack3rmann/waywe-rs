@@ -150,11 +150,8 @@ impl<S> WlObjectStorage<S> {
         &self,
         handle: WlObjectHandle<T>,
     ) -> Option<&WlObject<T>> {
-        // HACK(hack3rmann): if let chains
-        if let Some(id) = self.acquired_object {
-            if id == handle.id() {
-                return None;
-            }
+        if let Some(id) = self.acquired_object && id == handle.id() {
+            return None;
         }
 
         self.objects
@@ -178,11 +175,8 @@ impl<S> WlObjectStorage<S> {
         &mut self,
         handle: WlObjectHandle<T>,
     ) -> Option<&mut WlObject<T>> {
-        // HACK(hack3rmann): if let chains
-        if let Some(id) = self.acquired_object {
-            if id == handle.id() {
-                return None;
-            }
+        if let Some(id) = self.acquired_object && id == handle.id() {
+            return None;
         }
 
         self.objects

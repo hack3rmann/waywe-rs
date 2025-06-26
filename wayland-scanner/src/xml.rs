@@ -185,15 +185,10 @@ impl FromStr for MaybeHexU32 {
     type Err = InvalidMaybeHexU32;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // HACK(hack3rmann): if let chains
-        if s.len() >= 2 {
-            if let Some(hex_prefix) = s.as_bytes().get(0..2) {
-                if hex_prefix == b"0x" {
-                    return u32::from_str_radix(&s[2..], 16)
-                        .map(MaybeHexU32)
-                        .map_err(|_| InvalidMaybeHexU32(s.to_owned()));
-                }
-            }
+        if s.len() >= 2 && let Some(hex_prefix) = s.as_bytes().get(0..2) && hex_prefix == b"0x" {
+            return u32::from_str_radix(&s[2..], 16)
+                .map(MaybeHexU32)
+                .map_err(|_| InvalidMaybeHexU32(s.to_owned()));
         }
 
         s.parse::<u32>()

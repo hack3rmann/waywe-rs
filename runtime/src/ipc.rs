@@ -172,11 +172,8 @@ impl<T> IpcSocket<Server, T> {
     pub fn server() -> Result<Self, Errno> {
         let path = Path::new(Self::path());
 
-        // HACK(hack3rmann): if let chains
-        if let Some(dir) = path.parent() {
-            if !dir.exists() {
-                std::fs::create_dir_all(dir).unwrap();
-            }
+        if let Some(dir) = path.parent() && !dir.exists() {
+            std::fs::create_dir_all(dir).unwrap();
         }
 
         debug!(?path, "creating daemon socket");
