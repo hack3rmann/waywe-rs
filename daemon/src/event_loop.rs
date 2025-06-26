@@ -137,6 +137,8 @@ impl<A: App> EventLoop<A> {
                 }
             }
 
+            self.runtime.task_pool.erase_finished();
+
             self.runtime.wayland.display.roundtrip(
                 self.runtime.wayland.main_queue.as_mut(),
                 self.runtime.wayland.client_state.as_ref(),
