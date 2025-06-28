@@ -499,6 +499,14 @@ pub struct wl_interface {
     pub events: *const wl_message,
 }
 
+pub type wl_notify_func_t = unsafe extern "C" fn(*mut wl_listener, *mut c_void);
+
+#[repr(C)]
+pub struct wl_listener {
+    link: wl_list,
+    notify: wl_notify_func_t,
+}
+
 unsafe impl Sync for wl_interface {}
 
 #[derive(Clone, Debug, PartialEq, Copy, Eq, PartialOrd, Ord, Hash)]
@@ -1469,6 +1477,58 @@ unsafe extern "C" {
 
     /// Set the user data associated with a proxy
     pub fn wl_proxy_set_user_data(proxy: *mut wl_proxy, data: *mut c_void);
+}
+
+#[link(name = "wayland-server")]
+#[allow(dead_code)]
+unsafe extern "C" {
+    /// Create Wayland display object.
+    ///
+    /// # Returns
+    ///
+    /// The Wayland display object. Null if failed to create
+    ///
+    /// This creates the [`wl_display`] object.
+    pub fn wl_display_create() -> *mut wl_display;
+
+    /// Destroy Wayland display object.
+    ///
+    /// # Parameter
+    ///
+    /// `display` - The Wayland display object which should be destroyed.
+    ///
+    /// This function emits the wl_display destroy signal, releases all
+    /// the sockets added to this display, free's all the globals associated
+    /// with this display, free's memory of additional shared memory formats
+    /// and destroy the display object.
+    ///
+    /// # See also
+    ///
+    /// [`wl_display_add_destroy_listener`]
+    pub fn wl_display_destroy(display: *mut wl_display);
+
+    pub fn wl_display_add_destroy_listener(display: *mut wl_display, listener: *const wl_listener);
+
+    /// Add a socket with an existing fd to Wayland display for the clients to connect.
+    ///
+    /// # Parameters
+    ///
+    /// - `display` - Wayland display to which the socket should be added.
+    /// - `sock_fd` - The existing socket file descriptor to be used
+    ///
+    /// # Returns
+    ///
+    /// `0` if success. `-1` if failed.
+    ///
+    /// The existing socket `fd` must already be created, opened, and locked.
+    /// The `fd` must be properly set to `CLOEXEC` and bound to a socket file with
+    /// both `bind()` and `listen()` already called.
+    ///
+    /// On success, the socket `fd` ownership is transferred to libwayland:
+    /// libwayland will close the socket when the display is destroyed.
+    pub fn wl_display_add_socket_fd(display: *mut wl_display, fd: RawFd) -> c_int;
+
+    pub fn wl_display_run(disply: *mut wl_display);
 }
 
 #[cfg(test)]

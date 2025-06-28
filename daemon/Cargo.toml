@@ -35,3 +35,5 @@ toml.workspace = true
 [dev-dependencies]
 libc = "0.2.171"
 tracing-test.workspace = true
+wayland-sys.workspace = true
+scopeguard = "1.2.0"
