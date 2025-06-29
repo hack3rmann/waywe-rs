@@ -248,7 +248,7 @@ impl TransitionPipeline {
             wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Glsl {
-                    shader: include_str!("../shaders/white-vertex.glsl").into(),
+                    shader: include_str!("../shaders/fullscreen-vertex.glsl").into(),
                     stage: wgpu::naga::ShaderStage::Vertex,
                     defines: Default::default(),
                 },

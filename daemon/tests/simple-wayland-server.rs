@@ -81,7 +81,7 @@ fn create_wayland_socket() -> SocketInfo {
                     ?socket_path,
                     "socket address already in use, trying to remove",
                 );
-                rustix::fs::unlink(&socket_path).unwrap();
+                fs::unlink(&socket_path).unwrap();
             }
             Err(other) => panic!("{other:?}"),
         }
@@ -114,7 +114,7 @@ fn run_server() {
     } = create_wayland_socket();
 
     defer! {
-        rustix::fs::unlink(&socket_path).unwrap();
+        fs::unlink(&socket_path).unwrap();
     }
 
     assert_eq!(0, unsafe {
