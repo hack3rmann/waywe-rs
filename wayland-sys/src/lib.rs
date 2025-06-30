@@ -499,15 +499,111 @@ pub struct wl_interface {
     pub events: *const wl_message,
 }
 
+unsafe impl Sync for wl_interface {}
+
 pub type wl_notify_func_t = unsafe extern "C" fn(*mut wl_listener, *mut c_void);
 
 #[repr(C)]
 pub struct wl_listener {
-    link: wl_list,
-    notify: wl_notify_func_t,
+    pub link: wl_list,
+    pub notify: wl_notify_func_t,
 }
 
-unsafe impl Sync for wl_interface {}
+#[repr(C)]
+pub struct wl_signal {
+    pub listener_list: wl_list,
+}
+
+#[repr(C)]
+pub struct wl_event_loop {
+    pub epoll_fd: i32,
+    pub check_list: wl_list,
+    pub idle_list: wl_list,
+    pub destroy_list: wl_list,
+    pub destroy_signal: wl_signal,
+}
+
+pub type wl_resource_destroy_func_t = unsafe extern "C" fn(resource: *mut wl_resource);
+
+#[repr(C)]
+pub struct wl_resource {
+    pub object: wl_object,
+    pub destroy: wl_resource_destroy_func_t,
+    pub link: wl_list,
+    pub destroy_signal: wl_signal,
+    pub client: *mut wl_client,
+    pub data: *mut c_void,
+}
+
+#[repr(C)]
+pub struct wl_buffer {
+    pub resource: wl_resource,
+    pub width: i32,
+    pub height: i32,
+    pub busy_count: u32,
+}
+
+#[repr(C)]
+pub struct wl_connection {
+    pub in_: wl_buffer,
+    pub out: wl_buffer,
+    pub fds_in: wl_buffer,
+    pub fds_out: wl_buffer,
+    pub fd: RawFd,
+    pub want_flush: i32,
+}
+
+#[repr(C)]
+pub struct wl_event_source_interface {
+    pub dispatch:
+        unsafe extern "C" fn(source: *mut wl_event_source, event: *mut libc::epoll_event) -> c_int,
+}
+
+#[repr(C)]
+pub struct wl_event_source {
+    pub interface: *mut wl_event_source_interface,
+    pub event_loop: *mut wl_event_loop,
+    pub link: wl_list,
+    pub data: *mut c_void,
+    pub fd: RawFd,
+}
+
+#[repr(C)]
+pub struct wl_map {
+    pub client_entries: wl_array,
+    pub server_entries: wl_array,
+    pub side: u32,
+    pub free_list: u32,
+}
+
+#[repr(C)]
+pub struct wl_client {
+    pub connection: wl_connection,
+    pub source: wl_event_source,
+    pub display: wl_display,
+    pub display_resource: wl_resource,
+    pub id_count: u32,
+    pub mask: u32,
+    pub link: wl_list,
+    pub objects: wl_map,
+    pub destroy_signal: wl_signal,
+    pub ucred: libc::ucred,
+    pub error: i32,
+}
+
+pub type wl_global_bind_func_t =
+    unsafe extern "C" fn(client: *mut wl_client, data: *mut c_void, version: u32, id: u32);
+
+#[repr(C)]
+pub struct wl_global {
+    pub display: *mut wl_display,
+    pub interface: *const wl_interface,
+    pub name: u32,
+    pub version: u32,
+    pub data: *mut c_void,
+    pub bind: wl_global_bind_func_t,
+    pub link: wl_list,
+}
 
 #[derive(Clone, Debug, PartialEq, Copy, Eq, PartialOrd, Ord, Hash)]
 pub struct Interface<'s> {
@@ -1489,7 +1585,7 @@ unsafe extern "C" {
     /// The Wayland display object. Null if failed to create
     ///
     /// This creates the [`wl_display`] object.
-    pub fn wl_display_create() -> *mut wl_display;
+    pub safe fn wl_display_create() -> *mut wl_display;
 
     /// Destroy Wayland display object.
     ///
@@ -1528,7 +1624,45 @@ unsafe extern "C" {
     /// libwayland will close the socket when the display is destroyed.
     pub fn wl_display_add_socket_fd(display: *mut wl_display, fd: RawFd) -> c_int;
 
-    pub fn wl_display_run(disply: *mut wl_display);
+    pub fn wl_display_run(display: *mut wl_display);
+
+    pub fn wl_display_terminate(display: *mut wl_display);
+
+    pub fn wl_display_get_event_loop(display: *mut wl_display) -> *mut wl_event_loop;
+
+    pub fn wl_global_create(
+        display: *mut wl_display,
+        interface: *const wl_interface,
+        version: i32,
+        data: *mut c_void,
+        bind: wl_global_bind_func_t,
+    ) -> *mut wl_global;
+
+    pub fn wl_global_destroy(global: *mut wl_global);
+
+    pub fn wl_resource_create(
+        client: *mut wl_client,
+        interface: *const wl_interface,
+        version: i32,
+        id: u32,
+    ) -> *mut wl_resource;
+
+    pub fn wl_resource_destroy(resource: *mut wl_resource);
+
+    pub fn wl_resource_get_user_data(resource: *mut wl_resource) -> *mut c_void;
+
+    pub fn wl_resource_post_event_array(
+        resource: *mut wl_resource,
+        opcode: u32,
+        args: *mut wl_argument,
+    );
+
+    pub fn wl_resource_set_implementation(
+        resource: *mut wl_resource,
+        implementation: *const c_void,
+        data: *mut c_void,
+        destroy: wl_resource_destroy_func_t,
+    );
 }
 
 #[cfg(test)]

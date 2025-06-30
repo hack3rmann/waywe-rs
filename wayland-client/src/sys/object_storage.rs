@@ -150,7 +150,9 @@ impl<S> WlObjectStorage<S> {
         &self,
         handle: WlObjectHandle<T>,
     ) -> Option<&WlObject<T>> {
-        if let Some(id) = self.acquired_object && id == handle.id() {
+        if let Some(id) = self.acquired_object
+            && id == handle.id()
+        {
             return None;
         }
 
@@ -165,6 +167,11 @@ impl<S> WlObjectStorage<S> {
         self.get_object(handle).unwrap()
     }
 
+    /// A shorthand for `.object(handle).data().unwrap()`
+    pub fn object_data<T: Dispatch<State = S>>(&self, handle: WlObjectHandle<T>) -> &T {
+        self.object(handle).data().unwrap()
+    }
+
     /// Searches an object in the storage by its handle.
     ///
     /// # Errors
@@ -175,7 +182,9 @@ impl<S> WlObjectStorage<S> {
         &mut self,
         handle: WlObjectHandle<T>,
     ) -> Option<&mut WlObject<T>> {
-        if let Some(id) = self.acquired_object && id == handle.id() {
+        if let Some(id) = self.acquired_object
+            && id == handle.id()
+        {
             return None;
         }
 
