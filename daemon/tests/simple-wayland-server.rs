@@ -6,7 +6,7 @@ use rustix::{
 use scopeguard::defer;
 use std::{
     env,
-    ffi::{OsStr, OsString, c_void},
+    ffi::{OsString, c_void},
     fmt::Write as _,
     mem::MaybeUninit,
     os::fd::{IntoRawFd, OwnedFd},
@@ -297,14 +297,6 @@ fn run_simple_unsafe_server() {
         unsafe { wl_global_destroy(output_global) };
     }
 
-    let client_join = thread::spawn(move || {
-        const DELAY: Duration = Duration::from_millis(10);
-        thread::sleep(DELAY);
-        run_simple_client_for_custom_server(display_name)
-    });
-
-    std::mem::forget(client_join);
-
     unsafe { wl_display_run(display) };
 
     dbg!("done");
@@ -338,10 +330,12 @@ impl Dispatch for ClientOutput {
     }
 }
 
-fn run_simple_client_for_custom_server(display_name: impl AsRef<OsStr>) {
+#[test]
+#[ignore = "custom server may not run"]
+fn run_simple_client_for_custom_server() {
     _ = tracing_subscriber::fmt::try_init();
 
-    unsafe { env::set_var("WAYLAND_DISPLAY", display_name) };
+    unsafe { env::set_var("WAYLAND_DISPLAY", "wayland-2") };
 
     let client_state = pin!(ClientState);
     let mut buf = WlStackMessageBuffer::new();
