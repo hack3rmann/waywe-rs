@@ -13,7 +13,7 @@ members = [
     "cli",
     "runtime",
     "project-parser",
-    "deploy-tool",
+    "deploy-tool", "wayland-server",
 ]
 
 [workspace.package]
@@ -23,6 +23,7 @@ license = "MIT"
 
 [workspace.dependencies]
 wayland-client = { path = "wayland-client", features = ["smallvec"] }
+wayland-server = { path = "wayland-server" }
 waylnad-scanner = { path = "wayland-scanner" }
 wayland-sys = { path = "wayland-sys" }
 runtime = { path = "runtime" }

@@ -1,23 +1,14 @@
-use rustix::{
-    fs::{self, FlockOperation},
-    io::Errno,
-    net::{self, AddressFamily, SocketAddrUnix, SocketFlags, SocketType},
-};
 use scopeguard::defer;
 use std::{
     env,
-    ffi::{OsString, c_void},
-    fmt::Write as _,
+    ffi::c_void,
     mem::MaybeUninit,
-    os::fd::{IntoRawFd, OwnedFd},
-    path::PathBuf,
     pin::pin,
     ptr,
     sync::atomic::{AtomicPtr, Ordering},
     thread,
     time::Duration,
 };
-use tracing::warn;
 use wayland_client::{
     interface::{
         Event as _, WlOutputEvent, WlOutputGeometryEvent, WlOutputSubpixel, WlOutputTransform,
@@ -31,89 +22,8 @@ use wayland_client::{
         wire::{WlMessage, WlStackMessageBuffer},
     },
 };
+use wayland_server::WlDisplay as WlServerDisplay;
 use wayland_sys::*;
-
-struct SocketInfo {
-    pub socket: OwnedFd,
-    pub display_name: OsString,
-    pub socket_path: PathBuf,
-}
-
-fn create_new_display_name() -> OsString {
-    let Some(taken_name) = env::var_os("WAYLAND_DISPLAY") else {
-        return OsString::from("wayland-0");
-    };
-
-    let mut name = OsString::new();
-
-    for i in 1.. {
-        name.clear();
-        name.push("wayland-");
-        write!(&mut name, "{i}").unwrap();
-
-        if name != taken_name {
-            break;
-        }
-    }
-
-    name
-}
-
-fn create_wayland_socket() -> SocketInfo {
-    let xdg_runtime_dir: PathBuf = env::var_os("XDG_RUNTIME_DIR")
-        .unwrap_or_else(|| {
-            warn!("XDG_RUNTIME_DIR env variable not set");
-
-            let real_user_id = rustix::process::getuid();
-            OsString::from(format!("/run/user/{}", real_user_id.as_raw()))
-        })
-        .into();
-
-    let display_name = create_new_display_name();
-    dbg!(&display_name);
-
-    let socket_path = {
-        let mut dir = xdg_runtime_dir;
-        dir.push(&display_name);
-        dir
-    };
-
-    dbg!(&socket_path);
-
-    let addr = SocketAddrUnix::new(&socket_path).expect("addr is correct");
-
-    let socket = net::socket_with(
-        AddressFamily::UNIX,
-        SocketType::STREAM,
-        SocketFlags::CLOEXEC,
-        None,
-    )
-    .unwrap();
-
-    fs::flock(&socket, FlockOperation::LockExclusive).unwrap();
-
-    loop {
-        match net::bind_unix(&socket, &addr) {
-            Ok(()) => break,
-            Err(Errno::ADDRINUSE) => {
-                warn!(
-                    ?socket_path,
-                    "socket address already in use, trying to remove",
-                );
-                fs::unlink(&socket_path).unwrap();
-            }
-            Err(other) => panic!("{other:?}"),
-        }
-    }
-
-    net::listen(&socket, 0).unwrap();
-
-    SocketInfo {
-        socket,
-        socket_path,
-        display_name,
-    }
-}
 
 pub struct WlOutput {
     pub wl_resource: *mut wl_resource,
@@ -161,41 +71,21 @@ fn setup_signals() {
 fn run_simple_unsafe_server() {
     _ = tracing_subscriber::fmt::try_init();
 
-    let display = wl_display_create();
-    assert!(!display.is_null());
+    let display = WlServerDisplay::create().unwrap();
 
-    DISPLAY.store(display, Ordering::Relaxed);
+    DISPLAY.store(display.as_raw().as_ptr(), Ordering::Relaxed);
     setup_signals();
 
-    const TIMEOUT: Duration = Duration::from_millis(500);
-
     let _timeout_join = thread::spawn(move || {
+        const TIMEOUT: Duration = Duration::from_millis(500);
         thread::sleep(TIMEOUT);
         unsafe { wl_display_terminate(DISPLAY.load(Ordering::Relaxed)) };
-    });
-
-    defer! {
-        unsafe { wl_display_destroy(display) };
-    }
-
-    let SocketInfo {
-        socket,
-        display_name,
-        socket_path,
-    } = create_wayland_socket();
-
-    defer! {
-        fs::unlink(&socket_path).unwrap();
-    }
-
-    assert_eq!(0, unsafe {
-        wl_display_add_socket_fd(display, socket.into_raw_fd())
     });
 
     const CHANGE_WAYLAND_DISPLAY_ENV: bool = false;
 
     if CHANGE_WAYLAND_DISPLAY_ENV {
-        unsafe { env::set_var("WAYLAND_DISPLAY", &display_name) };
+        unsafe { env::set_var("WAYLAND_DISPLAY", display.name()) };
         _ = dbg!(env::var("WAYLAND_DISPLAY"));
     }
 
@@ -285,7 +175,7 @@ fn run_simple_unsafe_server() {
 
     let output_global = unsafe {
         wl_global_create(
-            display,
+            display.as_raw().as_ptr(),
             &raw const wl_output_interface,
             4,
             (&raw mut server_state).cast(),
@@ -297,7 +187,7 @@ fn run_simple_unsafe_server() {
         unsafe { wl_global_destroy(output_global) };
     }
 
-    unsafe { wl_display_run(display) };
+    unsafe { wl_display_run(display.as_raw().as_ptr()) };
 
     dbg!("done");
 }
