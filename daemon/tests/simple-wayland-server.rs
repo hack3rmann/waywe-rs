@@ -6,7 +6,7 @@ use rustix::{
 use scopeguard::defer;
 use std::{
     env,
-    ffi::{OsString, c_void},
+    ffi::{OsStr, OsString, c_void},
     fmt::Write as _,
     mem::MaybeUninit,
     os::fd::{IntoRawFd, OwnedFd},
@@ -14,6 +14,8 @@ use std::{
     pin::pin,
     ptr,
     sync::atomic::{AtomicPtr, Ordering},
+    thread,
+    time::Duration,
 };
 use tracing::warn;
 use wayland_client::{
@@ -156,7 +158,7 @@ fn setup_signals() {
 }
 
 #[test]
-fn run_server() {
+fn run_simple_unsafe_server() {
     _ = tracing_subscriber::fmt::try_init();
 
     let display = wl_display_create();
@@ -164,6 +166,13 @@ fn run_server() {
 
     DISPLAY.store(display, Ordering::Relaxed);
     setup_signals();
+
+    const TIMEOUT: Duration = Duration::from_millis(500);
+
+    let _timeout_join = thread::spawn(move || {
+        thread::sleep(TIMEOUT);
+        unsafe { wl_display_terminate(DISPLAY.load(Ordering::Relaxed)) };
+    });
 
     defer! {
         unsafe { wl_display_destroy(display) };
@@ -191,6 +200,11 @@ fn run_server() {
     }
 
     let mut server_state = ServerState::default();
+
+    #[repr(C)]
+    struct WlOutputInterface {
+        pub release: unsafe extern "C" fn(client: *mut wl_client, resource: *mut wl_resource),
+    }
 
     static WL_OUTPUT_IMPL: WlOutputInterface = WlOutputInterface {
         release: wl_output_handle_release,
@@ -256,11 +270,6 @@ fn run_server() {
         server_state.client_outputs.push(output);
     }
 
-    #[repr(C)]
-    struct WlOutputInterface {
-        pub release: unsafe extern "C" fn(client: *mut wl_client, resource: *mut wl_resource),
-    }
-
     unsafe extern "C" fn wl_output_handle_resource_destroy(resource: *mut wl_resource) {
         let _wl_output = unsafe {
             wl_resource_get_user_data(resource)
@@ -288,7 +297,17 @@ fn run_server() {
         unsafe { wl_global_destroy(output_global) };
     }
 
+    let client_join = thread::spawn(move || {
+        const DELAY: Duration = Duration::from_millis(10);
+        thread::sleep(DELAY);
+        run_simple_client_for_custom_server(display_name)
+    });
+
+    std::mem::forget(client_join);
+
     unsafe { wl_display_run(display) };
+
+    dbg!("done");
 }
 
 #[derive(Debug)]
@@ -319,11 +338,10 @@ impl Dispatch for ClientOutput {
     }
 }
 
-#[test]
-fn run_client() {
+fn run_simple_client_for_custom_server(display_name: impl AsRef<OsStr>) {
     _ = tracing_subscriber::fmt::try_init();
 
-    unsafe { env::set_var("WAYLAND_DISPLAY", "wayland-2") };
+    unsafe { env::set_var("WAYLAND_DISPLAY", display_name) };
 
     let client_state = pin!(ClientState);
     let mut buf = WlStackMessageBuffer::new();
