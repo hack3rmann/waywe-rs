@@ -80,8 +80,10 @@ pub mod request {
             self,
             registry: &WlObject<WlRegistry<S>>,
             buf: &mut impl WlMessageBuffer,
+            global_index: usize,
         ) -> Option<WlProxy> {
-            let message = self.build_message(buf, registry.name_of(T::OBJECT_TYPE)?);
+            let message =
+                self.build_message(buf, registry.name_of_index(T::OBJECT_TYPE, global_index)?);
             let interface = &raw const *Self::OUTGOING_INTERFACE.backend_interface();
 
             let raw_proxy = unsafe {

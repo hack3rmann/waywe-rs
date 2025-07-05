@@ -2,6 +2,7 @@ use glam::UVec2;
 use raw_window_handle::{
     HasDisplayHandle as _, RawDisplayHandle, RawWindowHandle, WaylandWindowHandle,
 };
+use smallvec::SmallVec;
 use std::{
     ffi::CStr,
     pin::Pin,
@@ -9,9 +10,10 @@ use std::{
 };
 use wayland_client::{
     interface::{
-        WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlRegionAddRequest,
-        WlRegionDestroyRequest, WlSurfaceCommitRequest, WlSurfaceSetBufferScaleRequest,
-        WlSurfaceSetOpaqueRegionRequest, ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellLayer,
+        WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlOutputEvent,
+        WlRegionAddRequest, WlRegionDestroyRequest, WlSurfaceCommitRequest,
+        WlSurfaceSetBufferScaleRequest, WlSurfaceSetOpaqueRegionRequest,
+        ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellLayer,
         ZwlrLayerSurfaceAckConfigureRequest, ZwlrLayerSurfaceAnchor,
         ZwlrLayerSurfaceConfigureEvent, ZwlrLayerSurfaceKeyboardInteractivity,
         ZwlrLayerSurfaceSetAnchorRequest, ZwlrLayerSurfaceSetExclusiveZoneRequest,
@@ -148,7 +150,7 @@ impl Dispatch for LayerSurface {
 
         let mut storage = Pin::new(storage);
 
-        let region: WlObjectHandle<WlRegion> = self.compositor.create_object(
+        let region: WlObjectHandle<Region> = self.compositor.create_object(
             &mut buf,
             storage.as_mut(),
             WlCompositorCreateRegionRequest,
@@ -182,21 +184,50 @@ impl Dispatch for LayerSurface {
     }
 }
 
-struct WlRegion;
+struct Region;
 
-impl Dispatch for WlRegion {
+impl Dispatch for Region {
     type State = ClientState;
     const ALLOW_EMPTY_DISPATCH: bool = true;
 }
 
-impl FromProxy for WlRegion {
+impl FromProxy for Region {
     fn from_proxy(_: &WlProxy) -> Self {
         Self
     }
 }
 
-impl HasObjectType for WlRegion {
+impl HasObjectType for Region {
     const OBJECT_TYPE: WlObjectType = WlObjectType::Region;
+}
+
+struct Output;
+
+impl HasObjectType for Output {
+    const OBJECT_TYPE: WlObjectType = WlObjectType::Output;
+}
+
+impl Dispatch for Output {
+    type State = ClientState;
+
+    fn dispatch(
+        &mut self,
+        _state: &Self::State,
+        _storage: &mut WlObjectStorage<Self::State>,
+        message: WlMessage<'_>,
+    ) {
+        let Some(event) = message.as_event::<WlOutputEvent>() else {
+            return;
+        };
+
+        dbg!(&event);
+    }
+}
+
+impl FromProxy for Output {
+    fn from_proxy(_: &WlProxy) -> Self {
+        Self
+    }
 }
 
 pub const WLR_NAMESPACE: &CStr = c"waywe-runtime";
@@ -237,6 +268,11 @@ impl Wayland {
         let registry = display.create_registry(&mut buf, main_queue.as_mut().storage_mut());
 
         display.roundtrip(main_queue.as_mut(), client_state.as_ref());
+
+        let _outputs = registry
+            .bind_all::<Output>(&mut buf, main_queue.as_mut().storage_mut())
+            .collect::<Option<SmallVec<[WlObjectHandle<Output>; 4]>>>()
+            .unwrap();
 
         let compositor = registry
             .bind::<Compositor>(&mut buf, main_queue.as_mut().storage_mut())

@@ -4,7 +4,7 @@ use super::{Dispatch, FromProxy, WlObject, WlObjectHandle, dispatch::State};
 use crate::{
     NoState,
     interface::{
-        Event, WlObjectType, WlRegistryBindRequest, WlRegistryGlobalEvent,
+        WlObjectType, WlRegistryBindRequest, WlRegistryEvent, WlRegistryGlobalEvent,
         WlRegistryGlobalRemoveEvent,
     },
     object::{HasObjectType, WlObjectId},
@@ -15,7 +15,9 @@ use crate::{
     },
 };
 use fxhash::FxHashMap;
-use std::{marker::PhantomData, pin::Pin};
+use smallvec::{SmallVec, smallvec};
+use static_assertions::assert_impl_all;
+use std::{marker::PhantomData, pin::Pin, str};
 
 /// Numerical name and version of a global object
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
@@ -25,64 +27,111 @@ pub struct WlRegistryGlobalInfo {
     /// Version of a global object
     pub version: u32,
 }
-static_assertions::assert_impl_all!(WlRegistryGlobalInfo: Send, Sync);
+assert_impl_all!(WlRegistryGlobalInfo: Send, Sync);
+
+pub type WlInterfaces = FxHashMap<WlObjectType, SmallVec<[WlRegistryGlobalInfo; 2]>>;
+pub type WlNames = FxHashMap<WlObjectId, WlObjectType>;
 
 /// Canonical `wl_registry` implementation
 #[derive(Debug)]
 pub struct WlRegistry<S> {
-    pub(crate) interfaces: FxHashMap<WlObjectType, WlRegistryGlobalInfo>,
+    pub(crate) interfaces: WlInterfaces,
+    pub(crate) names: WlNames,
     pub(crate) _p: PhantomData<fn() -> S>,
 }
-static_assertions::assert_impl_all!(WlRegistry<NoState>: Send, Sync);
+assert_impl_all!(WlRegistry<NoState>: Send, Sync);
 
 impl<S> WlRegistry<S> {
     /// Constructs new [`WlRegistry`]
     pub fn new() -> Self {
         Self {
-            interfaces: FxHashMap::default(),
+            interfaces: WlInterfaces::default(),
+            names: WlNames::default(),
             _p: PhantomData,
         }
     }
 
     /// Interfaces of all registered global objects
-    pub fn interfaces(&self) -> &FxHashMap<WlObjectType, WlRegistryGlobalInfo> {
+    pub fn interfaces(&self) -> &WlInterfaces {
         &self.interfaces
     }
 
-    /// Numerical name of global object of given type
+    /// Numerical name of global object of given type on a given index
+    pub fn name_of_index(&self, object_type: WlObjectType, index: usize) -> Option<WlObjectId> {
+        self.interfaces
+            .get(&object_type)
+            .and_then(|globals| globals.get(index))
+            .map(|global| global.name)
+    }
+
+    /// Return the number of global objects of given type
+    pub fn count_of(&self, object_type: WlObjectType) -> usize {
+        self.interfaces
+            .get(&object_type)
+            .map(|globals| globals.len())
+            .unwrap_or(0)
+    }
+
+    /// Numerical name of global object of given type on the first index (which always exists)
     pub fn name_of(&self, object_type: WlObjectType) -> Option<WlObjectId> {
-        self.interfaces.get(&object_type).map(|global| global.name)
+        self.interfaces
+            .get(&object_type)
+            .map(|globals| {
+                // Safety: `globals` contains at least one value
+                unsafe { globals.first().unwrap_unchecked() }
+            })
+            .map(|global| global.name)
     }
 
     /// # Safety
     ///
     /// `event.interface` should be a valid utf-8 string.
     pub(crate) unsafe fn handle_global_event(&mut self, event: WlRegistryGlobalEvent<'_>) {
-        let interface = unsafe { std::str::from_utf8_unchecked(event.interface.to_bytes()) };
+        let interface = unsafe { str::from_utf8_unchecked(event.interface.to_bytes()) };
 
         let Some(ty) = WlObjectType::from_interface_name(interface) else {
             return;
         };
 
-        self.interfaces.insert(
-            ty,
-            WlRegistryGlobalInfo {
-                name: unsafe { WlObjectId::try_from(event.name).unwrap_unchecked() },
-                version: event.version,
-            },
-        );
+        let name = unsafe { WlObjectId::try_from(event.name).unwrap_unchecked() };
+        let info = WlRegistryGlobalInfo {
+            name,
+            version: event.version,
+        };
+
+        self.interfaces
+            .entry(ty)
+            .and_modify(|globals| globals.push(info))
+            .or_insert_with(|| smallvec![info]);
+
+        _ = self.names.insert(name, ty);
     }
 
     pub(crate) fn handle_global_remove_event(&mut self, event: WlRegistryGlobalRemoveEvent) {
-        let Some(ty) = self
-            .interfaces
-            .iter()
-            .find_map(|(&ty, &entry)| (event.name == entry.name.into()).then_some(ty))
-        else {
+        let name = unsafe { WlObjectId::try_from(event.name).unwrap_unchecked() };
+
+        let Some(&ty) = self.names.get(&name) else {
             return;
         };
 
-        self.interfaces.remove(&ty);
+        let Some(globals) = self.interfaces.get_mut(&ty) else {
+            return;
+        };
+
+        match globals.len() {
+            0 | 1 => _ = self.interfaces.remove(&ty),
+            _ => {
+                if let Some(index) = globals
+                    .iter()
+                    .enumerate()
+                    .find_map(|(i, &info)| (info.name == name).then_some(i))
+                {
+                    _ = globals.swap_remove(index);
+                }
+            }
+        }
+
+        self.names.remove(&name);
     }
 }
 
@@ -97,7 +146,39 @@ impl<S> WlObjectHandle<WlRegistry<S>> {
         T: Dispatch<State = S> + FromProxy,
         S: State,
     {
-        self.bind_from_fn(buf, storage, |_, _, proxy| T::from_proxy(proxy))
+        self.bind_from_fn(buf, storage, 0, |_, _, proxy| T::from_proxy(proxy))
+    }
+
+    /// Bind request on [`WlRegistry`]
+    pub fn bind_index<T>(
+        self,
+        buf: &mut impl WlMessageBuffer,
+        storage: Pin<&mut WlObjectStorage<S>>,
+        global_index: usize,
+    ) -> Option<WlObjectHandle<T>>
+    where
+        T: Dispatch<State = S> + FromProxy,
+        S: State,
+    {
+        self.bind_from_fn(buf, storage, global_index, |_, _, proxy| {
+            T::from_proxy(proxy)
+        })
+    }
+
+    pub fn bind_all<'s, T>(
+        self,
+        buf: &'s mut impl WlMessageBuffer,
+        mut storage: Pin<&'s mut WlObjectStorage<S>>,
+    ) -> impl Iterator<Item = Option<WlObjectHandle<T>>> + 's
+    where
+        T: Dispatch<State = S> + FromProxy,
+        S: State,
+    {
+        let count = storage.object(self).count_of(T::OBJECT_TYPE);
+
+        (0..count).map(move |i| {
+            self.bind_from_fn(buf, storage.as_mut(), i, |_, _, proxy| T::from_proxy(proxy))
+        })
     }
 
     /// Bind request on [`WlRegistry`] with given value
@@ -105,13 +186,14 @@ impl<S> WlObjectHandle<WlRegistry<S>> {
         self,
         buf: &mut impl WlMessageBuffer,
         storage: Pin<&mut WlObjectStorage<S>>,
+        global_index: usize,
         object: T,
     ) -> Option<WlObjectHandle<T>>
     where
         T: Dispatch<State = S>,
         S: State,
     {
-        self.bind_from_fn(buf, storage, |_, _, _| object)
+        self.bind_from_fn(buf, storage, global_index, |_, _, _| object)
     }
 
     /// Bind request on [`WlRegistry`] with given function providing value
@@ -119,6 +201,7 @@ impl<S> WlObjectHandle<WlRegistry<S>> {
         self,
         buf: &mut B,
         mut storage: Pin<&mut WlObjectStorage<S>>,
+        global_index: usize,
         make_data: F,
     ) -> Option<WlObjectHandle<T>>
     where
@@ -128,8 +211,9 @@ impl<S> WlObjectHandle<WlRegistry<S>> {
         S: State,
     {
         // Safety: `WlRegistry` is the parent for this request
-        let proxy =
-            unsafe { WlRegistryBindRequest::<T>::new().send(storage.get_object(self)?, buf)? };
+        let proxy = unsafe {
+            WlRegistryBindRequest::<T>::new().send(storage.get_object(self)?, buf, global_index)?
+        };
 
         let data = make_data(buf, storage.as_mut(), &proxy);
 
@@ -162,23 +246,13 @@ impl<S: State> Dispatch for WlRegistry<S> {
         _: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
-        match message.opcode {
-            WlRegistryGlobalEvent::CODE => {
-                let event = unsafe {
-                    message
-                        .as_event::<WlRegistryGlobalEvent>()
-                        .unwrap_unchecked()
-                };
+        match message.as_event::<WlRegistryEvent>() {
+            Some(WlRegistryEvent::Global(event)) => {
                 // Safety: `event.interface` is a valid utf-8 string,
                 // it contains only valid ascii characters
                 unsafe { self.handle_global_event(event) };
             }
-            WlRegistryGlobalRemoveEvent::CODE => {
-                let event = unsafe {
-                    message
-                        .as_event::<WlRegistryGlobalRemoveEvent>()
-                        .unwrap_unchecked()
-                };
+            Some(WlRegistryEvent::GlobalRemove(event)) => {
                 self.handle_global_remove_event(event);
             }
             _ => {}
