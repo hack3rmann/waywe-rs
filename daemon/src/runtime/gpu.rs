@@ -1,6 +1,7 @@
 use super::wayland::Wayland;
 use ash::vk;
 use glam::UVec2;
+use smallvec::SmallVec;
 use std::{
     collections::HashMap,
     ops::Deref,
@@ -60,8 +61,8 @@ pub struct Wgpu {
     pub instance: wgpu::Instance,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
-    pub surface: wgpu::Surface<'static>,
-    pub surface_format: wgpu::TextureFormat,
+    pub surfaces: SmallVec<[wgpu::Surface<'static>; 1]>,
+    pub surface_formats: SmallVec<[wgpu::TextureFormat; 1]>,
     pub shader_cache: ShaderCache,
 }
 
@@ -77,20 +78,23 @@ impl Wgpu {
             ..Default::default()
         });
 
-        let surface = unsafe {
-            instance
-                .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
-                    raw_display_handle: wayland.raw_display_handle(),
-                    raw_window_handle: wayland.raw_window_handle(),
-                })
-                .unwrap()
-        };
+        let surfaces = wayland
+            .raw_window_handles()
+            .map(|raw_window_handle| unsafe {
+                instance
+                    .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
+                        raw_display_handle: wayland.raw_display_handle(),
+                        raw_window_handle,
+                    })
+                    .unwrap()
+            })
+            .collect::<SmallVec<[wgpu::Surface; 1]>>();
 
         let Some(adapter) = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::LowPower,
                 force_fallback_adapter: false,
-                compatible_surface: Some(&surface),
+                compatible_surface: Some(surfaces.first().unwrap()),
             })
             .await
         else {
@@ -181,49 +185,61 @@ impl Wgpu {
             panic!("failed to request device")
         };
 
-        let screen_size = wayland.client_state.monitor_size();
-        let capabilities = surface.get_capabilities(&adapter);
+        let surface_formats = surfaces
+            .iter()
+            .enumerate()
+            .map(|(monitor_index, surface)| {
+                let capabilities = surface.get_capabilities(&adapter);
+                let screen_size = wayland.client_state.monitor_size(monitor_index).unwrap();
 
-        let Some(surface_format) = surface.get_capabilities(&adapter).formats.first().copied()
-        else {
-            panic!("no surface format supported");
-        };
+                let Some(surface_format) =
+                    surface.get_capabilities(&adapter).formats.first().copied()
+                else {
+                    panic!("no surface format supported");
+                };
 
-        // TODO(hack3rmann): configure surface with
-        // `usage |= wgt::TextureUsages::STORAGE_BINDING`
-        // to render to it using compute shaders
-        let surface_config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: surface_format,
-            width: screen_size.x,
-            height: screen_size.y,
-            desired_maximum_frame_latency: 2,
-            present_mode: *capabilities
-                .present_modes
-                .first()
-                .expect("should has at least one format"),
-            alpha_mode: wgpu::CompositeAlphaMode::Auto,
-            view_formats: vec![],
-        };
+                // TODO(hack3rmann): configure surface with
+                // `usage |= wgt::TextureUsages::STORAGE_BINDING`
+                // to render to it using compute shaders
+                let surface_config = wgpu::SurfaceConfiguration {
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                    format: surface_format,
+                    width: screen_size.x,
+                    height: screen_size.y,
+                    desired_maximum_frame_latency: 2,
+                    present_mode: *capabilities
+                        .present_modes
+                        .first()
+                        .expect("should has at least one format"),
+                    alpha_mode: wgpu::CompositeAlphaMode::Auto,
+                    view_formats: vec![],
+                };
 
-        surface.configure(&device, &surface_config);
+                surface.configure(&device, &surface_config);
+
+                surface_format
+            })
+            .collect();
 
         Self {
             adapter,
             instance,
             device,
             queue,
-            surface,
-            surface_format,
+            surfaces,
+            surface_formats,
             shader_cache: ShaderCache::default(),
         }
     }
 
     pub fn resize_surface(&self, size: UVec2) {
-        self.surface.configure(
+        // FIXME(hack3rmann): multiple monitors
+        self.surfaces.first().unwrap().configure(
             &self.device,
             &self
-                .surface
+                .surfaces
+                .first()
+                .unwrap()
                 .get_default_config(&self.adapter, size.x, size.y)
                 .unwrap(),
         );

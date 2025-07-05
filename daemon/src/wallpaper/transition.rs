@@ -33,14 +33,20 @@ impl TransitionWallpaper {
         from: DynWallpaper,
         to: DynWallpaper,
         config: TransitionConfig,
+        monitor_index: usize,
     ) -> Self {
         Self {
             pipeline: TransitionPipeline::new(
                 &runtime.wgpu,
-                runtime.wayland.client_state.monitor_size(),
+                runtime
+                    .wayland
+                    .client_state
+                    .monitor_size(monitor_index)
+                    .unwrap(),
                 from,
                 to,
                 config,
+                monitor_index,
             ),
         }
     }
@@ -130,6 +136,7 @@ pub struct TransitionPipeline {
     last_frame_time: Option<Instant>,
     frame_index: usize,
     config: TransitionConfig,
+    monitor_index: usize,
 }
 
 impl TransitionPipeline {
@@ -139,6 +146,7 @@ impl TransitionPipeline {
         from: DynWallpaper,
         to: DynWallpaper,
         config: TransitionConfig,
+        monitor_index: usize,
     ) -> Self {
         let vertex_buffer = gpu
             .device
@@ -147,6 +155,8 @@ impl TransitionPipeline {
                 contents: bytemuck::bytes_of(&SCREEN_TRIANGLE),
                 usage: wgpu::BufferUsages::VERTEX,
             });
+
+        let surface_format = gpu.surface_formats[monitor_index];
 
         let from_texture = gpu.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("from-texture-target"),
@@ -158,7 +168,7 @@ impl TransitionPipeline {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: gpu.surface_format,
+            format: surface_format,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
@@ -173,7 +183,7 @@ impl TransitionPipeline {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: gpu.surface_format,
+            format: surface_format,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
@@ -308,7 +318,7 @@ impl TransitionPipeline {
                         zero_initialize_workgroup_memory: false,
                     },
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: gpu.surface_format,
+                        format: surface_format,
                         blend: None,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
@@ -345,6 +355,7 @@ impl TransitionPipeline {
             last_frame_time: None,
             frame_index: 0,
             config,
+            monitor_index,
         }
     }
 
@@ -419,7 +430,11 @@ impl TransitionPipeline {
         });
 
         // TODO(hack3rmann): support for vertical monitors
-        let aspect_ratio = runtime.wayland.client_state.aspect_ratio();
+        let aspect_ratio = runtime
+            .wayland
+            .client_state
+            .aspect_ratio(self.monitor_index)
+            .unwrap();
         let corners = [
             Vec2::new(-aspect_ratio, -1.0),
             Vec2::new(aspect_ratio, -1.0),

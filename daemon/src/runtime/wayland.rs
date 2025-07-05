@@ -10,10 +10,9 @@ use std::{
 };
 use wayland_client::{
     interface::{
-        WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlOutputEvent,
-        WlRegionAddRequest, WlRegionDestroyRequest, WlSurfaceCommitRequest,
-        WlSurfaceSetBufferScaleRequest, WlSurfaceSetOpaqueRegionRequest,
-        ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellLayer,
+        WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlRegionAddRequest,
+        WlRegionDestroyRequest, WlSurfaceCommitRequest, WlSurfaceSetBufferScaleRequest,
+        WlSurfaceSetOpaqueRegionRequest, ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellLayer,
         ZwlrLayerSurfaceAckConfigureRequest, ZwlrLayerSurfaceAnchor,
         ZwlrLayerSurfaceConfigureEvent, ZwlrLayerSurfaceKeyboardInteractivity,
         ZwlrLayerSurfaceSetAnchorRequest, ZwlrLayerSurfaceSetExclusiveZoneRequest,
@@ -33,23 +32,31 @@ use wayland_client::{
 };
 
 #[derive(Default, Debug)]
+pub struct MonitorSize {
+    pub width: AtomicU32,
+    pub height: AtomicU32,
+}
+
+impl MonitorSize {
+    pub fn get(&self) -> UVec2 {
+        UVec2::new(self.width.load(Relaxed), self.height.load(Relaxed))
+    }
+}
+
+#[derive(Default, Debug)]
 pub struct ClientState {
-    pub monitor_width: AtomicU32,
-    pub monitor_height: AtomicU32,
+    pub monitors: SmallVec<[MonitorSize; 2]>,
     pub resize_requested: AtomicBool,
 }
 
 impl ClientState {
-    pub fn monitor_size(&self) -> UVec2 {
-        UVec2::new(
-            self.monitor_width.load(Relaxed),
-            self.monitor_height.load(Relaxed),
-        )
+    pub fn monitor_size(&self, index: usize) -> Option<UVec2> {
+        Some(self.monitors.get(index)?.get())
     }
 
-    pub fn aspect_ratio(&self) -> f32 {
-        let size = self.monitor_size();
-        size.x as f32 / size.y as f32
+    pub fn aspect_ratio(&self, index: usize) -> Option<f32> {
+        let size = self.monitor_size(index)?;
+        Some(size.x as f32 / size.y as f32)
     }
 }
 
@@ -105,6 +112,7 @@ impl FromProxy for Surface {
 }
 
 pub struct LayerSurface {
+    monitor_index: usize,
     handle: WlObjectHandle<Self>,
     surface: WlObjectHandle<Surface>,
     compositor: WlObjectHandle<Compositor>,
@@ -133,12 +141,16 @@ impl Dispatch for LayerSurface {
         };
 
         state.resize_requested.store(
-            state.monitor_size() != UVec2::ZERO
-                && state.monitor_size() != UVec2::new(width, height),
+            state.monitor_size(self.monitor_index) != Some(UVec2::ZERO)
+                && state.monitor_size(self.monitor_index) != Some(UVec2::new(width, height)),
             Release,
         );
-        state.monitor_width.store(width, Relaxed);
-        state.monitor_height.store(height, Relaxed);
+        state.monitors[self.monitor_index]
+            .width
+            .store(width, Relaxed);
+        state.monitors[self.monitor_index]
+            .height
+            .store(height, Relaxed);
 
         let mut buf = WlStackMessageBuffer::new();
 
@@ -184,7 +196,7 @@ impl Dispatch for LayerSurface {
     }
 }
 
-struct Region;
+pub struct Region;
 
 impl Dispatch for Region {
     type State = ClientState;
@@ -201,7 +213,7 @@ impl HasObjectType for Region {
     const OBJECT_TYPE: WlObjectType = WlObjectType::Region;
 }
 
-struct Output;
+pub struct Output;
 
 impl HasObjectType for Output {
     const OBJECT_TYPE: WlObjectType = WlObjectType::Output;
@@ -209,19 +221,7 @@ impl HasObjectType for Output {
 
 impl Dispatch for Output {
     type State = ClientState;
-
-    fn dispatch(
-        &mut self,
-        _state: &Self::State,
-        _storage: &mut WlObjectStorage<Self::State>,
-        message: WlMessage<'_>,
-    ) {
-        let Some(event) = message.as_event::<WlOutputEvent>() else {
-            return;
-        };
-
-        dbg!(&event);
-    }
+    const ALLOW_EMPTY_DISPATCH: bool = true;
 }
 
 impl FromProxy for Output {
@@ -242,12 +242,17 @@ impl SurfaceExtension for WlObject<Surface> {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct MonitorSurface {
+    pub surface: WlObjectHandle<Surface>,
+    pub layer_surface: WlObjectHandle<LayerSurface>,
+}
+
 pub struct WaylandHandle {
     pub registry: WlObjectHandle<WlRegistry<ClientState>>,
     pub compositor: WlObjectHandle<Compositor>,
-    pub layer_shell: WlObjectHandle<LayerShell>,
-    pub surface: WlObjectHandle<Surface>,
-    pub layer_surface: WlObjectHandle<LayerSurface>,
+    pub outputs: SmallVec<[WlObjectHandle<Output>; 4]>,
+    pub surfaces: SmallVec<[MonitorSurface; 2]>,
 }
 
 pub struct Wayland {
@@ -259,7 +264,7 @@ pub struct Wayland {
 
 impl Wayland {
     pub fn new() -> Self {
-        let client_state = Box::pin(ClientState::default());
+        let mut client_state = Box::pin(ClientState::default());
         let display = WlDisplay::connect(client_state.as_ref()).unwrap();
         let mut main_queue = Box::pin(display.take_main_queue().unwrap());
 
@@ -269,92 +274,111 @@ impl Wayland {
 
         display.roundtrip(main_queue.as_mut(), client_state.as_ref());
 
-        let _outputs = registry
+        let outputs = registry
             .bind_all::<Output>(&mut buf, main_queue.as_mut().storage_mut())
             .collect::<Option<SmallVec<[WlObjectHandle<Output>; 4]>>>()
             .unwrap();
+
+        assert!(!outputs.is_empty());
 
         let compositor = registry
             .bind::<Compositor>(&mut buf, main_queue.as_mut().storage_mut())
             .unwrap();
 
-        let layer_shell = registry
-            .bind::<LayerShell>(&mut buf, main_queue.as_mut().storage_mut())
-            .unwrap();
+        // TODO(hack3rmann): handle it with wl_registry.global/wl_registry.global_remove events
+        let surfaces = outputs
+            .iter()
+            .enumerate()
+            .map(|(monitor_index, &output)| {
+                client_state.monitors.push(MonitorSize::default());
 
-        let surface: WlObjectHandle<Surface> = compositor.create_object(
-            &mut buf,
-            main_queue.as_mut().storage_mut(),
-            WlCompositorCreateSurfaceRequest,
-        );
+                let layer_shell = registry
+                    .bind::<LayerShell>(&mut buf, main_queue.as_mut().storage_mut())
+                    .unwrap();
 
-        let layer_surface: WlObjectHandle<LayerSurface> = layer_shell.create_object_with(
-            &mut buf,
-            main_queue.as_mut().storage_mut(),
-            ZwlrLayerShellGetLayerSurfaceRequest {
-                surface: surface.id(),
-                output: None,
-                layer: ZwlrLayerShellLayer::Background,
-                namespace: WLR_NAMESPACE,
-            },
-            move |proxy| LayerSurface {
-                handle: WlObjectHandle::new(proxy.id()),
-                surface,
-                compositor,
-            },
-        );
+                let surface: WlObjectHandle<Surface> = compositor.create_object(
+                    &mut buf,
+                    main_queue.as_mut().storage_mut(),
+                    WlCompositorCreateSurfaceRequest,
+                );
 
-        layer_surface.request(
-            &mut buf,
-            &main_queue.as_ref().storage(),
-            ZwlrLayerSurfaceSetAnchorRequest {
-                anchor: ZwlrLayerSurfaceAnchor::all(),
-            },
-        );
+                let layer_surface: WlObjectHandle<LayerSurface> = layer_shell.create_object_with(
+                    &mut buf,
+                    main_queue.as_mut().storage_mut(),
+                    ZwlrLayerShellGetLayerSurfaceRequest {
+                        surface: surface.id(),
+                        output: Some(output.id()),
+                        layer: ZwlrLayerShellLayer::Background,
+                        namespace: WLR_NAMESPACE,
+                    },
+                    move |proxy| LayerSurface {
+                        monitor_index,
+                        handle: WlObjectHandle::new(proxy.id()),
+                        surface,
+                        compositor,
+                    },
+                );
 
-        layer_surface.request(
-            &mut buf,
-            &main_queue.as_ref().storage(),
-            ZwlrLayerSurfaceSetExclusiveZoneRequest { zone: -1 },
-        );
+                layer_surface.request(
+                    &mut buf,
+                    &main_queue.as_ref().storage(),
+                    ZwlrLayerSurfaceSetAnchorRequest {
+                        anchor: ZwlrLayerSurfaceAnchor::all(),
+                    },
+                );
 
-        layer_surface.request(
-            &mut buf,
-            &main_queue.as_ref().storage(),
-            ZwlrLayerSurfaceSetMarginRequest {
-                top: 0,
-                right: 0,
-                bottom: 0,
-                left: 0,
-            },
-        );
+                layer_surface.request(
+                    &mut buf,
+                    &main_queue.as_ref().storage(),
+                    ZwlrLayerSurfaceSetExclusiveZoneRequest { zone: -1 },
+                );
 
-        layer_surface.request(
-            &mut buf,
-            &main_queue.as_ref().storage(),
-            ZwlrLayerSurfaceSetKeyboardInteractivityRequest {
-                keyboard_interactivity: ZwlrLayerSurfaceKeyboardInteractivity::None,
-            },
-        );
+                layer_surface.request(
+                    &mut buf,
+                    &main_queue.as_ref().storage(),
+                    ZwlrLayerSurfaceSetMarginRequest {
+                        top: 0,
+                        right: 0,
+                        bottom: 0,
+                        left: 0,
+                    },
+                );
 
-        surface.request(
-            &mut buf,
-            &main_queue.as_ref().storage(),
-            WlSurfaceSetBufferScaleRequest { scale: 1 },
-        );
+                layer_surface.request(
+                    &mut buf,
+                    &main_queue.as_ref().storage(),
+                    ZwlrLayerSurfaceSetKeyboardInteractivityRequest {
+                        keyboard_interactivity: ZwlrLayerSurfaceKeyboardInteractivity::None,
+                    },
+                );
 
-        surface.request(
-            &mut buf,
-            &main_queue.as_ref().storage(),
-            WlSurfaceCommitRequest,
-        );
+                surface.request(
+                    &mut buf,
+                    &main_queue.as_ref().storage(),
+                    WlSurfaceSetBufferScaleRequest { scale: 1 },
+                );
+
+                surface.request(
+                    &mut buf,
+                    &main_queue.as_ref().storage(),
+                    WlSurfaceCommitRequest,
+                );
+
+                MonitorSurface {
+                    surface,
+                    layer_surface,
+                }
+            })
+            .collect();
 
         display.roundtrip(main_queue.as_mut(), client_state.as_ref());
 
-        let screen_size = client_state.monitor_size();
+        for monitor_size in &client_state.monitors {
+            let screen_size = monitor_size.get();
 
-        assert_ne!(screen_size.x, 0);
-        assert_ne!(screen_size.y, 0);
+            assert_ne!(screen_size.x, 0);
+            assert_ne!(screen_size.y, 0);
+        }
 
         Self {
             client_state,
@@ -363,9 +387,8 @@ impl Wayland {
             handle: WaylandHandle {
                 registry,
                 compositor,
-                layer_shell,
-                surface,
-                layer_surface,
+                outputs,
+                surfaces,
             },
         }
     }
@@ -374,12 +397,17 @@ impl Wayland {
         self.display.display_handle().unwrap().as_raw()
     }
 
-    pub fn raw_window_handle(&self) -> RawWindowHandle {
-        self.main_queue
-            .as_ref()
-            .storage()
-            .object(self.handle.surface)
-            .raw_window_handle()
+    /// # Note
+    ///
+    /// Guaranteed to have at least one entry
+    pub fn raw_window_handles(&self) -> impl Iterator<Item = RawWindowHandle> {
+        self.handle.surfaces.iter().map(|&surface| {
+            self.main_queue
+                .as_ref()
+                .storage()
+                .object(surface.surface)
+                .raw_window_handle()
+        })
     }
 }
 

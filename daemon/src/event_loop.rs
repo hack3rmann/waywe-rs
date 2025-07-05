@@ -8,7 +8,11 @@ use crate::{
 };
 use glam::UVec2;
 use runtime::{
-    epoll::PolledFds, ipc::Server, profile::{SetupProfile, SetupProfileError}, signals, DaemonCommand, Epoll, IpcSocket, RecvError, WallpaperType
+    DaemonCommand, Epoll, IpcSocket, RecvError, WallpaperType,
+    epoll::PolledFds,
+    ipc::Server,
+    profile::{SetupProfile, SetupProfileError},
+    signals,
 };
 use rustix::io::Errno;
 use std::{
@@ -48,6 +52,10 @@ impl<A: App> EventLoop<A> {
             Ok(queue) => queue,
             Err(error) => panic!("failed to create event queue: {error:?}"),
         };
+
+        event_queue.events.push(Event::ResetMonitors {
+            count: wayland.handle.surfaces.len(),
+        });
 
         match SetupProfile::read() {
             Ok(profile) => {
@@ -191,6 +199,7 @@ pub enum Event<T> {
     Custom(T),
     NewWallpaper { path: PathBuf, ty: WallpaperType },
     ResizeRequested { size: UVec2 },
+    ResetMonitors { count: usize },
 }
 
 #[derive(Debug)]
@@ -255,7 +264,8 @@ impl<T: CustomEvent> EventQueue<T> {
         if state.resize_requested.load(Ordering::Acquire) {
             state.resize_requested.store(false, Ordering::Release);
             self.events.push(Event::ResizeRequested {
-                size: state.monitor_size(),
+                // FIXME(hack3rmann): multiple monitors
+                size: state.monitor_size(0).unwrap(),
             });
         }
     }
@@ -306,7 +316,7 @@ impl FrameInfo {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum FrameError {
     #[error("event loop stop requested")]
     StopRequested,

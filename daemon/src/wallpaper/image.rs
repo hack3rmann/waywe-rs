@@ -20,6 +20,7 @@ impl ImageWallpaper {
         gpu: &Wgpu,
         monitor_size: UVec2,
         path: impl AsRef<Path>,
+        monitor_index: usize,
     ) -> Result<Self, ImageWallpaperCreationError> {
         let path = path.as_ref();
         let reader = ImageReader::open(path)?;
@@ -33,6 +34,7 @@ impl ImageWallpaper {
                 // TODO(hack3rmann): let the user decide
                 COLOR_WHITE,
                 monitor_size,
+                monitor_index,
             ),
         })
     }

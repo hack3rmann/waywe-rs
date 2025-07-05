@@ -18,7 +18,7 @@ pub struct VideoPipeline {
 }
 
 impl VideoPipeline {
-    pub fn new(gpu: &Wgpu, screen_size: UVec2) -> Self {
+    pub fn new(gpu: &Wgpu, screen_size: UVec2, monitor_index: usize) -> Self {
         const VERTEX_SHADER_NAME: &str = "shaders/white-vertex.glsl";
         const FRAGMENT_SHADER_NAME: &str = "shaders/video.glsl";
 
@@ -135,7 +135,7 @@ impl VideoPipeline {
                         zero_initialize_workgroup_memory: false,
                     },
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: gpu.surface_format,
+                        format: gpu.surface_formats[monitor_index],
                         blend: None,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],

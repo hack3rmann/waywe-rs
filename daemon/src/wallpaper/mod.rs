@@ -71,14 +71,15 @@ pub fn create(
     monitor_size: UVec2,
     path: &Path,
     ty: WallpaperType,
+    monitor_index: usize,
 ) -> Result<DynWallpaper, WallpaperCreationError> {
     match ty {
         WallpaperType::Video => {
-            VideoWallpaper::new(gpu, monitor_size, &pathbuf_into_cstring(path.to_owned()))
+            VideoWallpaper::new(gpu, monitor_size, &pathbuf_into_cstring(path.to_owned()), monitor_index)
                 .map(IntoDynWallpaper::into_dyn_wallpaper)
                 .map_err(WallpaperCreationError::from)
         }
-        WallpaperType::Image => ImageWallpaper::new(gpu, monitor_size, path)
+        WallpaperType::Image => ImageWallpaper::new(gpu, monitor_size, path, monitor_index)
             .map(IntoDynWallpaper::into_dyn_wallpaper)
             .map_err(WallpaperCreationError::from),
     }

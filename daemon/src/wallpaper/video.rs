@@ -33,6 +33,7 @@ impl VideoWallpaper {
         gpu: &Wgpu,
         monitor_size: UVec2,
         path: &CStr,
+        monitor_index: usize,
     ) -> Result<Self, VideoWallpaperCreationError> {
         let format_context = FormatContext::from_input(path)?;
         let best_stream = format_context.find_best_stream(MediaType::Video)?;
@@ -70,7 +71,7 @@ impl VideoWallpaper {
         };
 
         Ok(Self {
-            pipeline: VideoPipeline::new(gpu, monitor_size),
+            pipeline: VideoPipeline::new(gpu, monitor_size, monitor_index),
             format_context,
             time_base,
             best_stream_index,
