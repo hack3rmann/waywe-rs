@@ -198,8 +198,12 @@ impl<S> WlObjectStorage<S> {
     pub fn object_mut<T: Dispatch<State = S>>(
         &mut self,
         handle: WlObjectHandle<T>,
-    ) -> &WlObject<T> {
+    ) -> &mut WlObject<T> {
         self.get_object_mut(handle).unwrap()
+    }
+
+    pub fn object_data_mut<T: Dispatch<State = S>>(&mut self, handle: WlObjectHandle<T>) -> &mut T {
+        self.object_mut(handle).data_mut().unwrap()
     }
 
     /// Searches an object in the storage by its id and returns an assocciated [`WlProxy`].

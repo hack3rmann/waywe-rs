@@ -1,4 +1,4 @@
-use crate::runtime::gpu::Wgpu;
+use crate::runtime::{gpu::Wgpu, wayland::MonitorId};
 use glam::{UVec2, Vec2};
 use std::mem;
 use wgpu::util::DeviceExt as _;
@@ -18,7 +18,7 @@ pub struct VideoPipeline {
 }
 
 impl VideoPipeline {
-    pub fn new(gpu: &Wgpu, screen_size: UVec2, monitor_index: usize) -> Self {
+    pub fn new(gpu: &Wgpu, screen_size: UVec2, monitor_id: MonitorId) -> Self {
         const VERTEX_SHADER_NAME: &str = "shaders/white-vertex.glsl";
         const FRAGMENT_SHADER_NAME: &str = "shaders/video.glsl";
 
@@ -135,7 +135,7 @@ impl VideoPipeline {
                         zero_initialize_workgroup_memory: false,
                     },
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: gpu.surface_formats[monitor_index],
+                        format: gpu.surface_formats[&monitor_id],
                         blend: None,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],

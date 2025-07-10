@@ -53,10 +53,6 @@ impl<A: App> EventLoop<A> {
             Err(error) => panic!("failed to create event queue: {error:?}"),
         };
 
-        event_queue.events.push(Event::ResetMonitors {
-            count: wayland.handle.surfaces.len(),
-        });
-
         match SetupProfile::read() {
             Ok(profile) => {
                 debug!("found profile config");
@@ -199,7 +195,6 @@ pub enum Event<T> {
     Custom(T),
     NewWallpaper { path: PathBuf, ty: WallpaperType },
     ResizeRequested { size: UVec2 },
-    ResetMonitors { count: usize },
 }
 
 #[derive(Debug)]
@@ -263,10 +258,11 @@ impl<T: CustomEvent> EventQueue<T> {
     pub fn populate_from_wayland_client_state(&mut self, state: &ClientState) {
         if state.resize_requested.load(Ordering::Acquire) {
             state.resize_requested.store(false, Ordering::Release);
-            self.events.push(Event::ResizeRequested {
-                // FIXME(hack3rmann): multiple monitors
-                size: state.monitor_size(0).unwrap(),
-            });
+            // FIXME(hack3rmann): handle resize
+            // self.events.push(Event::ResizeRequested {
+            //     // FIXME(hack3rmann): multiple monitors
+            //     size: state.monitor_size(0).unwrap(),
+            // });
         }
     }
 }

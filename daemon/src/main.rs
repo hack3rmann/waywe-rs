@@ -8,6 +8,7 @@ pub mod runtime;
 pub mod task_pool;
 pub mod video_pipeline;
 pub mod wallpaper;
+pub mod hash;
 
 use ::runtime::config::Config;
 use app::VideoApp;

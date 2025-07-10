@@ -17,7 +17,14 @@ use crate::{
 use fxhash::FxHashMap;
 use smallvec::{SmallVec, smallvec};
 use static_assertions::assert_impl_all;
-use std::{marker::PhantomData, pin::Pin, str};
+use std::{marker::PhantomData, mem, pin::Pin, str};
+
+pub type WlRegistryDispatchFn<S> = fn(
+    registry: &mut WlRegistry<S>,
+    state: &S,
+    storage: &mut WlObjectStorage<S>,
+    event: WlRegistryEvent<'_>,
+);
 
 /// Numerical name and version of a global object
 #[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash)]
@@ -37,18 +44,32 @@ pub type WlNames = FxHashMap<WlObjectId, WlObjectType>;
 pub struct WlRegistry<S> {
     pub(crate) interfaces: WlInterfaces,
     pub(crate) names: WlNames,
+    pub(crate) dispatchers: SmallVec<[WlRegistryDispatchFn<S>; 2]>,
+    pub(crate) handle: WlObjectHandle<Self>,
     pub(crate) _p: PhantomData<fn() -> S>,
 }
 assert_impl_all!(WlRegistry<NoState>: Send, Sync);
 
 impl<S> WlRegistry<S> {
     /// Constructs new [`WlRegistry`]
-    pub fn new() -> Self {
+    pub fn new(handle: WlObjectHandle<Self>) -> Self {
         Self {
             interfaces: WlInterfaces::default(),
             names: WlNames::default(),
+            dispatchers: smallvec![],
+            handle,
             _p: PhantomData,
         }
+    }
+
+    pub fn handle(&self) -> WlObjectHandle<Self> {
+        self.handle
+    }
+
+    /// Adds dispatch function to registry
+    pub fn with_dispatcher(&mut self, dispatcher: WlRegistryDispatchFn<S>) -> &mut Self {
+        self.dispatchers.push(dispatcher);
+        self
     }
 
     /// Interfaces of all registered global objects
@@ -81,6 +102,11 @@ impl<S> WlRegistry<S> {
                 unsafe { globals.first().unwrap_unchecked() }
             })
             .map(|global| global.name)
+    }
+
+    /// The type of global with id `name`
+    pub fn type_of(&self, name: WlObjectId) -> Option<WlObjectType> {
+        self.names.get(&name).copied()
     }
 
     /// # Safety
@@ -137,6 +163,7 @@ impl<S> WlRegistry<S> {
 
 impl<S> WlObjectHandle<WlRegistry<S>> {
     /// Bind request on [`WlRegistry`]
+    #[must_use]
     pub fn bind<T>(
         self,
         buf: &mut impl WlMessageBuffer,
@@ -150,6 +177,7 @@ impl<S> WlObjectHandle<WlRegistry<S>> {
     }
 
     /// Bind request on [`WlRegistry`]
+    #[must_use]
     pub fn bind_index<T>(
         self,
         buf: &mut impl WlMessageBuffer,
@@ -182,6 +210,7 @@ impl<S> WlObjectHandle<WlRegistry<S>> {
     }
 
     /// Bind request on [`WlRegistry`] with given value
+    #[must_use]
     pub fn bind_value<T>(
         self,
         buf: &mut impl WlMessageBuffer,
@@ -197,11 +226,33 @@ impl<S> WlObjectHandle<WlRegistry<S>> {
     }
 
     /// Bind request on [`WlRegistry`] with given function providing value
+    #[must_use]
     pub fn bind_from_fn<B, T, F>(
         self,
         buf: &mut B,
-        mut storage: Pin<&mut WlObjectStorage<S>>,
+        storage: Pin<&mut WlObjectStorage<S>>,
         global_index: usize,
+        make_data: F,
+    ) -> Option<WlObjectHandle<T>>
+    where
+        B: WlMessageBuffer,
+        T: Dispatch<State = S>,
+        F: FnOnce(&mut B, Pin<&mut WlObjectStorage<S>>, &WlProxy) -> T,
+        S: State,
+    {
+        let registry = storage.get_object(self)?;
+        dbg!(storage.as_ref());
+        let global_name = registry.name_of_index(T::OBJECT_TYPE, global_index)?;
+
+        self.bind_from_fn_by_id(buf, storage, global_name, make_data)
+    }
+
+    #[must_use]
+    pub fn bind_from_fn_by_id<B, T, F>(
+        self,
+        buf: &mut B,
+        mut storage: Pin<&mut WlObjectStorage<S>>,
+        global_name: WlObjectId,
         make_data: F,
     ) -> Option<WlObjectHandle<T>>
     where
@@ -212,7 +263,7 @@ impl<S> WlObjectHandle<WlRegistry<S>> {
     {
         // Safety: `WlRegistry` is the parent for this request
         let proxy = unsafe {
-            WlRegistryBindRequest::<T>::new().send(storage.get_object(self)?, buf, global_index)?
+            WlRegistryBindRequest::<T>::new().send(storage.get_object(self)?, buf, global_name)?
         };
 
         let data = make_data(buf, storage.as_mut(), &proxy);
@@ -221,15 +272,9 @@ impl<S> WlObjectHandle<WlRegistry<S>> {
     }
 }
 
-impl<S> Default for WlRegistry<S> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl<S> FromProxy for WlRegistry<S> {
-    fn from_proxy(_: &WlProxy) -> Self {
-        Self::new()
+    fn from_proxy(proxy: &WlProxy) -> Self {
+        Self::new(WlObjectHandle::new(proxy.id()))
     }
 }
 
@@ -242,20 +287,31 @@ impl<S: State> Dispatch for WlRegistry<S> {
 
     fn dispatch(
         &mut self,
-        _: &Self::State,
-        _: &mut WlObjectStorage<Self::State>,
+        state: &Self::State,
+        storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
-        match message.as_event::<WlRegistryEvent>() {
-            Some(WlRegistryEvent::Global(event)) => {
+        let Some(event) = message.as_event::<WlRegistryEvent>() else {
+            return;
+        };
+
+        match event.clone() {
+            WlRegistryEvent::Global(event) => {
                 // Safety: `event.interface` is a valid utf-8 string,
                 // it contains only valid ascii characters
                 unsafe { self.handle_global_event(event) };
             }
-            Some(WlRegistryEvent::GlobalRemove(event)) => {
+            WlRegistryEvent::GlobalRemove(event) => {
                 self.handle_global_remove_event(event);
             }
-            _ => {}
         }
+
+        let dispatchers = mem::take(&mut self.dispatchers);
+
+        for &dispatch in &dispatchers {
+            dispatch(self, state, storage, event.clone());
+        }
+
+        self.dispatchers = dispatchers;
     }
 }

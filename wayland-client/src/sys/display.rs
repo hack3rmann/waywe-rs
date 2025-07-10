@@ -157,11 +157,11 @@ impl<S> WlDisplay<S> {
     }
 
     /// Creates `wl_registry` object and stores it in the storage
-    pub fn create_registry(
+    pub fn create_registry<'s>(
         &self,
         buf: &mut impl WlMessageBuffer,
-        storage: Pin<&mut WlObjectStorage<S>>,
-    ) -> WlObjectHandle<WlRegistry<S>>
+        mut storage: Pin<&'s mut WlObjectStorage<S>>,
+    ) -> &'s mut WlRegistry<S>
     where
         S: State,
     {
@@ -176,7 +176,10 @@ impl<S> WlDisplay<S> {
             .unwrap()
         };
 
-        storage.insert(WlObject::new(proxy, WlRegistry::default()))
+        let handle = WlObjectHandle::new(proxy.id());
+
+        _ = storage.as_mut().insert(WlObject::new(proxy, WlRegistry::new(handle)));
+        storage.get_mut().object_data_mut(handle)
     }
 
     /// Creates raw event queue

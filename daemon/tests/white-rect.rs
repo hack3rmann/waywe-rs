@@ -54,7 +54,9 @@ async fn use_wgpu_to_draw_anything() {
     let state = pin!(NoState);
     let display = WlDisplay::connect(state.as_ref()).unwrap();
     let mut queue = pin!(display.take_main_queue().unwrap());
-    let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
+    let registry = display
+        .create_registry(&mut buf, queue.as_mut().storage_mut())
+        .handle();
 
     display.roundtrip(queue.as_mut(), state.as_ref());
 

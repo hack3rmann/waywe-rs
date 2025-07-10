@@ -5,7 +5,7 @@ pub mod video;
 use crate::{
     app::VideoAppEvent,
     event_loop::{FrameError, FrameInfo},
-    runtime::{Runtime, RuntimeFeatures, gpu::Wgpu},
+    runtime::{gpu::Wgpu, wayland::MonitorId, Runtime, RuntimeFeatures},
 };
 use glam::UVec2;
 use image::{ImageWallpaper, ImageWallpaperCreationError};
@@ -71,15 +71,15 @@ pub fn create(
     monitor_size: UVec2,
     path: &Path,
     ty: WallpaperType,
-    monitor_index: usize,
+    monitor_id: MonitorId,
 ) -> Result<DynWallpaper, WallpaperCreationError> {
     match ty {
         WallpaperType::Video => {
-            VideoWallpaper::new(gpu, monitor_size, &pathbuf_into_cstring(path.to_owned()), monitor_index)
+            VideoWallpaper::new(gpu, monitor_size, &pathbuf_into_cstring(path.to_owned()), monitor_id)
                 .map(IntoDynWallpaper::into_dyn_wallpaper)
                 .map_err(WallpaperCreationError::from)
         }
-        WallpaperType::Image => ImageWallpaper::new(gpu, monitor_size, path, monitor_index)
+        WallpaperType::Image => ImageWallpaper::new(gpu, monitor_size, path, monitor_id)
             .map(IntoDynWallpaper::into_dyn_wallpaper)
             .map_err(WallpaperCreationError::from),
     }

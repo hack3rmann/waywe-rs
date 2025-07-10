@@ -1,7 +1,6 @@
-use super::wayland::Wayland;
+use super::wayland::{MonitorMap, SurfaceExtension, Wayland};
 use ash::vk;
 use glam::UVec2;
-use smallvec::SmallVec;
 use std::{
     collections::HashMap,
     ops::Deref,
@@ -61,8 +60,8 @@ pub struct Wgpu {
     pub instance: wgpu::Instance,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
-    pub surfaces: SmallVec<[wgpu::Surface<'static>; 1]>,
-    pub surface_formats: SmallVec<[wgpu::TextureFormat; 1]>,
+    pub surfaces: MonitorMap<wgpu::Surface<'static>>,
+    pub surface_formats: MonitorMap<wgpu::TextureFormat>,
     pub shader_cache: ShaderCache,
 }
 
@@ -79,22 +78,38 @@ impl Wgpu {
         });
 
         let surfaces = wayland
-            .raw_window_handles()
-            .map(|raw_window_handle| unsafe {
-                instance
-                    .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
-                        raw_display_handle: wayland.raw_display_handle(),
-                        raw_window_handle,
-                    })
-                    .unwrap()
+            .client_state
+            .monitors
+            .read()
+            .unwrap()
+            .iter()
+            .map(|(&id, info)| {
+                let handle = wayland
+                    .main_queue
+                    .as_ref()
+                    .storage()
+                    .object(info.surface)
+                    .raw_window_handle();
+
+                let surface = unsafe {
+                    instance
+                        .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
+                            raw_display_handle: wayland.raw_display_handle(),
+                            raw_window_handle: handle,
+                        })
+                        .unwrap()
+                };
+
+                (id, surface)
             })
-            .collect::<SmallVec<[wgpu::Surface; 1]>>();
+            .collect::<MonitorMap<_>>();
 
         let Some(adapter) = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::LowPower,
                 force_fallback_adapter: false,
-                compatible_surface: Some(surfaces.first().unwrap()),
+                // take any available surface
+                compatible_surface: surfaces.values().next(),
             })
             .await
         else {
@@ -187,10 +202,9 @@ impl Wgpu {
 
         let surface_formats = surfaces
             .iter()
-            .enumerate()
-            .map(|(monitor_index, surface)| {
+            .map(|(&id, surface)| {
                 let capabilities = surface.get_capabilities(&adapter);
-                let screen_size = wayland.client_state.monitor_size(monitor_index).unwrap();
+                let screen_size = wayland.client_state.monitor_size(id).unwrap();
 
                 let Some(surface_format) =
                     surface.get_capabilities(&adapter).formats.first().copied()
@@ -217,9 +231,9 @@ impl Wgpu {
 
                 surface.configure(&device, &surface_config);
 
-                surface_format
+                (id, surface_format)
             })
-            .collect();
+            .collect::<MonitorMap<_>>();
 
         Self {
             adapter,
@@ -232,17 +246,18 @@ impl Wgpu {
         }
     }
 
-    pub fn resize_surface(&self, size: UVec2) {
+    #[deprecated = "nonsense"]
+    pub fn resize_surface(&self, _size: UVec2) {
         // FIXME(hack3rmann): multiple monitors
-        self.surfaces.first().unwrap().configure(
-            &self.device,
-            &self
-                .surfaces
-                .first()
-                .unwrap()
-                .get_default_config(&self.adapter, size.x, size.y)
-                .unwrap(),
-        );
+        // self.surfaces.first().unwrap().configure(
+        //     &self.device,
+        //     &self
+        //         .surfaces
+        //         .first()
+        //         .unwrap()
+        //         .get_default_config(&self.adapter, size.x, size.y)
+        //         .unwrap(),
+        // );
     }
 
     pub fn use_shader(&self, id: &'static str, desc: wgpu::ShaderModuleDescriptor) {

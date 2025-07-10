@@ -22,10 +22,20 @@ impl WlObjectId {
             None
         }
     }
+
+    /// Makes new id from `u32` unconditionaly
+    ///
+    /// # Safety
+    ///
+    /// `value` must not be `0`
+    pub const unsafe fn new_unchecked(value: u32) -> Self {
+        Self(unsafe { NonZeroU32::new_unchecked(value) })
+    }
 }
 
 impl Default for WlObjectId {
     fn default() -> Self {
+        // Corresponds to `wl_display`
         const { Self::new(1).unwrap() }
     }
 }

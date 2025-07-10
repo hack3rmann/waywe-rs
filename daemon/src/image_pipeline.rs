@@ -1,4 +1,4 @@
-use crate::runtime::gpu::Wgpu;
+use crate::runtime::{gpu::Wgpu, wayland::MonitorId};
 use bytemuck::{Pod, Zeroable};
 use glam::{UVec2, Vec2};
 use image::{ImageBuffer, Rgba};
@@ -36,7 +36,7 @@ impl ImagePipeline {
         image: &ImageBuffer<Rgba<u8>, Vec<u8>>,
         transparency_color: Color,
         monitor_size: UVec2,
-        monitor_index: usize,
+        monitor_id: MonitorId,
     ) -> Self {
         let vertex_buffer = gpu
             .device
@@ -181,7 +181,7 @@ impl ImagePipeline {
                         zero_initialize_workgroup_memory: false,
                     },
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: gpu.surface_formats[monitor_index],
+                        format: gpu.surface_formats[&monitor_id],
                         blend: None,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],

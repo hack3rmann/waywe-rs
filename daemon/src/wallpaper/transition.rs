@@ -2,7 +2,7 @@ use super::{DynWallpaper, RenderState, Wallpaper};
 use crate::{
     app::VideoAppEvent,
     event_loop::{FrameError, FrameInfo},
-    runtime::{Runtime, RuntimeFeatures, gpu::Wgpu},
+    runtime::{gpu::Wgpu, wayland::MonitorId, Runtime, RuntimeFeatures},
 };
 use bytemuck::{Pod, Zeroable};
 use glam::{UVec2, Vec2};
@@ -33,7 +33,7 @@ impl TransitionWallpaper {
         from: DynWallpaper,
         to: DynWallpaper,
         config: TransitionConfig,
-        monitor_index: usize,
+        monitor_id: MonitorId,
     ) -> Self {
         Self {
             pipeline: TransitionPipeline::new(
@@ -41,12 +41,12 @@ impl TransitionWallpaper {
                 runtime
                     .wayland
                     .client_state
-                    .monitor_size(monitor_index)
+                    .monitor_size(monitor_id)
                     .unwrap(),
                 from,
                 to,
                 config,
-                monitor_index,
+                monitor_id,
             ),
         }
     }
@@ -136,7 +136,7 @@ pub struct TransitionPipeline {
     last_frame_time: Option<Instant>,
     frame_index: usize,
     config: TransitionConfig,
-    monitor_index: usize,
+    monitor_id: MonitorId,
 }
 
 impl TransitionPipeline {
@@ -146,7 +146,7 @@ impl TransitionPipeline {
         from: DynWallpaper,
         to: DynWallpaper,
         config: TransitionConfig,
-        monitor_index: usize,
+        monitor_id: MonitorId,
     ) -> Self {
         let vertex_buffer = gpu
             .device
@@ -156,7 +156,7 @@ impl TransitionPipeline {
                 usage: wgpu::BufferUsages::VERTEX,
             });
 
-        let surface_format = gpu.surface_formats[monitor_index];
+        let surface_format = gpu.surface_formats[&monitor_id];
 
         let from_texture = gpu.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("from-texture-target"),
@@ -355,7 +355,7 @@ impl TransitionPipeline {
             last_frame_time: None,
             frame_index: 0,
             config,
-            monitor_index,
+            monitor_id,
         }
     }
 
@@ -433,7 +433,7 @@ impl TransitionPipeline {
         let aspect_ratio = runtime
             .wayland
             .client_state
-            .aspect_ratio(self.monitor_index)
+            .aspect_ratio(self.monitor_id)
             .unwrap();
         let corners = [
             Vec2::new(-aspect_ratio, -1.0),

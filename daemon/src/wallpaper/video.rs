@@ -2,7 +2,7 @@ use super::Wallpaper;
 use crate::{
     app::VideoAppEvent,
     event_loop::{FrameError, FrameInfo},
-    runtime::{Runtime, RuntimeFeatures, gpu::Wgpu},
+    runtime::{gpu::Wgpu, wayland::MonitorId, Runtime, RuntimeFeatures},
     video_pipeline::VideoPipeline,
 };
 use ash::vk;
@@ -33,7 +33,7 @@ impl VideoWallpaper {
         gpu: &Wgpu,
         monitor_size: UVec2,
         path: &CStr,
-        monitor_index: usize,
+        monitor_id: MonitorId,
     ) -> Result<Self, VideoWallpaperCreationError> {
         let format_context = FormatContext::from_input(path)?;
         let best_stream = format_context.find_best_stream(MediaType::Video)?;
@@ -71,7 +71,7 @@ impl VideoWallpaper {
         };
 
         Ok(Self {
-            pipeline: VideoPipeline::new(gpu, monitor_size, monitor_index),
+            pipeline: VideoPipeline::new(gpu, monitor_size, monitor_id),
             format_context,
             time_base,
             best_stream_index,

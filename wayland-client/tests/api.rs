@@ -133,7 +133,9 @@ fn get_protocol_error() {
     let state = pin!(NoState);
     let display = WlDisplay::connect(state.as_ref()).unwrap();
     let mut queue = pin!(display.take_main_queue().unwrap());
-    let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
+    let registry = display
+        .create_registry(&mut buf, queue.as_mut().storage_mut())
+        .handle();
 
     pub struct WrongGlobal;
 
@@ -177,7 +179,9 @@ fn get_registry() {
     let state = pin!(NoState);
     let display = WlDisplay::connect(state.as_ref()).unwrap();
     let mut queue = pin!(display.take_main_queue().unwrap());
-    let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
+    let registry = display
+        .create_registry(&mut buf, queue.as_mut().storage_mut())
+        .handle();
 
     display.roundtrip(queue.as_mut(), state.as_ref());
 
@@ -200,7 +204,9 @@ fn create_surface() {
     let state = pin!(NoState);
     let display = WlDisplay::connect(state.as_ref()).unwrap();
     let mut queue = pin!(display.take_main_queue().unwrap());
-    let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
+    let registry = display
+        .create_registry(&mut buf, queue.as_mut().storage_mut())
+        .handle();
 
     display.roundtrip(queue.as_mut(), state.as_ref());
 
@@ -234,7 +240,9 @@ fn bind_wlr_shell() {
     let state = pin!(NoState);
     let display = WlDisplay::connect(state.as_ref()).unwrap();
     let mut queue = pin!(display.take_main_queue().unwrap());
-    let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
+    let registry = display
+        .create_registry(&mut buf, queue.as_mut().storage_mut())
+        .handle();
 
     display.roundtrip(queue.as_mut(), state.as_ref());
 
@@ -272,7 +280,9 @@ fn white_rect() {
     let state = pin!(NoState);
     let display = WlDisplay::connect(state.as_ref()).unwrap();
     let mut queue = pin!(display.take_main_queue().unwrap());
-    let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
+    let registry = display
+        .create_registry(&mut buf, queue.as_mut().storage_mut())
+        .handle();
 
     display.roundtrip(queue.as_mut(), state.as_ref());
 

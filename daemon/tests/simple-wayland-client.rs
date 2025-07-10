@@ -290,7 +290,9 @@ fn simple_wayland_client() {
     let mut buf = WlStackMessageBuffer::new();
     let mut queue = pin!(display.take_main_queue().unwrap());
 
-    let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
+    let registry = display
+        .create_registry(&mut buf, queue.as_mut().storage_mut())
+        .handle();
 
     display.roundtrip(queue.as_mut(), client_state.as_ref());
 
@@ -544,7 +546,9 @@ fn multithread_client() {
     let mut main_queue = pin!(display.take_main_queue().unwrap());
     let mut side_queue = pin!(display.create_queue().unwrap());
 
-    let registry = display.create_registry(&mut buf, main_queue.as_mut().storage_mut());
+    let registry = display
+        .create_registry(&mut buf, main_queue.as_mut().storage_mut())
+        .handle();
 
     display.roundtrip(main_queue.as_mut(), client_state.as_ref());
 
