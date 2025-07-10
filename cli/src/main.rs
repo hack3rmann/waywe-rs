@@ -33,14 +33,17 @@ fn main() -> ExitCode {
                 }
             };
 
-            let image = match profile.wallpaper_type {
+            // FIXME(hack3rmann): multiple_monitors
+            let info = profile.monitors.into_values().next().unwrap();
+
+            let image = match info.wallpaper_type {
                 WallpaperType::Video => {
-                    let c_path = pathbuf_into_cstring(profile.path.clone().into_owned());
+                    let c_path = pathbuf_into_cstring(info.path.clone());
 
                     let mut format_context = match FormatContext::from_input(&c_path) {
                         Ok(context) => context,
                         Err(error) => {
-                            error!(?error, path = ?profile.path, "failed to open video");
+                            error!(?error, path = ?info.path, "failed to open video");
                             return ExitCode::FAILURE;
                         }
                     };
@@ -48,7 +51,7 @@ fn main() -> ExitCode {
                     let best_stream = match format_context.find_best_stream(MediaType::Video) {
                         Ok(stream) => stream,
                         Err(error) => {
-                            error!(?error, path = ?profile.path, "failed to find video stream");
+                            error!(?error, path = ?info.path, "failed to find video stream");
                             return ExitCode::FAILURE;
                         }
                     };
@@ -58,7 +61,7 @@ fn main() -> ExitCode {
 
                     let Some(decoder) = Codec::find_decoder_for_id(codec_parameters.codec_id())
                     else {
-                        error!(path = ?profile.path, "failed to find decoder");
+                        error!(path = ?info.path, "failed to find decoder");
                         return ExitCode::FAILURE;
                     };
 
@@ -114,10 +117,10 @@ fn main() -> ExitCode {
                     DynamicImage::ImageRgb8(image)
                 }
                 WallpaperType::Image => {
-                    let reader = match ImageReader::open(&profile.path) {
+                    let reader = match ImageReader::open(&info.path) {
                         Ok(reader) => reader,
                         Err(error) => {
-                            error!(?error, path = ?profile.path, "failed to open image file");
+                            error!(?error, path = ?info.path, "failed to open image file");
                             return ExitCode::FAILURE;
                         }
                     };
@@ -125,7 +128,7 @@ fn main() -> ExitCode {
                     match reader.decode() {
                         Ok(image) => image,
                         Err(error) => {
-                            error!(?error, path = ?profile.path, "failed to decode image");
+                            error!(?error, path = ?info.path, "failed to decode image");
                             return ExitCode::FAILURE;
                         }
                     }
@@ -151,7 +154,10 @@ fn main() -> ExitCode {
                 }
             };
 
-            println!("{}", profile.path.display());
+            // FIXME(hack3rmann): multiple_monitors
+            let info = profile.monitors.into_values().next().unwrap();
+
+            println!("{}", info.path.display());
 
             return ExitCode::SUCCESS;
         }

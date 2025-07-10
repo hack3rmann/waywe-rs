@@ -1,5 +1,6 @@
 use crate::{
-    event_loop::{App, Event, FrameError, FrameInfo},
+    almost::Almost,
+    event_loop::{App, Event, FrameError, FrameInfo, SetWallpaper},
     runtime::{
         Runtime,
         wayland::{MonitorId, MonitorMap},
@@ -10,10 +11,13 @@ use crate::{
     },
 };
 use glam::Vec2;
-use runtime::{config::Config, profile::SetupProfile};
-use smallvec::SmallVec;
+use runtime::{
+    config::Config,
+    profile::{Monitor, SetupProfile},
+};
+use smallvec::{SmallVec, smallvec};
 use std::{sync::Arc, time::Duration};
-use tracing::error;
+use tracing::{debug, error};
 
 #[derive(Default)]
 pub struct VideoApp {
@@ -86,14 +90,26 @@ impl App for VideoApp {
                 wallpaper,
                 monitor_id,
             } => {
-                dbg!("WallpaperPrepared", monitor_id);
                 runtime.control_flow.busy();
                 self.set_wallpaper(runtime, wallpaper, monitor_id);
             }
-            Event::NewWallpaper { path, ty } => {
+            Event::NewWallpaper { path, ty, set } => {
                 runtime.enable(ty.required_features()).await;
 
-                for &monitor_id in runtime.wayland.client_state.monitors.read().unwrap().keys() {
+                let monitor_ids: SmallVec<[MonitorId; 4]> = match set {
+                    SetWallpaper::ForAll => runtime
+                        .wayland
+                        .client_state
+                        .monitors
+                        .read()
+                        .unwrap()
+                        .keys()
+                        .copied()
+                        .collect(),
+                    SetWallpaper::ForMonitor(wl_object_id) => smallvec![wl_object_id],
+                };
+
+                for monitor_id in monitor_ids {
                     let path = path.clone();
                     let gpu = Arc::clone(&runtime.wgpu);
                     let monitor_size = runtime
@@ -101,8 +117,22 @@ impl App for VideoApp {
                         .client_state
                         .monitor_size(monitor_id)
                         .unwrap();
+                    let monitor_name = runtime
+                        .wayland
+                        .client_state
+                        .monitor_name(monitor_id)
+                        .unwrap();
 
-                    if let Err(error) = SetupProfile::new(&path, ty, monitor_size).store() {
+                    if let Err(error) = SetupProfile::default()
+                        .with(
+                            monitor_name,
+                            Monitor {
+                                wallpaper_type: ty,
+                                path: path.clone(),
+                            },
+                        )
+                        .store()
+                    {
                         error!(?error, "failed to save setup profile");
                     }
 
@@ -121,8 +151,42 @@ impl App for VideoApp {
                 }
             }
             Event::ResizeRequested { monitor_id, size } => {
-                runtime.wgpu.resize_surface(monitor_id, size);
+                if Almost::is_init(&runtime.wgpu) {
+                    runtime.wgpu.resize_surface(monitor_id, size);
+                }
+
                 self.do_force_frame = true;
+            }
+            Event::MonitorPlugged { monitor_id } => {
+                if Almost::is_init(&runtime.wgpu) {
+                    runtime.wgpu.register_surface(&runtime.wayland, monitor_id);
+                }
+
+                let monitors = runtime.wayland.client_state.monitors.read().unwrap();
+                let monitor = &monitors[&monitor_id];
+                let monitor_name = Arc::clone(monitor.name.as_ref().unwrap());
+
+                debug!(?monitor_id, ?monitor_name, "new monitor detected");
+
+                if let Ok(mut profile) = SetupProfile::read()
+                    && let Some(info) = profile.monitors.remove(&monitor_name)
+                {
+                    let event = Event::NewWallpaper {
+                        path: info.path,
+                        ty: info.wallpaper_type,
+                        set: SetWallpaper::ForMonitor(monitor_id),
+                    };
+
+                    runtime.task_pool.emitter.emit(event).unwrap();
+                }
+
+                runtime.control_flow.busy();
+            }
+            Event::MonitorUnplugged { monitor_id } => {
+                debug!(?monitor_id, "unplugged a monitor");
+
+                _ = self.wallpapers.remove(&monitor_id);
+                runtime.wgpu.unregister_surface(monitor_id);
             }
             Event::Error(_error) => todo!(),
         }
@@ -131,17 +195,20 @@ impl App for VideoApp {
     async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
         self.resolve_transitions();
 
+        if Almost::is_uninit(&runtime.wgpu) {
+            return Err(FrameError::NoWorkToDo);
+        }
+
         // FIXME(hack3rmann): multiple monitors
         let mut result = Err(FrameError::NoWorkToDo);
+        let surfaces = runtime.wgpu.surfaces.read().unwrap();
 
         for (&monitor_id, wallpaper) in self.wallpapers.iter_mut() {
             if !self.do_force_frame && wallpaper.render_state() == RenderState::Done {
                 continue;
             }
 
-            let surface_texture = runtime.wgpu.surfaces[&monitor_id]
-                .get_current_texture()
-                .unwrap();
+            let surface_texture = surfaces[&monitor_id].get_current_texture().unwrap();
             let surface_view = surface_texture.texture.create_view(&Default::default());
 
             let mut encoder = runtime

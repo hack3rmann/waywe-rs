@@ -9,15 +9,12 @@ use crate::{
 };
 use glam::UVec2;
 use runtime::{
-    DaemonCommand, Epoll, IpcSocket, RecvError, WallpaperType,
-    epoll::PolledFds,
-    ipc::Server,
-    profile::{SetupProfile, SetupProfileError},
+    DaemonCommand, Epoll, IpcSocket, RecvError, WallpaperType, epoll::PolledFds, ipc::Server,
     signals,
 };
 use rustix::io::Errno;
 use std::{
-    io::{self, ErrorKind},
+    io::{self},
     os::fd::AsFd as _,
     path::PathBuf,
     sync::{Once, atomic::Ordering},
@@ -26,7 +23,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::runtime::Builder as AsyncRuntimeBuilder;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error};
 use video::RatioI32;
 
 pub struct EventLoop<A: App> {
@@ -47,41 +44,16 @@ impl<A: App> EventLoop<A> {
         static SIGNALS_ONCE: Once = Once::new();
         SIGNALS_ONCE.call_once(signals::setup);
 
-        let mut event_queue = match EventQueue::new() {
+        let event_queue = match EventQueue::new() {
             Ok(queue) => queue,
             Err(error) => panic!("failed to create event queue: {error:?}"),
         };
 
         let wayland = Wayland::new(event_queue.custom_receiver.make_emitter().unwrap());
 
-        match SetupProfile::read() {
-            Ok(profile) => {
-                debug!("found profile config");
-
-                event_queue.events.push(Event::NewWallpaper {
-                    path: profile.path.into_owned(),
-                    ty: profile.wallpaper_type,
-                });
-            }
-            Err(SetupProfileError::Io(error)) if error.kind() == ErrorKind::NotFound => {}
-            Err(SetupProfileError::Decode(message)) => {
-                warn!(
-                    ?message,
-                    "could not read setup profile cache, may be caused by outdated files",
-                );
-            }
-            Err(error) => info!(?error, "can not read setup profile config"),
-        }
-
-        let control_flow = if event_queue.events.is_empty() {
-            ControlFlow::Idle
-        } else {
-            ControlFlow::Busy
-        };
-
         let task_pool = TaskPool::new(event_queue.custom_receiver.make_emitter().unwrap());
 
-        let runtime = Runtime::new(wayland, control_flow, task_pool);
+        let runtime = Runtime::new(wayland, ControlFlow::Busy, task_pool);
 
         let fds = [
             runtime.wayland.display.as_fd(),
@@ -188,6 +160,12 @@ impl<A: App> EventLoop<A> {
     }
 }
 
+#[derive(Debug)]
+pub enum SetWallpaper {
+    ForAll,
+    ForMonitor(MonitorId),
+}
+
 pub enum Event {
     WallpaperPrepared {
         wallpaper: DynWallpaper,
@@ -197,10 +175,17 @@ pub enum Event {
     NewWallpaper {
         path: PathBuf,
         ty: WallpaperType,
+        set: SetWallpaper,
     },
     ResizeRequested {
         monitor_id: MonitorId,
         size: UVec2,
+    },
+    MonitorPlugged {
+        monitor_id: MonitorId,
+    },
+    MonitorUnplugged {
+        monitor_id: MonitorId,
     },
 }
 
@@ -245,10 +230,12 @@ impl EventQueue {
                     DaemonCommand::SetVideo { path } => Event::NewWallpaper {
                         path,
                         ty: WallpaperType::Video,
+                        set: SetWallpaper::ForAll,
                     },
                     DaemonCommand::SetImage { path } => Event::NewWallpaper {
                         path,
                         ty: WallpaperType::Image,
+                        set: SetWallpaper::ForAll,
                     },
                 };
 

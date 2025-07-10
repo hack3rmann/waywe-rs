@@ -30,11 +30,7 @@ pub mod request {
     use crate::{
         ffi,
         object::{HasObjectType, InterfaceMessageArgument, WlObjectType},
-        sys::{
-            object::{WlObject, dispatch::State, registry::WlRegistry},
-            proxy::WlProxy,
-            wire::OpCode,
-        },
+        sys::{object::dispatch::State, proxy::WlProxy, wire::OpCode},
     };
     use std::{marker::PhantomData, ptr::NonNull};
 
@@ -74,11 +70,12 @@ pub mod request {
 
         /// # Safety
         ///
+        /// - `registry` should correspond to the registry proxy object
         /// - `parent` proxy must match the parent interface
         /// - resulting `WlProxy` object must be owned by `ObjectStorage` after call
         pub unsafe fn send<S: State>(
             self,
-            registry: &WlObject<WlRegistry<S>>,
+            registry: &WlProxy,
             buf: &mut impl WlMessageBuffer,
             global_name: WlObjectId,
         ) -> Option<WlProxy> {
@@ -87,7 +84,7 @@ pub mod request {
 
             let raw_proxy = unsafe {
                 ffi::wl_proxy_marshal_array_constructor(
-                    registry.proxy().as_raw().as_ptr(),
+                    registry.as_raw().as_ptr(),
                     message.opcode.into(),
                     message.arguments.as_ptr().cast_mut(),
                     interface,

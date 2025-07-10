@@ -3,37 +3,28 @@ use bincode::{
     Decode, Encode, config,
     error::{DecodeError, EncodeError},
 };
-use glam::UVec2;
 use std::{
-    borrow::Cow,
+    collections::HashMap,
     env,
     fs::{self, File},
     io,
-    path::{Path, PathBuf},
+    path::PathBuf,
+    sync::Arc,
 };
 use thiserror::Error;
 
 #[derive(Clone, PartialEq, PartialOrd, Debug, Hash, Eq, Ord, Encode, Decode)]
-pub struct SetupProfile<'s> {
+pub struct Monitor {
     pub wallpaper_type: WallpaperType,
-    pub path: Cow<'s, Path>,
-    pub monitor_size: (u32, u32),
+    pub path: PathBuf,
 }
 
-impl<'s> SetupProfile<'s> {
-    pub fn new(path: impl Into<Cow<'s, Path>>, wallpaper_type: WallpaperType, monitor_size: UVec2) -> Self {
-        Self {
-            path: path.into(),
-            wallpaper_type,
-            monitor_size: monitor_size.into(),
-        }
-    }
+#[derive(Clone, Default, PartialEq, Debug, Eq, Encode, Decode)]
+pub struct SetupProfile {
+    pub monitors: HashMap<Arc<str>, Monitor>,
+}
 
-    pub const fn size(&self) -> UVec2 {
-        let (width, height) = self.monitor_size;
-        UVec2::new(width, height)
-    }
-
+impl SetupProfile {
     pub fn read() -> Result<Self, SetupProfileError> {
         let profile_path = {
             let mut path = cache_dir().ok_or(SetupProfileError::NoHomeDirectory)?;
@@ -49,7 +40,23 @@ impl<'s> SetupProfile<'s> {
         )?)
     }
 
+    pub fn with(mut self, name: Arc<str>, monitor: Monitor) -> Self {
+        self.monitors.insert(name, monitor);
+        self
+    }
+
     pub fn store(&self) -> Result<(), SetupProfileError> {
+        let profile = match Self::read() {
+            Ok(mut profile) => {
+                for (key, value) in &self.monitors {
+                    profile.monitors.insert(Arc::clone(key), value.clone());
+                }
+
+                profile
+            }
+            Err(_) => self.clone(),
+        };
+
         let cache_directory = cache_dir().ok_or(SetupProfileError::NoHomeDirectory)?;
 
         fs::create_dir_all(&cache_directory)?;
@@ -66,7 +73,7 @@ impl<'s> SetupProfile<'s> {
             .truncate(true)
             .open(&profile_path)?;
 
-        bincode::encode_into_std_write(self, &mut file, config::standard())?;
+        bincode::encode_into_std_write(&profile, &mut file, config::standard())?;
 
         Ok(())
     }

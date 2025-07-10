@@ -161,7 +161,7 @@ impl<S> WlRegistry<S> {
     }
 }
 
-impl<S> WlObjectHandle<WlRegistry<S>> {
+impl<S: State> WlObjectHandle<WlRegistry<S>> {
     /// Bind request on [`WlRegistry`]
     #[must_use]
     pub fn bind<T>(
@@ -171,7 +171,6 @@ impl<S> WlObjectHandle<WlRegistry<S>> {
     ) -> Option<WlObjectHandle<T>>
     where
         T: Dispatch<State = S> + FromProxy,
-        S: State,
     {
         self.bind_from_fn(buf, storage, 0, |_, _, proxy| T::from_proxy(proxy))
     }
@@ -186,7 +185,6 @@ impl<S> WlObjectHandle<WlRegistry<S>> {
     ) -> Option<WlObjectHandle<T>>
     where
         T: Dispatch<State = S> + FromProxy,
-        S: State,
     {
         self.bind_from_fn(buf, storage, global_index, |_, _, proxy| {
             T::from_proxy(proxy)
@@ -197,16 +195,16 @@ impl<S> WlObjectHandle<WlRegistry<S>> {
         self,
         buf: &'s mut impl WlMessageBuffer,
         mut storage: Pin<&'s mut WlObjectStorage<S>>,
-    ) -> impl Iterator<Item = Option<WlObjectHandle<T>>> + 's
+    ) -> Option<impl Iterator<Item = Option<WlObjectHandle<T>>> + 's>
     where
         T: Dispatch<State = S> + FromProxy,
-        S: State,
     {
-        let count = storage.object(self).count_of(T::OBJECT_TYPE);
+        let registry = storage.get_object(self)?;
+        let count = registry.count_of(T::OBJECT_TYPE);
 
-        (0..count).map(move |i| {
+        Some((0..count).map(move |i| {
             self.bind_from_fn(buf, storage.as_mut(), i, |_, _, proxy| T::from_proxy(proxy))
-        })
+        }))
     }
 
     /// Bind request on [`WlRegistry`] with given value
@@ -220,7 +218,6 @@ impl<S> WlObjectHandle<WlRegistry<S>> {
     ) -> Option<WlObjectHandle<T>>
     where
         T: Dispatch<State = S>,
-        S: State,
     {
         self.bind_from_fn(buf, storage, global_index, |_, _, _| object)
     }
@@ -238,10 +235,8 @@ impl<S> WlObjectHandle<WlRegistry<S>> {
         B: WlMessageBuffer,
         T: Dispatch<State = S>,
         F: FnOnce(&mut B, Pin<&mut WlObjectStorage<S>>, &WlProxy) -> T,
-        S: State,
     {
         let registry = storage.get_object(self)?;
-        dbg!(storage.as_ref());
         let global_name = registry.name_of_index(T::OBJECT_TYPE, global_index)?;
 
         self.bind_from_fn_by_id(buf, storage, global_name, make_data)
@@ -259,12 +254,12 @@ impl<S> WlObjectHandle<WlRegistry<S>> {
         B: WlMessageBuffer,
         T: Dispatch<State = S>,
         F: FnOnce(&mut B, Pin<&mut WlObjectStorage<S>>, &WlProxy) -> T,
-        S: State,
     {
+        let registry = storage.get_proxy(self.id()).unwrap();
+
         // Safety: `WlRegistry` is the parent for this request
-        let proxy = unsafe {
-            WlRegistryBindRequest::<T>::new().send(storage.get_object(self)?, buf, global_name)?
-        };
+        let proxy =
+            unsafe { WlRegistryBindRequest::<T>::new().send::<S>(registry, buf, global_name)? };
 
         let data = make_data(buf, storage.as_mut(), &proxy);
 
@@ -295,21 +290,25 @@ impl<S: State> Dispatch for WlRegistry<S> {
             return;
         };
 
-        match event.clone() {
-            WlRegistryEvent::Global(event) => {
-                // Safety: `event.interface` is a valid utf-8 string,
-                // it contains only valid ascii characters
-                unsafe { self.handle_global_event(event) };
-            }
-            WlRegistryEvent::GlobalRemove(event) => {
-                self.handle_global_remove_event(event);
-            }
-        }
-
         let dispatchers = mem::take(&mut self.dispatchers);
 
-        for &dispatch in &dispatchers {
-            dispatch(self, state, storage, event.clone());
+        match event.clone() {
+            WlRegistryEvent::Global(global) => {
+                // Safety: `event.interface` is a valid utf-8 string,
+                // it contains only valid ascii characters
+                unsafe { self.handle_global_event(global) };
+
+                for &dispatch in &dispatchers {
+                    dispatch(self, state, storage, event.clone());
+                }
+            }
+            WlRegistryEvent::GlobalRemove(remove) => {
+                for &dispatch in &dispatchers {
+                    dispatch(self, state, storage, event.clone());
+                }
+
+                self.handle_global_remove_event(remove);
+            }
         }
 
         self.dispatchers = dispatchers;

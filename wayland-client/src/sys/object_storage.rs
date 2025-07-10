@@ -245,9 +245,11 @@ impl<S> WlObjectStorage<S> {
         id: WlObjectId,
         f: impl FnOnce(&mut Self),
     ) -> Result<(), ObjectDataAcquireError> {
-        if self.acquired_object.replace(id).is_some() {
+        if self.acquired_object.is_some() {
             return Err(ObjectDataAcquireError::AcquiredTwice);
         }
+
+        self.acquired_object = Some(id);
 
         // NOTE(hack3rmann): panic can lead to invalid state for the storage here.
         // If `f` has panicked `self.acquired_object` will not be `Some` after

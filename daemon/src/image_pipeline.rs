@@ -181,7 +181,7 @@ impl ImagePipeline {
                         zero_initialize_workgroup_memory: false,
                     },
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: gpu.surface_formats[&monitor_id],
+                        format: gpu.surface_formats.read().unwrap()[&monitor_id],
                         blend: None,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],

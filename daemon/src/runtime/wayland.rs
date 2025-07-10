@@ -4,18 +4,18 @@ use raw_window_handle::{
     HasDisplayHandle as _, RawDisplayHandle, RawWindowHandle, WaylandWindowHandle,
 };
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     ffi::CStr,
     pin::Pin,
     sync::{
-        Mutex, RwLock,
+        Arc, Mutex, RwLock,
         atomic::{AtomicBool, Ordering::*},
     },
 };
 use wayland_client::{
     interface::{
-        WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlRegionAddRequest,
-        WlRegionDestroyRequest, WlRegistryEvent, WlRegistryGlobalEvent,
+        WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlOutputNameEvent,
+        WlRegionAddRequest, WlRegionDestroyRequest, WlRegistryEvent, WlRegistryGlobalEvent,
         WlRegistryGlobalRemoveEvent, WlSurfaceCommitRequest, WlSurfaceSetBufferScaleRequest,
         WlSurfaceSetOpaqueRegionRequest, ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellLayer,
         ZwlrLayerSurfaceAckConfigureRequest, ZwlrLayerSurfaceAnchor,
@@ -42,6 +42,7 @@ pub type MonitorMap<T> = BTreeMap<MonitorId, T>;
 #[derive(Default, Debug)]
 pub struct MonitorInfo {
     pub size: Option<UVec2>,
+    pub name: Option<Arc<str>>,
     pub output: WlObjectHandle<Output>,
     pub surface: WlObjectHandle<Surface>,
     pub layer_surface: WlObjectHandle<LayerSurface>,
@@ -56,6 +57,7 @@ pub struct Globals {
 pub struct ClientState {
     pub events: Mutex<EventEmitter<Event>>,
     pub monitors: RwLock<MonitorMap<MonitorInfo>>,
+    pub monitor_names: RwLock<HashMap<Arc<str>, MonitorId>>,
     pub globals: Option<Globals>,
     pub resize_requested: AtomicBool,
 }
@@ -65,6 +67,7 @@ impl ClientState {
         Self {
             events: Mutex::new(events),
             monitors: RwLock::new(MonitorMap::default()),
+            monitor_names: RwLock::new(HashMap::default()),
             globals: None,
             resize_requested: AtomicBool::new(false),
         }
@@ -76,6 +79,17 @@ impl ClientState {
             .unwrap()
             .get(&id)
             .and_then(|info| info.size)
+    }
+
+    pub fn monitor_name(&self, id: MonitorId) -> Option<Arc<str>> {
+        let monitors = self.monitors.read().unwrap();
+        let monitor = monitors.get(&id).unwrap();
+        Some(Arc::clone(monitor.name.as_ref()?))
+    }
+
+    pub fn monitor_id(&self, name: &str) -> Option<MonitorId> {
+        let names = self.monitor_names.read().unwrap();
+        names.get(name).copied()
     }
 
     pub fn aspect_ratio(&self, id: MonitorId) -> Option<f32> {
@@ -178,18 +192,27 @@ impl Dispatch for LayerSurface {
 
             // this is resize if and only if monitor is ininialized
             // and size is changed indeed
-            if let Some(prev_size) = monitor.size
-                && prev_size != size
-            {
-                state
-                    .events
-                    .lock()
-                    .unwrap()
-                    .emit(Event::ResizeRequested {
-                        monitor_id: self.monitor_id,
-                        size,
-                    })
-                    .unwrap();
+            match monitor.size {
+                Some(prev_size) if prev_size != size => {
+                    state
+                        .events
+                        .lock()
+                        .unwrap()
+                        .emit(Event::ResizeRequested {
+                            monitor_id: self.monitor_id,
+                            size,
+                        })
+                        .unwrap();
+                }
+                Some(_same_size) => {}
+                None => {
+                    let mut events = state.events.lock().unwrap();
+                    events
+                        .emit(Event::MonitorPlugged {
+                            monitor_id: self.monitor_id,
+                        })
+                        .unwrap();
+                }
             }
 
             monitor.size = Some(size);
@@ -266,7 +289,27 @@ impl HasObjectType for Output {
 
 impl Dispatch for Output {
     type State = ClientState;
-    const ALLOW_EMPTY_DISPATCH: bool = true;
+
+    fn dispatch(
+        &mut self,
+        state: &Self::State,
+        _storage: &mut WlObjectStorage<Self::State>,
+        message: WlMessage<'_>,
+    ) {
+        let Some(WlOutputNameEvent { name }) = message.as_event() else {
+            return;
+        };
+
+        // Safety: name is an ASCII string which is a valid utf-8 string
+        let name = Arc::from(unsafe { str::from_utf8_unchecked(name.to_bytes()) });
+
+        let mut monitors = state.monitors.write().unwrap();
+        let monitor = monitors.get_mut(&self.monitor_id).unwrap();
+        monitor.name = Some(Arc::clone(&name));
+
+        let mut names = state.monitor_names.write().unwrap();
+        names.insert(name, self.monitor_id);
+    }
 }
 
 pub fn handle_output(
@@ -361,6 +404,7 @@ pub fn handle_output(
             surface,
             layer_surface,
             size: None,
+            name: None,
         },
     );
 }
@@ -392,15 +436,26 @@ pub(crate) fn handle_global_remove(
         return;
     }
 
+    let monitor_id = global_name;
     let mut monitors = state.monitors.write().unwrap();
 
-    let Some(info) = monitors.remove(&global_name) else {
+    let Some(info) = monitors.remove(&monitor_id) else {
         return;
     };
+
+    if let Some(name) = info.name {
+        let mut names = state.monitor_names.write().unwrap();
+        _ = names.remove(&name);
+    }
 
     storage.release(info.output).unwrap();
     storage.release(info.surface).unwrap();
     storage.release(info.layer_surface).unwrap();
+
+    {
+        let mut events = state.events.lock().unwrap();
+        events.emit(Event::MonitorUnplugged { monitor_id }).unwrap();
+    }
 }
 
 pub(crate) fn registry_dispatch(
