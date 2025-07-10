@@ -1,3 +1,4 @@
+use crate::{event::EventEmitter, event_loop::Event};
 use glam::UVec2;
 use raw_window_handle::{
     HasDisplayHandle as _, RawDisplayHandle, RawWindowHandle, WaylandWindowHandle,
@@ -7,7 +8,7 @@ use std::{
     ffi::CStr,
     pin::Pin,
     sync::{
-        RwLock,
+        Mutex, RwLock,
         atomic::{AtomicBool, Ordering::*},
     },
 };
@@ -52,14 +53,23 @@ pub struct Globals {
     pub layer_shell: WlObjectHandle<LayerShell>,
 }
 
-#[derive(Default, Debug)]
 pub struct ClientState {
+    pub events: Mutex<EventEmitter<Event>>,
     pub monitors: RwLock<MonitorMap<MonitorInfo>>,
     pub globals: Option<Globals>,
     pub resize_requested: AtomicBool,
 }
 
 impl ClientState {
+    pub fn new(events: EventEmitter<Event>) -> Self {
+        Self {
+            events: Mutex::new(events),
+            monitors: RwLock::new(MonitorMap::default()),
+            globals: None,
+            resize_requested: AtomicBool::new(false),
+        }
+    }
+
     pub fn monitor_size(&self, id: MonitorId) -> Option<UVec2> {
         self.monitors
             .read()
@@ -154,9 +164,11 @@ impl Dispatch for LayerSurface {
             return;
         };
 
+        let size = UVec2::new(width, height);
+
         state.resize_requested.store(
             state.monitor_size(self.monitor_id) != Some(UVec2::ZERO)
-                && state.monitor_size(self.monitor_id) != Some(UVec2::new(width, height)),
+                && state.monitor_size(self.monitor_id) != Some(size),
             Release,
         );
 
@@ -164,7 +176,23 @@ impl Dispatch for LayerSurface {
             let mut monitors = state.monitors.write().unwrap();
             let monitor = monitors.get_mut(&self.monitor_id).unwrap();
 
-            monitor.size = Some(UVec2::new(width, height));
+            // this is resize if and only if monitor is ininialized
+            // and size is changed indeed
+            if let Some(prev_size) = monitor.size
+                && prev_size != size
+            {
+                state
+                    .events
+                    .lock()
+                    .unwrap()
+                    .emit(Event::ResizeRequested {
+                        monitor_id: self.monitor_id,
+                        size,
+                    })
+                    .unwrap();
+            }
+
+            monitor.size = Some(size);
         }
 
         let mut buf = WlStackMessageBuffer::new();
@@ -417,8 +445,8 @@ pub struct Wayland {
 }
 
 impl Wayland {
-    pub fn new() -> Self {
-        let mut client_state = Box::pin(ClientState::default());
+    pub fn new(events: EventEmitter<Event>) -> Self {
+        let mut client_state = Box::pin(ClientState::new(events));
         let display = WlDisplay::connect(client_state.as_ref()).unwrap();
         let mut queue = Box::pin(display.take_main_queue().unwrap());
 
@@ -476,11 +504,5 @@ impl Wayland {
     #[deprecated = "nonsense"]
     pub fn raw_window_handles(&self) -> impl Iterator<Item = RawWindowHandle> {
         [].into_iter()
-    }
-}
-
-impl Default for Wayland {
-    fn default() -> Self {
-        Self::new()
     }
 }

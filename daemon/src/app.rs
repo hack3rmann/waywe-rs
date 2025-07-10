@@ -12,7 +12,7 @@ use crate::{
 use glam::Vec2;
 use runtime::{config::Config, profile::SetupProfile};
 use smallvec::SmallVec;
-use std::{error::Error, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use tracing::error;
 
 #[derive(Default)]
@@ -32,7 +32,7 @@ impl VideoApp {
 
     pub fn set_wallpaper(
         &mut self,
-        runtime: &Runtime<VideoAppEvent>,
+        runtime: &Runtime,
         wallpaper: impl IntoDynWallpaper,
         monitor_id: MonitorId,
     ) {
@@ -79,32 +79,17 @@ impl VideoApp {
     }
 }
 
-pub enum VideoAppEvent {
-    WallpaperPrepared {
-        wallpaper: DynWallpaper,
-        monitor_id: MonitorId,
-    },
-    Error(Box<dyn Error + Send + 'static>),
-}
-
 impl App for VideoApp {
-    type CustomEvent = VideoAppEvent;
-
-    async fn process_event(
-        &mut self,
-        runtime: &mut Runtime<Self::CustomEvent>,
-        event: Event<Self::CustomEvent>,
-    ) {
+    async fn process_event(&mut self, runtime: &mut Runtime, event: Event) {
         match event {
-            Event::Custom(VideoAppEvent::WallpaperPrepared {
+            Event::WallpaperPrepared {
                 wallpaper,
                 monitor_id,
-            }) => {
+            } => {
                 dbg!("WallpaperPrepared", monitor_id);
                 runtime.control_flow.busy();
                 self.set_wallpaper(runtime, wallpaper, monitor_id);
             }
-            Event::Custom(_custom) => {}
             Event::NewWallpaper { path, ty } => {
                 runtime.enable(ty.required_features()).await;
 
@@ -124,28 +109,26 @@ impl App for VideoApp {
                     runtime.task_pool.spawn(move |mut emitter| {
                         let event =
                             match wallpaper::create(&gpu, monitor_size, &path, ty, monitor_id) {
-                                Ok(wallpaper) => VideoAppEvent::WallpaperPrepared {
+                                Ok(wallpaper) => Event::WallpaperPrepared {
                                     wallpaper,
                                     monitor_id,
                                 },
-                                Err(error) => VideoAppEvent::Error(Box::new(error)),
+                                Err(error) => Event::Error(Box::new(error)),
                             };
 
                         emitter.emit(event).unwrap();
                     });
                 }
             }
-            Event::ResizeRequested { size } => {
-                runtime.wgpu.resize_surface(size);
+            Event::ResizeRequested { monitor_id, size } => {
+                runtime.wgpu.resize_surface(monitor_id, size);
                 self.do_force_frame = true;
             }
+            Event::Error(_error) => todo!(),
         }
     }
 
-    async fn frame(
-        &mut self,
-        runtime: &mut Runtime<Self::CustomEvent>,
-    ) -> Result<FrameInfo, FrameError> {
+    async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
         self.resolve_transitions();
 
         // FIXME(hack3rmann): multiple monitors

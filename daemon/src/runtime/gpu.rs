@@ -1,4 +1,4 @@
-use super::wayland::{MonitorMap, SurfaceExtension, Wayland};
+use super::wayland::{MonitorId, MonitorMap, SurfaceExtension, Wayland};
 use ash::vk;
 use glam::UVec2;
 use std::{
@@ -203,7 +203,6 @@ impl Wgpu {
         let surface_formats = surfaces
             .iter()
             .map(|(&id, surface)| {
-                let capabilities = surface.get_capabilities(&adapter);
                 let screen_size = wayland.client_state.monitor_size(id).unwrap();
 
                 let Some(surface_format) =
@@ -215,19 +214,9 @@ impl Wgpu {
                 // TODO(hack3rmann): configure surface with
                 // `usage |= wgt::TextureUsages::STORAGE_BINDING`
                 // to render to it using compute shaders
-                let surface_config = wgpu::SurfaceConfiguration {
-                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                    format: surface_format,
-                    width: screen_size.x,
-                    height: screen_size.y,
-                    desired_maximum_frame_latency: 2,
-                    present_mode: *capabilities
-                        .present_modes
-                        .first()
-                        .expect("should has at least one format"),
-                    alpha_mode: wgpu::CompositeAlphaMode::Auto,
-                    view_formats: vec![],
-                };
+                let surface_config = surface
+                    .get_default_config(&adapter, screen_size.x, screen_size.y)
+                    .unwrap();
 
                 surface.configure(&device, &surface_config);
 
@@ -246,18 +235,14 @@ impl Wgpu {
         }
     }
 
-    #[deprecated = "nonsense"]
-    pub fn resize_surface(&self, _size: UVec2) {
-        // FIXME(hack3rmann): multiple monitors
-        // self.surfaces.first().unwrap().configure(
-        //     &self.device,
-        //     &self
-        //         .surfaces
-        //         .first()
-        //         .unwrap()
-        //         .get_default_config(&self.adapter, size.x, size.y)
-        //         .unwrap(),
-        // );
+    pub fn resize_surface(&self, monitor_id: MonitorId, size: UVec2) {
+        let Some(surface) = self.surfaces.get(&monitor_id) else {
+            return;
+        };
+
+        let surface_config = surface.get_default_config(&self.adapter, size.x, size.y).unwrap();
+
+        surface.configure(&self.device, &surface_config);
     }
 
     pub fn use_shader(&self, id: &'static str, desc: wgpu::ShaderModuleDescriptor) {

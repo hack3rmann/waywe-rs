@@ -1,4 +1,4 @@
-use crate::{almost::Almost, task_pool::TaskPool};
+use crate::{almost::Almost, event_loop::Event, task_pool::TaskPool};
 use bitflags::bitflags;
 use gpu::Wgpu;
 use ipc::Ipc;
@@ -44,18 +44,18 @@ bitflags! {
     }
 }
 
-pub struct Runtime<T> {
+pub struct Runtime {
     pub timer: Timer,
     pub video: Almost<Video>,
     pub wgpu: Almost<Arc<Wgpu>>,
     pub wayland: Wayland,
     pub ipc: Ipc,
     pub control_flow: ControlFlow,
-    pub task_pool: TaskPool<T>,
+    pub task_pool: TaskPool<Event>,
 }
 
-impl<T> Runtime<T> {
-    pub fn new(wayland: Wayland, control_flow: ControlFlow, task_pool: TaskPool<T>) -> Self {
+impl Runtime {
+    pub fn new(wayland: Wayland, control_flow: ControlFlow, task_pool: TaskPool<Event>) -> Self {
         Self {
             timer: Timer::default(),
             wayland,

@@ -1,8 +1,7 @@
 use super::{DynWallpaper, RenderState, Wallpaper};
 use crate::{
-    app::VideoAppEvent,
     event_loop::{FrameError, FrameInfo},
-    runtime::{gpu::Wgpu, wayland::MonitorId, Runtime, RuntimeFeatures},
+    runtime::{Runtime, RuntimeFeatures, gpu::Wgpu, wayland::MonitorId},
 };
 use bytemuck::{Pod, Zeroable};
 use glam::{UVec2, Vec2};
@@ -29,7 +28,7 @@ pub struct TransitionWallpaper {
 
 impl TransitionWallpaper {
     pub fn new(
-        runtime: &Runtime<VideoAppEvent>,
+        runtime: &Runtime,
         from: DynWallpaper,
         to: DynWallpaper,
         config: TransitionConfig,
@@ -109,7 +108,7 @@ impl Wallpaper for TransitionWallpaper {
 
     fn frame(
         &mut self,
-        runtime: &Runtime<VideoAppEvent>,
+        runtime: &Runtime,
         encoder: &mut wgpu::CommandEncoder,
         surface_view: &wgpu::TextureView,
     ) -> Result<FrameInfo, FrameError> {
@@ -361,7 +360,7 @@ impl TransitionPipeline {
 
     pub fn render(
         &mut self,
-        runtime: &Runtime<VideoAppEvent>,
+        runtime: &Runtime,
         encoder: &mut wgpu::CommandEncoder,
         surface_view: &wgpu::TextureView,
     ) -> Result<FrameInfo, FrameError> {

@@ -1,6 +1,5 @@
 use super::{RenderState, Wallpaper};
 use crate::{
-    app::VideoAppEvent,
     event_loop::{FrameError, FrameInfo},
     image_pipeline::{ImagePipeline, COLOR_WHITE},
     runtime::{gpu::Wgpu, wayland::MonitorId, Runtime, RuntimeFeatures},
@@ -57,7 +56,7 @@ impl Wallpaper for ImageWallpaper {
 
     fn frame(
         &mut self,
-        _: &Runtime<VideoAppEvent>,
+        _: &Runtime,
         encoder: &mut wgpu::CommandEncoder,
         surface_view: &wgpu::TextureView,
     ) -> Result<FrameInfo, FrameError> {

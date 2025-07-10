@@ -3,9 +3,8 @@ pub mod transition;
 pub mod video;
 
 use crate::{
-    app::VideoAppEvent,
     event_loop::{FrameError, FrameInfo},
-    runtime::{gpu::Wgpu, wayland::MonitorId, Runtime, RuntimeFeatures},
+    runtime::{Runtime, RuntimeFeatures, gpu::Wgpu, wayland::MonitorId},
 };
 use glam::UVec2;
 use image::{ImageWallpaper, ImageWallpaperCreationError};
@@ -25,7 +24,7 @@ pub enum RenderState {
 pub trait Wallpaper: Any + Send + Sync {
     fn frame(
         &mut self,
-        runtime: &Runtime<VideoAppEvent>,
+        runtime: &Runtime,
         encoder: &mut wgpu::CommandEncoder,
         surface_view: &wgpu::TextureView,
     ) -> Result<FrameInfo, FrameError>;
@@ -74,11 +73,14 @@ pub fn create(
     monitor_id: MonitorId,
 ) -> Result<DynWallpaper, WallpaperCreationError> {
     match ty {
-        WallpaperType::Video => {
-            VideoWallpaper::new(gpu, monitor_size, &pathbuf_into_cstring(path.to_owned()), monitor_id)
-                .map(IntoDynWallpaper::into_dyn_wallpaper)
-                .map_err(WallpaperCreationError::from)
-        }
+        WallpaperType::Video => VideoWallpaper::new(
+            gpu,
+            monitor_size,
+            &pathbuf_into_cstring(path.to_owned()),
+            monitor_id,
+        )
+        .map(IntoDynWallpaper::into_dyn_wallpaper)
+        .map_err(WallpaperCreationError::from),
         WallpaperType::Image => ImageWallpaper::new(gpu, monitor_size, path, monitor_id)
             .map(IntoDynWallpaper::into_dyn_wallpaper)
             .map_err(WallpaperCreationError::from),

@@ -1,8 +1,7 @@
 use super::Wallpaper;
 use crate::{
-    app::VideoAppEvent,
     event_loop::{FrameError, FrameInfo},
-    runtime::{gpu::Wgpu, wayland::MonitorId, Runtime, RuntimeFeatures},
+    runtime::{Runtime, RuntimeFeatures, gpu::Wgpu, wayland::MonitorId},
     video_pipeline::VideoPipeline,
 };
 use ash::vk;
@@ -94,7 +93,7 @@ impl Wallpaper for VideoWallpaper {
 
     fn frame(
         &mut self,
-        runtime: &Runtime<VideoAppEvent>,
+        runtime: &Runtime,
         encoder: &mut wgpu::CommandEncoder,
         surface_view: &wgpu::TextureView,
     ) -> Result<FrameInfo, FrameError> {

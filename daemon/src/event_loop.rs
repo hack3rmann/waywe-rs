@@ -1,10 +1,11 @@
 use crate::{
-    event::{AbsorbError, CustomEvent, EventReceiver},
+    event::{AbsorbError, EventReceiver},
     runtime::{
         ControlFlow, Runtime,
-        wayland::{ClientState, Wayland},
+        wayland::{MonitorId, Wayland},
     },
     task_pool::TaskPool,
+    wallpaper::DynWallpaper,
 };
 use glam::UVec2;
 use runtime::{
@@ -29,8 +30,8 @@ use tracing::{debug, error, info, warn};
 use video::RatioI32;
 
 pub struct EventLoop<A: App> {
-    runtime: Runtime<A::CustomEvent>,
-    event_queue: EventQueue<A::CustomEvent>,
+    runtime: Runtime,
+    event_queue: EventQueue,
     app: A,
     epoll: Epoll,
 }
@@ -46,12 +47,12 @@ impl<A: App> EventLoop<A> {
         static SIGNALS_ONCE: Once = Once::new();
         SIGNALS_ONCE.call_once(signals::setup);
 
-        let wayland = Wayland::new();
-
-        let mut event_queue = match EventQueue::<A::CustomEvent>::new() {
+        let mut event_queue = match EventQueue::new() {
             Ok(queue) => queue,
             Err(error) => panic!("failed to create event queue: {error:?}"),
         };
+
+        let wayland = Wayland::new(event_queue.custom_receiver.make_emitter().unwrap());
 
         match SetupProfile::read() {
             Ok(profile) => {
@@ -147,9 +148,6 @@ impl<A: App> EventLoop<A> {
                 self.runtime.wayland.client_state.as_ref(),
             );
 
-            self.event_queue
-                .populate_from_wayland_client_state(&self.runtime.wayland.client_state);
-
             if let Err(error) = self.event_queue.populate_events_from_custom() {
                 error!(?error, "failed to populate custom events");
             }
@@ -190,20 +188,28 @@ impl<A: App> EventLoop<A> {
     }
 }
 
-#[derive(Debug)]
-pub enum Event<T> {
-    Custom(T),
-    NewWallpaper { path: PathBuf, ty: WallpaperType },
-    ResizeRequested { size: UVec2 },
+pub enum Event {
+    WallpaperPrepared {
+        wallpaper: DynWallpaper,
+        monitor_id: MonitorId,
+    },
+    Error(Box<dyn std::error::Error + Send + 'static>),
+    NewWallpaper {
+        path: PathBuf,
+        ty: WallpaperType,
+    },
+    ResizeRequested {
+        monitor_id: MonitorId,
+        size: UVec2,
+    },
 }
 
-#[derive(Debug)]
-pub struct EventQueue<T> {
-    pub events: Vec<Event<T>>,
-    pub custom_receiver: EventReceiver<T>,
+pub struct EventQueue {
+    pub events: Vec<Event>,
+    pub custom_receiver: EventReceiver<Event>,
 }
 
-impl<T: CustomEvent> EventQueue<T> {
+impl EventQueue {
     pub fn new() -> Result<Self, io::Error> {
         Ok(Self {
             events: vec![],
@@ -211,18 +217,18 @@ impl<T: CustomEvent> EventQueue<T> {
         })
     }
 
-    pub fn add(&mut self, event: Event<T>) {
+    pub fn add(&mut self, event: Event) {
         self.events.push(event);
     }
 
-    pub fn drain(&mut self) -> Drain<'_, Event<T>> {
+    pub fn drain(&mut self) -> Drain<'_, Event> {
         self.events.drain(..)
     }
 
     pub fn populate_events_from_custom(&mut self) -> Result<(), AbsorbError> {
         loop {
             match self.custom_receiver.try_recv() {
-                Ok(value) => self.events.push(Event::Custom(value)),
+                Ok(value) => self.events.push(value),
                 Err(AbsorbError::WouldBlock) => return Ok(()),
                 Err(error) => return Err(error),
             }
@@ -254,37 +260,21 @@ impl<T: CustomEvent> EventQueue<T> {
             Err(error) => Err(error),
         }
     }
-
-    pub fn populate_from_wayland_client_state(&mut self, state: &ClientState) {
-        if state.resize_requested.load(Ordering::Acquire) {
-            state.resize_requested.store(false, Ordering::Release);
-            // FIXME(hack3rmann): handle resize
-            // self.events.push(Event::ResizeRequested {
-            //     // FIXME(hack3rmann): multiple monitors
-            //     size: state.monitor_size(0).unwrap(),
-            // });
-        }
-    }
 }
 
 pub trait App {
-    type CustomEvent: CustomEvent;
-
     fn process_event(
         &mut self,
-        runtime: &mut Runtime<Self::CustomEvent>,
-        event: Event<Self::CustomEvent>,
+        runtime: &mut Runtime,
+        event: Event,
     ) -> impl Future<Output = ()> + Send;
 
     fn frame(
         &mut self,
-        runtime: &mut Runtime<Self::CustomEvent>,
+        runtime: &mut Runtime,
     ) -> impl Future<Output = Result<FrameInfo, FrameError>> + Send;
 
-    fn exit(
-        &mut self,
-        _runtime: &mut Runtime<Self::CustomEvent>,
-    ) -> impl Future<Output = ()> + Send {
+    fn exit(&mut self, _runtime: &mut Runtime) -> impl Future<Output = ()> + Send {
         async {}
     }
 }
