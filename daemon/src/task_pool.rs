@@ -1,6 +1,7 @@
 use crate::event::EventEmitter;
 use smallvec::{SmallVec, smallvec};
-use std::{panic, thread::JoinHandle};
+use std::thread::JoinHandle;
+use tracing::error;
 
 pub struct TaskPool<T> {
     pub handles: SmallVec<[JoinHandle<()>; 1]>,
@@ -26,8 +27,8 @@ impl<T> TaskPool<T> {
             if self.handles[i].is_finished() {
                 let handle = self.handles.swap_remove(i);
 
-                if let Err(payload) = handle.join() {
-                    panic::resume_unwind(payload);
+                if let Err(_panic_payload) = handle.join() {
+                    error!("task failed");
                 }
             }
         }
