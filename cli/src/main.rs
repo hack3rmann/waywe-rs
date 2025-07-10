@@ -24,8 +24,8 @@ fn main() -> ExitCode {
     video::init();
 
     let daemon_command = match Args::parse().command {
-        Command::Preview { out } => {
-            let profile = match SetupProfile::read() {
+        Command::Preview { out, monitor } => {
+            let mut profile = match SetupProfile::read() {
                 Ok(profile) => profile,
                 Err(error) => {
                     error!(?error, "failed to open profile file");
@@ -33,8 +33,13 @@ fn main() -> ExitCode {
                 }
             };
 
-            // FIXME(hack3rmann): multiple_monitors
-            let info = profile.monitors.into_values().next().unwrap();
+            let Some(info) = (match monitor {
+                Some(name) => profile.monitors.remove(name.as_str()),
+                None => profile.monitors.into_values().next(),
+            }) else {
+                error!("no preview available");
+                return ExitCode::FAILURE;
+            };
 
             let image = match info.wallpaper_type {
                 WallpaperType::Video => {
@@ -142,8 +147,8 @@ fn main() -> ExitCode {
 
             return ExitCode::SUCCESS;
         }
-        Command::Current => {
-            let profile = match SetupProfile::read() {
+        Command::Current { monitor } => {
+            let mut profile = match SetupProfile::read() {
                 Ok(profile) => profile,
                 Err(SetupProfileError::Io(error)) if error.kind() == ErrorKind::NotFound => {
                     return ExitCode::FAILURE;
@@ -154,8 +159,13 @@ fn main() -> ExitCode {
                 }
             };
 
-            // FIXME(hack3rmann): multiple monitors
-            let info = profile.monitors.into_values().next().unwrap();
+            let Some(info) = (match monitor {
+                Some(name) => profile.monitors.remove(name.as_str()),
+                None => profile.monitors.into_values().next(),
+            }) else {
+                error!("no wallpaper");
+                return ExitCode::FAILURE;
+            };
 
             println!("{}", info.path.display());
 
@@ -261,9 +271,16 @@ enum Command {
     /// Start the daemon process
     Start,
     /// Get path to the current wallpaper
-    Current,
+    Current {
+        /// Monitor to set wallpaper on
+        #[arg(long)]
+        monitor: Option<String>,
+    },
     /// Create a preview for the wallpaper
     Preview {
+        /// Monitor to set wallpaper on
+        #[arg(long)]
+        monitor: Option<String>,
         /// Where to store the preview
         out: PathBuf,
     },
