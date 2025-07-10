@@ -124,7 +124,10 @@ impl<A: App> EventLoop<A> {
                 error!(?error, "failed to populate custom events");
             }
 
-            if let Err(error) = self.event_queue.populate_from_cli(&self.runtime.ipc.socket) {
+            if let Err(error) = self
+                .event_queue
+                .populate_from_cli(&self.runtime.wayland, &self.runtime.ipc.socket)
+            {
                 error!(?error, "can not recv from waywe-cli");
             }
 
@@ -222,24 +225,29 @@ impl EventQueue {
 
     pub fn populate_from_cli(
         &mut self,
+        wayland: &Wayland,
         cli: &IpcSocket<Server, DaemonCommand>,
     ) -> Result<(), RecvError> {
         match cli.try_recv() {
             Ok(command) => {
-                let event = match command {
-                    DaemonCommand::SetVideo { path } => Event::NewWallpaper {
-                        path,
-                        ty: WallpaperType::Video,
-                        set: SetWallpaper::ForAll,
-                    },
-                    DaemonCommand::SetImage { path } => Event::NewWallpaper {
-                        path,
-                        ty: WallpaperType::Image,
-                        set: SetWallpaper::ForAll,
-                    },
+                let (path, monitor, ty) = match command {
+                    DaemonCommand::SetVideo { path, monitor } => {
+                        (path, monitor, WallpaperType::Video)
+                    }
+                    DaemonCommand::SetImage { path, monitor } => {
+                        (path, monitor, WallpaperType::Image)
+                    }
                 };
 
-                self.add(event);
+                let monitor_id = monitor
+                    .as_ref()
+                    .and_then(|name| wayland.client_state.monitor_id(name));
+
+                let set = monitor_id
+                    .map(SetWallpaper::ForMonitor)
+                    .unwrap_or(SetWallpaper::ForAll);
+
+                self.add(Event::NewWallpaper { path, ty, set });
 
                 Ok(())
             }

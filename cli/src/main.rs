@@ -154,7 +154,7 @@ fn main() -> ExitCode {
                 }
             };
 
-            // FIXME(hack3rmann): multiple_monitors
+            // FIXME(hack3rmann): multiple monitors
             let info = profile.monitors.into_values().next().unwrap();
 
             println!("{}", info.path.display());
@@ -173,7 +173,7 @@ fn main() -> ExitCode {
 
             return ExitCode::SUCCESS;
         }
-        Command::Video { path } => {
+        Command::Video { path, monitor } => {
             let absolute_path = match path.canonicalize() {
                 Ok(path) => path,
                 Err(error) => {
@@ -189,9 +189,10 @@ fn main() -> ExitCode {
 
             DaemonCommand::SetVideo {
                 path: absolute_path,
+                monitor,
             }
         }
-        Command::Image { path } => {
+        Command::Image { path, monitor } => {
             let _reader = match ImageReader::open(&path) {
                 Ok(image) => image,
                 Err(error) => {
@@ -210,6 +211,7 @@ fn main() -> ExitCode {
 
             DaemonCommand::SetImage {
                 path: absolute_path,
+                monitor,
             }
         }
     };
@@ -242,11 +244,17 @@ struct Args {
 enum Command {
     /// Set a video as a wallpaper
     Video {
+        /// Monitor to set wallpaper on
+        #[arg(long)]
+        monitor: Option<String>,
         /// Path to the video
         path: PathBuf,
     },
     /// Set an image as a wallpaper
     Image {
+        /// Monitor to set wallpaper on
+        #[arg(long)]
+        monitor: Option<String>,
         /// Path to the image
         path: PathBuf,
     },
