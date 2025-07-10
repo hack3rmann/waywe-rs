@@ -70,7 +70,7 @@ pub fn include_interfaces(token_stream: TokenStream) -> TokenStream {
 
     let object_type_enum_variants_docs = interface_names
         .iter()
-        .map(|name| format!("Type of `{}` interface", name));
+        .map(|name| format!("Type of `{name}` interface"));
 
     let protocol_modules = protocols.iter().map(|protocol| {
         let protocol_module_name = Ident::new(&protocol.name, Span::call_site());
@@ -724,10 +724,8 @@ fn bitfield_enum_to_impl(enumeration: &Enum) -> TokenStream {
     let enum_name = enumeration.name.to_case(Case::Pascal);
     let enum_ident = Ident::new(&enum_name, Span::call_site());
 
-    let from_u32_unchecked_docs = format!(
-        "Constructs [`{}`] from u32 as is\n\n# Safety\n\n`value` should be valid",
-        enum_name,
-    );
+    let from_u32_unchecked_docs =
+        format!("Constructs [`{enum_name}`] from u32 as is\n\n# Safety\n\n`value` should be valid");
 
     let enum_entry_names = enumeration
         .entry
@@ -793,12 +791,10 @@ fn regular_enum_to_impl(enumeration: &Enum) -> TokenStream {
     let enum_name = enumeration.name.to_case(Case::Pascal);
     let enum_ident = Ident::new(&enum_name, Span::call_site());
 
-    let from_u32_unchecked_docs = format!(
-        "Constructs [`{}`] from u32 as is\n\n# Safety\n\n`value` should be valid",
-        enum_name,
-    );
+    let from_u32_unchecked_docs =
+        format!("Constructs [`{enum_name}`] from u32 as is\n\n# Safety\n\n`value` should be valid");
 
-    let try_from_error_docs = format!("Error constructing [`{}`] from u32", enum_name);
+    let try_from_error_docs = format!("Error constructing [`{enum_name}`] from u32");
 
     let enum_entry_names = enumeration
         .entry

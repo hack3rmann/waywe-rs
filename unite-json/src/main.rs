@@ -283,12 +283,12 @@ fn main() -> io::Result<()> {
         let fd = io::stdout();
         let mut fd = BufWriter::new(fd);
 
-        fd.write_all(format!("{}", res).as_bytes())?;
+        fd.write_all(format!("{res}").as_bytes())?;
     } else {
         let fd = fs::File::create("united.json")?;
         let mut fd = BufWriter::new(fd);
 
-        fd.write_all(format!("{}", res).as_bytes())?;
+        fd.write_all(format!("{res}").as_bytes())?;
     };
 
     Ok(())
