@@ -1,13 +1,12 @@
 use crate::{
-    event::{AbsorbError, EventReceiver},
+    app::NewWallpaperEvent,
+    event::{AbsorbError, Event, EventReceiver, IntoEvent},
     runtime::{
         ControlFlow, Runtime,
         wayland::{MonitorId, Wayland},
     },
     task_pool::TaskPool,
-    wallpaper::DynWallpaper,
 };
-use glam::UVec2;
 use runtime::{
     DaemonCommand, Epoll, IpcSocket, RecvError, WallpaperType, epoll::PolledFds, ipc::Server,
     signals,
@@ -16,7 +15,6 @@ use rustix::io::Errno;
 use std::{
     io::{self},
     os::fd::AsFd as _,
-    path::PathBuf,
     sync::{Once, atomic::Ordering},
     time::Duration,
     vec::Drain,
@@ -169,32 +167,9 @@ pub enum SetWallpaper {
     ForMonitor(MonitorId),
 }
 
-pub enum Event {
-    WallpaperPrepared {
-        wallpaper: DynWallpaper,
-        monitor_id: MonitorId,
-    },
-    Error(Box<dyn std::error::Error + Send + 'static>),
-    NewWallpaper {
-        path: PathBuf,
-        ty: WallpaperType,
-        set: SetWallpaper,
-    },
-    ResizeRequested {
-        monitor_id: MonitorId,
-        size: UVec2,
-    },
-    MonitorPlugged {
-        monitor_id: MonitorId,
-    },
-    MonitorUnplugged {
-        monitor_id: MonitorId,
-    },
-}
-
 pub struct EventQueue {
     pub events: Vec<Event>,
-    pub custom_receiver: EventReceiver<Event>,
+    pub custom_receiver: EventReceiver,
 }
 
 impl EventQueue {
@@ -205,8 +180,8 @@ impl EventQueue {
         })
     }
 
-    pub fn add(&mut self, event: Event) {
-        self.events.push(event);
+    pub fn add(&mut self, event: impl IntoEvent) {
+        self.events.push(event.into_event());
     }
 
     pub fn drain(&mut self) -> Drain<'_, Event> {
@@ -247,7 +222,7 @@ impl EventQueue {
                     .map(SetWallpaper::ForMonitor)
                     .unwrap_or(SetWallpaper::ForAll);
 
-                self.add(Event::NewWallpaper { path, ty, set });
+                self.add(NewWallpaperEvent { path, ty, set });
 
                 Ok(())
             }

@@ -3,13 +3,13 @@ use smallvec::{SmallVec, smallvec};
 use std::thread::JoinHandle;
 use tracing::error;
 
-pub struct TaskPool<T> {
+pub struct TaskPool {
     pub handles: SmallVec<[JoinHandle<()>; 1]>,
-    pub emitter: EventEmitter<T>,
+    pub emitter: EventEmitter,
 }
 
-impl<T> TaskPool<T> {
-    pub fn new(emitter: EventEmitter<T>) -> Self {
+impl TaskPool {
+    pub fn new(emitter: EventEmitter) -> Self {
         Self {
             handles: smallvec![],
             emitter,
@@ -36,11 +36,7 @@ impl<T> TaskPool<T> {
         n_finished
     }
 
-    pub fn spawn<F>(&mut self, f: F)
-    where
-        F: FnOnce(EventEmitter<T>) + Send + 'static,
-        T: Send + 'static,
-    {
+    pub fn spawn(&mut self, f: impl FnOnce(EventEmitter) + Send + 'static) {
         self.erase_finished();
 
         let emitter = self.emitter.clone();

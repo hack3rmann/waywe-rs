@@ -1,9 +1,10 @@
 use crate::{
     almost::Almost,
-    event_loop::{App, Event, FrameError, FrameInfo, SetWallpaper},
+    event::Event,
+    event_loop::{App, FrameError, FrameInfo, SetWallpaper},
     runtime::{
         Runtime,
-        wayland::{MonitorId, MonitorMap},
+        wayland::{MonitorId, MonitorMap, WaylandEvent},
     },
     wallpaper::{
         self, DynWallpaper, IntoDynWallpaper, RenderState, RequiredFeaturesExt as _,
@@ -12,11 +13,12 @@ use crate::{
 };
 use glam::Vec2;
 use runtime::{
+    WallpaperType,
     config::Config,
     profile::{Monitor, SetupProfile},
 };
 use smallvec::{SmallVec, smallvec};
-use std::{sync::Arc, time::Duration};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 use tracing::{debug, error};
 
 #[derive(Default)]
@@ -83,81 +85,102 @@ impl VideoApp {
     }
 }
 
+pub struct WallpaperPreparedEvent {
+    pub wallpaper: DynWallpaper,
+    pub monitor_id: MonitorId,
+}
+
+pub struct NewWallpaperEvent {
+    pub path: PathBuf,
+    pub ty: WallpaperType,
+    pub set: SetWallpaper,
+}
+
 impl App for VideoApp {
-    async fn process_event(&mut self, runtime: &mut Runtime, event: Event) {
-        match event {
-            Event::WallpaperPrepared {
+    // TODO(hack3rmann): collect all handlers into a hashmap in event loop
+    // HACK(hack3rmann): should write `e` (or no more than 4 characters) to avoid wierd formatting
+    async fn process_event(&mut self, runtime: &mut Runtime, mut e: Event) {
+        e.handle(async |event| {
+            let WallpaperPreparedEvent {
                 wallpaper,
                 monitor_id,
-            } => {
-                runtime.control_flow.busy();
-                self.set_wallpaper(runtime, wallpaper, monitor_id);
-            }
-            Event::NewWallpaper { path, ty, set } => {
-                runtime.enable(ty.required_features()).await;
+            } = event;
 
-                let monitor_ids: SmallVec<[MonitorId; 4]> = match set {
-                    SetWallpaper::ForAll => runtime
-                        .wayland
-                        .client_state
-                        .monitors
-                        .read()
-                        .unwrap()
-                        .keys()
-                        .copied()
-                        .collect(),
-                    SetWallpaper::ForMonitor(wl_object_id) => smallvec![wl_object_id],
-                };
+            runtime.control_flow.busy();
+            self.set_wallpaper(runtime, wallpaper, monitor_id);
+        })
+        .await;
 
-                for monitor_id in monitor_ids {
-                    let path = path.clone();
-                    let gpu = Arc::clone(&runtime.wgpu);
-                    let monitor_size = runtime
-                        .wayland
-                        .client_state
-                        .monitor_size(monitor_id)
-                        .unwrap();
-                    let monitor_name = runtime
-                        .wayland
-                        .client_state
-                        .monitor_name(monitor_id)
-                        .unwrap();
+        e.handle(async |NewWallpaperEvent { path, ty, set }| {
+            runtime.enable(ty.required_features()).await;
 
-                    if let Err(error) = SetupProfile::default()
-                        .with(
-                            monitor_name,
-                            Monitor {
-                                wallpaper_type: ty,
-                                path: path.clone(),
-                            },
-                        )
-                        .store()
-                    {
-                        error!(?error, "failed to save setup profile");
-                    }
+            let monitor_ids: SmallVec<[MonitorId; 4]> = match set {
+                SetWallpaper::ForAll => runtime
+                    .wayland
+                    .client_state
+                    .monitors
+                    .read()
+                    .unwrap()
+                    .keys()
+                    .copied()
+                    .collect(),
+                SetWallpaper::ForMonitor(wl_object_id) => smallvec![wl_object_id],
+            };
 
-                    runtime.task_pool.spawn(move |mut emitter| {
-                        let event =
-                            match wallpaper::create(&gpu, monitor_size, &path, ty, monitor_id) {
-                                Ok(wallpaper) => Event::WallpaperPrepared {
-                                    wallpaper,
-                                    monitor_id,
-                                },
-                                Err(error) => Event::Error(Box::new(error)),
-                            };
+            for monitor_id in monitor_ids {
+                let path = path.clone();
+                let gpu = Arc::clone(&runtime.wgpu);
+                let monitor_size = runtime
+                    .wayland
+                    .client_state
+                    .monitor_size(monitor_id)
+                    .unwrap();
+                let monitor_name = runtime
+                    .wayland
+                    .client_state
+                    .monitor_name(monitor_id)
+                    .unwrap();
 
-                        emitter.emit(event).unwrap();
-                    });
+                if let Err(error) = SetupProfile::default()
+                    .with(
+                        monitor_name,
+                        Monitor {
+                            wallpaper_type: ty,
+                            path: path.clone(),
+                        },
+                    )
+                    .store()
+                {
+                    error!(?error, "failed to save setup profile");
                 }
+
+                runtime.task_pool.spawn(move |mut emitter| {
+                    let event = match wallpaper::create(&gpu, monitor_size, &path, ty, monitor_id) {
+                        Ok(wallpaper) => WallpaperPreparedEvent {
+                            wallpaper,
+                            monitor_id,
+                        },
+                        Err(error) => {
+                            error!(?error, "failed to create wallpaper");
+                            return;
+                        }
+                    };
+
+                    emitter.emit(event).unwrap();
+                });
             }
-            Event::ResizeRequested { monitor_id, size } => {
+        })
+        .await;
+
+        e.handle(async |e: WaylandEvent| match e {
+            WaylandEvent::ResizeRequested { monitor_id, size } => {
                 if Almost::is_init(&runtime.wgpu) {
                     runtime.wgpu.resize_surface(monitor_id, size);
                 }
 
                 self.do_force_frame = true;
             }
-            Event::MonitorPlugged { monitor_id } => {
+            WaylandEvent::MonitorPlugged { id: monitor_id } => {
                 if Almost::is_init(&runtime.wgpu) {
                     runtime.wgpu.register_surface(&runtime.wayland, monitor_id);
                 }
@@ -171,7 +194,7 @@ impl App for VideoApp {
                 if let Ok(mut profile) = SetupProfile::read()
                     && let Some(info) = profile.monitors.remove(&monitor_name)
                 {
-                    let event = Event::NewWallpaper {
+                    let event = NewWallpaperEvent {
                         path: info.path,
                         ty: info.wallpaper_type,
                         set: SetWallpaper::ForMonitor(monitor_id),
@@ -182,14 +205,14 @@ impl App for VideoApp {
 
                 runtime.control_flow.busy();
             }
-            Event::MonitorUnplugged { monitor_id } => {
+            WaylandEvent::MonitorUnplugged { id: monitor_id } => {
                 debug!(?monitor_id, "unplugged a monitor");
 
                 _ = self.wallpapers.remove(&monitor_id);
                 runtime.wgpu.unregister_surface(monitor_id);
             }
-            Event::Error(_error) => todo!(),
-        }
+        })
+        .await;
     }
 
     async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {

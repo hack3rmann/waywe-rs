@@ -1,11 +1,46 @@
+use crate::box_ext::BoxExt;
 use bytemuck::{Contiguous, NoUninit};
 use rustix::fs::OFlags;
 use std::{
+    any::Any,
     io::{self, ErrorKind, PipeReader, PipeWriter, Read as _, Write as _},
     os::fd::{AsFd, BorrowedFd},
     sync::mpsc::{self, Receiver, RecvError, Sender, TryRecvError},
 };
 use thiserror::Error;
+
+pub struct Event(Option<Box<dyn Any + Send + 'static>>);
+
+impl Event {
+    pub async fn handle<T: Any + Send + 'static>(&mut self, f: impl AsyncFnOnce(T)) {
+        let Some(any_value) = self.0.take() else {
+            return;
+        };
+
+        let boxed_value = match any_value.downcast::<T>() {
+            Ok(value) => value,
+            Err(other) => {
+                self.0 = Some(other);
+                return;
+            }
+        };
+
+        let value = BoxExt::into_inner(boxed_value);
+        f(value).await;
+    }
+}
+
+pub trait IntoEvent: Any + Send + 'static {
+    fn into_event(self) -> Event
+    where
+        Self: Sized;
+}
+
+impl<T: Any + Send + 'static> IntoEvent for T {
+    fn into_event(self) -> Event {
+        Event(Some(Box::new(self)))
+    }
+}
 
 #[repr(u8)]
 #[derive(
@@ -13,21 +48,18 @@ use thiserror::Error;
 )]
 pub enum EventType {
     #[default]
-    Custom = 0,
+    Any = 0,
 }
-
-pub trait CustomEvent: Send + 'static {}
-impl<T: Send + 'static> CustomEvent for T {}
 
 #[derive(Debug)]
-pub struct EventReceiver<T> {
+pub struct EventReceiver {
     reader: PipeReader,
     writer: PipeWriter,
-    receiver: Receiver<T>,
-    sender: Sender<T>,
+    receiver: Receiver<Event>,
+    sender: Sender<Event>,
 }
 
-impl<T: CustomEvent> EventReceiver<T> {
+impl EventReceiver {
     pub fn new() -> Result<Self, io::Error> {
         let (reader, writer) = io::pipe()?;
 
@@ -47,7 +79,7 @@ impl<T: CustomEvent> EventReceiver<T> {
         })
     }
 
-    pub fn make_emitter(&self) -> Result<EventEmitter<T>, io::Error> {
+    pub fn make_emitter(&self) -> Result<EventEmitter, io::Error> {
         Ok(EventEmitter {
             writer: self.writer.try_clone()?,
             sender: self.sender.clone(),
@@ -58,12 +90,12 @@ impl<T: CustomEvent> EventReceiver<T> {
         self.reader.as_fd()
     }
 
-    pub fn recv(&mut self) -> Result<T, AbsorbError> {
+    pub fn recv(&mut self) -> Result<Event, AbsorbError> {
         self.reader.read_exact(&mut [0_u8])?;
         Ok(self.receiver.recv()?)
     }
 
-    pub fn try_recv(&mut self) -> Result<T, AbsorbError> {
+    pub fn try_recv(&mut self) -> Result<Event, AbsorbError> {
         match self.reader.read(&mut [0_u8]) {
             Ok(1) => {}
             Ok(..) => return Err(AbsorbError::WouldBlock),
@@ -77,23 +109,22 @@ impl<T: CustomEvent> EventReceiver<T> {
     }
 }
 
-pub struct EventEmitter<T> {
+pub struct EventEmitter {
     writer: PipeWriter,
-    sender: Sender<T>,
+    sender: Sender<Event>,
 }
 
-impl<T> EventEmitter<T> {
-    pub fn emit(&mut self, event: T) -> Result<(), EmitError> {
-        self.writer
-            .write_all(bytemuck::bytes_of(&EventType::Custom))?;
+impl EventEmitter {
+    pub fn emit(&mut self, event: impl IntoEvent) -> Result<(), EmitError> {
+        self.writer.write_all(bytemuck::bytes_of(&EventType::Any))?;
         self.sender
-            .send(event)
+            .send(event.into_event())
             .map_err(|_| EmitError::Disconnected)?;
         Ok(())
     }
 }
 
-impl<T> Clone for EventEmitter<T> {
+impl Clone for EventEmitter {
     fn clone(&self) -> Self {
         Self {
             writer: self.writer.try_clone().unwrap(),

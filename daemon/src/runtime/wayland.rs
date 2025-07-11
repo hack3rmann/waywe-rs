@@ -1,4 +1,4 @@
-use crate::{event::EventEmitter, event_loop::Event};
+use crate::event::EventEmitter;
 use glam::UVec2;
 use raw_window_handle::{
     HasDisplayHandle as _, RawDisplayHandle, RawWindowHandle, WaylandWindowHandle,
@@ -36,6 +36,13 @@ use wayland_client::{
     },
 };
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum WaylandEvent {
+    ResizeRequested { monitor_id: MonitorId, size: UVec2 },
+    MonitorPlugged { id: MonitorId },
+    MonitorUnplugged { id: MonitorId },
+}
+
 pub type MonitorId = WlObjectId;
 pub type MonitorMap<T> = BTreeMap<MonitorId, T>;
 
@@ -55,7 +62,7 @@ pub struct Globals {
 }
 
 pub struct ClientState {
-    pub events: Mutex<EventEmitter<Event>>,
+    pub events: Mutex<EventEmitter>,
     pub monitors: RwLock<MonitorMap<MonitorInfo>>,
     pub monitor_names: RwLock<HashMap<Arc<str>, MonitorId>>,
     pub globals: Option<Globals>,
@@ -63,7 +70,7 @@ pub struct ClientState {
 }
 
 impl ClientState {
-    pub fn new(events: EventEmitter<Event>) -> Self {
+    pub fn new(events: EventEmitter) -> Self {
         Self {
             events: Mutex::new(events),
             monitors: RwLock::new(MonitorMap::default()),
@@ -198,7 +205,7 @@ impl Dispatch for LayerSurface {
                         .events
                         .lock()
                         .unwrap()
-                        .emit(Event::ResizeRequested {
+                        .emit(WaylandEvent::ResizeRequested {
                             monitor_id: self.monitor_id,
                             size,
                         })
@@ -208,8 +215,8 @@ impl Dispatch for LayerSurface {
                 None => {
                     let mut events = state.events.lock().unwrap();
                     events
-                        .emit(Event::MonitorPlugged {
-                            monitor_id: self.monitor_id,
+                        .emit(WaylandEvent::MonitorPlugged {
+                            id: self.monitor_id,
                         })
                         .unwrap();
                 }
@@ -454,7 +461,9 @@ pub(crate) fn handle_global_remove(
 
     {
         let mut events = state.events.lock().unwrap();
-        events.emit(Event::MonitorUnplugged { monitor_id }).unwrap();
+        events
+            .emit(WaylandEvent::MonitorUnplugged { id: monitor_id })
+            .unwrap();
     }
 }
 
@@ -500,7 +509,7 @@ pub struct Wayland {
 }
 
 impl Wayland {
-    pub fn new(events: EventEmitter<Event>) -> Self {
+    pub fn new(events: EventEmitter) -> Self {
         let mut client_state = Box::pin(ClientState::new(events));
         let display = WlDisplay::connect(client_state.as_ref()).unwrap();
         let mut queue = Box::pin(display.take_main_queue().unwrap());
