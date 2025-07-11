@@ -213,40 +213,28 @@ impl Handle<NewWallpaperEvent> for VideoApp {
         runtime.enable(ty.required_features()).await;
 
         let monitor_ids: SmallVec<[MonitorId; 4]> = match set {
-            SetWallpaper::ForAll => runtime
-                .wayland
-                .client_state
-                .monitors
-                .read()
-                .unwrap()
-                .keys()
-                .copied()
-                .collect(),
+            SetWallpaper::ForAll => {
+                let monitors = runtime.wayland.client_state.monitors.read().unwrap();
+                monitors.keys().copied().collect()
+            }
             SetWallpaper::ForMonitor(wl_object_id) => smallvec![wl_object_id],
         };
 
         for monitor_id in monitor_ids {
             let path = path.clone();
             let gpu = Arc::clone(&runtime.wgpu);
-            let monitor_size = runtime
-                .wayland
-                .client_state
-                .monitor_size(monitor_id)
-                .unwrap();
-            let monitor_name = runtime
-                .wayland
-                .client_state
-                .monitor_name(monitor_id)
-                .unwrap();
+
+            let monitors = runtime.wayland.client_state.monitors.read().unwrap();
+            let monitor = &monitors[&monitor_id];
+            let monitor_size = monitor.size.unwrap();
+            let monitor_name = Arc::clone(monitor.name.as_ref().unwrap());
+            let monitor_profile = Monitor {
+                wallpaper_type: ty,
+                path: path.clone(),
+            };
 
             if let Err(error) = SetupProfile::default()
-                .with(
-                    monitor_name,
-                    Monitor {
-                        wallpaper_type: ty,
-                        path: path.clone(),
-                    },
-                )
+                .with(monitor_name, monitor_profile)
                 .store()
             {
                 error!(?error, "failed to save setup profile");
