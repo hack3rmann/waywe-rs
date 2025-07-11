@@ -1,8 +1,10 @@
-use super::{RenderState, Wallpaper};
+use super::{
+    RenderState, Wallpaper,
+    image_pipeline::{COLOR_WHITE, ImagePipeline},
+};
 use crate::{
     event_loop::{FrameError, FrameInfo},
-    image_pipeline::{ImagePipeline, COLOR_WHITE},
-    runtime::{gpu::Wgpu, wayland::MonitorId, Runtime, RuntimeFeatures},
+    runtime::{Runtime, RuntimeFeatures, gpu::Wgpu, wayland::MonitorId},
 };
 use glam::UVec2;
 use image::{ImageReader, error::ImageError};

@@ -3,10 +3,8 @@ pub mod app;
 pub mod detach;
 pub mod event;
 pub mod event_loop;
-pub mod image_pipeline;
 pub mod runtime;
 pub mod task_pool;
-pub mod video_pipeline;
 pub mod wallpaper;
 pub(crate) mod box_ext;
 

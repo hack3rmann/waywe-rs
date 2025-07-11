@@ -1,8 +1,7 @@
-use super::Wallpaper;
+use super::{Wallpaper, video_pipeline::VideoPipeline};
 use crate::{
     event_loop::{FrameError, FrameInfo},
     runtime::{Runtime, RuntimeFeatures, gpu::Wgpu, wayland::MonitorId},
-    video_pipeline::VideoPipeline,
 };
 use ash::vk;
 use glam::UVec2;

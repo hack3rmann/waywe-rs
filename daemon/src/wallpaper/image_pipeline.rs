@@ -1,6 +1,8 @@
 use crate::runtime::{gpu::Wgpu, wayland::MonitorId};
+use bytemuck::{Pod, Zeroable};
 use glam::{UVec2, Vec2};
-use std::mem;
+use image::{ImageBuffer, Rgba};
+use std::{collections::HashMap, mem};
 use wgpu::util::DeviceExt as _;
 
 const SCREEN_TRIANGLE: [Vec2; 3] = [
@@ -9,43 +11,33 @@ const SCREEN_TRIANGLE: [Vec2; 3] = [
     Vec2::new(-1.0, 3.0),
 ];
 
-pub struct VideoPipeline {
-    pub screen_size: UVec2,
-    pub vertex_buffer: wgpu::Buffer,
-    pub pipeline: wgpu::RenderPipeline,
-    pub bind_group_layout: wgpu::BindGroupLayout,
-    pub sampler: wgpu::Sampler,
+pub type Color = u32;
+
+pub const COLOR_WHITE: Color = u32::MAX;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
+pub struct PushConst {
+    pub resolution: Vec2,
+    pub transparency_color: u32,
 }
 
-impl VideoPipeline {
-    pub fn new(gpu: &Wgpu, screen_size: UVec2, monitor_id: MonitorId) -> Self {
-        const VERTEX_SHADER_NAME: &str = "shaders/white-vertex.glsl";
-        const FRAGMENT_SHADER_NAME: &str = "shaders/video.glsl";
+pub struct ImagePipeline {
+    vertex_buffer: wgpu::Buffer,
+    bind_group: wgpu::BindGroup,
+    pipeline: wgpu::RenderPipeline,
+    screen_size: UVec2,
+    transparency_color: Color,
+}
 
-        gpu.use_shader(
-            VERTEX_SHADER_NAME,
-            wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Glsl {
-                    shader: include_str!("shaders/fullscreen-vertex.glsl").into(),
-                    stage: wgpu::naga::ShaderStage::Vertex,
-                    defines: Default::default(),
-                },
-            },
-        );
-
-        gpu.use_shader(
-            FRAGMENT_SHADER_NAME,
-            wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Glsl {
-                    shader: include_str!("shaders/video.glsl").into(),
-                    stage: wgpu::naga::ShaderStage::Fragment,
-                    defines: Default::default(),
-                },
-            },
-        );
-
+impl ImagePipeline {
+    pub fn new(
+        gpu: &Wgpu,
+        image: &ImageBuffer<Rgba<u8>, Vec<u8>>,
+        transparency_color: Color,
+        monitor_size: UVec2,
+        monitor_id: MonitorId,
+    ) -> Self {
         let vertex_buffer = gpu
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -54,10 +46,38 @@ impl VideoPipeline {
                 usage: wgpu::BufferUsages::VERTEX,
             });
 
+        let texture = gpu.device.create_texture_with_data(
+            &gpu.queue,
+            &wgpu::TextureDescriptor {
+                label: Some("image-texture"),
+                size: wgpu::Extent3d {
+                    width: image.width(),
+                    height: image.height(),
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            },
+            wgpu::util::TextureDataOrder::LayerMajor,
+            image,
+        );
+
+        let texture_view = texture.create_view(&Default::default());
+
+        let sampler = gpu.device.create_sampler(&wgpu::SamplerDescriptor {
+            min_filter: wgpu::FilterMode::Linear,
+            mag_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
+
         let bind_group_layout =
             gpu.device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("waywe-bind-group-layout"),
+                    label: Some("image-bind-group-layout"),
                     entries: &[
                         wgpu::BindGroupLayoutEntry {
                             binding: 0,
@@ -72,49 +92,75 @@ impl VideoPipeline {
                         wgpu::BindGroupLayoutEntry {
                             binding: 1,
                             visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Texture {
-                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                                view_dimension: wgpu::TextureViewDimension::D2,
-                                multisampled: false,
-                            },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 2,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
                             ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                             count: None,
                         },
                     ],
                 });
 
-        let sampler = gpu.device.create_sampler(&wgpu::SamplerDescriptor {
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            ..Default::default()
+        let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("image-bind-group"),
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
         });
+
+        const VERTEX_SHADER_NAME: &str = "shaders/white-vertex.glsl";
+        const FRAGMENT_SHADER_NAME: &str = "shaders/image.glsl";
+
+        gpu.use_shader(
+            VERTEX_SHADER_NAME,
+            wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Glsl {
+                    shader: include_str!("../shaders/fullscreen-vertex.glsl").into(),
+                    stage: wgpu::naga::ShaderStage::Vertex,
+                    defines: Default::default(),
+                },
+            },
+        );
+
+        gpu.use_shader(
+            FRAGMENT_SHADER_NAME,
+            wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Glsl {
+                    shader: include_str!("../shaders/image.glsl").into(),
+                    stage: wgpu::naga::ShaderStage::Fragment,
+                    defines: Default::default(),
+                },
+            },
+        );
 
         let pipeline_layout = gpu
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: None,
+                label: Some("image-pipeline-layout"),
                 bind_group_layouts: &[&bind_group_layout],
                 push_constant_ranges: &[wgpu::PushConstantRange {
                     stages: wgpu::ShaderStages::FRAGMENT,
-                    range: 0..mem::size_of::<Vec2>() as u32,
+                    range: 0..mem::size_of::<PushConst>() as u32,
                 }],
             });
 
         let pipeline = gpu
             .device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: None,
+                label: Some("image-pipeline"),
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &gpu.shader_cache.get(VERTEX_SHADER_NAME).unwrap(),
                     entry_point: Some("main"),
                     compilation_options: wgpu::PipelineCompilationOptions {
-                        constants: &Default::default(),
+                        constants: &HashMap::new(),
                         zero_initialize_workgroup_memory: false,
                     },
                     buffers: &[wgpu::VertexBufferLayout {
@@ -131,7 +177,7 @@ impl VideoPipeline {
                     module: &gpu.shader_cache.get(FRAGMENT_SHADER_NAME).unwrap(),
                     entry_point: Some("main"),
                     compilation_options: wgpu::PipelineCompilationOptions {
-                        constants: &Default::default(),
+                        constants: &HashMap::new(),
                         zero_initialize_workgroup_memory: false,
                     },
                     targets: &[Some(wgpu::ColorTargetState {
@@ -160,20 +206,15 @@ impl VideoPipeline {
             });
 
         Self {
-            sampler,
-            screen_size,
             vertex_buffer,
+            bind_group,
             pipeline,
-            bind_group_layout,
+            screen_size: monitor_size,
+            transparency_color,
         }
     }
 
-    pub fn render(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
-        surface_view: &wgpu::TextureView,
-        bind_group: &wgpu::BindGroup,
-    ) {
+    pub fn render(&self, encoder: &mut wgpu::CommandEncoder, surface_view: &wgpu::TextureView) {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -194,12 +235,12 @@ impl VideoPipeline {
         pass.set_push_constants(
             wgpu::ShaderStages::FRAGMENT,
             0,
-            bytemuck::bytes_of(&Vec2::new(
-                self.screen_size.x as f32,
-                self.screen_size.y as f32,
-            )),
+            bytemuck::bytes_of(&PushConst {
+                resolution: Vec2::new(self.screen_size.x as f32, self.screen_size.y as f32),
+                transparency_color: self.transparency_color,
+            }),
         );
-        pass.set_bind_group(0, bind_group, &[]);
+        pass.set_bind_group(0, &self.bind_group, &[]);
         pass.draw(0..SCREEN_TRIANGLE.len() as u32, 0..1);
     }
 }
