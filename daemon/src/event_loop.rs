@@ -75,29 +75,18 @@ impl<A: App> EventLoop<A> {
     async fn run_async(&mut self) {
         self.runtime.timer.mark_event_loop_start_time();
 
+        let mut polled_fds = PolledFds::with_capacity(1);
+
         'event_loop: loop {
             self.runtime.timer.mark_frame_start();
 
-            let mut polled_fds = PolledFds::with_capacity(1);
-
             match self.runtime.control_flow {
-                ControlFlow::Busy => {
-                    if signals::SHOULD_EXIT.load(Ordering::Relaxed) {
-                        debug!("caught stop signal");
-                        break 'event_loop;
-                    }
-                }
+                ControlFlow::Busy => {}
                 ControlFlow::Idle => {
                     self.runtime.timer.mark_block_start();
 
                     match self.epoll.wait(&mut polled_fds, None) {
-                        Ok(()) => {}
-                        Err(Errno::INTR) => {
-                            if signals::SHOULD_EXIT.load(Ordering::Relaxed) {
-                                debug!("caught stop signal");
-                                break 'event_loop;
-                            }
-                        }
+                        Ok(()) | Err(Errno::INTR) => {}
                         Err(error) => {
                             error!(?error, "failed to sleep on multiple sockets");
                         }
@@ -109,6 +98,11 @@ impl<A: App> EventLoop<A> {
                     debug!("shutting down daemon");
                     break 'event_loop;
                 }
+            }
+
+            if signals::SHOULD_EXIT.load(Ordering::Relaxed) {
+                debug!("caught stop signal");
+                break 'event_loop;
             }
 
             self.runtime.task_pool.erase_finished();
