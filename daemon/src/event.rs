@@ -11,35 +11,43 @@ use std::{
 };
 use thiserror::Error;
 
+pub trait Handle<E: IntoEvent> {
+    fn handle(&mut self, runtime: &mut Runtime, event: E) -> impl Future<Output = ()>;
+}
+
 type Handler<A> =
-    dyn for<'a> Fn(&'a mut A, &'a mut Runtime, Event) -> Pin<Box<dyn Future<Output = ()> + 'a>>;
+    for<'a> unsafe fn(&'a mut A, &'a mut Runtime, Event) -> Pin<Box<dyn Future<Output = ()> + 'a>>;
 
 pub struct EventHandler<A> {
-    pub handlers: FxHashMap<TypeId, Box<Handler<A>>>,
+    pub handlers: FxHashMap<TypeId, Handler<A>>,
+}
+
+/// # Safety
+///
+/// - event should contain data
+/// - event type should be exactly `E`
+unsafe fn handle_event<'a, A, E>(
+    app: &'a mut A,
+    runtime: &'a mut Runtime,
+    event: Event,
+) -> Pin<Box<dyn Future<Output = ()> + 'a>>
+where
+    E: IntoEvent,
+    A: Handle<E>,
+{
+    let event = unsafe { event.downcast_unchecked::<E>() };
+    Box::pin(<A as Handle<E>>::handle(app, runtime, event))
 }
 
 impl<A: 'static> EventHandler<A> {
-    fn make_handler<E, F>(handle: F) -> Box<Handler<A>>
+    pub fn dispatches<E>(&mut self) -> &mut Self
     where
         E: IntoEvent,
-        F: AsyncFnOnce(&mut A, &mut Runtime, E) + Copy + 'static,
-    {
-        Box::new(move |app, runtime, event: Event| {
-            // Safety:
-            // - event will have value
-            // - the type will match
-            let event = unsafe { event.downcast_unchecked::<E>() };
-            Box::pin(handle(app, runtime, event))
-        })
-    }
-
-    pub fn add<E, F>(&mut self, handle: F) -> &mut Self
-    where
-        E: IntoEvent,
-        F: AsyncFnOnce(&mut A, &mut Runtime, E) + Copy + 'static,
+        A: Handle<E>,
     {
         let id = TypeId::of::<E>();
-        self.handlers.insert(id, Self::make_handler(handle));
+
+        self.handlers.insert(id, handle_event::<A, E>);
         self
     }
 
@@ -52,7 +60,10 @@ impl<A: 'static> EventHandler<A> {
             return;
         };
 
-        handle(app, runtime, event).await;
+        // Safety:
+        // - event contains data
+        // - type matches exactly
+        unsafe { handle(app, runtime, event).await };
     }
 }
 
@@ -68,7 +79,7 @@ pub struct Event(Option<Box<dyn Any + Send + 'static>>);
 
 impl Event {
     pub fn underlying_type(&self) -> Option<TypeId> {
-        self.0.as_ref().map(Box::as_ref).map(Any::type_id)
+        self.0.as_ref().map(Box::as_ref).map(<dyn Any + Send>::type_id)
     }
 
     /// # Safety
