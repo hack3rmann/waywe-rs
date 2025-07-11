@@ -1,6 +1,6 @@
 use crate::{
     app::NewWallpaperEvent,
-    event::{AbsorbError, Event, EventReceiver, IntoEvent},
+    event::{AbsorbError, Event, EventHandler, EventReceiver, IntoEvent},
     runtime::{
         ControlFlow, Runtime,
         wayland::{MonitorId, Wayland},
@@ -27,6 +27,7 @@ use video::RatioI32;
 pub struct EventLoop<A: App> {
     runtime: Runtime,
     event_queue: EventQueue,
+    event_handler: EventHandler<A>,
     app: A,
     epoll: Epoll,
 }
@@ -38,9 +39,12 @@ impl<A: App + Default> Default for EventLoop<A> {
 }
 
 impl<A: App> EventLoop<A> {
-    pub fn new(app: A) -> Self {
+    pub fn new(mut app: A) -> Self {
         static SIGNALS_ONCE: Once = Once::new();
         SIGNALS_ONCE.call_once(signals::setup);
+
+        let mut event_handler = EventHandler::default();
+        app.populate_handler(&mut event_handler);
 
         let event_queue = match EventQueue::new() {
             Ok(queue) => queue,
@@ -68,6 +72,7 @@ impl<A: App> EventLoop<A> {
             runtime,
             app,
             event_queue,
+            event_handler,
             epoll,
         }
     }
@@ -124,7 +129,7 @@ impl<A: App> EventLoop<A> {
             }
 
             for event in self.event_queue.drain() {
-                self.app.process_event(&mut self.runtime, event).await;
+                self.event_handler.handle(&mut self.app, &mut self.runtime, event).await;
             }
 
             self.runtime.timer.mark_wallpaper_start_time();
@@ -226,12 +231,10 @@ impl EventQueue {
     }
 }
 
-pub trait App {
-    fn process_event(
-        &mut self,
-        runtime: &mut Runtime,
-        event: Event,
-    ) -> impl Future<Output = ()> + Send;
+pub trait App: 'static {
+    fn populate_handler(&mut self, handler: &mut EventHandler<Self>)
+    where
+        Self: Sized;
 
     fn frame(
         &mut self,

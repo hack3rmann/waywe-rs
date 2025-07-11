@@ -1,18 +1,87 @@
-use crate::box_ext::BoxExt;
+use crate::{box_ext::BoxExt, runtime::Runtime};
 use bytemuck::{Contiguous, NoUninit};
+use fxhash::FxHashMap;
 use rustix::fs::OFlags;
 use std::{
-    any::Any,
+    any::{Any, TypeId},
     io::{self, ErrorKind, PipeReader, PipeWriter, Read as _, Write as _},
     os::fd::{AsFd, BorrowedFd},
+    pin::Pin,
     sync::mpsc::{self, Receiver, RecvError, Sender, TryRecvError},
 };
 use thiserror::Error;
 
+type Handler<A> =
+    dyn for<'a> Fn(&'a mut A, &'a mut Runtime, Event) -> Pin<Box<dyn Future<Output = ()> + 'a>>;
+
+pub struct EventHandler<A> {
+    pub handlers: FxHashMap<TypeId, Box<Handler<A>>>,
+}
+
+impl<A: 'static> EventHandler<A> {
+    fn make_handler<E, F>(handle: F) -> Box<Handler<A>>
+    where
+        E: IntoEvent,
+        F: AsyncFnOnce(&mut A, &mut Runtime, E) + Copy + 'static,
+    {
+        Box::new(move |app, runtime, event: Event| {
+            // Safety:
+            // - event will have value
+            // - the type will match
+            let event = unsafe { event.downcast_unchecked::<E>() };
+            Box::pin(handle(app, runtime, event))
+        })
+    }
+
+    pub fn add<E, F>(&mut self, handle: F) -> &mut Self
+    where
+        E: IntoEvent,
+        F: AsyncFnOnce(&mut A, &mut Runtime, E) + Copy + 'static,
+    {
+        let id = TypeId::of::<E>();
+        self.handlers.insert(id, Self::make_handler(handle));
+        self
+    }
+
+    pub async fn handle(&self, app: &mut A, runtime: &mut Runtime, event: Event) {
+        let Some(id) = event.underlying_type() else {
+            return;
+        };
+
+        let Some(handle) = self.handlers.get(&id) else {
+            return;
+        };
+
+        handle(app, runtime, event).await;
+    }
+}
+
+impl<A> Default for EventHandler<A> {
+    fn default() -> Self {
+        Self {
+            handlers: FxHashMap::default(),
+        }
+    }
+}
+
 pub struct Event(Option<Box<dyn Any + Send + 'static>>);
 
 impl Event {
-    pub async fn handle<T: Any + Send + 'static>(&mut self, f: impl AsyncFnOnce(T)) {
+    pub fn underlying_type(&self) -> Option<TypeId> {
+        self.0.as_ref().map(Box::as_ref).map(Any::type_id)
+    }
+
+    /// # Safety
+    ///
+    /// - event should contain a value
+    /// - underlying type should be exactly `E`
+    pub unsafe fn downcast_unchecked<E: IntoEvent>(self) -> E {
+        let any = unsafe { self.0.unwrap_unchecked() };
+        let boxed = unsafe { any.downcast::<E>().unwrap_unchecked() };
+        BoxExt::into_inner(boxed)
+    }
+
+    pub async fn handle<T: IntoEvent>(&mut self, f: impl AsyncFnOnce(T)) {
         let Some(any_value) = self.0.take() else {
             return;
         };
