@@ -239,6 +239,7 @@ impl App for VideoApp {
                 .device
                 .create_command_encoder(&Default::default());
 
+            // FIXME(hack3rmann): handle different framerates
             result = wallpaper.frame(runtime, &mut encoder, &surface_view);
 
             _ = runtime.wgpu.queue.submit([encoder.finish()]);
