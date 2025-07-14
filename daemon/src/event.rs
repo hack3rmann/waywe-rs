@@ -15,8 +15,12 @@ pub trait Handle<E: IntoEvent> {
     fn handle(&mut self, runtime: &mut Runtime, event: E) -> impl Future<Output = ()> + Send;
 }
 
-type Handler<A> =
-    for<'a> unsafe fn(&'a mut A, &'a mut Runtime, Event, &'a mut ReusableBox) -> ReusedBoxFuture<'a, ()>;
+type Handler<A> = for<'a> unsafe fn(
+    &'a mut A,
+    &'a mut Runtime,
+    Event,
+    &'a mut ReusableBox,
+) -> ReusedBoxFuture<'a, ()>;
 
 pub struct EventHandler<A> {
     pub handlers: FxHashMap<TypeId, Handler<A>>,
@@ -82,7 +86,10 @@ pub struct Event(Option<Box<dyn Any + Send + 'static>>);
 
 impl Event {
     pub fn underlying_type(&self) -> Option<TypeId> {
-        self.0.as_ref().map(Box::as_ref).map(<dyn Any + Send>::type_id)
+        self.0
+            .as_ref()
+            .map(Box::as_ref)
+            .map(<dyn Any + Send>::type_id)
     }
 
     /// # Safety

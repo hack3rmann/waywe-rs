@@ -250,7 +250,9 @@ impl MipmapFormat {
         image_format: Option<FreeImageFormat>,
         tex_format: TexFormat,
     ) -> Self {
-        if let Some(format) = image_format && let Ok(format) = Self::try_from(format) {
+        if let Some(format) = image_format
+            && let Ok(format) = Self::try_from(format)
+        {
             return format;
         }
 

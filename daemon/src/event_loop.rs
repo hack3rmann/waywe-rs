@@ -129,7 +129,9 @@ impl<A: App> EventLoop<A> {
             }
 
             for event in self.event_queue.drain() {
-                self.event_handler.handle(&mut self.app, &mut self.runtime, event).await;
+                self.event_handler
+                    .handle(&mut self.app, &mut self.runtime, event)
+                    .await;
             }
 
             self.runtime.timer.mark_wallpaper_start_time();

@@ -178,7 +178,9 @@ impl<S> WlDisplay<S> {
 
         let handle = WlObjectHandle::new(proxy.id());
 
-        _ = storage.as_mut().insert(WlObject::new(proxy, WlRegistry::new(handle)));
+        _ = storage
+            .as_mut()
+            .insert(WlObject::new(proxy, WlRegistry::new(handle)));
         storage.get_mut().object_data_mut(handle)
     }
 

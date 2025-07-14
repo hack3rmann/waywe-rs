@@ -172,7 +172,9 @@ impl<T> IpcSocket<Server, T> {
     pub fn server() -> Result<Self, Errno> {
         let path = Path::new(Self::path());
 
-        if let Some(dir) = path.parent() && !dir.exists() {
+        if let Some(dir) = path.parent()
+            && !dir.exists()
+        {
             std::fs::create_dir_all(dir).unwrap();
         }
 

@@ -417,7 +417,9 @@ impl CodecContext {
     pub fn open(&mut self, codec: &Codec) -> Result<(), BackendError> {
         // NOTE(hack3rmann): if codec context was initialized with codec default values
         // then it is invalid to open it with another codec
-        if let Some(id) = self.codec_id && codec.id() != id {
+        if let Some(id) = self.codec_id
+            && codec.id() != id
+        {
             return Err(BackendError::INVALID_DATA);
         } else {
             self.codec_id = Some(codec.id());

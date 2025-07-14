@@ -294,8 +294,11 @@ impl Wgpu {
 
         surface.configure(&self.device, &surface_config);
 
-        let Some(surface_format) =
-            surface.get_capabilities(&self.adapter).formats.first().copied()
+        let Some(surface_format) = surface
+            .get_capabilities(&self.adapter)
+            .formats
+            .first()
+            .copied()
         else {
             panic!("no surface format supported");
         };

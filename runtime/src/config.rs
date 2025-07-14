@@ -79,9 +79,7 @@ pub type InterpolationFn = fn(f32) -> f32;
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum CenterPosition {
-    Point {
-        position: Vec2,
-    },
+    Point { position: Vec2 },
     Random,
 }
 
@@ -117,9 +115,11 @@ mod tests {
     fn print_config() {
         let config = Config {
             animation: AnimationConfig {
-                center_position: CenterPosition::Point { position: Vec2::ZERO },
+                center_position: CenterPosition::Point {
+                    position: Vec2::ZERO,
+                },
                 ..AnimationConfig::default()
-            }
+            },
         };
         let string = toml::to_string(&config).unwrap();
         println!("{string}");
