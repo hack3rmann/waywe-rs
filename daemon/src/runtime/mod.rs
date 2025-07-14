@@ -2,14 +2,13 @@ use crate::task_pool::TaskPool;
 use bitflags::bitflags;
 use for_sure::prelude::*;
 use gpu::Wgpu;
-use ipc::Ipc;
+use runtime::{DaemonCommand, IpcSocket, ipc::Server};
 use std::sync::Arc;
 use timer::Timer;
 use video::Video;
 use wayland::Wayland;
 
 pub mod gpu;
-pub mod ipc;
 pub mod timer;
 pub mod video;
 pub mod wayland;
@@ -50,7 +49,7 @@ pub struct Runtime {
     pub video: Almost<Video>,
     pub wgpu: Almost<Arc<Wgpu>>,
     pub wayland: Wayland,
-    pub ipc: Ipc,
+    pub ipc: IpcSocket<Server, DaemonCommand>,
     pub control_flow: ControlFlow,
     pub task_pool: TaskPool,
 }
@@ -62,7 +61,7 @@ impl Runtime {
             wayland,
             wgpu: Nil,
             video: Nil,
-            ipc: match Ipc::new() {
+            ipc: match IpcSocket::server() {
                 Ok(ipc) => ipc,
                 Err(error) => panic!("failed to initialize ipc: {error:?}"),
             },

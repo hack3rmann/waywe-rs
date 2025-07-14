@@ -59,7 +59,7 @@ impl<A: App> EventLoop<A> {
 
         let fds = [
             runtime.wayland.display.as_fd(),
-            runtime.ipc.socket.as_fd(),
+            runtime.ipc.as_fd(),
             event_queue.custom_receiver.pipe_fd(),
         ];
 
@@ -123,7 +123,7 @@ impl<A: App> EventLoop<A> {
 
             if let Err(error) = self
                 .event_queue
-                .populate_from_cli(&self.runtime.wayland, &self.runtime.ipc.socket)
+                .populate_from_cli(&self.runtime.wayland, &self.runtime.ipc)
             {
                 error!(?error, "can not recv from waywe-cli");
             }
