@@ -155,8 +155,8 @@ impl TransitionPipeline {
                 usage: wgpu::BufferUsages::VERTEX,
             });
 
-        let surface_formats = gpu.surface_formats.read().unwrap();
-        let surface_format = surface_formats[&monitor_id];
+        let surface_formats = gpu.surfaces.read().unwrap();
+        let surface_format = surface_formats[&monitor_id].format;
 
         let from_texture = gpu.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("from-texture-target"),

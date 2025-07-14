@@ -123,7 +123,7 @@ impl App for VideoApp {
                 continue;
             }
 
-            let surface_texture = surfaces[&monitor_id].get_current_texture().unwrap();
+            let surface_texture = surfaces[&monitor_id].surface.get_current_texture().unwrap();
             let surface_view = surface_texture.texture.create_view(&Default::default());
 
             let mut encoder = runtime

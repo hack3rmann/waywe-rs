@@ -135,7 +135,7 @@ impl VideoPipeline {
                         zero_initialize_workgroup_memory: false,
                     },
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: gpu.surface_formats.read().unwrap()[&monitor_id],
+                        format: gpu.surfaces.read().unwrap()[&monitor_id].format,
                         blend: None,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],

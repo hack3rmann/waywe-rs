@@ -1,4 +1,4 @@
-use super::wayland::{MonitorId, MonitorMap, SurfaceExtension, Wayland};
+use super::wayland::{MonitorId, MonitorInfo, MonitorMap, SurfaceExtension, Wayland};
 use ash::vk;
 use glam::UVec2;
 use std::{
@@ -55,13 +55,18 @@ impl Deref for RwLockShaderReadGuard<'_> {
     }
 }
 
+pub struct Surface {
+    pub surface: wgpu::Surface<'static>,
+    pub config: wgpu::SurfaceConfiguration,
+    pub format: wgpu::TextureFormat,
+}
+
 pub struct Wgpu {
     pub adapter: wgpu::Adapter,
     pub instance: wgpu::Instance,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
-    pub surfaces: RwLock<MonitorMap<wgpu::Surface<'static>>>,
-    pub surface_formats: RwLock<MonitorMap<wgpu::TextureFormat>>,
+    pub surfaces: RwLock<MonitorMap<Surface>>,
     pub shader_cache: ShaderCache,
 }
 
@@ -77,39 +82,12 @@ impl Wgpu {
             ..Default::default()
         });
 
-        let surfaces = wayland
-            .client_state
-            .monitors
-            .read()
-            .unwrap()
-            .iter()
-            .map(|(&id, info)| {
-                let handle = wayland
-                    .main_queue
-                    .as_ref()
-                    .storage()
-                    .object(info.surface)
-                    .raw_window_handle();
-
-                let surface = unsafe {
-                    instance
-                        .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
-                            raw_display_handle: wayland.raw_display_handle(),
-                            raw_window_handle: handle,
-                        })
-                        .unwrap()
-                };
-
-                (id, surface)
-            })
-            .collect::<MonitorMap<_>>();
-
         let Some(adapter) = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::LowPower,
                 force_fallback_adapter: false,
                 // take any available surface
-                compatible_surface: surfaces.values().next(),
+                compatible_surface: None,
             })
             .await
         else {
@@ -200,27 +178,17 @@ impl Wgpu {
             panic!("failed to request device")
         };
 
-        let surface_formats = surfaces
+        let surfaces = wayland
+            .client_state
+            .monitors
+            .read()
+            .unwrap()
             .iter()
-            .map(|(&id, surface)| {
-                let screen_size = wayland.client_state.monitor_size(id).unwrap();
-
-                let Some(surface_format) =
-                    surface.get_capabilities(&adapter).formats.first().copied()
-                else {
-                    panic!("no surface format supported");
-                };
-
-                // TODO(hack3rmann): configure surface with
-                // `usage |= wgt::TextureUsages::STORAGE_BINDING`
-                // to render to it using compute shaders
-                let surface_config = surface
-                    .get_default_config(&adapter, screen_size.x, screen_size.y)
-                    .unwrap();
-
-                surface.configure(&device, &surface_config);
-
-                (id, surface_format)
+            .map(|(&id, info)| {
+                (
+                    id,
+                    create_surface(&instance, &adapter, &device, wayland, info, id),
+                )
             })
             .collect::<MonitorMap<_>>();
 
@@ -230,7 +198,6 @@ impl Wgpu {
             device,
             queue,
             surfaces: RwLock::new(surfaces),
-            surface_formats: RwLock::new(surface_formats),
             shader_cache: ShaderCache::default(),
         }
     }
@@ -243,75 +210,83 @@ impl Wgpu {
         };
 
         let surface_config = surface
+            .surface
             .get_default_config(&self.adapter, size.x, size.y)
             .unwrap();
 
-        surface.configure(&self.device, &surface_config);
+        surface.surface.configure(&self.device, &surface_config);
     }
 
     pub fn unregister_surface(&self, monitor_id: MonitorId) {
-        {
-            let mut surfaces = self.surfaces.write().unwrap();
-            _ = surfaces.remove(&monitor_id);
-        }
-
-        {
-            let mut surface_formats = self.surface_formats.write().unwrap();
-            _ = surface_formats.remove(&monitor_id);
-        }
+        let mut surfaces = self.surfaces.write().unwrap();
+        _ = surfaces.remove(&monitor_id);
     }
 
     pub fn register_surface(&self, wayland: &Wayland, monitor_id: MonitorId) {
         let monitors = wayland.client_state.monitors.read().unwrap();
-        let monitor = monitors.get(&monitor_id).unwrap();
+        let info = &monitors[&monitor_id];
 
-        let handle = {
-            wayland
-                .main_queue
-                .as_ref()
-                .storage()
-                .object(monitor.surface)
-                .raw_window_handle()
-        };
-
-        let surface = unsafe {
-            self.instance
-                .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
-                    raw_display_handle: wayland.raw_display_handle(),
-                    raw_window_handle: handle,
-                })
-                .unwrap()
-        };
-
-        let surface_size = monitor.size.unwrap();
-
-        // TODO(hack3rmann): configure surface with
-        // `usage |= wgt::TextureUsages::STORAGE_BINDING`
-        // to render to it using compute shaders
-        let surface_config = surface
-            .get_default_config(&self.adapter, surface_size.x, surface_size.y)
-            .unwrap();
-
-        surface.configure(&self.device, &surface_config);
-
-        let Some(surface_format) = surface
-            .get_capabilities(&self.adapter)
-            .formats
-            .first()
-            .copied()
-        else {
-            panic!("no surface format supported");
-        };
-
-        let mut surface_formats = self.surface_formats.write().unwrap();
-        _ = surface_formats.insert(monitor_id, surface_format);
+        let surface = create_surface(
+            &self.instance,
+            &self.adapter,
+            &self.device,
+            wayland,
+            info,
+            monitor_id,
+        );
 
         let mut surfaces = self.surfaces.write().unwrap();
-        _ = surfaces.insert(monitor_id, surface);
+        surfaces.insert(monitor_id, surface);
     }
 
     pub fn use_shader(&self, id: &'static str, desc: wgpu::ShaderModuleDescriptor) {
         self.shader_cache
             .insert_with(id, || self.device.create_shader_module(desc));
+    }
+}
+
+fn create_surface(
+    instance: &wgpu::Instance,
+    adapter: &wgpu::Adapter,
+    device: &wgpu::Device,
+    wayland: &Wayland,
+    info: &MonitorInfo,
+    id: MonitorId,
+) -> Surface {
+    let handle = wayland
+        .main_queue
+        .as_ref()
+        .storage()
+        .object(info.surface)
+        .raw_window_handle();
+
+    let surface = unsafe {
+        instance
+            .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
+                raw_display_handle: wayland.raw_display_handle(),
+                raw_window_handle: handle,
+            })
+            .unwrap()
+    };
+
+    let screen_size = wayland.client_state.monitor_size(id).unwrap();
+
+    let Some(format) = surface.get_capabilities(adapter).formats.first().copied() else {
+        panic!("no surface format supported");
+    };
+
+    // TODO(hack3rmann): configure surface with
+    // `usage |= wgt::TextureUsages::STORAGE_BINDING`
+    // to render to it using compute shaders
+    let config = surface
+        .get_default_config(adapter, screen_size.x, screen_size.y)
+        .unwrap();
+
+    surface.configure(device, &config);
+
+    Surface {
+        surface,
+        format,
+        config,
     }
 }
