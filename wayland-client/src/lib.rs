@@ -188,7 +188,7 @@
 //!
 //! // Request Wayland to create a registry. The registry is empty initially.
 //! // `registry` itself is essentially a lightweight handle.
-//! let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
+//! let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut()).handle();
 //!
 //! // We should wait the registry to be filled.
 //! display.roundtrip(queue.as_mut(), state.as_ref());
@@ -234,7 +234,7 @@
 //! # impl FromProxy for Compositor {
 //! #     fn from_proxy(_proxy: &WlProxy) -> Self { Self }
 //! # }
-//! # let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut());
+//! # let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut()).handle();
 //! # display.roundtrip(queue.as_mut(), state.as_ref());
 //! # let compositor = registry
 //! #     .bind::<Compositor>(&mut buf, queue.as_mut().storage_mut())
