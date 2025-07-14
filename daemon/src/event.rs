@@ -1,25 +1,26 @@
 use crate::{box_ext::BoxExt, runtime::Runtime};
 use bytemuck::{Contiguous, NoUninit};
 use fxhash::FxHashMap;
+use reusable_box::{ReusableBox, ReusedBoxFuture};
 use rustix::fs::OFlags;
 use std::{
     any::{Any, TypeId},
     io::{self, ErrorKind, PipeReader, PipeWriter, Read as _, Write as _},
     os::fd::{AsFd, BorrowedFd},
-    pin::Pin,
     sync::mpsc::{self, Receiver, RecvError, Sender, TryRecvError},
 };
 use thiserror::Error;
 
 pub trait Handle<E: IntoEvent> {
-    fn handle(&mut self, runtime: &mut Runtime, event: E) -> impl Future<Output = ()>;
+    fn handle(&mut self, runtime: &mut Runtime, event: E) -> impl Future<Output = ()> + Send;
 }
 
 type Handler<A> =
-    for<'a> unsafe fn(&'a mut A, &'a mut Runtime, Event) -> Pin<Box<dyn Future<Output = ()> + 'a>>;
+    for<'a> unsafe fn(&'a mut A, &'a mut Runtime, Event, &'a mut ReusableBox) -> ReusedBoxFuture<'a, ()>;
 
 pub struct EventHandler<A> {
     pub handlers: FxHashMap<TypeId, Handler<A>>,
+    pub future: ReusableBox,
 }
 
 /// # Safety
@@ -30,13 +31,14 @@ unsafe fn handle_event<'a, A, E>(
     app: &'a mut A,
     runtime: &'a mut Runtime,
     event: Event,
-) -> Pin<Box<dyn Future<Output = ()> + 'a>>
+    future: &'a mut ReusableBox,
+) -> ReusedBoxFuture<'a, ()>
 where
     E: IntoEvent,
     A: Handle<E>,
 {
     let event = unsafe { event.downcast_unchecked::<E>() };
-    Box::pin(<A as Handle<E>>::handle(app, runtime, event))
+    future.store_future(<A as Handle<E>>::handle(app, runtime, event))
 }
 
 impl<A: 'static> EventHandler<A> {
@@ -51,7 +53,7 @@ impl<A: 'static> EventHandler<A> {
         self
     }
 
-    pub async fn handle(&self, app: &mut A, runtime: &mut Runtime, event: Event) {
+    pub async fn handle(&mut self, app: &mut A, runtime: &mut Runtime, event: Event) {
         let Some(id) = event.underlying_type() else {
             return;
         };
@@ -63,7 +65,7 @@ impl<A: 'static> EventHandler<A> {
         // Safety:
         // - event contains data
         // - type matches exactly
-        unsafe { handle(app, runtime, event).await };
+        unsafe { handle(app, runtime, event, &mut self.future).await };
     }
 }
 
@@ -71,6 +73,7 @@ impl<A> Default for EventHandler<A> {
     fn default() -> Self {
         Self {
             handlers: FxHashMap::default(),
+            future: ReusableBox::new(),
         }
     }
 }

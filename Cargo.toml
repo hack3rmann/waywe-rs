@@ -24,7 +24,6 @@ license = "MIT"
 [workspace.dependencies]
 wayland-client = { path = "wayland-client", features = ["smallvec"] }
 wayland-server = { path = "wayland-server" }
-waylnad-scanner = { path = "wayland-scanner" }
 wayland-sys = { path = "wayland-sys" }
 runtime = { path = "runtime" }
 transmute-extra = { path = "transmute-extra" }
