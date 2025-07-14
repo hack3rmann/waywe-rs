@@ -14,7 +14,7 @@ raw-window-handle = "0.6.2"
 rustix.workspace = true
 thiserror = "2.0.11"
 tokio.workspace = true
-wgpu = { version = "24.0.1", features = ["glsl"] }
+wgpu = { version = "26.0.1", features = ["glsl"] }
 ash = "0.38.0"
 wayland-client.workspace = true
 tracing.workspace = true
@@ -33,7 +33,7 @@ clap.workspace = true
 toml.workspace = true
 wayland-server.workspace = true
 fxhash.workspace = true
-for-sure = "0.1.0"
+for-sure = "0.1.1"
 reusable-box = "0.1.0"
 
 [dev-dependencies]

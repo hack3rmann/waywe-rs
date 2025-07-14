@@ -105,15 +105,13 @@ async fn use_wgpu_to_draw_anything() {
         .expect("failed to request adapter");
 
     let (device, wgpu_queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::empty(),
-                label: None,
-                required_limits: adapter.limits(),
-                memory_hints: wgpu::MemoryHints::Performance,
-            },
-            None,
-        )
+        .request_device(&wgpu::DeviceDescriptor {
+            required_features: wgpu::Features::empty(),
+            label: None,
+            required_limits: adapter.limits(),
+            memory_hints: wgpu::MemoryHints::Performance,
+            trace: wgpu::Trace::Off,
+        })
         .await
         .unwrap();
 
@@ -167,7 +165,7 @@ async fn use_wgpu_to_draw_anything() {
             module: &vertex_shader,
             entry_point: Some("main"),
             compilation_options: wgpu::PipelineCompilationOptions {
-                constants: &Default::default(),
+                constants: &[],
                 zero_initialize_workgroup_memory: false,
             },
             buffers: &[wgpu::VertexBufferLayout {
@@ -184,7 +182,7 @@ async fn use_wgpu_to_draw_anything() {
             module: &fragment_shader,
             entry_point: Some("main"),
             compilation_options: wgpu::PipelineCompilationOptions {
-                constants: &Default::default(),
+                constants: &[],
                 zero_initialize_workgroup_memory: false,
             },
             targets: &[Some(wgpu::ColorTargetState {
@@ -234,6 +232,7 @@ async fn use_wgpu_to_draw_anything() {
                         load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
                         store: wgpu::StoreOp::Store,
                     },
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,

@@ -8,7 +8,6 @@ use glam::{UVec2, Vec2};
 use runtime::config::{AnimationDirection, Interpolation};
 use std::{
     any::Any,
-    collections::HashMap,
     mem,
     time::{Duration, Instant},
 };
@@ -297,7 +296,7 @@ impl TransitionPipeline {
                     module: &gpu.shader_cache.get(VERTEX_SHADER_NAME).unwrap(),
                     entry_point: Some("main"),
                     compilation_options: wgpu::PipelineCompilationOptions {
-                        constants: &HashMap::new(),
+                        constants: &[],
                         zero_initialize_workgroup_memory: false,
                     },
                     buffers: &[wgpu::VertexBufferLayout {
@@ -314,7 +313,7 @@ impl TransitionPipeline {
                     module: &gpu.shader_cache.get(FRAGMENT_SHADER_NAME).unwrap(),
                     entry_point: Some("main"),
                     compilation_options: wgpu::PipelineCompilationOptions {
-                        constants: &HashMap::new(),
+                        constants: &[],
                         zero_initialize_workgroup_memory: false,
                     },
                     targets: &[Some(wgpu::ColorTargetState {
@@ -423,6 +422,7 @@ impl TransitionPipeline {
                     load: wgpu::LoadOp::Load,
                     store: wgpu::StoreOp::Store,
                 },
+                depth_slice: None,
             })],
             depth_stencil_attachment: None,
             timestamp_writes: None,

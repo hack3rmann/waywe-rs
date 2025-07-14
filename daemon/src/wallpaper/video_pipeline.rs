@@ -114,7 +114,7 @@ impl VideoPipeline {
                     module: &gpu.shader_cache.get(VERTEX_SHADER_NAME).unwrap(),
                     entry_point: Some("main"),
                     compilation_options: wgpu::PipelineCompilationOptions {
-                        constants: &Default::default(),
+                        constants: &[],
                         zero_initialize_workgroup_memory: false,
                     },
                     buffers: &[wgpu::VertexBufferLayout {
@@ -131,7 +131,7 @@ impl VideoPipeline {
                     module: &gpu.shader_cache.get(FRAGMENT_SHADER_NAME).unwrap(),
                     entry_point: Some("main"),
                     compilation_options: wgpu::PipelineCompilationOptions {
-                        constants: &Default::default(),
+                        constants: &[],
                         zero_initialize_workgroup_memory: false,
                     },
                     targets: &[Some(wgpu::ColorTargetState {
@@ -183,6 +183,7 @@ impl VideoPipeline {
                     load: wgpu::LoadOp::Load,
                     store: wgpu::StoreOp::Store,
                 },
+                depth_slice: None,
             })],
             depth_stencil_attachment: None,
             timestamp_writes: None,

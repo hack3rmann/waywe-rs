@@ -2,7 +2,7 @@ use crate::runtime::{gpu::Wgpu, wayland::MonitorId};
 use bytemuck::{Pod, Zeroable};
 use glam::{UVec2, Vec2};
 use image::{ImageBuffer, Rgba};
-use std::{collections::HashMap, mem};
+use std::mem;
 use wgpu::util::DeviceExt as _;
 
 const SCREEN_TRIANGLE: [Vec2; 3] = [
@@ -160,7 +160,7 @@ impl ImagePipeline {
                     module: &gpu.shader_cache.get(VERTEX_SHADER_NAME).unwrap(),
                     entry_point: Some("main"),
                     compilation_options: wgpu::PipelineCompilationOptions {
-                        constants: &HashMap::new(),
+                        constants: &[],
                         zero_initialize_workgroup_memory: false,
                     },
                     buffers: &[wgpu::VertexBufferLayout {
@@ -177,7 +177,7 @@ impl ImagePipeline {
                     module: &gpu.shader_cache.get(FRAGMENT_SHADER_NAME).unwrap(),
                     entry_point: Some("main"),
                     compilation_options: wgpu::PipelineCompilationOptions {
-                        constants: &HashMap::new(),
+                        constants: &[],
                         zero_initialize_workgroup_memory: false,
                     },
                     targets: &[Some(wgpu::ColorTargetState {
@@ -224,6 +224,7 @@ impl ImagePipeline {
                     load: wgpu::LoadOp::Load,
                     store: wgpu::StoreOp::Store,
                 },
+                depth_slice: None,
             })],
             depth_stencil_attachment: None,
             timestamp_writes: None,
