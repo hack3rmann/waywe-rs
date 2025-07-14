@@ -68,7 +68,6 @@ impl VideoApp {
     }
 
     pub fn resolve_transitions(&mut self) {
-        // FIXME(hack3rmann): really bad
         let keys = self
             .wallpapers
             .keys()
