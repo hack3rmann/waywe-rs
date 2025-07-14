@@ -1,5 +1,6 @@
-use crate::{almost::Almost, task_pool::TaskPool};
+use crate::task_pool::TaskPool;
 use bitflags::bitflags;
+use for_sure::prelude::*;
 use gpu::Wgpu;
 use ipc::Ipc;
 use std::sync::Arc;
@@ -59,8 +60,8 @@ impl Runtime {
         Self {
             timer: Timer::default(),
             wayland,
-            wgpu: Almost::uninit(),
-            video: Almost::uninit(),
+            wgpu: Nil,
+            video: Nil,
             ipc: match Ipc::new() {
                 Ok(ipc) => ipc,
                 Err(error) => panic!("failed to initialize ipc: {error:?}"),
@@ -71,14 +72,14 @@ impl Runtime {
     }
 
     pub fn init_video(&mut self) {
-        if Almost::is_uninit(&self.video) {
-            Almost::init(&mut self.video, Video::default());
+        if Almost::is_nil(&self.video) {
+            self.video = Value(Video::default());
         }
     }
 
     pub async fn init_wgpu(&mut self) {
-        if Almost::is_uninit(&self.wgpu) {
-            Almost::init(&mut self.wgpu, Arc::new(Wgpu::new(&self.wayland).await));
+        if Almost::is_nil(&self.wgpu) {
+            self.wgpu = Value(Arc::new(Wgpu::new(&self.wayland).await));
         }
     }
 

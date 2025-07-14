@@ -1,5 +1,4 @@
 use crate::{
-    almost::Almost,
     event::{EventHandler, Handle},
     event_loop::{App, FrameError, FrameInfo, SetWallpaper},
     runtime::{
@@ -11,6 +10,7 @@ use crate::{
         transition::{TransitionConfig, TransitionWallpaper},
     },
 };
+use for_sure::Almost;
 use glam::Vec2;
 use runtime::{
     WallpaperType,
@@ -110,7 +110,7 @@ impl App for VideoApp {
     async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
         self.resolve_transitions();
 
-        if Almost::is_uninit(&runtime.wgpu) {
+        if Almost::is_nil(&runtime.wgpu) {
             return Err(FrameError::NoWorkToDo);
         }
 
@@ -150,7 +150,7 @@ impl App for VideoApp {
 }
 
 impl Handle<WallpaperPreparedEvent> for VideoApp {
-    async fn handle(&mut self, runtime: &mut Runtime, event: WallpaperPreparedEvent) -> () {
+    async fn handle(&mut self, runtime: &mut Runtime, event: WallpaperPreparedEvent) {
         let WallpaperPreparedEvent {
             wallpaper,
             monitor_id,
@@ -165,14 +165,14 @@ impl Handle<WaylandEvent> for VideoApp {
     async fn handle(&mut self, runtime: &mut Runtime, event: WaylandEvent) {
         match event {
             WaylandEvent::ResizeRequested { monitor_id, size } => {
-                if Almost::is_init(&runtime.wgpu) {
+                if Almost::is_value(&runtime.wgpu) {
                     runtime.wgpu.resize_surface(monitor_id, size);
                 }
 
                 self.do_force_frame = true;
             }
             WaylandEvent::MonitorPlugged { id: monitor_id } => {
-                if Almost::is_init(&runtime.wgpu) {
+                if Almost::is_value(&runtime.wgpu) {
                     runtime.wgpu.register_surface(&runtime.wayland, monitor_id);
                 }
 

@@ -561,12 +561,4 @@ impl Wayland {
     pub fn raw_display_handle(&self) -> RawDisplayHandle {
         self.display.display_handle().unwrap().as_raw()
     }
-
-    /// # Note
-    ///
-    /// Guaranteed to have at least one entry
-    #[deprecated = "nonsense"]
-    pub fn raw_window_handles(&self) -> impl Iterator<Item = RawWindowHandle> {
-        [].into_iter()
-    }
 }

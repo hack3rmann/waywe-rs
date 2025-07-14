@@ -1,12 +1,11 @@
-pub mod almost;
 pub mod app;
+pub mod box_ext;
 pub mod detach;
 pub mod event;
 pub mod event_loop;
 pub mod runtime;
 pub mod task_pool;
 pub mod wallpaper;
-pub(crate) mod box_ext;
 
 use ::runtime::config::Config;
 use app::VideoApp;
@@ -32,7 +31,9 @@ fn main() {
 
     let args = Args::parse();
 
-    if args.run_in_background && let Err(error) = detach() {
+    if args.run_in_background
+        && let Err(error) = detach()
+    {
         error!(?error, "failed to start daemon in the background");
     }
 
