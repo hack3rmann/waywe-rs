@@ -10,7 +10,7 @@ use thiserror::Error;
 use tracing::error;
 use video::{
     AudioVideoFormat, BackendError, Codec, CodecContext, FormatContext, Frame, FrameDuration,
-    MediaType, Packet, RatioI32, VideoPixelFormat,
+    MediaType, Packet, RatioI32, VideoPixelFormat, acceleration::VaSurfaceHandle,
 };
 use wgpu::hal::api;
 
@@ -80,22 +80,8 @@ impl VideoWallpaper {
             frame: Frame::new(),
         })
     }
-}
 
-impl Wallpaper for VideoWallpaper {
-    fn required_features() -> RuntimeFeatures
-    where
-        Self: Sized,
-    {
-        RuntimeFeatures::GPU | RuntimeFeatures::VIDEO
-    }
-
-    fn frame(
-        &mut self,
-        runtime: &Runtime,
-        encoder: &mut wgpu::CommandEncoder,
-        surface_view: &wgpu::TextureView,
-    ) -> Result<FrameInfo, FrameError> {
+    fn read_next_frame(&mut self) -> Result<(), FrameError> {
         loop {
             if self.packet.is_none() {
                 let packet = match self.format_context.read_packet(self.best_stream_index) {
@@ -138,10 +124,31 @@ impl Wallpaper for VideoWallpaper {
             }
         }
 
+        Ok(())
+    }
+}
+
+impl Wallpaper for VideoWallpaper {
+    fn required_features() -> RuntimeFeatures
+    where
+        Self: Sized,
+    {
+        RuntimeFeatures::GPU | RuntimeFeatures::VIDEO
+    }
+
+    fn frame(
+        &mut self,
+        runtime: &Runtime,
+        encoder: &mut wgpu::CommandEncoder,
+        surface_view: &wgpu::TextureView,
+    ) -> Result<FrameInfo, FrameError> {
+        self.read_next_frame()?;
+
         let Some(va_display) = self.codec_context.va_display() else {
             panic!("failed to retrieve libva display");
         };
 
+        // Safety: the frame is created by libva
         let surface_id = unsafe { self.frame.surface_id() };
 
         if let Err(error) = va_display.sync_surface(surface_id) {
@@ -153,233 +160,7 @@ impl Wallpaper for VideoWallpaper {
             Err(error) => panic!("failed to export surface handle: {error:?}"),
         };
 
-        let dma_desc = *surface_handle.desc();
-        let dma_buf_fd = surface_handle.into_fd().into_raw_fd();
-
-        let memory_properties = unsafe {
-            let adapter = runtime.wgpu.adapter.as_hal::<api::Vulkan>().unwrap();
-
-            let raw_instance = adapter.shared_instance().raw_instance();
-
-            let memory_properties = raw_instance
-                .get_physical_device_memory_properties(adapter.raw_physical_device());
-
-            let ext_format_info = vk::PhysicalDeviceExternalImageFormatInfo {
-                s_type: vk::StructureType::PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO,
-                p_next: ptr::null(),
-                handle_type: vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD,
-                _marker: std::marker::PhantomData,
-            };
-
-            let format_info = vk::PhysicalDeviceImageFormatInfo2 {
-                s_type: vk::StructureType::PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
-                p_next: (&raw const ext_format_info).cast(),
-                format: vk::Format::G8_B8R8_2PLANE_420_UNORM,
-                ty: vk::ImageType::TYPE_2D,
-                tiling: vk::ImageTiling::LINEAR,
-                usage: vk::ImageUsageFlags::SAMPLED,
-                flags: vk::ImageCreateFlags::empty(),
-                _marker: std::marker::PhantomData,
-            };
-
-            let mut ext_properties = vk::ExternalImageFormatProperties {
-                s_type: vk::StructureType::EXTERNAL_IMAGE_FORMAT_PROPERTIES,
-                p_next: ptr::null_mut(),
-                external_memory_properties: vk::ExternalMemoryProperties::default(),
-                _marker: std::marker::PhantomData,
-            };
-
-            let mut format_properties = vk::ImageFormatProperties2 {
-                s_type: vk::StructureType::IMAGE_FORMAT_PROPERTIES_2,
-                p_next: (&raw mut ext_properties).cast(),
-                image_format_properties: vk::ImageFormatProperties::default(),
-                _marker: std::marker::PhantomData,
-            };
-
-            raw_instance
-                .get_physical_device_image_format_properties2(
-                    adapter.raw_physical_device(),
-                    &format_info,
-                    &mut format_properties,
-                )
-                .unwrap();
-
-            assert!(
-                ext_properties
-                    .external_memory_properties
-                    .external_memory_features
-                    .contains(vk::ExternalMemoryFeatureFlags::IMPORTABLE)
-            );
-
-            memory_properties
-        };
-
-        let texture_hal = unsafe {
-            let device = runtime
-                .wgpu
-                .device
-                .as_hal::<api::Vulkan>().unwrap();
-
-            let vk_device = device.raw_device();
-
-            let vk_free_memory = vk_device.fp_v1_0().free_memory;
-            let vk_destroy_image = vk_device.fp_v1_0().destroy_image;
-            let vk_device_raw = vk_device.handle();
-
-            let ext_info = vk::ExternalMemoryImageCreateInfo {
-                s_type: vk::StructureType::EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-                // TODO(hack3rmann): use `DMA_BUF_EXT` whenever it is possible
-                // The reason is it has no restrictions on the device that was
-                // used to decode a video
-                handle_types: vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD,
-                p_next: ptr::null(),
-                _marker: std::marker::PhantomData,
-            };
-
-            let plane_layouts = [
-                vk::SubresourceLayout {
-                    offset: dma_desc.layers[0].offset[0] as u64,
-                    size: 0,
-                    row_pitch: dma_desc.layers[0].pitch[0] as u64,
-                    array_pitch: 0,
-                    depth_pitch: 0,
-                },
-                vk::SubresourceLayout {
-                    offset: dma_desc.layers[1].offset[0] as u64,
-                    size: 0,
-                    row_pitch: dma_desc.layers[1].pitch[0] as u64,
-                    array_pitch: 0,
-                    depth_pitch: 0,
-                },
-            ];
-
-            let formats = [vk::Format::R8_UNORM, vk::Format::R8G8_UNORM];
-
-            let format_list_info = vk::ImageFormatListCreateInfo {
-                s_type: vk::StructureType::IMAGE_FORMAT_LIST_CREATE_INFO,
-                p_next: (&raw const ext_info).cast(),
-                view_format_count: formats.len() as u32,
-                p_view_formats: formats.as_ptr(),
-                _marker: std::marker::PhantomData,
-            };
-
-            let drm_create_info = vk::ImageDrmFormatModifierExplicitCreateInfoEXT {
-                s_type:
-                    vk::StructureType::IMAGE_DRM_FORMAT_MODIFIER_EXPLICIT_CREATE_INFO_EXT,
-                p_next: (&raw const format_list_info).cast(),
-                drm_format_modifier: dma_desc.objects[0].drm_format_modifier,
-                drm_format_modifier_plane_count: dma_desc.num_layers,
-                p_plane_layouts: plane_layouts.as_ptr(),
-                _marker: std::marker::PhantomData,
-            };
-
-            let image_info = vk::ImageCreateInfo {
-                s_type: vk::StructureType::IMAGE_CREATE_INFO,
-                format: vk::Format::G8_B8R8_2PLANE_420_UNORM,
-                usage: vk::ImageUsageFlags::SAMPLED,
-                extent: vk::Extent3D {
-                    width: dma_desc.width,
-                    height: dma_desc.height,
-                    depth: 1,
-                },
-                p_next: (&raw const drm_create_info).cast(),
-                image_type: vk::ImageType::TYPE_2D,
-                flags: vk::ImageCreateFlags::MUTABLE_FORMAT,
-                mip_levels: 1,
-                array_layers: 1,
-                samples: vk::SampleCountFlags::TYPE_1,
-                tiling: vk::ImageTiling::DRM_FORMAT_MODIFIER_EXT,
-                sharing_mode: vk::SharingMode::EXCLUSIVE,
-                queue_family_index_count: 0,
-                p_queue_family_indices: ptr::null(),
-                initial_layout: vk::ImageLayout::UNDEFINED,
-                _marker: std::marker::PhantomData,
-            };
-
-            let vk_image = vk_device.create_image(&image_info, None).unwrap();
-            let memory_requirements = vk_device.get_image_memory_requirements(vk_image);
-
-            let memory_type_index = memory_properties.memory_types
-                [..memory_properties.memory_type_count as usize]
-                .iter()
-                .enumerate()
-                .find(|&(i, memory_type)| {
-                    memory_type
-                        .property_flags
-                        .contains(vk::MemoryPropertyFlags::DEVICE_LOCAL)
-                        && (memory_requirements.memory_type_bits & (1 << i as u32)) != 0
-                })
-                .map(|(i, _)| i as u32)
-                .unwrap();
-
-            let import_info = vk::ImportMemoryFdInfoKHR {
-                s_type: vk::StructureType::IMPORT_MEMORY_FD_INFO_KHR,
-                p_next: ptr::null(),
-                handle_type: vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD,
-                fd: dma_buf_fd,
-                _marker: std::marker::PhantomData,
-            };
-
-            let alloc_info = vk::MemoryAllocateInfo {
-                s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,
-                p_next: (&raw const import_info).cast(),
-                allocation_size: memory_requirements.size,
-                memory_type_index,
-                _marker: std::marker::PhantomData,
-            };
-
-            let device_memory = vk_device.allocate_memory(&alloc_info, None).unwrap();
-            vk_device
-                .bind_image_memory(vk_image, device_memory, 0)
-                .unwrap();
-
-            wgpu::hal::vulkan::Device::texture_from_raw(
-                vk_image,
-                &wgpu::hal::TextureDescriptor {
-                    label: Some("video-texture"),
-                    size: wgpu::Extent3d {
-                        width: dma_desc.width,
-                        height: dma_desc.height,
-                        depth_or_array_layers: 1,
-                    },
-                    mip_level_count: 1,
-                    sample_count: 1,
-                    dimension: wgpu::TextureDimension::D2,
-                    format: wgpu::TextureFormat::NV12,
-                    usage: wgpu::TextureUses::RESOURCE,
-                    memory_flags: wgpu::hal::MemoryFlags::PREFER_COHERENT,
-                    view_formats: vec![],
-                },
-                Some(Box::new(move || {
-                    // NOTE(hack3rmann): we have to manually destroy the image
-                    // because wgpu does not do this due creation of drop callback
-                    vk_destroy_image(vk_device_raw, vk_image, ptr::null());
-                    // NOTE(hack3rmann): we have to manually deallocate the memory
-                    // because wgpu does not do this due to call to `texture_from_raw`
-                    vk_free_memory(vk_device_raw, device_memory, ptr::null());
-                })),
-            )
-        };
-
-        let texture = unsafe {
-            runtime.wgpu.device.create_texture_from_hal::<api::Vulkan>(
-                texture_hal,
-                &wgpu::TextureDescriptor {
-                    label: Some("video-texture"),
-                    size: wgpu::Extent3d {
-                        width: dma_desc.width,
-                        height: dma_desc.height,
-                        depth_or_array_layers: 1,
-                    },
-                    mip_level_count: 1,
-                    sample_count: 1,
-                    dimension: wgpu::TextureDimension::D2,
-                    format: wgpu::TextureFormat::NV12,
-                    usage: wgpu::TextureUsages::TEXTURE_BINDING,
-                    view_formats: &[],
-                },
-            )
-        };
+        let texture = get_va_surface_texture(&runtime.wgpu, surface_handle);
 
         let texture_y_plane = texture.create_view(&wgpu::TextureViewDescriptor {
             aspect: wgpu::TextureAspect::Plane0,
@@ -433,4 +214,230 @@ pub enum VideoWallpaperCreationError {
     VideoBackend(#[from] BackendError),
     #[error("unsupported format {0:?}")]
     UnsupportedFormat(Option<AudioVideoFormat>),
+}
+
+pub fn get_va_surface_texture(gpu: &Wgpu, surface_handle: VaSurfaceHandle) -> wgpu::Texture {
+    let dma_desc = *surface_handle.desc();
+    let dma_buf_fd = surface_handle.into_fd().into_raw_fd();
+
+    let adapter = unsafe { gpu.adapter.as_hal::<api::Vulkan>().unwrap() };
+    let raw_instance = adapter.shared_instance().raw_instance();
+
+    let memory_properties = unsafe {
+        raw_instance.get_physical_device_memory_properties(adapter.raw_physical_device())
+    };
+
+    let ext_format_info = vk::PhysicalDeviceExternalImageFormatInfo {
+        s_type: vk::StructureType::PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO,
+        p_next: ptr::null(),
+        handle_type: vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD,
+        _marker: std::marker::PhantomData,
+    };
+
+    let format_info = vk::PhysicalDeviceImageFormatInfo2 {
+        s_type: vk::StructureType::PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
+        p_next: (&raw const ext_format_info).cast(),
+        format: vk::Format::G8_B8R8_2PLANE_420_UNORM,
+        ty: vk::ImageType::TYPE_2D,
+        tiling: vk::ImageTiling::LINEAR,
+        usage: vk::ImageUsageFlags::SAMPLED,
+        flags: vk::ImageCreateFlags::empty(),
+        _marker: std::marker::PhantomData,
+    };
+
+    let mut ext_properties = vk::ExternalImageFormatProperties {
+        s_type: vk::StructureType::EXTERNAL_IMAGE_FORMAT_PROPERTIES,
+        p_next: ptr::null_mut(),
+        external_memory_properties: vk::ExternalMemoryProperties::default(),
+        _marker: std::marker::PhantomData,
+    };
+
+    let mut format_properties = vk::ImageFormatProperties2 {
+        s_type: vk::StructureType::IMAGE_FORMAT_PROPERTIES_2,
+        p_next: (&raw mut ext_properties).cast(),
+        image_format_properties: vk::ImageFormatProperties::default(),
+        _marker: std::marker::PhantomData,
+    };
+
+    unsafe {
+        raw_instance
+            .get_physical_device_image_format_properties2(
+                adapter.raw_physical_device(),
+                &format_info,
+                &mut format_properties,
+            )
+            .unwrap()
+    };
+
+    assert!(
+        ext_properties
+            .external_memory_properties
+            .external_memory_features
+            .contains(vk::ExternalMemoryFeatureFlags::IMPORTABLE)
+    );
+
+    let device = unsafe { gpu.device.as_hal::<api::Vulkan>().unwrap() };
+    let raw_device = device.raw_device();
+
+    let vk_free_memory = raw_device.fp_v1_0().free_memory;
+    let vk_destroy_image = raw_device.fp_v1_0().destroy_image;
+    let raw_device_handle = raw_device.handle();
+
+    let ext_info = vk::ExternalMemoryImageCreateInfo {
+        s_type: vk::StructureType::EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+        // TODO(hack3rmann): use `DMA_BUF_EXT` whenever it is possible
+        // The reason is it has no restrictions on the device that was
+        // used to decode a video
+        handle_types: vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD,
+        p_next: ptr::null(),
+        _marker: std::marker::PhantomData,
+    };
+
+    let plane_layouts = [
+        vk::SubresourceLayout {
+            offset: dma_desc.layers[0].offset[0] as u64,
+            size: 0,
+            row_pitch: dma_desc.layers[0].pitch[0] as u64,
+            array_pitch: 0,
+            depth_pitch: 0,
+        },
+        vk::SubresourceLayout {
+            offset: dma_desc.layers[1].offset[0] as u64,
+            size: 0,
+            row_pitch: dma_desc.layers[1].pitch[0] as u64,
+            array_pitch: 0,
+            depth_pitch: 0,
+        },
+    ];
+
+    let formats = [vk::Format::R8_UNORM, vk::Format::R8G8_UNORM];
+
+    let format_list_info = vk::ImageFormatListCreateInfo {
+        s_type: vk::StructureType::IMAGE_FORMAT_LIST_CREATE_INFO,
+        p_next: (&raw const ext_info).cast(),
+        view_format_count: formats.len() as u32,
+        p_view_formats: formats.as_ptr(),
+        _marker: std::marker::PhantomData,
+    };
+
+    let drm_create_info = vk::ImageDrmFormatModifierExplicitCreateInfoEXT {
+        s_type: vk::StructureType::IMAGE_DRM_FORMAT_MODIFIER_EXPLICIT_CREATE_INFO_EXT,
+        p_next: (&raw const format_list_info).cast(),
+        drm_format_modifier: dma_desc.objects[0].drm_format_modifier,
+        drm_format_modifier_plane_count: dma_desc.num_layers,
+        p_plane_layouts: plane_layouts.as_ptr(),
+        _marker: std::marker::PhantomData,
+    };
+
+    let image_info = vk::ImageCreateInfo {
+        s_type: vk::StructureType::IMAGE_CREATE_INFO,
+        format: vk::Format::G8_B8R8_2PLANE_420_UNORM,
+        usage: vk::ImageUsageFlags::SAMPLED,
+        extent: vk::Extent3D {
+            width: dma_desc.width,
+            height: dma_desc.height,
+            depth: 1,
+        },
+        p_next: (&raw const drm_create_info).cast(),
+        image_type: vk::ImageType::TYPE_2D,
+        flags: vk::ImageCreateFlags::MUTABLE_FORMAT,
+        mip_levels: 1,
+        array_layers: 1,
+        samples: vk::SampleCountFlags::TYPE_1,
+        tiling: vk::ImageTiling::DRM_FORMAT_MODIFIER_EXT,
+        sharing_mode: vk::SharingMode::EXCLUSIVE,
+        queue_family_index_count: 0,
+        p_queue_family_indices: ptr::null(),
+        initial_layout: vk::ImageLayout::UNDEFINED,
+        _marker: std::marker::PhantomData,
+    };
+
+    let vk_image = unsafe { raw_device.create_image(&image_info, None).unwrap() };
+    let memory_requirements = unsafe { raw_device.get_image_memory_requirements(vk_image) };
+
+    let memory_type_index = memory_properties.memory_types
+        [..memory_properties.memory_type_count as usize]
+        .iter()
+        .enumerate()
+        .find(|&(i, memory_type)| {
+            memory_type
+                .property_flags
+                .contains(vk::MemoryPropertyFlags::DEVICE_LOCAL)
+                && (memory_requirements.memory_type_bits & (1 << i as u32)) != 0
+        })
+        .map(|(i, _)| i as u32)
+        .unwrap();
+
+    let import_info = vk::ImportMemoryFdInfoKHR {
+        s_type: vk::StructureType::IMPORT_MEMORY_FD_INFO_KHR,
+        p_next: ptr::null(),
+        handle_type: vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD,
+        fd: dma_buf_fd,
+        _marker: std::marker::PhantomData,
+    };
+
+    let alloc_info = vk::MemoryAllocateInfo {
+        s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,
+        p_next: (&raw const import_info).cast(),
+        allocation_size: memory_requirements.size,
+        memory_type_index,
+        _marker: std::marker::PhantomData,
+    };
+
+    let device_memory = unsafe { raw_device.allocate_memory(&alloc_info, None).unwrap() };
+
+    unsafe {
+        raw_device
+            .bind_image_memory(vk_image, device_memory, 0)
+            .unwrap()
+    };
+
+    let hal_texture_desc = wgpu::hal::TextureDescriptor {
+        label: Some("video-texture"),
+        size: wgpu::Extent3d {
+            width: image_info.extent.width,
+            height: image_info.extent.height,
+            depth_or_array_layers: image_info.extent.depth,
+        },
+        mip_level_count: image_info.mip_levels,
+        sample_count: image_info.samples.as_raw(),
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::NV12,
+        usage: wgpu::TextureUses::RESOURCE,
+        memory_flags: wgpu::hal::MemoryFlags::TRANSIENT,
+        view_formats: vec![],
+    };
+
+    let on_drop = move || unsafe {
+        // NOTE(hack3rmann): we have to manually destroy the image
+        // because wgpu does not do this due creation of drop callback
+        vk_destroy_image(raw_device_handle, vk_image, ptr::null());
+        // NOTE(hack3rmann): we have to manually deallocate the memory
+        // because wgpu does not do this due to call to `texture_from_raw`
+        vk_free_memory(raw_device_handle, device_memory, ptr::null());
+    };
+
+    let texture_hal = unsafe {
+        wgpu::hal::vulkan::Device::texture_from_raw(
+            vk_image,
+            &hal_texture_desc,
+            Some(Box::new(on_drop)),
+        )
+    };
+
+    let texture_desc = wgpu::TextureDescriptor {
+        label: hal_texture_desc.label,
+        size: hal_texture_desc.size,
+        mip_level_count: hal_texture_desc.mip_level_count,
+        sample_count: hal_texture_desc.sample_count,
+        dimension: hal_texture_desc.dimension,
+        format: hal_texture_desc.format,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: &hal_texture_desc.view_formats,
+    };
+
+    unsafe {
+        gpu.device
+            .create_texture_from_hal::<api::Vulkan>(texture_hal, &texture_desc)
+    }
 }
