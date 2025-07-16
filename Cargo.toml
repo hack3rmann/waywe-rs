@@ -1,25 +1,32 @@
 [workspace]
 resolver = "3"
 members = [
-    "daemon",
-    "extractor",
+    "deploy-tool",
     "dxt",
+    "extractor",
+    "project-parser",
+    "runtime",
     "transmute-extra",
-    "wayland-scanner",
-    "wayland-client",
-    "wayland-sys",
     "unite-json",
     "video",
-    "cli",
-    "runtime",
-    "project-parser",
-    "deploy-tool", "wayland-server",
+    "wayland-client",
+    "wayland-scanner",
+    "wayland-server",
+    "wayland-sys",
+    "waywe",
+    "waywe-daemon",
 ]
 
 [workspace.package]
 version = "0.0.6"
 edition = "2024"
 license = "MIT"
+rust-version = "1.88"
+authors = [
+    "Varov Svyatoslav <slava-varov3@mail.ru>",
+    "Alexander Filimonov <arnodarkrose@duck.com>",
+]
+repository = "https://www.github.com/hack3rmann/waywe-rs"
 
 [workspace.dependencies]
 wayland-client = { path = "wayland-client", features = ["smallvec"] }
@@ -49,6 +56,3 @@ tokio = { version = "1.43.0", features = ["full"] }
 serde = { version = "1.0.219", features = ["derive"] }
 toml = "0.8.23"
 fxhash = "0.2.1"
-
-[profile.release]
-lto = true

@@ -9,7 +9,7 @@ https://github.com/user-attachments/assets/48a8b135-bbf2-4055-8453-19292a923939
 ### Warning
 
 - This software is still in development, some major features may be unimplemented.
-- This project uses a lot of hardware-dependent code to make it work fast as _f_.
+- This project uses a lot of hardware-dependent code to make it work fast as *F*.
 - Special warning for the ones who concerned about unsafe code in Rust: this project contains a
   lot of it and built upon it. Of course, to speed up a lot of processing code.
 
@@ -25,22 +25,25 @@ https://github.com/user-attachments/assets/48a8b135-bbf2-4055-8453-19292a923939
 2. `wlroots`-based Wayland compositor (e.g. Hyprland or Sway).
 3. Support for `libva` hardware acceleration.
 4. Support for minor (yet unpopular) Vulkan features:
-    - VK_KHR_external_memory_fd
-    - VK_EXT_image_drm_format_modifier
-
-## Build
-
-```shell
-cargo build --release
-```
+    - `VK_KHR_external_memory_fd`
+    - `VK_EXT_image_drm_format_modifier`
 
 ## Install
 
-After build instructions run:
+### Clone the repo
 
 ```shell
-sudo cp /target/release/waywe /usr/bin/waywe
-sudo cp /target/release/waywe-daemon /usr/bin/waywe-daemon
+git clone --depth=1 https://github.com/hack3rmann/waywe-rs.git
+```
+
+### Build and install
+
+Install both `waywe` and `waywe-daemon`.
+
+```shell
+cd waywe-rs
+CARGO_TAREGT_DIR=target cargo install --path waywe
+CARGO_TAREGT_DIR=target cargo install --path waywe-daemon
 ```
 
 ## Usage
@@ -60,7 +63,10 @@ waywe video path/to/your/video.mp4
 waywe image path/to/your/picture.jpg
 ```
 
-Also, you can create preview of currently running wallpaper:
+Note that it will set the same wallpaper for all currently plugged monitors.
+You can also specify on which monitor to set wallpaper to with `--monitor <NAME>` key.
+
+Also, you can create preview image of currently running wallpaper:
 
 ```shell
 waywe preview preview.png

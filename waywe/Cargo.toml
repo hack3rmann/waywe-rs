@@ -1,8 +1,11 @@
 [package]
-name = "cli"
+name = "waywe"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
 
 [[bin]]
 name = "waywe"
@@ -18,3 +21,6 @@ rustix.workspace = true
 image.workspace = true
 transmute-extra.workspace = true
 glam.workspace = true
+
+[profile.release]
+lto = true
