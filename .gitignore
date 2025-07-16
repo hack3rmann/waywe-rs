@@ -1,5 +1,4 @@
 target
 extractor/scene.pkg
 extractor/assets
-Cargo.lock
 deploy-tool/releases
