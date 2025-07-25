@@ -5,7 +5,7 @@ use std::{
     ffi::{CStr, c_char, c_int},
     mem::MaybeUninit,
     slice, str,
-    sync::Mutex,
+    sync::Once,
 };
 use va_list::VaList;
 
@@ -85,15 +85,12 @@ pub(crate) unsafe fn setup_non_block() {
     unsafe { ffi::wl_log_set_handler_client(wl_log_raw) };
 }
 
-/// Setup wayland client logger in a thread-safe manner.
+/// Setup wayland client logger once in a thread-safe manner.
 pub(crate) fn setup() {
-    static MUTEX: Mutex<()> = Mutex::new(());
+    static ONCE: Once = Once::new();
 
-    {
-        let _lock = MUTEX.lock().unwrap();
-        // Safety: we are holding the lock therefore there is only 1 thread calling this function
-        unsafe { setup_non_block() };
-    }
+    // Safety: there is only 1 thread calling this function
+    ONCE.call_once(|| unsafe { setup_non_block() });
 }
 
 // NOTE(hack3rmann): the crate `libc` does not provide this function se we do.
