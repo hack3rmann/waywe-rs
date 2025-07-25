@@ -27,11 +27,10 @@ use wayland_client::{
     sys::{
         display::WlDisplay,
         object::{
-            FromProxy, WlObject, WlObjectHandle, dispatch::Dispatch, event_queue::WlEventQueue,
+            WlObject, WlObjectHandle, dispatch::Dispatch, event_queue::WlEventQueue,
             registry::WlRegistry,
         },
         object_storage::WlObjectStorage,
-        proxy::WlProxy,
         wire::{WlMessage, WlStackMessageBuffer},
     },
 };
@@ -105,6 +104,7 @@ impl ClientState {
     }
 }
 
+#[derive(Default)]
 pub struct Compositor;
 
 impl HasObjectType for Compositor {
@@ -116,12 +116,7 @@ impl Dispatch for Compositor {
     const ALLOW_EMPTY_DISPATCH: bool = true;
 }
 
-impl FromProxy for Compositor {
-    fn from_proxy(_: &WlProxy) -> Self {
-        Self
-    }
-}
-
+#[derive(Default)]
 pub struct LayerShell;
 
 impl HasObjectType for LayerShell {
@@ -133,12 +128,7 @@ impl Dispatch for LayerShell {
     const ALLOW_EMPTY_DISPATCH: bool = true;
 }
 
-impl FromProxy for LayerShell {
-    fn from_proxy(_: &WlProxy) -> Self {
-        Self
-    }
-}
-
+#[derive(Default)]
 pub struct Surface;
 
 impl HasObjectType for Surface {
@@ -148,12 +138,6 @@ impl HasObjectType for Surface {
 impl Dispatch for Surface {
     type State = ClientState;
     const ALLOW_EMPTY_DISPATCH: bool = true;
-}
-
-impl FromProxy for Surface {
-    fn from_proxy(_: &WlProxy) -> Self {
-        Self
-    }
 }
 
 pub struct LayerSurface {
@@ -269,17 +253,12 @@ impl Dispatch for LayerSurface {
     }
 }
 
+#[derive(Default)]
 pub struct Region;
 
 impl Dispatch for Region {
     type State = ClientState;
     const ALLOW_EMPTY_DISPATCH: bool = true;
-}
-
-impl FromProxy for Region {
-    fn from_proxy(_: &WlProxy) -> Self {
-        Self
-    }
 }
 
 impl HasObjectType for Region {

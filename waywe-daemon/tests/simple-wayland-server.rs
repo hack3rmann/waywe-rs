@@ -195,16 +195,11 @@ fn run_simple_unsafe_server() {
 #[derive(Debug)]
 struct ClientState;
 
+#[derive(Default)]
 struct ClientOutput;
 
 impl HasObjectType for ClientOutput {
     const OBJECT_TYPE: WlObjectType = WlObjectType::Output;
-}
-
-impl FromProxy for ClientOutput {
-    fn from_proxy(_: &WlProxy) -> Self {
-        Self
-    }
 }
 
 impl Dispatch for ClientOutput {

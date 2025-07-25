@@ -9,13 +9,8 @@ use wayland_client::{
 };
 use wgpu::util::DeviceExt as _;
 
+#[derive(Default)]
 struct Compositor;
-
-impl FromProxy for Compositor {
-    fn from_proxy(_: &WlProxy) -> Self {
-        Self
-    }
-}
 
 impl HasObjectType for Compositor {
     const OBJECT_TYPE: WlObjectType = WlObjectType::Compositor;
@@ -26,13 +21,8 @@ impl Dispatch for Compositor {
     const ALLOW_EMPTY_DISPATCH: bool = true;
 }
 
+#[derive(Default)]
 struct Surface;
-
-impl FromProxy for Surface {
-    fn from_proxy(_: &WlProxy) -> Self {
-        Self
-    }
-}
 
 impl HasObjectType for Surface {
     const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
