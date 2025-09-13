@@ -3,7 +3,7 @@ pub mod command;
 
 use crate::{
     args::{Args, Command},
-    command::{execute_current, execute_image, execute_preview, execute_start, execute_video},
+    command::{execute_current, execute_image, execute_pause, execute_preview, execute_start, execute_video},
 };
 use anyhow::{Context as _, bail};
 use clap::Parser as _;
@@ -29,6 +29,7 @@ fn main() -> anyhow::Result<()> {
         }
         Command::Video { path, monitor } => execute_video(&path, monitor)?,
         Command::Image { path, monitor } => execute_image(&path, monitor)?,
+        Command::Pause { monitor } => execute_pause(monitor)?,
     };
 
     let socket = match IpcSocket::<Client, DaemonCommand>::connect() {

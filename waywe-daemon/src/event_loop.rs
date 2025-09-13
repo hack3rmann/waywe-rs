@@ -15,6 +15,7 @@ use rustix::io::Errno;
 use std::{
     io::{self},
     os::fd::AsFd as _,
+    path::PathBuf,
     sync::{Once, atomic::Ordering},
     time::Duration,
     vec::Drain,
@@ -204,32 +205,35 @@ impl EventQueue {
         wayland: &Wayland,
         cli: &IpcSocket<Server, DaemonCommand>,
     ) -> Result<(), RecvError> {
-        match cli.try_recv() {
-            Ok(command) => {
-                let (path, monitor, ty) = match command {
-                    DaemonCommand::SetVideo { path, monitor } => {
-                        (path, monitor, WallpaperType::Video)
-                    }
-                    DaemonCommand::SetImage { path, monitor } => {
-                        (path, monitor, WallpaperType::Image)
-                    }
-                };
+        let command = match cli.try_recv() {
+            Ok(command) => command,
+            Err(RecvError::Empty) => return Ok(()),
+            Err(error) => return Err(error),
+        };
 
-                let monitor_id = monitor
-                    .as_ref()
-                    .and_then(|name| wayland.client_state.monitor_id(name));
+        let mut set = |path: PathBuf, monitor: Option<&str>, ty: WallpaperType| {
+            let monitor_id = monitor
+                .as_ref()
+                .and_then(|name| wayland.client_state.monitor_id(name));
 
-                let set = monitor_id
-                    .map(SetWallpaper::ForMonitor)
-                    .unwrap_or(SetWallpaper::ForAll);
+            let set = monitor_id
+                .map(SetWallpaper::ForMonitor)
+                .unwrap_or(SetWallpaper::ForAll);
 
-                self.add(NewWallpaperEvent { path, ty, set });
+            self.add(NewWallpaperEvent { path, ty, set });
+        };
 
-                Ok(())
+        match command {
+            DaemonCommand::SetVideo { path, monitor } => {
+                set(path, monitor.as_deref(), WallpaperType::Video);
             }
-            Err(RecvError::Empty) => Ok(()),
-            Err(error) => Err(error),
-        }
+            DaemonCommand::SetImage { path, monitor } => {
+                set(path, monitor.as_deref(), WallpaperType::Image);
+            }
+            DaemonCommand::Pause { monitor: _ } => todo!(),
+        };
+
+        Ok(())
     }
 }
 

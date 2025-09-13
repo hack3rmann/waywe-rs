@@ -141,7 +141,10 @@ pub fn execute_preview(result_path: &Path, monitor_name: Option<&str>) -> Result
     Ok(())
 }
 
-pub fn execute_video(path: &Path, monitor_name: Option<String>) -> Result<DaemonCommand, ExecuteError> {
+pub fn execute_video(
+    path: &Path,
+    monitor_name: Option<String>,
+) -> Result<DaemonCommand, ExecuteError> {
     let absolute_path = path.canonicalize()?;
 
     if !is_video_path_valid(absolute_path.clone()) {
@@ -152,6 +155,25 @@ pub fn execute_video(path: &Path, monitor_name: Option<String>) -> Result<Daemon
 
     Ok(DaemonCommand::SetVideo {
         path: absolute_path,
+        monitor: monitor_name,
+    })
+}
+
+pub fn execute_image(
+    path: &Path,
+    monitor_name: Option<String>,
+) -> Result<DaemonCommand, ExecuteError> {
+    let _reader = ImageReader::open(path)?;
+    let absolute_path = path.canonicalize()?;
+
+    Ok(DaemonCommand::SetImage {
+        path: absolute_path,
+        monitor: monitor_name,
+    })
+}
+
+pub fn execute_pause(monitor_name: Option<String>) -> Result<DaemonCommand, ExecuteError> {
+    Ok(DaemonCommand::Pause {
         monitor: monitor_name,
     })
 }
@@ -203,14 +225,4 @@ fn is_video_valid(path: &CStr) -> bool {
     }
 
     true
-}
-
-pub fn execute_image(path: &Path, monitor_name: Option<String>) -> Result<DaemonCommand, ExecuteError> {
-    let _reader = ImageReader::open(path)?;
-    let absolute_path = path.canonicalize()?;
-
-    Ok(DaemonCommand::SetImage {
-        path: absolute_path,
-        monitor: monitor_name,
-    })
 }

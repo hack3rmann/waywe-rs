@@ -11,4 +11,7 @@ pub enum DaemonCommand {
         path: PathBuf,
         monitor: Option<String>,
     },
+    Pause {
+        monitor: Option<String>,
+    },
 }

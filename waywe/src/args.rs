@@ -13,7 +13,7 @@ pub enum Command {
     /// Set a video as a wallpaper
     Video {
         /// Monitor to set wallpaper on
-        #[arg(long)]
+        #[arg(short, long)]
         monitor: Option<String>,
         /// Path to the video
         path: PathBuf,
@@ -21,7 +21,7 @@ pub enum Command {
     /// Set an image as a wallpaper
     Image {
         /// Monitor to set wallpaper on
-        #[arg(long)]
+        #[arg(short, long)]
         monitor: Option<String>,
         /// Path to the image
         path: PathBuf,
@@ -31,15 +31,21 @@ pub enum Command {
     /// Get path to the current wallpaper
     Current {
         /// Monitor to set wallpaper on
-        #[arg(long)]
+        #[arg(short, long)]
         monitor: Option<String>,
     },
     /// Create a preview for the wallpaper
     Preview {
         /// Monitor to set wallpaper on
-        #[arg(long)]
+        #[arg(short, long)]
         monitor: Option<String>,
         /// Where to store the preview
         out: PathBuf,
+    },
+    /// Pause/Resume current wallpaper
+    Pause {
+        /// Monitor to pause the wallpaper on
+        #[arg(short, long)]
+        monitor: Option<String>,
     },
 }
