@@ -211,18 +211,23 @@ impl EventQueue {
         };
 
         let get_target = |monitor_name: Option<&str>| {
-            let monitor_id = monitor_name
-                .as_ref()
-                .and_then(|name| wayland.client_state.monitor_id(name));
+            let Some(name) = monitor_name else {
+                return Some(WallpaperTarget::ForAll);
+            };
 
-            monitor_id
-                .map(WallpaperTarget::ForMonitor)
-                .unwrap_or(WallpaperTarget::ForAll)
+            let target = wayland
+                .client_state
+                .monitor_id(name)
+                .map(WallpaperTarget::ForMonitor)?;
+
+            Some(target)
         };
 
         match command {
             DaemonCommand::SetVideo { path, monitor } => {
-                let target = get_target(monitor.as_deref());
+                let Some(target) = get_target(monitor.as_deref()) else {
+                    return Ok(());
+                };
 
                 self.add(NewWallpaperEvent {
                     path,
@@ -231,7 +236,9 @@ impl EventQueue {
                 });
             }
             DaemonCommand::SetImage { path, monitor } => {
-                let target = get_target(monitor.as_deref());
+                let Some(target) = get_target(monitor.as_deref()) else {
+                    return Ok(());
+                };
 
                 self.add(NewWallpaperEvent {
                     path,
@@ -240,7 +247,10 @@ impl EventQueue {
                 });
             }
             DaemonCommand::Pause { monitor } => {
-                let target = get_target(monitor.as_deref());
+                let Some(target) = get_target(monitor.as_deref()) else {
+                    return Ok(());
+                };
+
                 self.add(WallpaperPauseEvent { target });
             }
         };
