@@ -54,7 +54,7 @@ impl fmt::Debug for SizeAndOffset {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, Hash)]
 pub(crate) struct ThinDataHeader {
     pub drop: unsafe fn(*mut ()),
     pub size_and_offset: SizeAndOffset,
