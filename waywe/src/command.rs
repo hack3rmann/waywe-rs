@@ -163,7 +163,8 @@ pub fn execute_image(
     path: &Path,
     monitor_name: Option<String>,
 ) -> Result<DaemonCommand, ExecuteError> {
-    let _reader = ImageReader::open(path)?;
+    let reader = ImageReader::open(path)?.with_guessed_format()?;
+    let _image = reader.decode()?;
     let absolute_path = path.canonicalize()?;
 
     Ok(DaemonCommand::SetImage {
