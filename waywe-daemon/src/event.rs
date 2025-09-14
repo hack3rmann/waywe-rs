@@ -46,7 +46,7 @@ where
 }
 
 impl<A: 'static> EventHandler<A> {
-    pub fn dispatches<E>(&mut self) -> &mut Self
+    pub fn add_event<E>(&mut self) -> &mut Self
     where
         E: IntoEvent,
         A: Handle<E>,
@@ -57,7 +57,7 @@ impl<A: 'static> EventHandler<A> {
         self
     }
 
-    pub async fn handle(&mut self, app: &mut A, runtime: &mut Runtime, event: Event) {
+    pub async fn execute_all(&mut self, app: &mut A, runtime: &mut Runtime, event: Event) {
         let Some(id) = event.underlying_type() else {
             return;
         };

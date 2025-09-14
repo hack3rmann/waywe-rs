@@ -1,6 +1,6 @@
 use crate::{
     event::{EventHandler, Handle},
-    event_loop::{App, FrameError, FrameInfo, SetWallpaper},
+    event_loop::{App, FrameError, FrameInfo, WallpaperTarget},
     runtime::{
         Runtime,
         wayland::{MonitorId, MonitorMap, WaylandEvent},
@@ -21,9 +21,34 @@ use smallvec::{SmallVec, smallvec};
 use std::{path::PathBuf, sync::Arc, time::Duration};
 use tracing::{debug, error};
 
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum WallpaperState {
+    #[default]
+    Running,
+    Paused,
+}
+
+impl WallpaperState {
+    pub const fn inverted(self) -> Self {
+        match self {
+            Self::Running => Self::Paused,
+            Self::Paused => Self::Running,
+        }
+    }
+
+    pub const fn is_paused(self) -> bool {
+        matches!(self, Self::Paused)
+    }
+
+    pub const fn is_running(self) -> bool {
+        matches!(self, Self::Running)
+    }
+}
+
 #[derive(Default)]
 pub struct VideoApp {
     pub wallpapers: MonitorMap<DynWallpaper>,
+    pub wallpaper_states: MonitorMap<WallpaperState>,
     pub config: Config,
     pub do_force_frame: bool,
 }
@@ -65,6 +90,8 @@ impl VideoApp {
         };
 
         self.wallpapers.insert(monitor_id, wallpaper);
+        self.wallpaper_states
+            .insert(monitor_id, WallpaperState::Running);
     }
 
     pub fn resolve_transitions(&mut self) {
@@ -92,7 +119,11 @@ pub struct WallpaperPreparedEvent {
 pub struct NewWallpaperEvent {
     pub path: PathBuf,
     pub ty: WallpaperType,
-    pub set: SetWallpaper,
+    pub target: WallpaperTarget,
+}
+
+pub struct WallpaperPauseEvent {
+    pub target: WallpaperTarget,
 }
 
 impl App for VideoApp {
@@ -101,9 +132,10 @@ impl App for VideoApp {
         Self: Sized,
     {
         handler
-            .dispatches::<WaylandEvent>()
-            .dispatches::<NewWallpaperEvent>()
-            .dispatches::<WallpaperPreparedEvent>();
+            .add_event::<WaylandEvent>()
+            .add_event::<NewWallpaperEvent>()
+            .add_event::<WallpaperPreparedEvent>()
+            .add_event::<WallpaperPauseEvent>();
     }
 
     async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
@@ -119,6 +151,12 @@ impl App for VideoApp {
 
         for (&monitor_id, wallpaper) in self.wallpapers.iter_mut() {
             if !self.do_force_frame && wallpaper.render_state() == RenderState::Done {
+                continue;
+            }
+
+            if let Some(&state) = self.wallpaper_states.get(&monitor_id)
+                && state.is_paused()
+            {
                 continue;
             }
 
@@ -145,6 +183,28 @@ impl App for VideoApp {
         self.do_force_frame = false;
 
         result
+    }
+}
+
+impl Handle<WallpaperPauseEvent> for VideoApp {
+    async fn handle(&mut self, runtime: &mut Runtime, event: WallpaperPauseEvent) {
+        let WallpaperPauseEvent { target } = event;
+
+        let monitor_ids: SmallVec<[MonitorId; 4]> = match target {
+            WallpaperTarget::ForAll => {
+                let monitors = runtime.wayland.client_state.monitors.read().unwrap();
+                monitors.keys().copied().collect()
+            }
+            WallpaperTarget::ForMonitor(id) => smallvec![id],
+        };
+
+        for monitor_id in monitor_ids {
+            let Some(state) = self.wallpaper_states.get_mut(&monitor_id) else {
+                continue;
+            };
+
+            *state = state.inverted();
+        }
     }
 }
 
@@ -187,7 +247,7 @@ impl Handle<WaylandEvent> for VideoApp {
                     let event = NewWallpaperEvent {
                         path: info.path,
                         ty: info.wallpaper_type,
-                        set: SetWallpaper::ForMonitor(monitor_id),
+                        target: WallpaperTarget::ForMonitor(monitor_id),
                     };
 
                     runtime.task_pool.emitter.emit(event).unwrap();
@@ -199,6 +259,8 @@ impl Handle<WaylandEvent> for VideoApp {
                 debug!(?monitor_id, "unplugged a monitor");
 
                 _ = self.wallpapers.remove(&monitor_id);
+                _ = self.wallpaper_states.remove(&monitor_id);
+
                 runtime.wgpu.unregister_surface(monitor_id);
             }
         }
@@ -207,16 +269,16 @@ impl Handle<WaylandEvent> for VideoApp {
 
 impl Handle<NewWallpaperEvent> for VideoApp {
     async fn handle(&mut self, runtime: &mut Runtime, event: NewWallpaperEvent) {
-        let NewWallpaperEvent { path, ty, set } = event;
+        let NewWallpaperEvent { path, ty, target } = event;
 
         runtime.enable(ty.required_features()).await;
 
-        let monitor_ids: SmallVec<[MonitorId; 4]> = match set {
-            SetWallpaper::ForAll => {
+        let monitor_ids: SmallVec<[MonitorId; 4]> = match target {
+            WallpaperTarget::ForAll => {
                 let monitors = runtime.wayland.client_state.monitors.read().unwrap();
                 monitors.keys().copied().collect()
             }
-            SetWallpaper::ForMonitor(wl_object_id) => smallvec![wl_object_id],
+            WallpaperTarget::ForMonitor(id) => smallvec![id],
         };
 
         for monitor_id in monitor_ids {

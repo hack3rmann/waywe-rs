@@ -1,5 +1,5 @@
 use crate::{
-    app::NewWallpaperEvent,
+    app::{NewWallpaperEvent, WallpaperPauseEvent},
     event::{AbsorbError, Event, EventHandler, EventReceiver, IntoEvent},
     runtime::{
         ControlFlow, Runtime,
@@ -15,7 +15,6 @@ use rustix::io::Errno;
 use std::{
     io::{self},
     os::fd::AsFd as _,
-    path::PathBuf,
     sync::{Once, atomic::Ordering},
     time::Duration,
     vec::Drain,
@@ -131,7 +130,7 @@ impl<A: App> EventLoop<A> {
 
             for event in self.event_queue.drain() {
                 self.event_handler
-                    .handle(&mut self.app, &mut self.runtime, event)
+                    .execute_all(&mut self.app, &mut self.runtime, event)
                     .await;
             }
 
@@ -164,7 +163,7 @@ impl<A: App> EventLoop<A> {
 }
 
 #[derive(Debug)]
-pub enum SetWallpaper {
+pub enum WallpaperTarget {
     ForAll,
     ForMonitor(MonitorId),
 }
@@ -211,26 +210,39 @@ impl EventQueue {
             Err(error) => return Err(error),
         };
 
-        let mut set = |path: PathBuf, monitor: Option<&str>, ty: WallpaperType| {
-            let monitor_id = monitor
+        let get_target = |monitor_name: Option<&str>| {
+            let monitor_id = monitor_name
                 .as_ref()
                 .and_then(|name| wayland.client_state.monitor_id(name));
 
-            let set = monitor_id
-                .map(SetWallpaper::ForMonitor)
-                .unwrap_or(SetWallpaper::ForAll);
-
-            self.add(NewWallpaperEvent { path, ty, set });
+            monitor_id
+                .map(WallpaperTarget::ForMonitor)
+                .unwrap_or(WallpaperTarget::ForAll)
         };
 
         match command {
             DaemonCommand::SetVideo { path, monitor } => {
-                set(path, monitor.as_deref(), WallpaperType::Video);
+                let target = get_target(monitor.as_deref());
+
+                self.add(NewWallpaperEvent {
+                    path,
+                    ty: WallpaperType::Video,
+                    target,
+                });
             }
             DaemonCommand::SetImage { path, monitor } => {
-                set(path, monitor.as_deref(), WallpaperType::Image);
+                let target = get_target(monitor.as_deref());
+
+                self.add(NewWallpaperEvent {
+                    path,
+                    ty: WallpaperType::Image,
+                    target,
+                });
             }
-            DaemonCommand::Pause { monitor: _ } => todo!(),
+            DaemonCommand::Pause { monitor } => {
+                let target = get_target(monitor.as_deref());
+                self.add(WallpaperPauseEvent { target });
+            }
         };
 
         Ok(())
