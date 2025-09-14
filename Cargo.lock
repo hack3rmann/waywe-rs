@@ -572,7 +572,7 @@ dependencies = [
 
 [[package]]
 name = "deploy-tool"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "anyhow",
  "clap",
@@ -592,7 +592,7 @@ dependencies = [
 
 [[package]]
 name = "dxt"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "rayon",
  "safe-transmute",
@@ -684,7 +684,7 @@ dependencies = [
 
 [[package]]
 name = "extractor"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "anyhow",
  "bitflags 2.9.1",
@@ -1738,7 +1738,7 @@ dependencies = [
 
 [[package]]
 name = "project-parser"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "chumsky",
  "thiserror 2.0.12",
@@ -2020,7 +2020,7 @@ checksum = "57397d16646700483b67d2dd6511d79318f9d057fdbd21a4066aeac8b41d310a"
 
 [[package]]
 name = "runtime"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "bincode",
  "bytemuck",
@@ -2486,7 +2486,7 @@ dependencies = [
 
 [[package]]
 name = "transmute-extra"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "thiserror 2.0.12",
 ]
@@ -2517,7 +2517,7 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
 name = "unite-json"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "clap",
  "serde",
@@ -2580,7 +2580,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "video"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "bitflags 2.9.1",
  "ffmpeg-sys-next",
@@ -2683,7 +2683,7 @@ dependencies = [
 
 [[package]]
 name = "wayland-client"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "bitflags 2.9.1",
  "bytemuck",
@@ -2706,7 +2706,7 @@ dependencies = [
 
 [[package]]
 name = "wayland-scanner"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "convert_case",
  "paste",
@@ -2724,7 +2724,7 @@ dependencies = [
 
 [[package]]
 name = "wayland-server"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "rustix",
  "thiserror 2.0.12",
@@ -2735,7 +2735,7 @@ dependencies = [
 
 [[package]]
 name = "wayland-sys"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "libc",
  "static_assertions",
@@ -2745,7 +2745,7 @@ dependencies = [
 
 [[package]]
 name = "waywe"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "anyhow",
  "clap",
@@ -2762,7 +2762,7 @@ dependencies = [
 
 [[package]]
 name = "waywe-daemon"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "ash",
  "bincode",
