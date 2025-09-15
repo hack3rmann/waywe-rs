@@ -1,5 +1,6 @@
 pub mod image;
 pub mod image_pipeline;
+pub mod scene;
 pub mod transition;
 pub mod video;
 pub mod video_pipeline;
@@ -7,6 +8,7 @@ pub mod video_pipeline;
 use crate::{
     event_loop::{FrameError, FrameInfo},
     runtime::{Runtime, RuntimeFeatures, gpu::Wgpu, wayland::MonitorId},
+    wallpaper::scene::SceneTestWallpaper,
 };
 use glam::UVec2;
 use image::{ImageWallpaper, ImageWallpaperCreationError};
@@ -30,6 +32,10 @@ pub trait Wallpaper: Any + Send + Sync {
         encoder: &mut wgpu::CommandEncoder,
         surface_view: &wgpu::TextureView,
     ) -> Result<FrameInfo, FrameError>;
+
+    fn free_frame(&mut self, _runtime: &Runtime) -> Result<FrameInfo, FrameError> {
+        Ok(FrameInfo::default())
+    }
 
     fn render_state(&self) -> RenderState {
         RenderState::NeedFrame
@@ -86,6 +92,8 @@ pub fn create(
         WallpaperType::Image => ImageWallpaper::new(gpu, monitor_size, path, monitor_id)
             .map(IntoDynWallpaper::into_dyn_wallpaper)
             .map_err(WallpaperCreationError::from),
+        // FIXME:
+        WallpaperType::Scene => Ok(SceneTestWallpaper::new_test(monitor_id).into_dyn_wallpaper()),
     }
 }
 
@@ -98,6 +106,8 @@ impl RequiredFeaturesExt for WallpaperType {
         match self {
             Self::Video => VideoWallpaper::required_features(),
             Self::Image => ImageWallpaper::required_features(),
+            // FIXME:
+            Self::Scene => SceneTestWallpaper::required_features(),
         }
     }
 }

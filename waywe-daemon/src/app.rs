@@ -2,12 +2,10 @@ use crate::{
     event::{EventHandler, Handle},
     event_loop::{App, FrameError, FrameInfo, WallpaperTarget},
     runtime::{
-        Runtime,
-        wayland::{MonitorId, MonitorMap, WaylandEvent},
+        wayland::{MonitorId, MonitorMap, WaylandEvent}, Runtime, RuntimeFeatures
     },
     wallpaper::{
-        self, DynWallpaper, IntoDynWallpaper, RenderState, RequiredFeaturesExt as _,
-        transition::{TransitionConfig, TransitionWallpaper},
+        self, scene::{render::{MonitorPlugged, MonitorUnplugged}, render_test::RenderMeshPlugin, SceneTestWallpaper}, transition::{TransitionConfig, TransitionWallpaper}, DynWallpaper, IntoDynWallpaper, RenderState, RequiredFeaturesExt as _
     },
 };
 use for_sure::Almost;
@@ -18,7 +16,11 @@ use runtime::{
     profile::{Monitor, SetupProfile},
 };
 use smallvec::{SmallVec, smallvec};
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Once},
+    time::Duration,
+};
 use tracing::{debug, error};
 
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -147,7 +149,7 @@ impl App for VideoApp {
 
         // FIXME(hack3rmann): multiple monitors
         let mut result = Err(FrameError::NoWorkToDo);
-        let surfaces = runtime.wgpu.surfaces.read().unwrap();
+        // let surfaces = runtime.wgpu.surfaces.read().unwrap();
 
         for (&monitor_id, wallpaper) in self.wallpapers.iter_mut() {
             if !self.do_force_frame && wallpaper.render_state() == RenderState::Done {
@@ -160,20 +162,23 @@ impl App for VideoApp {
                 continue;
             }
 
-            let surface_texture = surfaces[&monitor_id].surface.get_current_texture().unwrap();
-            let surface_view = surface_texture.texture.create_view(&Default::default());
+            // FIXME:
+            result = wallpaper.free_frame(runtime);
 
-            let mut encoder = runtime
-                .wgpu
-                .device
-                .create_command_encoder(&Default::default());
-
-            // FIXME(hack3rmann): handle different framerates
-            result = wallpaper.frame(runtime, &mut encoder, &surface_view);
-
-            _ = runtime.wgpu.queue.submit([encoder.finish()]);
-
-            surface_texture.present();
+            // let surface_texture = surfaces[&monitor_id].surface.get_current_texture().unwrap();
+            // let surface_view = surface_texture.texture.create_view(&Default::default());
+            //
+            // let mut encoder = runtime
+            //     .wgpu
+            //     .device
+            //     .create_command_encoder(&Default::default());
+            //
+            // // FIXME(hack3rmann): handle different framerates
+            // result = wallpaper.frame(runtime, &mut encoder, &surface_view);
+            //
+            // _ = runtime.wgpu.queue.submit([encoder.finish()]);
+            //
+            // surface_texture.present();
         }
 
         if let Err(FrameError::NoWorkToDo) = &result {
@@ -235,6 +240,11 @@ impl Handle<WaylandEvent> for VideoApp {
                     runtime.wgpu.register_surface(&runtime.wayland, monitor_id);
                 }
 
+                if Almost::is_value(&runtime.scene_renderer) {
+                    let mut renderer = runtime.scene_renderer.write().unwrap();
+                    renderer.trigger(MonitorPlugged { id: monitor_id });
+                }
+
                 let monitors = runtime.wayland.client_state.monitors.read().unwrap();
                 let monitor = &monitors[&monitor_id];
                 let monitor_name = Arc::clone(monitor.name.as_ref().unwrap());
@@ -244,13 +254,14 @@ impl Handle<WaylandEvent> for VideoApp {
                 if let Ok(mut profile) = SetupProfile::read()
                     && let Some(info) = profile.monitors.remove(&monitor_name)
                 {
-                    let event = NewWallpaperEvent {
+                    // FIXME:
+                    let _event = NewWallpaperEvent {
                         path: info.path,
                         ty: info.wallpaper_type,
                         target: WallpaperTarget::ForMonitor(monitor_id),
                     };
 
-                    runtime.task_pool.emitter.emit(event).unwrap();
+                    // runtime.task_pool.emitter.emit(event).unwrap();
                 }
 
                 runtime.control_flow.busy();
@@ -262,6 +273,11 @@ impl Handle<WaylandEvent> for VideoApp {
                 _ = self.wallpaper_states.remove(&monitor_id);
 
                 runtime.wgpu.unregister_surface(monitor_id);
+
+                if Almost::is_value(&runtime.scene_renderer) {
+                    let mut renderer = runtime.scene_renderer.write().unwrap();
+                    renderer.trigger(MonitorUnplugged { id: monitor_id });
+                }
             }
         }
     }

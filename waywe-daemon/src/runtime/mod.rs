@@ -1,9 +1,9 @@
-use crate::task_pool::TaskPool;
+use crate::{task_pool::TaskPool, wallpaper::scene::{render::SceneRenderer, render_test::RenderMeshPlugin}};
 use bitflags::bitflags;
 use for_sure::prelude::*;
 use gpu::Wgpu;
 use runtime::{DaemonCommand, IpcSocket, ipc::Server};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use timer::Timer;
 use video::Video;
 use wayland::Wayland;
@@ -41,6 +41,7 @@ bitflags! {
     pub struct RuntimeFeatures: u32 {
         const GPU = 0x1;
         const VIDEO = 0x2;
+        const SCENE_RENDERER = 0x4;
     }
 }
 
@@ -48,6 +49,7 @@ pub struct Runtime {
     pub timer: Timer,
     pub video: Almost<Video>,
     pub wgpu: Almost<Arc<Wgpu>>,
+    pub scene_renderer: Almost<RwLock<SceneRenderer>>,
     pub wayland: Wayland,
     pub ipc: IpcSocket<Server, DaemonCommand>,
     pub control_flow: ControlFlow,
@@ -61,6 +63,7 @@ impl Runtime {
             wayland,
             wgpu: Nil,
             video: Nil,
+            scene_renderer: Nil,
             ipc: match IpcSocket::server() {
                 Ok(ipc) => ipc,
                 Err(error) => panic!("failed to initialize ipc: {error:?}"),
@@ -82,6 +85,17 @@ impl Runtime {
         }
     }
 
+    pub async fn init_scene_renderer(&mut self) {
+        self.init_wgpu().await;
+
+        if Almost::is_nil(&self.scene_renderer) {
+            let gpu = Arc::clone(&self.wgpu);
+            let mut renderer = SceneRenderer::new(gpu, &self.wayland);
+            renderer.add_plugin(RenderMeshPlugin);
+            self.scene_renderer = Value(RwLock::new(renderer));
+        }
+    }
+
     pub async fn enable(&mut self, features: RuntimeFeatures) {
         if features.contains(RuntimeFeatures::VIDEO) {
             self.init_video();
@@ -89,6 +103,10 @@ impl Runtime {
 
         if features.contains(RuntimeFeatures::GPU) {
             self.init_wgpu().await;
+        }
+
+        if features.contains(RuntimeFeatures::SCENE_RENDERER) {
+            self.init_scene_renderer().await;
         }
     }
 }

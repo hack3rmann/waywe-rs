@@ -113,7 +113,7 @@ impl ImagePipeline {
             ],
         });
 
-        const VERTEX_SHADER_NAME: &str = "shaders/white-vertex.glsl";
+        const VERTEX_SHADER_NAME: &str = "shaders/fullscreen-vertex.glsl";
         const FRAGMENT_SHADER_NAME: &str = "shaders/image.glsl";
 
         gpu.use_shader(

@@ -15,7 +15,7 @@ use rustix::io::Errno;
 use std::{
     io::{self},
     os::fd::AsFd as _,
-    sync::{Once, atomic::Ordering},
+    sync::{atomic::Ordering, mpsc::TryRecvError, Once},
     time::Duration,
     vec::Drain,
 };
@@ -82,6 +82,19 @@ impl<A: App> EventLoop<A> {
 
         let mut polled_fds = PolledFds::with_capacity(1);
 
+        let mut event = self.runtime.task_pool.emitter.clone();
+
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(100));
+            event
+                .emit(NewWallpaperEvent {
+                    path: Default::default(),
+                    ty: WallpaperType::Scene,
+                    target: WallpaperTarget::ForAll,
+                })
+                .unwrap();
+        });
+
         'event_loop: loop {
             self.runtime.timer.mark_frame_start();
 
@@ -117,7 +130,9 @@ impl<A: App> EventLoop<A> {
                 self.runtime.wayland.client_state.as_ref(),
             );
 
-            if let Err(error) = self.event_queue.populate_events_from_custom() {
+            if let Err(error) = self.event_queue.populate_events_from_custom()
+                && !matches!(error, AbsorbError::TryRecv(TryRecvError::Empty))
+            {
                 error!(?error, "failed to populate custom events");
             }
 
@@ -280,18 +295,24 @@ pub struct FrameInfo {
 }
 
 impl FrameInfo {
-    pub fn best_with_60_fps(self, other: Self) -> Self {
-        const MAX_FPS: Duration = RatioI32::new(1, 60).unwrap().to_duration_seconds();
+    pub const MAX_FPS: Duration = RatioI32::new(1, 60).unwrap().to_duration_seconds();
 
+    pub const fn new_60_fps() -> Self {
+        Self {
+            target_frame_time: Some(Self::MAX_FPS),
+        }
+    }
+
+    pub fn best_with_60_fps(self, other: Self) -> Self {
         match (self.target_frame_time, other.target_frame_time) {
             (Some(time1), Some(time2)) => Self {
-                target_frame_time: Some(time1.min(time2).min(MAX_FPS)),
+                target_frame_time: Some(time1.min(time2).min(Self::MAX_FPS)),
             },
             (Some(time), None) | (None, Some(time)) => Self {
-                target_frame_time: Some(time.min(MAX_FPS)),
+                target_frame_time: Some(time.min(Self::MAX_FPS)),
             },
             (None, None) => Self {
-                target_frame_time: Some(MAX_FPS),
+                target_frame_time: Some(Self::MAX_FPS),
             },
         }
     }

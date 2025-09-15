@@ -5,4 +5,5 @@ pub enum WallpaperType {
     #[default]
     Video,
     Image,
+    Scene,
 }

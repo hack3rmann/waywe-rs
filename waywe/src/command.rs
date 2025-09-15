@@ -70,6 +70,7 @@ pub fn execute_preview(result_path: &Path, monitor_name: Option<&str>) -> Result
     };
 
     let image = match info.wallpaper_type {
+        WallpaperType::Scene => todo!("scene"),
         WallpaperType::Video => {
             let c_path = pathbuf_into_cstring(info.path.clone());
 
