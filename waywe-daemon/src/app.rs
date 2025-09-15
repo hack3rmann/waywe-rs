@@ -260,7 +260,13 @@ impl Handle<WaylandEvent> for VideoApp {
                         target: WallpaperTarget::ForMonitor(monitor_id),
                     };
 
-                    // runtime.task_pool.emitter.emit(event).unwrap();
+                    let event = NewWallpaperEvent {
+                        path: Default::default(),
+                        ty: WallpaperType::Scene,
+                        target: WallpaperTarget::ForAll,
+                    };
+
+                    runtime.task_pool.emitter.emit(event).unwrap();
                 }
 
                 runtime.control_flow.busy();

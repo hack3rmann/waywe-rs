@@ -82,19 +82,6 @@ impl<A: App> EventLoop<A> {
 
         let mut polled_fds = PolledFds::with_capacity(1);
 
-        let mut event = self.runtime.task_pool.emitter.clone();
-
-        std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(100));
-            event
-                .emit(NewWallpaperEvent {
-                    path: Default::default(),
-                    ty: WallpaperType::Scene,
-                    target: WallpaperTarget::ForAll,
-                })
-                .unwrap();
-        });
-
         'event_loop: loop {
             self.runtime.timer.mark_frame_start();
 
@@ -148,8 +135,6 @@ impl<A: App> EventLoop<A> {
                     .execute_all(&mut self.app, &mut self.runtime, event)
                     .await;
             }
-
-            self.runtime.timer.mark_wallpaper_start_time();
 
             let info = match self.app.frame(&mut self.runtime).await {
                 Ok(info) => info,
