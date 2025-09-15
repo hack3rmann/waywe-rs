@@ -8,19 +8,18 @@ use crate::{
         Wallpaper,
         scene::{
             render::{SceneExtract, SceneRender},
-            render_test::Mesh,
+            render_test::{Mesh, MeshMeta},
         },
     },
 };
 use bevy_ecs::{prelude::*, schedule::ScheduleLabel, system::ScheduleSystem};
-use derive_more::Deref;
+use derive_more::{Deref, DerefMut};
 use for_sure::Almost;
 use std::{
     mem,
     result::Result,
     time::{Duration, Instant},
 };
-use video::RatioI32;
 
 #[derive(Resource)]
 pub struct Time {
@@ -45,7 +44,7 @@ pub struct SceneUpdate;
 #[derive(ScheduleLabel, Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SceneStartup;
 
-#[derive(Resource, Deref)]
+#[derive(Resource, Deref, DerefMut)]
 pub struct MainWorld(pub World);
 
 #[derive(Resource, Default)]
@@ -130,7 +129,7 @@ pub struct SceneTestWallpaper {
 impl SceneTestWallpaper {
     pub fn new_test(monitor_id: MonitorId) -> Self {
         let mut scene = Scene::new(monitor_id);
-        scene.world.spawn(Mesh);
+        scene.world.spawn((Mesh, MeshMeta(0)));
 
         Self { scene }
     }

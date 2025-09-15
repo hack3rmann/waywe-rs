@@ -2,10 +2,13 @@ use crate::{
     event::{EventHandler, Handle},
     event_loop::{App, FrameError, FrameInfo, WallpaperTarget},
     runtime::{
-        wayland::{MonitorId, MonitorMap, WaylandEvent}, Runtime, RuntimeFeatures
+        Runtime,
+        wayland::{MonitorId, MonitorMap, WaylandEvent},
     },
     wallpaper::{
-        self, scene::{render::{MonitorPlugged, MonitorUnplugged}, render_test::RenderMeshPlugin, SceneTestWallpaper}, transition::{TransitionConfig, TransitionWallpaper}, DynWallpaper, IntoDynWallpaper, RenderState, RequiredFeaturesExt as _
+        self, DynWallpaper, IntoDynWallpaper, RenderState, RequiredFeaturesExt as _,
+        scene::render::{MonitorPlugged, MonitorUnplugged},
+        transition::{TransitionConfig, TransitionWallpaper},
     },
 };
 use for_sure::Almost;
@@ -16,11 +19,7 @@ use runtime::{
     profile::{Monitor, SetupProfile},
 };
 use smallvec::{SmallVec, smallvec};
-use std::{
-    path::PathBuf,
-    sync::{Arc, Once},
-    time::Duration,
-};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 use tracing::{debug, error};
 
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

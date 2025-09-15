@@ -5,11 +5,9 @@ use crate::{
         wayland::{MonitorId, MonitorMap},
     },
     wallpaper::scene::{
-        MainWorld, Monitor, Time,
         render::{
-            MainEntity, MonitorPlugged, MonitorUnplugged, RenderGpu, RenderPlugin, SceneExtract,
-            SceneRender, SceneRenderStage,
-        },
+            Extract, MainEntity, MonitorPlugged, MonitorUnplugged, RenderGpu, RenderPlugin, SceneExtract, SceneRender, SceneRenderStage
+        }, MainWorld, Monitor, Time
     },
 };
 use bevy_ecs::prelude::*;
@@ -182,7 +180,11 @@ pub fn remove_pipeline(unplugged: Trigger<MonitorUnplugged>, mut pipelines: ResM
 }
 
 #[derive(Component)]
+#[require(MeshMeta)]
 pub struct Mesh;
+
+#[derive(Component, Default)]
+pub struct MeshMeta(pub i32);
 
 #[derive(Component)]
 pub struct RenderMesh {
@@ -222,19 +224,29 @@ impl RenderMesh {
 #[derive(Component, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 pub struct AttachedMonitor(pub MonitorId);
 
+#[derive(Deref, DerefMut)]
+pub struct Meshes<'s>(pub QueryState<(Entity, &'s Mesh), Changed<MeshMeta>>);
+
+impl FromWorld for Meshes<'_> {
+    fn from_world(world: &mut World) -> Self {
+        let main_world = world.resource::<MainWorld>();
+        Self(QueryState::try_new(main_world).unwrap())
+    }
+}
+
 pub fn extract_meshes(
+    monitor_id: Extract<Res<Monitor>>,
+    meshes: Extract<Query<(Entity, &Mesh), Changed<MeshMeta>>>,
     mut commands: Commands,
-    main_world: Res<MainWorld>,
     gpu: Res<RenderGpu>,
     pipelines: Res<Pipelines>,
 ) {
-    let mut meshes = QueryState::<(Entity, &Mesh), Changed<Mesh>>::try_new(&main_world).unwrap();
-    let monitor_id = main_world.resource::<Monitor>().0;
+    let monitor_id = monitor_id.0;
     let Some(pipeline) = pipelines.get(&monitor_id) else {
         return;
     };
 
-    for (id, _mesh) in meshes.iter(&main_world) {
+    for (id, _mesh) in &meshes {
         commands.spawn((
             MainEntity(id),
             RenderMesh::new(&gpu, pipeline),
