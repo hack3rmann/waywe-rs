@@ -1,4 +1,7 @@
-use crate::{task_pool::TaskPool, wallpaper::scene::{render::SceneRenderer, render_test::RenderMeshPlugin}};
+use crate::{
+    task_pool::TaskPool,
+    wallpaper::scene::{render::SceneRenderer, render_test::RenderMeshPlugin},
+};
 use bitflags::bitflags;
 use for_sure::prelude::*;
 use gpu::Wgpu;

@@ -15,7 +15,7 @@ use rustix::io::Errno;
 use std::{
     io::{self},
     os::fd::AsFd as _,
-    sync::{atomic::Ordering, mpsc::TryRecvError, Once},
+    sync::{Once, atomic::Ordering, mpsc::TryRecvError},
     time::Duration,
     vec::Drain,
 };

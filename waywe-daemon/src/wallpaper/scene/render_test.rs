@@ -5,9 +5,11 @@ use crate::{
         wayland::{MonitorId, MonitorMap},
     },
     wallpaper::scene::{
+        MainWorld, Monitor, Time,
         render::{
-            Extract, MainEntity, MonitorPlugged, MonitorUnplugged, RenderGpu, RenderPlugin, SceneExtract, SceneRender, SceneRenderStage
-        }, MainWorld, Monitor, Time
+            Extract, MainEntity, MonitorPlugged, MonitorUnplugged, RenderGpu, RenderPlugin,
+            SceneExtract, SceneRender, SceneRenderStage,
+        },
     },
 };
 use bevy_ecs::prelude::*;

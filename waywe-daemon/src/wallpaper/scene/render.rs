@@ -6,9 +6,14 @@ use crate::{
     wallpaper::scene::{MainWorld, Time, update_time},
 };
 use bevy_ecs::{
-    component::Tick, prelude::*, schedule::ScheduleLabel, system::{
-        ReadOnlySystemParam, ScheduleSystem, SystemMeta, SystemParam, SystemParamItem, SystemParamValidationError, SystemState
-    }, world::unsafe_world_cell::UnsafeWorldCell
+    component::Tick,
+    prelude::*,
+    schedule::ScheduleLabel,
+    system::{
+        ReadOnlySystemParam, ScheduleSystem, SystemMeta, SystemParam, SystemParamItem,
+        SystemParamValidationError, SystemState,
+    },
+    world::unsafe_world_cell::UnsafeWorldCell,
 };
 use derive_more::{Deref, DerefMut};
 use std::sync::Arc;

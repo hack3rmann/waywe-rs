@@ -3,7 +3,10 @@ pub mod command;
 
 use crate::{
     args::{Args, Command},
-    command::{execute_current, execute_image, execute_pause, execute_preview, execute_start, execute_video},
+    command::{
+        execute_current, execute_image, execute_pause, execute_preview, execute_start,
+        execute_video,
+    },
 };
 use anyhow::{Context as _, bail};
 use clap::Parser as _;
