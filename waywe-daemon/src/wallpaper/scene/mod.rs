@@ -1,5 +1,7 @@
 pub mod render;
 pub mod render_test;
+pub mod sprite;
+pub mod transform;
 
 use crate::{
     event_loop::{FrameError, FrameInfo},
@@ -8,13 +10,15 @@ use crate::{
         Wallpaper,
         scene::{
             render::{SceneExtract, SceneRender},
-            render_test::{Mesh, MeshMeta},
+            render_test::Mesh,
+            transform::{Transform, TransformPlugin},
         },
     },
 };
 use bevy_ecs::{prelude::*, schedule::ScheduleLabel, system::ScheduleSystem};
 use derive_more::{Deref, DerefMut};
 use for_sure::Almost;
+use glam::{Quat, Vec3};
 use std::{
     mem,
     result::Result,
@@ -72,10 +76,15 @@ impl Scene {
         world.init_resource::<DummyWorld>();
         world.init_resource::<Time>();
 
-        Self {
+        let mut this = Self {
             world,
             startup_done: false,
-        }
+        };
+
+        // FIXME: add default plugins in another way
+        this.add_plugin(TransformPlugin);
+
+        this
     }
 
     pub fn add_systems<M>(
@@ -111,6 +120,11 @@ impl Scene {
         let temp_world = mem::replace(&mut self.world, main_world);
         self.world.insert_resource(DummyWorld(temp_world));
     }
+
+    pub fn add_plugin(&mut self, plugin: impl ScenePlugin) -> &mut Self {
+        plugin.init(self);
+        self
+    }
 }
 
 pub fn update_time(mut time: ResMut<Time>) {
@@ -129,7 +143,19 @@ pub struct SceneTestWallpaper {
 impl SceneTestWallpaper {
     pub fn new_test(monitor_id: MonitorId) -> Self {
         let mut scene = Scene::new(monitor_id);
-        scene.world.spawn((Mesh, MeshMeta(0)));
+
+        scene.add_systems(
+            SceneUpdate,
+            |mut transforms: Query<&mut Transform, With<Mesh>>, time: Res<Time>| {
+                for mut transform in &mut transforms {
+                    transform.rotation = Quat::from_rotation_z(time.elapsed.as_secs_f32());
+                }
+            },
+        );
+
+        scene
+            .world
+            .spawn((Mesh, Transform::from_translation(0.1 * Vec3::ONE)));
 
         Self { scene }
     }
@@ -167,4 +193,8 @@ impl Wallpaper for SceneTestWallpaper {
     {
         RuntimeFeatures::SCENE_RENDERER
     }
+}
+
+pub trait ScenePlugin {
+    fn init(self, scene: &mut Scene);
 }

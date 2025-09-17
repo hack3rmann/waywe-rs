@@ -1,6 +1,7 @@
 #version 460
 
 layout(push_constant) uniform struct PushConst {
+    mat4 model;
     float time;
 } push;
 

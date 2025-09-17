@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 use super::render::SceneRenderer;
 use crate::{
     runtime::{
@@ -5,18 +7,16 @@ use crate::{
         wayland::{MonitorId, MonitorMap},
     },
     wallpaper::scene::{
-        MainWorld, Monitor, Time,
         render::{
-            Extract, MainEntity, MonitorPlugged, MonitorUnplugged, RenderGpu, RenderPlugin,
-            SceneExtract, SceneRender, SceneRenderStage,
-        },
+            EntityMap, Extract, MainEntity, MonitorPlugged, MonitorUnplugged, RenderGpu, RenderPlugin, SceneExtract, SceneRender, SceneRenderStage
+        }, transform::{GlobalTransform, ModelMatrix, Transform}, MainWorld, Monitor, Time
     },
 };
 use bevy_ecs::prelude::*;
 use bytemuck::{Pod, Zeroable};
 use derive_more::{Deref, DerefMut};
 use for_sure::prelude::*;
-use glam::Vec3;
+use glam::{Mat4, Vec3};
 use itertools::Itertools;
 use std::mem;
 
@@ -47,7 +47,10 @@ pub struct Vertex(pub Vec3);
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 pub struct PushConst {
+    pub model: Mat4,
     pub time: f32,
+    /// Padding for shaders, should be zeroed
+    pub _padding: [u32; 3],
 }
 
 pub struct MeshPipeline {
@@ -98,7 +101,7 @@ impl MeshPipeline {
                 label: Some("image-pipeline-layout"),
                 bind_group_layouts: &[&bind_group_layout],
                 push_constant_ranges: &[wgpu::PushConstantRange {
-                    stages: wgpu::ShaderStages::FRAGMENT,
+                    stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
                     range: 0..mem::size_of::<PushConst>() as u32,
                 }],
             });
@@ -182,13 +185,11 @@ pub fn remove_pipeline(unplugged: Trigger<MonitorUnplugged>, mut pipelines: ResM
 }
 
 #[derive(Component)]
-#[require(MeshMeta)]
+#[require(Transform)]
 pub struct Mesh;
 
-#[derive(Component, Default)]
-pub struct MeshMeta(pub i32);
-
 #[derive(Component)]
+#[require(ModelMatrix)]
 pub struct RenderMesh {
     pub vertices: wgpu::Buffer,
     pub bind_group: wgpu::BindGroup,
@@ -227,7 +228,7 @@ impl RenderMesh {
 pub struct AttachedMonitor(pub MonitorId);
 
 #[derive(Deref, DerefMut)]
-pub struct Meshes<'s>(pub QueryState<(Entity, &'s Mesh), Changed<MeshMeta>>);
+pub struct Meshes<'s>(pub QueryState<(Entity, &'s Mesh), Changed<Mesh>>);
 
 impl FromWorld for Meshes<'_> {
     fn from_world(world: &mut World) -> Self {
@@ -237,8 +238,9 @@ impl FromWorld for Meshes<'_> {
 }
 
 pub fn extract_meshes(
+    mut entity_map: ResMut<EntityMap>,
     monitor_id: Extract<Res<Monitor>>,
-    meshes: Extract<Query<(Entity, &Mesh), Changed<MeshMeta>>>,
+    meshes: Extract<Query<(Entity, &Mesh, &GlobalTransform), Changed<Mesh>>>,
     mut commands: Commands,
     gpu: Res<RenderGpu>,
     pipelines: Res<Pipelines>,
@@ -248,18 +250,21 @@ pub fn extract_meshes(
         return;
     };
 
-    for (id, _mesh) in &meshes {
-        commands.spawn((
+    for (id, _mesh, transform) in &meshes {
+        let render_id = commands.spawn((
             MainEntity(id),
             RenderMesh::new(&gpu, pipeline),
             AttachedMonitor(monitor_id),
-        ));
+            ModelMatrix(transform.0.to_model()),
+        )).id();
+
+        entity_map.insert(id, render_id);
     }
 }
 
 pub fn render_meshes(
     pipelines: Res<Pipelines>,
-    meshes: Query<(&RenderMesh, &AttachedMonitor, &MainEntity)>,
+    meshes: Query<(&RenderMesh, &AttachedMonitor, &ModelMatrix)>,
     mut render: ResMut<OngoingRender>,
     time: Res<Time>,
 ) {
@@ -292,17 +297,19 @@ pub fn render_meshes(
                 });
 
             pass.set_pipeline(&pipeline.pipeline);
-            pass.set_push_constants(
-                wgpu::ShaderStages::FRAGMENT,
-                0,
-                bytemuck::bytes_of(&PushConst {
-                    time: time.elapsed.as_secs_f32(),
-                }),
-            );
 
-            for (mesh, _, &MainEntity(_main_entity)) in meshes {
+            for (mesh, _, &ModelMatrix(model)) in meshes {
                 pass.set_vertex_buffer(0, mesh.vertices.slice(..));
                 pass.set_bind_group(0, &mesh.bind_group, &[]);
+                pass.set_push_constants(
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                    0,
+                    bytemuck::bytes_of(&PushConst {
+                        time: time.elapsed.as_secs_f32(),
+                        model,
+                        _padding: [0; 3],
+                    }),
+                );
 
                 let n_vertices = mesh.vertices.size() / mem::size_of::<Vertex>() as u64;
                 pass.draw(0..n_vertices as u32, 0..1);

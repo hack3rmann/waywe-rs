@@ -3,7 +3,7 @@ use crate::{
         gpu::Wgpu,
         wayland::{MonitorId, Wayland},
     },
-    wallpaper::scene::{MainWorld, Time, update_time},
+    wallpaper::scene::{transform::TransformPlugin, update_time, MainWorld, Time},
 };
 use bevy_ecs::{
     component::Tick,
@@ -16,7 +16,7 @@ use bevy_ecs::{
     world::unsafe_world_cell::UnsafeWorldCell,
 };
 use derive_more::{Deref, DerefMut};
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 #[derive(Component, Clone, Copy)]
 pub struct MainEntity(pub Entity);
@@ -49,6 +49,7 @@ impl SceneRenderer {
         let mut world = World::new();
 
         world.init_resource::<Time>();
+        world.init_resource::<EntityMap>();
         world.insert_resource(RenderGpu(gpu));
         world.add_schedule(Schedule::new(SceneExtract));
 
@@ -72,10 +73,15 @@ impl SceneRenderer {
             queued_plug_events.push(MonitorPlugged { id });
         }
 
-        Self {
+        let mut this = Self {
             world,
             queued_plug_events,
-        }
+        };
+
+        // FIXME: other way to do default plugins
+        this.add_plugin(TransformPlugin);
+
+        this
     }
 
     pub fn apply_queued(&mut self) {
@@ -117,6 +123,9 @@ pub struct MonitorPlugged {
 pub struct MonitorUnplugged {
     pub id: MonitorId,
 }
+
+#[derive(Resource, Default, Clone, Deref, DerefMut)]
+pub struct EntityMap(pub HashMap<Entity, Entity>);
 
 pub struct Extract<'w, 's, P>
 where
