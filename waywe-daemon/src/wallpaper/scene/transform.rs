@@ -69,6 +69,7 @@ impl Default for Transform {
 #[derive(Debug, Default, PartialEq, Clone, Copy, Component)]
 pub struct GlobalTransform(pub Transform);
 
+// TODO: make it faster
 pub fn propagate_transforms(
     mut entity_stack: Local<SmallVec<[(Entity, Transform); 16]>>,
     mut commands: Commands,

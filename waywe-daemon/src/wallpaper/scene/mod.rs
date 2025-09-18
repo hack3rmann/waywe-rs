@@ -2,6 +2,7 @@ pub mod render;
 pub mod render_test;
 pub mod sprite;
 pub mod transform;
+pub mod assets;
 
 use crate::{
     event_loop::{FrameError, FrameInfo},
