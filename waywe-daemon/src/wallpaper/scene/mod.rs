@@ -16,7 +16,7 @@ use crate::{
         scene::{
             assets::Assets,
             image::{Image, ImageMaterial, ImagePlugin},
-            mesh::{Mesh, MeshMaterial},
+            mesh::{Mesh, Mesh3d, MeshMaterial, MeshPlugin},
             render::{SceneExtract, SceneRender},
             transform::{Transform, TransformPlugin},
         },
@@ -97,6 +97,7 @@ impl Scene {
         // FIXME: add default plugins in another way
         this.add_plugin(TransformPlugin);
         this.add_plugin(ImagePlugin);
+        this.add_plugin(MeshPlugin);
 
         this
     }
@@ -173,6 +174,7 @@ impl SceneTestWallpaper {
         mut commands: Commands,
         mut images: ResMut<Assets<Image>>,
         mut materials: ResMut<Assets<ImageMaterial>>,
+        mut meshes: ResMut<Assets<Mesh>>,
     ) {
         // FIXME(hack3rmann): use local image
         const PATH: &str = "target/test-image.png";
@@ -186,19 +188,20 @@ impl SceneTestWallpaper {
 
         let image = images.add(Image { image });
         let material = materials.add(ImageMaterial { image });
+        let mesh = meshes.add(Mesh::rect(Vec2::ONE));
 
         const SCALE: f32 = 0.6;
         let aspect_scale = Vec3::new(SCALE, SCALE * aspect_ratio, 1.0);
 
         commands.spawn((
-            Mesh::rect(Vec2::ONE),
+            Mesh3d(mesh),
             Transform::from_translation(Vec3::new(-0.2, -0.2, 0.0)).scaled_by(aspect_scale),
             MeshMaterial(material),
             TimeScale(1.0),
         ));
 
         commands.spawn((
-            Mesh::rect(Vec2::ONE),
+            Mesh3d(mesh),
             Transform::from_translation(Vec3::new(0.2, 0.2, 0.0)).scaled_by(aspect_scale),
             MeshMaterial(material),
             TimeScale(std::f32::consts::FRAC_PI_2),
@@ -206,7 +209,7 @@ impl SceneTestWallpaper {
     }
 
     pub fn rotate_meshes(
-        mut transforms: Query<(&mut Transform, &TimeScale), With<Mesh>>,
+        mut transforms: Query<(&mut Transform, &TimeScale), With<Mesh3d>>,
         time: Res<Time>,
     ) {
         let time = time.elapsed.as_secs_f32();

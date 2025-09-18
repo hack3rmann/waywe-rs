@@ -1,12 +1,14 @@
-use super::render::SceneRenderer;
+use super::{Scene, render::SceneRenderer};
 use crate::{
     runtime::{
         gpu::Wgpu,
         wayland::{MonitorId, MonitorMap},
     },
     wallpaper::scene::{
-        Monitor, Time,
-        assets::{AssetHandle, Assets},
+        Monitor, ScenePlugin, Time,
+        assets::{
+            Asset, AssetHandle, Assets, AssetsPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin,
+        },
         image::{ImageMaterial, extract_image_materials},
         material::{Material, MaterialAssetMap, RenderMaterial, RenderMaterialHandle},
         render::{
@@ -25,17 +27,28 @@ use itertools::Itertools;
 use smallvec::{SmallVec, smallvec};
 use std::{collections::HashMap, mem};
 
-pub struct RenderMeshPlugin;
+pub struct MeshPlugin;
 
-impl RenderPlugin for RenderMeshPlugin {
+impl ScenePlugin for MeshPlugin {
+    fn init(self, scene: &mut Scene) {
+        scene.add_plugin(AssetsPlugin::<Mesh>::new());
+    }
+}
+
+impl RenderPlugin for MeshPlugin {
     fn init(self, renderer: &mut SceneRenderer) {
+        renderer.add_plugin(RenderAssetsPlugin::<RenderMesh>::new());
         renderer.world.add_observer(add_monitor);
         renderer.world.add_observer(remove_monitor);
         renderer.world.init_resource::<Pipelines>();
         renderer.world.init_resource::<OngoingRender>();
         renderer.add_systems(
             SceneExtract,
-            extract_meshes::<ImageMaterial>.after(extract_image_materials),
+            (
+                extact_meshes,
+                extact_objects::<ImageMaterial>.after(extract_image_materials),
+            )
+                .chain(),
         );
         renderer.add_systems(
             SceneRender,
@@ -166,11 +179,12 @@ pub fn remove_monitor(unplugged: Trigger<MonitorUnplugged>, mut pipelines: ResMu
     _ = pipelines.remove(&unplugged.id);
 }
 
-#[derive(Component, Default)]
-#[require(Transform)]
+#[derive(Default)]
 pub struct Mesh {
     pub vertices: SmallVec<[Vertex; 12]>,
 }
+
+impl Asset for Mesh {}
 
 impl Mesh {
     pub fn rect(sizes: Vec2) -> Self {
@@ -187,14 +201,30 @@ impl Mesh {
     }
 }
 
-#[derive(Component)]
-#[require(Mesh)]
-pub struct MeshMaterial<M: Material>(pub AssetHandle<M>);
+#[derive(Clone, Debug, Component)]
+#[require(Transform)]
+pub struct Mesh3d(pub AssetHandle<Mesh>);
+
+pub fn extact_meshes(
+    meshes: Extract<Res<Assets<Mesh>>>,
+    mut render_meshes: ResMut<RenderAssets<RenderMesh>>,
+    gpu: Res<RenderGpu>,
+) {
+    for (id, mesh) in meshes.new_assets() {
+        render_meshes.add(id, RenderMesh::new(mesh, &gpu));
+    }
+}
 
 #[derive(Component)]
-#[require(ModelMatrix)]
+pub struct MeshMaterial<M: Material>(pub AssetHandle<M>);
+
+#[derive(Clone, Debug)]
 pub struct RenderMesh {
     pub vertices: wgpu::Buffer,
+}
+
+impl RenderAsset for RenderMesh {
+    type Asset = Mesh;
 }
 
 impl RenderMesh {
@@ -213,15 +243,21 @@ impl RenderMesh {
     }
 }
 
+#[derive(Component)]
+#[require(ModelMatrix)]
+pub struct RenderMeshHandle(pub AssetHandle<Mesh>);
+
 #[derive(Component, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 pub struct AttachedMonitor(pub MonitorId);
 
-pub fn extract_meshes<M: Material>(
+pub fn extact_objects<M: Material>(
     mut commands: Commands,
     mut entity_map: ResMut<EntityMap>,
     monitor_id: Extract<Res<Monitor>>,
     asset_map: Res<MaterialAssetMap>,
-    meshes: Extract<Query<(Entity, &Mesh, &MeshMaterial<M>, &GlobalTransform), Changed<Mesh>>>,
+    mesh_query: Extract<
+        Query<(Entity, &Mesh3d, &MeshMaterial<M>, &GlobalTransform), Changed<Mesh3d>>,
+    >,
     gpu: Res<RenderGpu>,
     materials: Res<Assets<RenderMaterial>>,
     mut pipelines: ResMut<Pipelines>,
@@ -229,13 +265,13 @@ pub fn extract_meshes<M: Material>(
     let monitor_id = monitor_id.0;
     let pipelines = pipelines.get_mut(&monitor_id).unwrap();
 
-    for (id, mesh, &MeshMaterial(material_id), transform) in &meshes {
+    for (id, &Mesh3d(mesh_id), &MeshMaterial(material_id), transform) in &mesh_query {
         let render_material_id = asset_map.get(material_id).unwrap();
 
         let render_id = commands
             .spawn((
                 MainEntity(id),
-                RenderMesh::new(mesh, &gpu),
+                RenderMeshHandle(mesh_id),
                 AttachedMonitor(monitor_id),
                 RenderMaterialHandle(render_material_id),
                 ModelMatrix(transform.0.to_model()),
@@ -255,8 +291,9 @@ pub fn extract_meshes<M: Material>(
 pub fn render_meshes(
     pipelines: Res<Pipelines>,
     materials: Res<Assets<RenderMaterial>>,
-    meshes: Query<(
-        &RenderMesh,
+    meshes: Res<RenderAssets<RenderMesh>>,
+    mesh_handles: Query<(
+        &RenderMeshHandle,
         &RenderMaterialHandle,
         &AttachedMonitor,
         &ModelMatrix,
@@ -265,12 +302,12 @@ pub fn render_meshes(
     time: Res<Time>,
     gpu: Res<RenderGpu>,
 ) {
-    let meshes = meshes
+    let mesh_handles = mesh_handles
         .iter()
         .sort::<&AttachedMonitor>()
         .chunk_by(|&(_, _, id, _)| id);
 
-    for (&AttachedMonitor(monitor_id), meshes) in &meshes {
+    for (&AttachedMonitor(monitor_id), mesh_handles) in &mesh_handles {
         let monitor_pipelines = &pipelines[&monitor_id];
         let target_surface = render.outputs.remove(&monitor_id).unwrap();
         let aspect_ratio = {
@@ -299,9 +336,16 @@ pub fn render_meshes(
                     occlusion_query_set: None,
                 });
 
-            for (mesh, &RenderMaterialHandle(material_id), _, &ModelMatrix(model)) in meshes {
+            for (
+                &RenderMeshHandle(mesh_id),
+                &RenderMaterialHandle(material_id),
+                _,
+                &ModelMatrix(model),
+            ) in mesh_handles
+            {
                 let material = materials.get(material_id).unwrap();
                 let pipeline = monitor_pipelines.get(&material_id).unwrap();
+                let mesh = meshes.get(mesh_id).unwrap();
 
                 pass.set_pipeline(&pipeline.pipeline);
                 pass.set_vertex_buffer(0, mesh.vertices.slice(..));

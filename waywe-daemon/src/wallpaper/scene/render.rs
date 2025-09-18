@@ -4,7 +4,7 @@ use crate::{
         wayland::{MonitorId, Wayland},
     },
     wallpaper::scene::{
-        MainWorld, Time, image::ImagePlugin, material::MaterialPlugin, mesh::RenderMeshPlugin,
+        MainWorld, Time, image::ImagePlugin, material::MaterialPlugin, mesh::MeshPlugin,
         transform::TransformPlugin, update_time,
     },
 };
@@ -83,7 +83,7 @@ impl SceneRenderer {
 
         // FIXME: other way to do default plugins
         this.add_plugin(TransformPlugin);
-        this.add_plugin(RenderMeshPlugin);
+        this.add_plugin(MeshPlugin);
         this.add_plugin(ImagePlugin);
         this.add_plugin(MaterialPlugin);
 

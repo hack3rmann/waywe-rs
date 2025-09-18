@@ -49,7 +49,9 @@ impl<A: Asset> Assets<A> {
     }
 
     pub fn iter(&self) -> impl ExactSizeIterator<Item = (AssetHandle<A>, &A)> + '_ {
-        self.map.iter().map(|(&id, asset)| (AssetHandle::new(id), asset))
+        self.map
+            .iter()
+            .map(|(&id, asset)| (AssetHandle::new(id), asset))
     }
 }
 
