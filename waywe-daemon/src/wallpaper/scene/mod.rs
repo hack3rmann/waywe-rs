@@ -1,26 +1,31 @@
 #![allow(clippy::type_complexity, clippy::too_many_arguments)]
 
+pub mod assets;
+pub mod image;
+pub mod material;
 pub mod render;
 pub mod render_test;
 pub mod sprite;
 pub mod transform;
-pub mod assets;
-pub mod material;
-pub mod image;
 
 use crate::{
     event_loop::{FrameError, FrameInfo},
-    runtime::{wayland::MonitorId, Runtime, RuntimeFeatures},
+    runtime::{Runtime, RuntimeFeatures, wayland::MonitorId},
     wallpaper::{
+        Wallpaper,
         scene::{
-            image::ImagePlugin, render::{SceneExtract, SceneRender}, render_test::Mesh, transform::{Transform, TransformPlugin}
-        }, Wallpaper
+            assets::Assets,
+            image::{Image, ImageMaterial, ImagePlugin},
+            render::{SceneExtract, SceneRender},
+            render_test::{Mesh, MeshMaterial},
+            transform::{Transform, TransformPlugin},
+        },
     },
 };
 use bevy_ecs::{prelude::*, schedule::ScheduleLabel, system::ScheduleSystem};
 use derive_more::{Deref, DerefMut};
 use for_sure::Almost;
-use glam::{Quat, Vec3};
+use glam::{Quat, Vec2, Vec3};
 use std::{
     mem,
     result::Result,
@@ -155,20 +160,39 @@ impl SceneTestWallpaper {
     pub fn new_test(monitor_id: MonitorId) -> Self {
         let mut scene = Scene::new(monitor_id);
 
-        scene.add_systems(
-            SceneUpdate,
-            |mut transforms: Query<&mut Transform, With<Mesh>>, time: Res<Time>| {
-                for mut transform in &mut transforms {
-                    transform.rotation = Quat::from_rotation_z(time.elapsed.as_secs_f32());
-                }
-            },
-        );
-
-        scene
-            .world
-            .spawn((Mesh, Transform::from_translation(0.1 * Vec3::ONE)));
+        scene.add_systems(SceneUpdate, Self::rotate_meshes);
+        scene.add_systems(SceneStartup, Self::spawn_mesh);
 
         Self { scene }
+    }
+
+    pub fn spawn_mesh(
+        mut commands: Commands,
+        mut images: ResMut<Assets<Image>>,
+        mut materials: ResMut<Assets<ImageMaterial>>,
+    ) {
+        // FIXME(hack3rmann): use local image
+        const PATH: &str = "/home/hack3rmann/Pictures/Wallpapers/All/wallhaven-28kdom.png";
+        let image = ::image::ImageReader::open(PATH)
+            .unwrap()
+            .decode()
+            .unwrap()
+            .into_rgba8();
+
+        let image = images.add(Image { image });
+        let material = materials.add(ImageMaterial { image });
+
+        commands.spawn((
+            Mesh::rect(Vec2::ONE),
+            Transform::from_translation(0.1 * Vec3::ONE),
+            MeshMaterial(material),
+        ));
+    }
+
+    pub fn rotate_meshes(mut transforms: Query<&mut Transform, With<Mesh>>, time: Res<Time>) {
+        for mut transform in &mut transforms {
+            transform.rotation = Quat::from_rotation_z(time.elapsed.as_secs_f32());
+        }
     }
 }
 

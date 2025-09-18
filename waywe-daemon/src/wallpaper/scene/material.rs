@@ -1,34 +1,37 @@
 use super::render::SceneRenderer;
 use crate::wallpaper::scene::{
-    assets::{Asset, AssetHandle, AssetsPlugin, RenderAsset},
+    assets::{Asset, AssetHandle, AssetId, AssetsPlugin},
     render::RenderPlugin,
 };
 use bevy_ecs::{
-    component::Component,
+    prelude::*,
     system::{SystemParam, SystemParamItem},
 };
+use std::{any::TypeId, collections::HashMap};
 
 pub struct MaterialPlugin;
 
 impl RenderPlugin for MaterialPlugin {
     fn init(self, renderer: &mut SceneRenderer) {
         renderer.add_plugin(AssetsPlugin::<RenderMaterial>::new());
+        renderer.world.init_resource::<MaterialAssetMap>();
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct VertexFragmentShader {
     pub vertex: wgpu::ShaderModule,
     pub fragment: wgpu::ShaderModule,
 }
 
-pub trait Material: Asset + AsBindGroup {
-    type RenderAsset: RenderAsset<Asset = Self>;
+impl Asset for VertexFragmentShader {}
 
+pub trait Material: Asset + AsBindGroup {
     fn create_shader(device: &wgpu::Device) -> VertexFragmentShader;
 }
 
 pub trait AsBindGroup {
-    type Param: SystemParam;
+    type Param: SystemParam + 'static;
 
     const LABEL: Option<&'static str> = None;
 
@@ -44,6 +47,8 @@ pub trait AsBindGroup {
 
 #[derive(Clone, Debug)]
 pub struct RenderMaterial {
+    pub shader: VertexFragmentShader,
+    pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
 }
 
@@ -51,3 +56,20 @@ impl Asset for RenderMaterial {}
 
 #[derive(Component, Clone, Copy, Debug)]
 pub struct RenderMaterialHandle(pub AssetHandle<RenderMaterial>);
+
+#[derive(Resource, Default)]
+pub struct MaterialAssetMap(pub HashMap<(TypeId, AssetId), AssetHandle<RenderMaterial>>);
+
+impl MaterialAssetMap {
+    pub fn set<M: Material>(
+        &mut self,
+        handle: AssetHandle<M>,
+        render_handle: AssetHandle<RenderMaterial>,
+    ) {
+        _ = self.0.insert((TypeId::of::<M>(), handle.id), render_handle);
+    }
+
+    pub fn get<M: Material>(&self, handle: AssetHandle<M>) -> Option<AssetHandle<RenderMaterial>> {
+        self.0.get(&(TypeId::of::<M>(), handle.id)).copied()
+    }
+}

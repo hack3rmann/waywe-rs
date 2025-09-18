@@ -5,7 +5,7 @@ use crate::wallpaper::scene::{
 };
 use bevy_ecs::prelude::*;
 use smallvec::SmallVec;
-use std::{collections::HashMap, fmt, marker::PhantomData};
+use std::{collections::HashMap, fmt, hash, marker::PhantomData};
 
 #[derive(Resource)]
 pub struct Assets<A: Asset> {
@@ -46,6 +46,10 @@ impl<A: Asset> Assets<A> {
 
     pub fn flush(&mut self) {
         self.new_ids.clear();
+    }
+
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (AssetHandle<A>, &A)> + '_ {
+        self.map.iter().map(|(&id, asset)| (AssetHandle::new(id), asset))
     }
 }
 
@@ -139,6 +143,12 @@ impl<A> fmt::Debug for AssetHandle<A> {
 impl<A> PartialEq for AssetHandle<A> {
     fn eq(&self, other: &Self) -> bool {
         self.id.eq(&other.id)
+    }
+}
+
+impl<A> hash::Hash for AssetHandle<A> {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        <AssetId as hash::Hash>::hash(&self.id, state);
     }
 }
 

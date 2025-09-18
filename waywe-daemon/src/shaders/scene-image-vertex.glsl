@@ -11,5 +11,6 @@ out vec2 uv;
 
 void main() {
     gl_Position = push.model * vec4(vertex_position, 0.0, 1.0);
-    uv = 0.5 * vertex_uv + 0.5;
+    uv = 0.5 * vertex_position + 0.5;
+    uv.y = 1.0 - uv.y;
 }
