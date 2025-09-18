@@ -45,6 +45,13 @@ impl Transform {
         }
     }
 
+    pub const fn with_translation(self, translation: Vec3) -> Self {
+        Self {
+            translation,
+            ..self
+        }
+    }
+
     pub fn scaled_by(self, scale: Vec3) -> Self {
         Self {
             scale: self.scale * scale,

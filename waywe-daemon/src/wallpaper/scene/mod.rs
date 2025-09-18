@@ -3,8 +3,8 @@
 pub mod assets;
 pub mod image;
 pub mod material;
+pub mod mesh;
 pub mod render;
-pub mod render_test;
 pub mod sprite;
 pub mod transform;
 
@@ -16,8 +16,8 @@ use crate::{
         scene::{
             assets::Assets,
             image::{Image, ImageMaterial, ImagePlugin},
+            mesh::{Mesh, MeshMaterial},
             render::{SceneExtract, SceneRender},
-            render_test::{Mesh, MeshMaterial},
             transform::{Transform, TransformPlugin},
         },
     },
@@ -25,7 +25,7 @@ use crate::{
 use bevy_ecs::{prelude::*, schedule::ScheduleLabel, system::ScheduleSystem};
 use derive_more::{Deref, DerefMut};
 use for_sure::Almost;
-use glam::{Quat, Vec2, Vec3};
+use glam::{Vec2, Vec3};
 use std::{
     mem,
     result::Result,
@@ -156,6 +156,9 @@ pub struct SceneTestWallpaper {
     pub scene: Scene,
 }
 
+#[derive(Component)]
+pub struct TimeScale(pub f32);
+
 impl SceneTestWallpaper {
     pub fn new_test(monitor_id: MonitorId) -> Self {
         let mut scene = Scene::new(monitor_id);
@@ -189,14 +192,28 @@ impl SceneTestWallpaper {
 
         commands.spawn((
             Mesh::rect(Vec2::ONE),
-            Transform::from_translation(0.1 * Vec3::ONE).scaled_by(aspect_scale),
+            Transform::from_translation(Vec3::new(-0.2, -0.2, 0.0)).scaled_by(aspect_scale),
             MeshMaterial(material),
+            TimeScale(1.0),
+        ));
+
+        commands.spawn((
+            Mesh::rect(Vec2::ONE),
+            Transform::from_translation(Vec3::new(0.2, 0.2, 0.0)).scaled_by(aspect_scale),
+            MeshMaterial(material),
+            TimeScale(std::f32::consts::FRAC_PI_2),
         ));
     }
 
-    pub fn rotate_meshes(mut transforms: Query<&mut Transform, With<Mesh>>, time: Res<Time>) {
-        for mut transform in &mut transforms {
-            transform.rotation = Quat::from_rotation_z(time.elapsed.as_secs_f32());
+    pub fn rotate_meshes(
+        mut transforms: Query<(&mut Transform, &TimeScale), With<Mesh>>,
+        time: Res<Time>,
+    ) {
+        let time = time.elapsed.as_secs_f32();
+
+        for (mut transform, &TimeScale(time_scale)) in &mut transforms {
+            transform.translation.x = 0.5 * (time_scale * time).cos();
+            transform.translation.y = 0.5 * (time_scale * time).sin();
         }
     }
 }

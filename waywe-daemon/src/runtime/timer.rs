@@ -101,12 +101,10 @@ impl Timer {
                 thread::sleep(unborrowed_time);
             } else {
                 self.time_borrow -= sleep_time;
-                tracing::warn!(?render_time, "speeding up current frame due to time borrow");
             }
         // ignore first frame lag
         } else if !self.is_first_frame() {
             self.time_borrow += render_time - target_frame_time;
-            tracing::warn!(?render_time, "frame took too long to prepare");
         }
     }
 }

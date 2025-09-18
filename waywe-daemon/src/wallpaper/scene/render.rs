@@ -4,8 +4,8 @@ use crate::{
         wayland::{MonitorId, Wayland},
     },
     wallpaper::scene::{
-        MainWorld, Time, image::ImagePlugin, material::MaterialPlugin,
-        render_test::RenderMeshPlugin, transform::TransformPlugin, update_time,
+        MainWorld, Time, image::ImagePlugin, material::MaterialPlugin, mesh::RenderMeshPlugin,
+        transform::TransformPlugin, update_time,
     },
 };
 use bevy_ecs::{
