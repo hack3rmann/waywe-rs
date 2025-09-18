@@ -172,19 +172,24 @@ impl SceneTestWallpaper {
         mut materials: ResMut<Assets<ImageMaterial>>,
     ) {
         // FIXME(hack3rmann): use local image
-        const PATH: &str = "/home/hack3rmann/Pictures/Wallpapers/All/wallhaven-28kdom.png";
+        const PATH: &str = "target/test-image.png";
         let image = ::image::ImageReader::open(PATH)
             .unwrap()
             .decode()
             .unwrap()
             .into_rgba8();
 
+        let aspect_ratio = image.height() as f32 / image.width() as f32;
+
         let image = images.add(Image { image });
         let material = materials.add(ImageMaterial { image });
 
+        const SCALE: f32 = 0.6;
+        let aspect_scale = Vec3::new(SCALE, SCALE * aspect_ratio, 1.0);
+
         commands.spawn((
             Mesh::rect(Vec2::ONE),
-            Transform::from_translation(0.1 * Vec3::ONE),
+            Transform::from_translation(0.1 * Vec3::ONE).scaled_by(aspect_scale),
             MeshMaterial(material),
         ));
     }

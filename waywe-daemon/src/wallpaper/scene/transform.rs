@@ -45,6 +45,13 @@ impl Transform {
         }
     }
 
+    pub fn scaled_by(self, scale: Vec3) -> Self {
+        Self {
+            scale: self.scale * scale,
+            ..self
+        }
+    }
+
     pub fn combine(self, other: Self) -> Self {
         Self {
             translation: self.translation + other.translation,

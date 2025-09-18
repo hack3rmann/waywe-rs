@@ -55,7 +55,7 @@ pub struct Vertex(pub Vec3);
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 pub struct PushConst {
-    pub model: Mat4,
+    pub mvp: Mat4,
     pub time: f32,
     /// Padding for shaders, should be zeroed
     pub _padding: [u32; 3],
@@ -263,6 +263,7 @@ pub fn render_meshes(
     )>,
     mut render: ResMut<OngoingRender>,
     time: Res<Time>,
+    gpu: Res<RenderGpu>,
 ) {
     let meshes = meshes
         .iter()
@@ -272,6 +273,12 @@ pub fn render_meshes(
     for (&AttachedMonitor(monitor_id), meshes) in &meshes {
         let monitor_pipelines = &pipelines[&monitor_id];
         let target_surface = render.outputs.remove(&monitor_id).unwrap();
+        let aspect_ratio = {
+            let surfaces = gpu.surfaces.read().unwrap();
+            let config = &surfaces.get(&monitor_id).unwrap().config;
+            config.height as f32 / config.width as f32
+        };
+        let camera_view = Mat4::from_scale(Vec3::new(aspect_ratio, 1.0, 1.0));
 
         {
             let mut pass = render
@@ -304,7 +311,7 @@ pub fn render_meshes(
                     0,
                     bytemuck::bytes_of(&PushConst {
                         time: time.elapsed.as_secs_f32(),
-                        model,
+                        mvp: camera_view * model,
                         _padding: [0; 3],
                     }),
                 );
