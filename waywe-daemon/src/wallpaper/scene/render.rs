@@ -3,7 +3,10 @@ use crate::{
         gpu::Wgpu,
         wayland::{MonitorId, Wayland},
     },
-    wallpaper::scene::{transform::TransformPlugin, update_time, MainWorld, Time},
+    wallpaper::scene::{
+        MainWorld, Time, image::ImagePlugin, material::MaterialPlugin,
+        render_test::RenderMeshPlugin, transform::TransformPlugin, update_time,
+    },
 };
 use bevy_ecs::{
     component::Tick,
@@ -80,6 +83,9 @@ impl SceneRenderer {
 
         // FIXME: other way to do default plugins
         this.add_plugin(TransformPlugin);
+        this.add_plugin(RenderMeshPlugin);
+        this.add_plugin(ImagePlugin);
+        this.add_plugin(MaterialPlugin);
 
         this
     }

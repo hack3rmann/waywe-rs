@@ -1,19 +1,20 @@
+#![allow(clippy::type_complexity, clippy::too_many_arguments)]
+
 pub mod render;
 pub mod render_test;
 pub mod sprite;
 pub mod transform;
 pub mod assets;
+pub mod material;
+pub mod image;
 
 use crate::{
     event_loop::{FrameError, FrameInfo},
-    runtime::{Runtime, RuntimeFeatures, wayland::MonitorId},
+    runtime::{wayland::MonitorId, Runtime, RuntimeFeatures},
     wallpaper::{
-        Wallpaper,
         scene::{
-            render::{SceneExtract, SceneRender},
-            render_test::Mesh,
-            transform::{Transform, TransformPlugin},
-        },
+            image::ImagePlugin, render::{SceneExtract, SceneRender}, render_test::Mesh, transform::{Transform, TransformPlugin}
+        }, Wallpaper
     },
 };
 use bevy_ecs::{prelude::*, schedule::ScheduleLabel, system::ScheduleSystem};
@@ -51,6 +52,9 @@ pub struct SceneUpdate;
 #[derive(ScheduleLabel, Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SceneStartup;
 
+#[derive(ScheduleLabel, Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ScenePostExtract;
+
 #[derive(Resource, Deref, DerefMut)]
 pub struct MainWorld(pub World);
 
@@ -74,6 +78,7 @@ impl Scene {
 
         world.add_schedule(update);
         world.add_schedule(Schedule::new(SceneStartup));
+        world.add_schedule(Schedule::new(ScenePostExtract));
 
         world.insert_resource(Monitor(monitor_id));
         world.init_resource::<DummyWorld>();
@@ -86,6 +91,7 @@ impl Scene {
 
         // FIXME: add default plugins in another way
         this.add_plugin(TransformPlugin);
+        this.add_plugin(ImagePlugin);
 
         this
     }
@@ -122,6 +128,8 @@ impl Scene {
         let MainWorld(main_world) = render_world.remove_resource::<MainWorld>().unwrap();
         let temp_world = mem::replace(&mut self.world, main_world);
         self.world.insert_resource(DummyWorld(temp_world));
+
+        self.world.run_schedule(ScenePostExtract);
     }
 
     pub fn add_plugin(&mut self, plugin: impl ScenePlugin) -> &mut Self {

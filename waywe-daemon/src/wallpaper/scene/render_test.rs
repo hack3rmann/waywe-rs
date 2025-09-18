@@ -1,5 +1,3 @@
-#![allow(clippy::type_complexity)]
-
 use super::render::SceneRenderer;
 use crate::{
     runtime::{
@@ -7,9 +5,14 @@ use crate::{
         wayland::{MonitorId, MonitorMap},
     },
     wallpaper::scene::{
+        MainWorld, Monitor, Time,
+        assets::{AssetHandle, Assets, RenderAssets},
+        material::{Material, RenderMaterial, RenderMaterialHandle},
         render::{
-            EntityMap, Extract, MainEntity, MonitorPlugged, MonitorUnplugged, RenderGpu, RenderPlugin, SceneExtract, SceneRender, SceneRenderStage
-        }, transform::{GlobalTransform, ModelMatrix, Transform}, MainWorld, Monitor, Time
+            EntityMap, Extract, MainEntity, MonitorPlugged, MonitorUnplugged, RenderGpu,
+            RenderPlugin, SceneExtract, SceneRender, SceneRenderStage,
+        },
+        transform::{GlobalTransform, ModelMatrix, Transform},
     },
 };
 use bevy_ecs::prelude::*;
@@ -56,18 +59,10 @@ pub struct PushConst {
 pub struct MeshPipeline {
     pub layout: wgpu::PipelineLayout,
     pub pipeline: wgpu::RenderPipeline,
-    pub bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl MeshPipeline {
     pub fn new(gpu: &Wgpu, monitor_id: MonitorId) -> Self {
-        let bind_group_layout =
-            gpu.device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("image-bind-group-layout"),
-                    entries: &[],
-                });
-
         const VERTEX_SHADER_NAME: &str = "shaders/test-vertex.glsl";
         const FRAGMENT_SHADER_NAME: &str = "shaders/test-fragment.glsl";
 
@@ -99,7 +94,7 @@ impl MeshPipeline {
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("image-pipeline-layout"),
-                bind_group_layouts: &[&bind_group_layout],
+                bind_group_layouts: &[],
                 push_constant_ranges: &[wgpu::PushConstantRange {
                     stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
                     range: 0..mem::size_of::<PushConst>() as u32,
@@ -160,11 +155,7 @@ impl MeshPipeline {
                 cache: None,
             });
 
-        Self {
-            layout,
-            pipeline,
-            bind_group_layout,
-        }
+        Self { layout, pipeline }
     }
 }
 
@@ -184,19 +175,22 @@ pub fn remove_pipeline(unplugged: Trigger<MonitorUnplugged>, mut pipelines: ResM
     _ = pipelines.remove(&unplugged.id);
 }
 
-#[derive(Component)]
+#[derive(Component, Default)]
 #[require(Transform)]
 pub struct Mesh;
+
+#[derive(Component)]
+#[require(Mesh)]
+pub struct MeshMaterial<M: Material>(pub AssetHandle<M>);
 
 #[derive(Component)]
 #[require(ModelMatrix)]
 pub struct RenderMesh {
     pub vertices: wgpu::Buffer,
-    pub bind_group: wgpu::BindGroup,
 }
 
 impl RenderMesh {
-    pub fn new(gpu: &Wgpu, pipeline: &MeshPipeline) -> Self {
+    pub fn new(gpu: &Wgpu) -> Self {
         use wgpu::util::DeviceExt as _;
 
         let vertices = gpu
@@ -211,16 +205,7 @@ impl RenderMesh {
                 ]),
             });
 
-        let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("test-mesh-bind-group"),
-            layout: &pipeline.bind_group_layout,
-            entries: &[],
-        });
-
-        Self {
-            vertices,
-            bind_group,
-        }
+        Self { vertices }
     }
 }
 
@@ -243,20 +228,42 @@ pub fn extract_meshes(
     meshes: Extract<Query<(Entity, &Mesh, &GlobalTransform), Changed<Mesh>>>,
     mut commands: Commands,
     gpu: Res<RenderGpu>,
-    pipelines: Res<Pipelines>,
 ) {
     let monitor_id = monitor_id.0;
-    let Some(pipeline) = pipelines.get(&monitor_id) else {
-        return;
-    };
 
     for (id, _mesh, transform) in &meshes {
-        let render_id = commands.spawn((
-            MainEntity(id),
-            RenderMesh::new(&gpu, pipeline),
-            AttachedMonitor(monitor_id),
-            ModelMatrix(transform.0.to_model()),
-        )).id();
+        let render_id = commands
+            .spawn((
+                MainEntity(id),
+                RenderMesh::new(&gpu),
+                AttachedMonitor(monitor_id),
+                ModelMatrix(transform.0.to_model()),
+            ))
+            .id();
+
+        entity_map.insert(id, render_id);
+    }
+}
+
+pub fn extract_meshes_material<M: Material>(
+    mut entity_map: ResMut<EntityMap>,
+    monitor_id: Extract<Res<Monitor>>,
+    _materials: Res<RenderAssets<M::RenderAsset>>,
+    meshes: Extract<Query<(Entity, &Mesh, &MeshMaterial<M>, &GlobalTransform), Changed<Mesh>>>,
+    mut commands: Commands,
+    gpu: Res<RenderGpu>,
+) {
+    let monitor_id = monitor_id.0;
+
+    for (id, _mesh, &MeshMaterial(_material_id), transform) in &meshes {
+        let render_id = commands
+            .spawn((
+                MainEntity(id),
+                RenderMesh::new(&gpu),
+                AttachedMonitor(monitor_id),
+                ModelMatrix(transform.0.to_model()),
+            ))
+            .id();
 
         entity_map.insert(id, render_id);
     }
@@ -264,14 +271,20 @@ pub fn extract_meshes(
 
 pub fn render_meshes(
     pipelines: Res<Pipelines>,
-    meshes: Query<(&RenderMesh, &AttachedMonitor, &ModelMatrix)>,
+    materials: Res<Assets<RenderMaterial>>,
+    meshes: Query<(
+        &RenderMesh,
+        &RenderMaterialHandle,
+        &AttachedMonitor,
+        &ModelMatrix,
+    )>,
     mut render: ResMut<OngoingRender>,
     time: Res<Time>,
 ) {
     let meshes = meshes
         .iter()
         .sort::<&AttachedMonitor>()
-        .chunk_by(|&(_, id, _)| id);
+        .chunk_by(|&(_, _, id, _)| id);
 
     for (&AttachedMonitor(monitor_id), meshes) in &meshes {
         let pipeline = &pipelines[&monitor_id];
@@ -298,9 +311,13 @@ pub fn render_meshes(
 
             pass.set_pipeline(&pipeline.pipeline);
 
-            for (mesh, _, &ModelMatrix(model)) in meshes {
+            for (mesh, &RenderMaterialHandle(material_id), _, &ModelMatrix(model)) in meshes {
+                let material = materials.get(material_id).unwrap();
+
                 pass.set_vertex_buffer(0, mesh.vertices.slice(..));
-                pass.set_bind_group(0, &mesh.bind_group, &[]);
+
+                pass.set_bind_group(0, &material.bind_group, &[]);
+
                 pass.set_push_constants(
                     wgpu::ShaderStages::VERTEX_FRAGMENT,
                     0,

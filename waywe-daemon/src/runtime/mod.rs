@@ -1,7 +1,4 @@
-use crate::{
-    task_pool::TaskPool,
-    wallpaper::scene::{render::SceneRenderer, render_test::RenderMeshPlugin},
-};
+use crate::{task_pool::TaskPool, wallpaper::scene::render::SceneRenderer};
 use bitflags::bitflags;
 use for_sure::prelude::*;
 use gpu::Wgpu;
@@ -93,8 +90,7 @@ impl Runtime {
 
         if Almost::is_nil(&self.scene_renderer) {
             let gpu = Arc::clone(&self.wgpu);
-            let mut renderer = SceneRenderer::new(gpu, &self.wayland);
-            renderer.add_plugin(RenderMeshPlugin);
+            let renderer = SceneRenderer::new(gpu, &self.wayland);
             self.scene_renderer = Value(RwLock::new(renderer));
         }
     }
