@@ -3222,6 +3222,7 @@ dependencies = [
  "tracing-subscriber",
  "tracing-test",
  "transmute-extra",
+ "variadics_please",
  "video",
  "wayland-client",
  "wayland-server",

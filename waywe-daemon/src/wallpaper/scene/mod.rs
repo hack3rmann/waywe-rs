@@ -22,6 +22,8 @@ use glam::{Quat, Vec3};
 use std::{
     mem,
     result::Result,
+    sync::atomic::{AtomicBool, Ordering::Relaxed},
+    thread,
     time::{Duration, Instant},
 };
 
@@ -176,13 +178,28 @@ impl Wallpaper for SceneTestWallpaper {
             return Err(FrameError::Skip);
         }
 
+        {
+            let mut renderer = runtime.scene_renderer.write().unwrap();
+            renderer.apply_queued();
+        }
+
+        static NOT_FIRST_TIME: AtomicBool = AtomicBool::new(false);
+
+        thread::scope(|s| {
+            let handle = s.spawn(|| {
+                if NOT_FIRST_TIME.fetch_or(true, Relaxed) {
+                    let mut renderer = runtime.scene_renderer.write().unwrap();
+                    renderer.world.run_schedule(SceneRender);
+                }
+            });
+
+            self.scene.update();
+
+            handle.join().unwrap();
+        });
+
         let mut renderer = runtime.scene_renderer.write().unwrap();
-        renderer.apply_queued();
-
-        self.scene.update();
         self.scene.extract(&mut renderer.world);
-
-        renderer.world.run_schedule(SceneRender);
 
         Ok(FrameInfo::new_60_fps())
     }
