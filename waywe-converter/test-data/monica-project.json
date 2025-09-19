@@ -1,0 +1,25 @@
+{
+	"contentrating" : "Everyone",
+	"description" : "My second attempt. I think I'm starting to get the hang of it.\nLink to source image: https://www.reddit.com/r/DDLC/comments/7xnz27/made_a_169_wallpapercompatible_version_of_the/?st=jdulv875&sh=ac88aedc\nI hope you like it!",
+	"file" : "scene.json",
+	"general" : 
+	{
+		"properties" : 
+		{
+			"schemecolor" : 
+			{
+				"order" : 0,
+				"text" : "ui_browse_properties_scheme_color",
+				"type" : "color",
+				"value" : "1 1 1"
+			}
+		}
+	},
+	"preview" : "preview.jpg",
+	"tags" : [ "Anime" ],
+	"title" : "Monika Doki Doki Literature Club",
+	"type" : "scene",
+	"visibility" : "public",
+	"workshopid" : 1307064309,
+	"ssdfd": "sdfds"
+}
