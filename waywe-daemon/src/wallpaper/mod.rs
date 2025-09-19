@@ -7,8 +7,8 @@ pub mod video_pipeline;
 
 use crate::{
     event_loop::{FrameError, FrameInfo},
-    runtime::{Runtime, RuntimeFeatures, gpu::Wgpu, wayland::MonitorId},
-    wallpaper::scene::test_scene::SceneTestWallpaper,
+    runtime::{gpu::Wgpu, wayland::MonitorId, Runtime, RuntimeFeatures},
+    wallpaper::scene::{test_scene::SceneTestWallpaper, Startup},
 };
 use glam::UVec2;
 use image::{ImageWallpaper, ImageWallpaperCreationError};
@@ -25,7 +25,7 @@ pub enum RenderState {
     Done,
 }
 
-pub trait Wallpaper: Any + Send + Sync {
+pub trait OldWallpaper: Any + Send + Sync {
     fn frame(
         &mut self,
         runtime: &Runtime,
@@ -45,9 +45,9 @@ pub trait Wallpaper: Any + Send + Sync {
     where
         Self: Sized;
 }
-static_assertions::assert_obj_safe!(Wallpaper);
+static_assertions::assert_obj_safe!(OldWallpaper);
 
-pub type DynWallpaper = Box<dyn Wallpaper>;
+pub type DynWallpaper = Box<dyn OldWallpaper>;
 
 pub trait IntoDynWallpaper {
     fn into_dyn_wallpaper(self) -> DynWallpaper
@@ -55,7 +55,7 @@ pub trait IntoDynWallpaper {
         Self: Sized;
 }
 
-impl<W: Wallpaper + Sized> IntoDynWallpaper for W {
+impl<W: OldWallpaper + Sized> IntoDynWallpaper for W {
     fn into_dyn_wallpaper(self) -> DynWallpaper
     where
         Self: Sized,
@@ -92,8 +92,17 @@ pub fn create(
         WallpaperType::Image => ImageWallpaper::new(gpu, monitor_size, path, monitor_id)
             .map(IntoDynWallpaper::into_dyn_wallpaper)
             .map_err(WallpaperCreationError::from),
-        // FIXME:
-        WallpaperType::Scene => Ok(SceneTestWallpaper::new_test(monitor_id).into_dyn_wallpaper()),
+        WallpaperType::Scene => Ok({
+            use scene::wallpaper::{ImageWallpaper, *};
+            // FIXME:
+            let path = Path::new("/home/hack3rmann/Pictures/Wallpapers/wallhaven-6kx95l_2520x1680.png");
+            let builder = ImageWallpaper {
+                path: path.to_owned(),
+            };
+            let mut wallpaper = builder.build(WallpaperBuildConfig { monitor_id });
+            wallpaper.world.run_schedule(Startup);
+            WallpaperWrapper(wallpaper).into_dyn_wallpaper()
+        }),
     }
 }
 

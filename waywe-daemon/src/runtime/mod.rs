@@ -1,4 +1,4 @@
-use crate::{task_pool::TaskPool, wallpaper::scene::render::SceneRenderer};
+use crate::{task_pool::TaskPool, wallpaper::scene::render::Renderer};
 use bitflags::bitflags;
 use for_sure::prelude::*;
 use gpu::Wgpu;
@@ -49,7 +49,7 @@ pub struct Runtime {
     pub timer: Timer,
     pub video: Almost<Video>,
     pub wgpu: Almost<Arc<Wgpu>>,
-    pub scene_renderer: Almost<RwLock<SceneRenderer>>,
+    pub scene_renderer: Almost<RwLock<Renderer>>,
     pub wayland: Wayland,
     pub ipc: IpcSocket<Server, DaemonCommand>,
     pub control_flow: ControlFlow,
@@ -90,7 +90,7 @@ impl Runtime {
 
         if Almost::is_nil(&self.scene_renderer) {
             let gpu = Arc::clone(&self.wgpu);
-            let renderer = SceneRenderer::new(gpu, &self.wayland);
+            let renderer = Renderer::new(gpu, &self.wayland);
             self.scene_renderer = Value(RwLock::new(renderer));
         }
     }

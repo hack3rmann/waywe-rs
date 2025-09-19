@@ -28,7 +28,7 @@ pub struct MainEntity(pub Entity);
 pub struct SceneExtract;
 
 #[derive(ScheduleLabel, Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct SceneRender;
+pub struct Render;
 
 #[derive(SystemSet, Debug, PartialEq, Eq, Default, Clone, Copy, Hash)]
 pub enum SceneRenderStage {
@@ -42,12 +42,12 @@ pub enum SceneRenderStage {
 #[derive(Resource, Clone, Deref, DerefMut)]
 pub struct RenderGpu(pub Arc<Wgpu>);
 
-pub struct SceneRenderer {
+pub struct Renderer {
     pub queued_plug_events: Vec<MonitorPlugged>,
     pub world: World,
 }
 
-impl SceneRenderer {
+impl Renderer {
     pub fn new(gpu: Arc<Wgpu>, wayland: &Wayland) -> Self {
         let mut world = World::new();
 
@@ -56,7 +56,7 @@ impl SceneRenderer {
         world.insert_resource(RenderGpu(gpu));
         world.add_schedule(Schedule::new(SceneExtract));
 
-        let mut render_schedule = Schedule::new(SceneRender);
+        let mut render_schedule = Schedule::new(Render);
         render_schedule.configure_sets(
             (
                 SceneRenderStage::Update,
@@ -118,7 +118,7 @@ impl SceneRenderer {
 }
 
 pub trait RenderPlugin {
-    fn init(self, renderer: &mut SceneRenderer);
+    fn init(self, renderer: &mut Renderer);
 }
 
 #[derive(Event, Clone, Copy, Debug)]

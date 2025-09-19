@@ -1,7 +1,7 @@
-use super::Scene;
+use super::Wallpaper;
 use crate::wallpaper::scene::{
-    ScenePlugin, ScenePostExtract,
-    render::{Extract, RenderPlugin, SceneExtract, SceneRenderer},
+    ScenePlugin, PostExtract,
+    render::{Extract, RenderPlugin, SceneExtract, Renderer},
 };
 use bevy_ecs::{
     prelude::*,
@@ -207,14 +207,14 @@ impl<A: Asset> Default for AssetsPlugin<A> {
 }
 
 impl<A: Asset> ScenePlugin for AssetsPlugin<A> {
-    fn init(self, scene: &mut Scene) {
-        scene.add_systems(ScenePostExtract, flush_assets::<A>);
+    fn init(self, scene: &mut Wallpaper) {
+        scene.add_systems(PostExtract, flush_assets::<A>);
         scene.world.init_resource::<Assets<A>>();
     }
 }
 
 impl<A: Asset> RenderPlugin for AssetsPlugin<A> {
-    fn init(self, renderer: &mut SceneRenderer) {
+    fn init(self, renderer: &mut Renderer) {
         renderer.world.init_resource::<Assets<A>>();
     }
 }
@@ -251,7 +251,7 @@ impl<A: RenderAsset> Default for RenderAssetsPlugin<A> {
 }
 
 impl<A: RenderAsset> RenderPlugin for RenderAssetsPlugin<A> {
-    fn init(self, renderer: &mut SceneRenderer) {
+    fn init(self, renderer: &mut Renderer) {
         renderer.world.init_resource::<RenderAssets<A>>();
 
         if self.do_extact_all {

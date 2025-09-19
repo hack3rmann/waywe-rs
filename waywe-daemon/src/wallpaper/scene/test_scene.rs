@@ -2,13 +2,13 @@ use crate::{
     event_loop::{FrameError, FrameInfo},
     runtime::{Runtime, RuntimeFeatures, wayland::MonitorId},
     wallpaper::{
-        Wallpaper,
+        OldWallpaper as OldWallpaper,
         scene::{
-            FrameRateSetting, Scene, SceneConfig, SceneStartup, SceneUpdate, Time,
+            FrameRateSetting, WallpaperConfig, WallpaperFlags, Startup, Update, Time, Wallpaper,
             assets::{AssetHandle, Assets},
             image::{Image, ImageMaterial},
             mesh::{Mesh, Mesh3d, MeshMaterial, Vertex},
-            render::SceneRender,
+            render::Render,
             transform::Transform,
             video::{Video, VideoMaterial},
         },
@@ -24,7 +24,7 @@ use std::{
 };
 
 pub struct SceneTestWallpaper {
-    pub scene: Scene,
+    pub scene: Wallpaper,
 }
 
 #[derive(Component)]
@@ -110,16 +110,19 @@ impl FromWorld for TestAssets {
 
 impl SceneTestWallpaper {
     pub fn new_test(monitor_id: MonitorId) -> Self {
-        let mut scene = Scene::new_with_config(
+        let mut scene = Wallpaper::new_with_config(
             monitor_id,
-            SceneConfig {
+            WallpaperConfig {
                 framerate: FrameRateSetting::GuessFromScene,
             },
         );
 
-        scene.add_systems(SceneUpdate, Self::rotate_meshes);
-        scene.add_systems(SceneStartup, (Self::spawn_mesh, Self::spawn_videos));
+        scene.add_systems(Update, Self::rotate_meshes);
+        scene.add_systems(Startup, (Self::spawn_mesh, Self::spawn_videos));
         scene.world.init_resource::<TestAssets>();
+
+        scene.world.run_schedule(Startup);
+        scene.flags |= WallpaperFlags::STARTUP_DONE;
 
         Self { scene }
     }
@@ -195,7 +198,7 @@ impl SceneTestWallpaper {
     }
 }
 
-impl Wallpaper for SceneTestWallpaper {
+impl OldWallpaper for SceneTestWallpaper {
     fn frame(
         &mut self,
         _: &Runtime,
@@ -221,7 +224,7 @@ impl Wallpaper for SceneTestWallpaper {
             let handle = s.spawn(|| {
                 if NOT_FIRST_TIME.fetch_or(true, Ordering::Relaxed) {
                     let mut renderer = runtime.scene_renderer.write().unwrap();
-                    renderer.world.run_schedule(SceneRender);
+                    renderer.world.run_schedule(Render);
                 }
             });
 

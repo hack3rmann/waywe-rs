@@ -1,4 +1,4 @@
-use super::{Scene, render::SceneRenderer};
+use super::{Wallpaper, render::Renderer};
 use crate::{
     runtime::{
         gpu::Wgpu,
@@ -14,7 +14,7 @@ use crate::{
         material::{Material, MaterialAssetMap, RenderMaterial, RenderMaterialHandle},
         render::{
             EntityMap, Extract, MainEntity, MonitorPlugged, MonitorUnplugged, RenderGpu,
-            RenderPlugin, SceneExtract, SceneRender, SceneRenderStage,
+            RenderPlugin, SceneExtract, Render, SceneRenderStage,
         },
         transform::{GlobalTransform, ModelMatrix, Transform},
         video::{VideoMaterial, extract_video_materials},
@@ -35,13 +35,13 @@ use std::{collections::HashMap, mem};
 pub struct MeshPlugin;
 
 impl ScenePlugin for MeshPlugin {
-    fn init(self, scene: &mut Scene) {
+    fn init(self, scene: &mut Wallpaper) {
         scene.add_plugin(AssetsPlugin::<Mesh>::new());
     }
 }
 
 impl RenderPlugin for MeshPlugin {
-    fn init(self, renderer: &mut SceneRenderer) {
+    fn init(self, renderer: &mut Renderer) {
         renderer.add_plugin(RenderAssetsPlugin::<RenderMesh>::extract_new());
         renderer.world.add_observer(add_monitor);
         renderer.world.add_observer(remove_monitor);
@@ -59,7 +59,7 @@ impl RenderPlugin for MeshPlugin {
             ),
         );
         renderer.add_systems(
-            SceneRender,
+            Render,
             (
                 prepare_render.in_set(SceneRenderStage::PreRender),
                 render_meshes.in_set(SceneRenderStage::Render),

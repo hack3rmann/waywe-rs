@@ -1,8 +1,8 @@
-use super::{Scene, render::SceneRenderer};
+use super::{Wallpaper, render::Renderer};
 use crate::{
     runtime::gpu::Wgpu,
     wallpaper::scene::{
-        ScenePlugin, SceneUpdate, Time,
+        ScenePlugin, Update, Time,
         assets::{
             Asset, AssetHandle, Assets, AssetsPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin,
         },
@@ -26,15 +26,15 @@ use wgpu::wgc::api;
 pub struct VideoPlugin;
 
 impl ScenePlugin for VideoPlugin {
-    fn init(self, scene: &mut Scene) {
+    fn init(self, scene: &mut Wallpaper) {
         scene.add_plugin(AssetsPlugin::<Video>::new());
         scene.add_plugin(AssetsPlugin::<VideoMaterial>::new());
-        scene.add_systems(SceneUpdate, advance_videos);
+        scene.add_systems(Update, advance_videos);
     }
 }
 
 impl RenderPlugin for VideoPlugin {
-    fn init(self, renderer: &mut SceneRenderer) {
+    fn init(self, renderer: &mut Renderer) {
         renderer.add_plugin(RenderAssetsPlugin::<RenderVideo>::extract_all());
         renderer.world.init_resource::<VideoPipeline>();
         renderer.add_systems(SceneExtract, extract_video_materials);

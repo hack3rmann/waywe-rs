@@ -1,4 +1,4 @@
-use super::{DynWallpaper, RenderState, Wallpaper};
+use super::{DynWallpaper, RenderState, OldWallpaper};
 use crate::{
     event_loop::{FrameError, FrameInfo},
     runtime::{Runtime, RuntimeFeatures, gpu::Wgpu, wayland::MonitorId},
@@ -85,7 +85,7 @@ impl TransitionWallpaper {
     }
 }
 
-impl Wallpaper for TransitionWallpaper {
+impl OldWallpaper for TransitionWallpaper {
     fn required_features() -> RuntimeFeatures
     where
         Self: Sized,

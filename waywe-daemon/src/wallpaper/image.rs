@@ -1,5 +1,5 @@
 use super::{
-    RenderState, Wallpaper,
+    RenderState, OldWallpaper,
     image_pipeline::{COLOR_WHITE, ImagePipeline},
 };
 use crate::{
@@ -41,7 +41,7 @@ impl ImageWallpaper {
     }
 }
 
-impl Wallpaper for ImageWallpaper {
+impl OldWallpaper for ImageWallpaper {
     fn required_features() -> RuntimeFeatures
     where
         Self: Sized,

@@ -1,4 +1,4 @@
-use super::{Scene, render::SceneRenderer};
+use super::{Wallpaper, render::Renderer};
 use crate::{
     runtime::gpu::Wgpu,
     wallpaper::scene::{
@@ -24,7 +24,7 @@ pub const DEFAULT_IMAGE_MATERIAL: AssetHandle<ImageMaterial> = AssetHandle::new(
 pub struct ImagePlugin;
 
 impl ScenePlugin for ImagePlugin {
-    fn init(self, scene: &mut Scene) {
+    fn init(self, scene: &mut Wallpaper) {
         scene.add_plugin(AssetsPlugin::<Image>::new());
         scene.add_plugin(AssetsPlugin::<ImageMaterial>::new());
 
@@ -41,7 +41,7 @@ impl ScenePlugin for ImagePlugin {
 }
 
 impl RenderPlugin for ImagePlugin {
-    fn init(self, renderer: &mut SceneRenderer) {
+    fn init(self, renderer: &mut Renderer) {
         renderer.add_plugin(RenderAssetsPlugin::<RenderImage>::extract_new());
         renderer.add_systems(
             SceneExtract,

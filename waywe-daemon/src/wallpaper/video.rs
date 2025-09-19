@@ -1,4 +1,4 @@
-use super::{Wallpaper, video_pipeline::VideoPipeline};
+use super::{OldWallpaper, video_pipeline::VideoPipeline};
 use crate::{
     event_loop::{FrameError, FrameInfo},
     runtime::{Runtime, RuntimeFeatures, gpu::Wgpu, wayland::MonitorId},
@@ -82,7 +82,7 @@ impl VideoWallpaper {
     }
 }
 
-impl Wallpaper for VideoWallpaper {
+impl OldWallpaper for VideoWallpaper {
     fn required_features() -> RuntimeFeatures
     where
         Self: Sized,

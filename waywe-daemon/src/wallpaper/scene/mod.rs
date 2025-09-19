@@ -2,6 +2,7 @@
 
 pub mod assets;
 pub mod image;
+pub mod image_scene;
 pub mod material;
 pub mod mesh;
 pub mod render;
@@ -9,6 +10,7 @@ pub mod sprite;
 pub mod test_scene;
 pub mod transform;
 pub mod video;
+pub mod wallpaper;
 
 use crate::{
     event_loop::FrameInfo,
@@ -66,16 +68,16 @@ impl Default for FrameRateSetting {
 }
 
 #[derive(ScheduleLabel, Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct SceneUpdate;
+pub struct Update;
 
 #[derive(ScheduleLabel, Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct SceneStartup;
+pub struct Startup;
 
 #[derive(ScheduleLabel, Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ScenePostStartup;
+pub struct PostStartup;
 
 #[derive(ScheduleLabel, Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ScenePostExtract;
+pub struct PostExtract;
 
 #[derive(Resource, Deref, DerefMut)]
 pub struct MainWorld(pub World);
@@ -87,52 +89,52 @@ pub struct DummyWorld(pub World);
 pub struct Monitor(pub MonitorId);
 
 bitflags! {
-    pub struct SceneFlags: u32 {
+    pub struct WallpaperFlags: u32 {
         const STARTUP_DONE = 1;
         const NO_UPDATE = 2;
     }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct SceneConfig {
+pub struct WallpaperConfig {
     pub framerate: FrameRateSetting,
 }
 
-pub struct Scene {
-    flags: SceneFlags,
+pub struct Wallpaper {
+    flags: WallpaperFlags,
     pub world: World,
 }
 
-impl Scene {
+impl Wallpaper {
     pub fn new(monitor_id: MonitorId) -> Self {
-        Self::new_with_config(monitor_id, SceneConfig::default())
+        Self::new_with_config(monitor_id, WallpaperConfig::default())
     }
 
-    pub fn new_with_config(monitor_id: MonitorId, config: SceneConfig) -> Self {
+    pub fn new_with_config(monitor_id: MonitorId, config: WallpaperConfig) -> Self {
         let mut world = World::new();
 
         if !matches!(config.framerate, FrameRateSetting::NoUpdate) {
-            let mut update = Schedule::new(SceneUpdate);
+            let mut update = Schedule::new(Update);
             update.add_systems(update_time);
             world.add_schedule(update);
         }
         world.init_resource::<Time>();
         world.insert_resource(config.framerate);
 
-        let mut post_startup = Schedule::new(ScenePostStartup);
+        let mut post_startup = Schedule::new(PostStartup);
         post_startup.add_systems(guess_framerate);
 
-        world.add_schedule(Schedule::new(SceneStartup));
+        world.add_schedule(Schedule::new(Startup));
         world.add_schedule(post_startup);
-        world.add_schedule(Schedule::new(ScenePostExtract));
+        world.add_schedule(Schedule::new(PostExtract));
 
         world.insert_resource(Monitor(monitor_id));
         world.init_resource::<DummyWorld>();
 
-        let mut flags = SceneFlags::empty();
+        let mut flags = WallpaperFlags::empty();
 
         if matches!(config.framerate, FrameRateSetting::NoUpdate) {
-            flags |= SceneFlags::NO_UPDATE;
+            flags |= WallpaperFlags::NO_UPDATE;
         }
 
         let mut this = Self { world, flags };
@@ -151,7 +153,7 @@ impl Scene {
         label: impl ScheduleLabel + Any + Eq,
         systems: impl IntoScheduleConfigs<ScheduleSystem, M>,
     ) -> &mut Self {
-        if self.flags.contains(SceneFlags::NO_UPDATE) && label.dyn_eq(&SceneUpdate) {
+        if self.flags.contains(WallpaperFlags::NO_UPDATE) && label.dyn_eq(&Update) {
             return self;
         }
 
@@ -160,15 +162,19 @@ impl Scene {
         self
     }
 
-    pub fn update(&mut self) {
-        if !self.flags.contains(SceneFlags::STARTUP_DONE) {
-            self.world.run_schedule(SceneStartup);
-            self.world.run_schedule(ScenePostStartup);
-            self.flags |= SceneFlags::STARTUP_DONE;
+    pub fn startup(&mut self) {
+        if !self.flags.contains(WallpaperFlags::STARTUP_DONE) {
+            self.world.run_schedule(Startup);
+            self.world.run_schedule(PostStartup);
+            self.flags |= WallpaperFlags::STARTUP_DONE;
         }
+    }
 
-        if !self.flags.contains(SceneFlags::NO_UPDATE) {
-            self.world.run_schedule(SceneUpdate);
+    pub fn update(&mut self) {
+        self.startup();
+
+        if !self.flags.contains(WallpaperFlags::NO_UPDATE) {
+            self.world.run_schedule(Update);
         }
     }
 
@@ -186,7 +192,7 @@ impl Scene {
         let temp_world = mem::replace(&mut self.world, main_world);
         self.world.insert_resource(DummyWorld(temp_world));
 
-        self.world.run_schedule(ScenePostExtract);
+        self.world.run_schedule(PostExtract);
     }
 
     pub fn add_plugin(&mut self, plugin: impl ScenePlugin) -> &mut Self {
@@ -219,5 +225,5 @@ pub fn update_time(mut time: ResMut<Time>) {
 }
 
 pub trait ScenePlugin {
-    fn init(self, scene: &mut Scene);
+    fn init(self, scene: &mut Wallpaper);
 }

@@ -1,4 +1,4 @@
-use super::render::SceneRenderer;
+use super::render::Renderer;
 use crate::wallpaper::scene::{
     assets::{Asset, AssetHandle, AssetId, AssetsPlugin},
     render::RenderPlugin,
@@ -12,7 +12,7 @@ use std::{any::TypeId, collections::HashMap};
 pub struct MaterialPlugin;
 
 impl RenderPlugin for MaterialPlugin {
-    fn init(self, renderer: &mut SceneRenderer) {
+    fn init(self, renderer: &mut Renderer) {
         renderer.add_plugin(AssetsPlugin::<RenderMaterial>::new());
         renderer.world.init_resource::<MaterialAssetMap>();
     }
