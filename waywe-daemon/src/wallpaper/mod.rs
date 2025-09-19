@@ -8,7 +8,7 @@ pub mod video_pipeline;
 use crate::{
     event_loop::{FrameError, FrameInfo},
     runtime::{Runtime, RuntimeFeatures, gpu::Wgpu, wayland::MonitorId},
-    wallpaper::scene::SceneTestWallpaper,
+    wallpaper::scene::test_scene::SceneTestWallpaper,
 };
 use glam::UVec2;
 use image::{ImageWallpaper, ImageWallpaperCreationError};

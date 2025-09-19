@@ -1,6 +1,7 @@
 use super::Scene;
 use crate::wallpaper::scene::{
-    render::{Extract, RenderPlugin, SceneExtract, SceneRenderer}, ScenePlugin, ScenePostExtract
+    ScenePlugin, ScenePostExtract,
+    render::{Extract, RenderPlugin, SceneExtract, SceneRenderer},
 };
 use bevy_ecs::{
     prelude::*,

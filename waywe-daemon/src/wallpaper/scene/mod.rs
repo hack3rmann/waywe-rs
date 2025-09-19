@@ -6,36 +6,28 @@ pub mod material;
 pub mod mesh;
 pub mod render;
 pub mod sprite;
+pub mod test_scene;
 pub mod transform;
 pub mod video;
 
 use crate::{
-    event_loop::{FrameError, FrameInfo},
-    runtime::{Runtime, RuntimeFeatures, wayland::MonitorId},
-    wallpaper::{
-        Wallpaper,
-        scene::{
-            assets::{AssetHandle, Assets},
-            image::{Image, ImageMaterial, ImagePlugin},
-            mesh::{Mesh, Mesh3d, MeshMaterial, MeshPlugin, Vertex},
-            render::{SceneExtract, SceneRender},
-            transform::{Transform, TransformPlugin},
-            video::{Video, VideoMaterial, VideoPlugin},
-        },
+    event_loop::FrameInfo,
+    runtime::wayland::MonitorId,
+    wallpaper::scene::{
+        assets::Assets,
+        image::ImagePlugin,
+        mesh::MeshPlugin,
+        render::SceneExtract,
+        transform::TransformPlugin,
+        video::{Video, VideoPlugin},
     },
 };
 use bevy_ecs::{label::DynEq, prelude::*, schedule::ScheduleLabel, system::ScheduleSystem};
 use bitflags::bitflags;
 use derive_more::{Deref, DerefMut};
-use for_sure::Almost;
-use glam::{Vec2, Vec3};
-use smallvec::smallvec;
 use std::{
     any::Any,
     mem,
-    result::Result,
-    sync::atomic::{AtomicBool, Ordering::Relaxed},
-    thread,
     time::{Duration, Instant},
 };
 
@@ -56,11 +48,31 @@ impl Default for Time {
     }
 }
 
+#[derive(Clone, Copy, Resource, Debug, PartialEq)]
+pub enum FrameRateSetting {
+    TargetFrameDuration(Duration),
+    NoUpdate,
+    GuessFromScene,
+}
+
+impl FrameRateSetting {
+    pub const CAP_TO_60_FPS: Self = Self::TargetFrameDuration(FrameInfo::MAX_FPS);
+}
+
+impl Default for FrameRateSetting {
+    fn default() -> Self {
+        Self::CAP_TO_60_FPS
+    }
+}
+
 #[derive(ScheduleLabel, Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SceneUpdate;
 
 #[derive(ScheduleLabel, Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SceneStartup;
+
+#[derive(ScheduleLabel, Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ScenePostStartup;
 
 #[derive(ScheduleLabel, Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ScenePostExtract;
@@ -83,7 +95,7 @@ bitflags! {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct SceneConfig {
-    no_update: bool,
+    pub framerate: FrameRateSetting,
 }
 
 pub struct Scene {
@@ -99,14 +111,19 @@ impl Scene {
     pub fn new_with_config(monitor_id: MonitorId, config: SceneConfig) -> Self {
         let mut world = World::new();
 
-        if !config.no_update {
+        if !matches!(config.framerate, FrameRateSetting::NoUpdate) {
             let mut update = Schedule::new(SceneUpdate);
             update.add_systems(update_time);
             world.add_schedule(update);
         }
         world.init_resource::<Time>();
+        world.insert_resource(config.framerate);
+
+        let mut post_startup = Schedule::new(ScenePostStartup);
+        post_startup.add_systems(guess_framerate);
 
         world.add_schedule(Schedule::new(SceneStartup));
+        world.add_schedule(post_startup);
         world.add_schedule(Schedule::new(ScenePostExtract));
 
         world.insert_resource(Monitor(monitor_id));
@@ -114,7 +131,7 @@ impl Scene {
 
         let mut flags = SceneFlags::empty();
 
-        if config.no_update {
+        if matches!(config.framerate, FrameRateSetting::NoUpdate) {
             flags |= SceneFlags::NO_UPDATE;
         }
 
@@ -146,6 +163,7 @@ impl Scene {
     pub fn update(&mut self) {
         if !self.flags.contains(SceneFlags::STARTUP_DONE) {
             self.world.run_schedule(SceneStartup);
+            self.world.run_schedule(ScenePostStartup);
             self.flags |= SceneFlags::STARTUP_DONE;
         }
 
@@ -177,6 +195,20 @@ impl Scene {
     }
 }
 
+pub fn guess_framerate(videos: Res<Assets<Video>>, mut setting: ResMut<FrameRateSetting>) {
+    if !matches!(&*setting, FrameRateSetting::GuessFromScene) {
+        return;
+    }
+
+    let min_duration = videos
+        .iter()
+        .map(|(_, video)| video.frame_time_fallback)
+        .min()
+        .unwrap_or(FrameInfo::MAX_FPS);
+
+    *setting = FrameRateSetting::TargetFrameDuration(min_duration);
+}
+
 pub fn update_time(mut time: ResMut<Time>) {
     let now = Instant::now();
     let delta = now.duration_since(time.prev);
@@ -184,220 +216,6 @@ pub fn update_time(mut time: ResMut<Time>) {
     time.delta = delta;
     time.elapsed += delta;
     time.prev = now;
-}
-
-pub struct SceneTestWallpaper {
-    pub scene: Scene,
-}
-
-#[derive(Component)]
-pub struct TimeScale(pub f32);
-
-#[derive(Resource)]
-pub struct TestAssets {
-    pub quad_mesh: AssetHandle<Mesh>,
-    pub triangle_mesh: AssetHandle<Mesh>,
-    pub image: AssetHandle<Image>,
-    pub image_aspect_ratio: f32,
-    pub image_material: AssetHandle<ImageMaterial>,
-    pub video1: AssetHandle<Video>,
-    pub video1_material: AssetHandle<VideoMaterial>,
-    pub video2: AssetHandle<Video>,
-    pub video2_material: AssetHandle<VideoMaterial>,
-    pub video1_aspect_ratio: f32,
-    pub video2_aspect_ratio: f32,
-}
-
-impl FromWorld for TestAssets {
-    fn from_world(world: &mut World) -> Self {
-        let mut meshes = world.resource_mut::<Assets<Mesh>>();
-
-        let quad_mesh = meshes.add(Mesh::rect(Vec2::ONE));
-        let triangle_mesh = meshes.add(Mesh {
-            vertices: smallvec![
-                Vertex(Vec3::new(-0.5, -0.5, 0.0)),
-                Vertex(Vec3::new(0.5, -0.5, 0.0)),
-                Vertex(Vec3::new(0.0, 0.5, 0.0)),
-            ],
-        });
-
-        let mut videos = world.resource_mut::<Assets<Video>>();
-
-        let video1 = Video::new(c"target/test-video.mp4").unwrap();
-        let video1_aspect_ratio = video1.frame_aspect_ratio();
-        let video1_handle = videos.add(video1);
-
-        let video2 = Video::new(c"target/test-video2.mp4").unwrap();
-        let video2_aspect_ratio = video2.frame_aspect_ratio();
-        let video2_handle = videos.add(video2);
-
-        let mut images = world.resource_mut::<Assets<Image>>();
-
-        // FIXME(hack3rmann): use local image
-        const PATH: &str = "target/test-image.png";
-        let image = ::image::ImageReader::open(PATH)
-            .unwrap()
-            .decode()
-            .unwrap()
-            .into_rgba8();
-
-        let image_aspect_ratio = image.height() as f32 / image.width() as f32;
-        let image = images.add(Image { image });
-
-        let mut image_materials = world.resource_mut::<Assets<ImageMaterial>>();
-        let image_material = image_materials.add(ImageMaterial { image });
-
-        let mut video_materials = world.resource_mut::<Assets<VideoMaterial>>();
-        let video1_material = video_materials.add(VideoMaterial {
-            video: video1_handle,
-        });
-        let video2_material = video_materials.add(VideoMaterial {
-            video: video2_handle,
-        });
-
-        Self {
-            quad_mesh,
-            triangle_mesh,
-            image,
-            image_aspect_ratio,
-            image_material,
-            video1: video1_handle,
-            video1_aspect_ratio,
-            video1_material,
-            video2: video2_handle,
-            video2_aspect_ratio,
-            video2_material,
-        }
-    }
-}
-
-impl SceneTestWallpaper {
-    pub fn new_test(monitor_id: MonitorId) -> Self {
-        let mut scene = Scene::new(monitor_id);
-
-        scene.add_systems(SceneUpdate, Self::rotate_meshes);
-        scene.add_systems(SceneStartup, (Self::spawn_mesh, Self::spawn_videos));
-        scene.world.init_resource::<TestAssets>();
-
-        Self { scene }
-    }
-
-    pub fn spawn_videos(mut commands: Commands, assets: Res<TestAssets>) {
-        const SCALE: f32 = 0.6;
-
-        commands.spawn((
-            Mesh3d(assets.quad_mesh),
-            MeshMaterial(assets.video1_material),
-            Transform::default().scaled_by(Vec3::new(
-                SCALE,
-                assets.video1_aspect_ratio * SCALE,
-                1.0,
-            )),
-            TimeScale(0.5),
-        ));
-
-        commands.spawn((
-            Mesh3d(assets.quad_mesh),
-            MeshMaterial(assets.video2_material),
-            Transform::default().scaled_by(Vec3::new(
-                SCALE,
-                assets.video2_aspect_ratio * SCALE,
-                1.0,
-            )),
-            TimeScale(0.3),
-        ));
-
-        commands.spawn((
-            Mesh3d(assets.triangle_mesh),
-            MeshMaterial(assets.video2_material),
-            Transform::default().scaled_by(Vec3::new(
-                SCALE,
-                assets.video2_aspect_ratio * SCALE,
-                1.0,
-            )),
-            TimeScale(0.8),
-        ));
-    }
-
-    pub fn spawn_mesh(mut commands: Commands, assets: Res<TestAssets>) {
-        const SCALE: f32 = 0.6;
-        let aspect_scale = Vec3::new(SCALE, SCALE * assets.image_aspect_ratio, 1.0);
-
-        commands.spawn((
-            Mesh3d(assets.quad_mesh),
-            Transform::default().scaled_by(aspect_scale),
-            MeshMaterial(assets.image_material),
-            TimeScale(1.0),
-        ));
-
-        commands.spawn((
-            Mesh3d(assets.quad_mesh),
-            Transform::default().scaled_by(aspect_scale),
-            MeshMaterial(assets.image_material),
-            TimeScale(std::f32::consts::FRAC_PI_2),
-        ));
-    }
-
-    pub fn rotate_meshes(
-        mut transforms: Query<(&mut Transform, &TimeScale), With<Mesh3d>>,
-        time: Res<Time>,
-    ) {
-        let time = time.elapsed.as_secs_f32();
-
-        for (mut transform, &TimeScale(time_scale)) in &mut transforms {
-            transform.translation.x = 0.5 * (time_scale * time).cos();
-            transform.translation.y = 0.5 * (time_scale * time).sin();
-        }
-    }
-}
-
-impl Wallpaper for SceneTestWallpaper {
-    fn frame(
-        &mut self,
-        _: &Runtime,
-        _: &mut wgpu::CommandEncoder,
-        _: &wgpu::TextureView,
-    ) -> Result<FrameInfo, FrameError> {
-        Err(FrameError::NoWorkToDo)
-    }
-
-    fn free_frame(&mut self, runtime: &Runtime) -> Result<FrameInfo, FrameError> {
-        if Almost::is_nil(&runtime.scene_renderer) {
-            return Err(FrameError::Skip);
-        }
-
-        {
-            let mut renderer = runtime.scene_renderer.write().unwrap();
-            renderer.apply_queued();
-        }
-
-        static NOT_FIRST_TIME: AtomicBool = AtomicBool::new(false);
-
-        thread::scope(|s| {
-            let handle = s.spawn(|| {
-                if NOT_FIRST_TIME.fetch_or(true, Relaxed) {
-                    let mut renderer = runtime.scene_renderer.write().unwrap();
-                    renderer.world.run_schedule(SceneRender);
-                }
-            });
-
-            self.scene.update();
-
-            handle.join().unwrap();
-        });
-
-        let mut renderer = runtime.scene_renderer.write().unwrap();
-        self.scene.extract(&mut renderer.world);
-
-        Ok(FrameInfo::new_60_fps())
-    }
-
-    fn required_features() -> RuntimeFeatures
-    where
-        Self: Sized,
-    {
-        RuntimeFeatures::SCENE_RENDERER
-    }
 }
 
 pub trait ScenePlugin {

@@ -319,7 +319,8 @@ pub fn render_meshes(
             let config = &surfaces.get(&monitor_id).unwrap().config;
             config.height as f32 / config.width as f32
         };
-        let camera_view = Mat4::from_scale(Vec3::new(aspect_ratio, 1.0, 1.0));
+        let camera_view =
+            Mat4::orthographic_rh(-1.0, 1.0, -aspect_ratio, aspect_ratio, -10.0, 10.0);
 
         {
             let mut pass = render
