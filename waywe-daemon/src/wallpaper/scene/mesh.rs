@@ -7,7 +7,8 @@ use crate::{
     wallpaper::scene::{
         Monitor, ScenePlugin, Time,
         assets::{
-            Asset, AssetHandle, Assets, AssetsPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin,
+            Asset, AssetHandle, Assets, AssetsPlugin, RenderAsset, RenderAssets,
+            RenderAssetsPlugin, extract_render_asset,
         },
         image::{ImageMaterial, extract_image_materials},
         material::{Material, MaterialAssetMap, RenderMaterial, RenderMaterialHandle},
@@ -18,7 +19,10 @@ use crate::{
         transform::{GlobalTransform, ModelMatrix, Transform},
     },
 };
-use bevy_ecs::prelude::*;
+use bevy_ecs::{
+    prelude::*,
+    system::{SystemParamItem, lifetimeless::SRes},
+};
 use bytemuck::{Pod, Zeroable};
 use derive_more::{Deref, DerefMut};
 use for_sure::prelude::*;
@@ -44,11 +48,9 @@ impl RenderPlugin for MeshPlugin {
         renderer.world.init_resource::<OngoingRender>();
         renderer.add_systems(
             SceneExtract,
-            (
-                extact_meshes,
-                extact_objects::<ImageMaterial>.after(extract_image_materials),
-            )
-                .chain(),
+            extact_objects::<ImageMaterial>
+                .after(extract_image_materials)
+                .after(extract_render_asset::<RenderMesh>),
         );
         renderer.add_systems(
             SceneRender,
@@ -205,16 +207,6 @@ impl Mesh {
 #[require(Transform)]
 pub struct Mesh3d(pub AssetHandle<Mesh>);
 
-pub fn extact_meshes(
-    meshes: Extract<Res<Assets<Mesh>>>,
-    mut render_meshes: ResMut<RenderAssets<RenderMesh>>,
-    gpu: Res<RenderGpu>,
-) {
-    for (id, mesh) in meshes.new_assets() {
-        render_meshes.add(id, RenderMesh::new(mesh, &gpu));
-    }
-}
-
 #[derive(Component)]
 pub struct MeshMaterial<M: Material>(pub AssetHandle<M>);
 
@@ -225,6 +217,11 @@ pub struct RenderMesh {
 
 impl RenderAsset for RenderMesh {
     type Asset = Mesh;
+    type Param = SRes<RenderGpu>;
+
+    fn extract(mesh: &Self::Asset, gpu: &mut SystemParamItem<'_, '_, Self::Param>) -> Self {
+        Self::new(mesh, gpu)
+    }
 }
 
 impl RenderMesh {

@@ -1,9 +1,11 @@
 use super::Scene;
 use crate::wallpaper::scene::{
-    ScenePlugin, ScenePostExtract,
-    render::{RenderPlugin, SceneRenderer},
+    render::{Extract, RenderPlugin, SceneExtract, SceneRenderer}, ScenePlugin, ScenePostExtract
 };
-use bevy_ecs::prelude::*;
+use bevy_ecs::{
+    prelude::*,
+    system::{StaticSystemParam, SystemParam, SystemParamItem},
+};
 use smallvec::SmallVec;
 use std::{collections::HashMap, fmt, hash, marker::PhantomData};
 
@@ -96,6 +98,20 @@ impl<A: RenderAsset> Default for RenderAssets<A> {
 
 pub trait RenderAsset: Send + Sync + 'static {
     type Asset: Asset;
+    type Param: SystemParam + 'static;
+
+    fn extract(source: &Self::Asset, item: &mut SystemParamItem<'_, '_, Self::Param>) -> Self;
+}
+
+pub fn extract_render_asset<A: RenderAsset>(
+    assets: Extract<Res<Assets<A::Asset>>>,
+    mut render_assets: ResMut<RenderAssets<A>>,
+    mut param: StaticSystemParam<A::Param>,
+) {
+    for (id, asset) in assets.new_assets() {
+        let render_asset = A::extract(asset, &mut param);
+        render_assets.add(id, render_asset);
+    }
 }
 
 // TODO(hack3rmann): hash it faster
@@ -208,5 +224,6 @@ impl<A: RenderAsset> Default for RenderAssetsPlugin<A> {
 impl<A: RenderAsset> RenderPlugin for RenderAssetsPlugin<A> {
     fn init(self, renderer: &mut SceneRenderer) {
         renderer.world.init_resource::<RenderAssets<A>>();
+        renderer.add_systems(SceneExtract, extract_render_asset::<A>);
     }
 }

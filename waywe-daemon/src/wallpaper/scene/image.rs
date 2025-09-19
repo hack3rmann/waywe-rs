@@ -1,11 +1,15 @@
 use super::{Scene, render::SceneRenderer};
-use crate::wallpaper::scene::{
-    ScenePlugin,
-    assets::{
-        Asset, AssetHandle, Assets, AssetsPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin,
+use crate::{
+    runtime::gpu::Wgpu,
+    wallpaper::scene::{
+        ScenePlugin,
+        assets::{
+            Asset, AssetHandle, Assets, AssetsPlugin, RenderAsset, RenderAssets,
+            RenderAssetsPlugin, extract_render_asset,
+        },
+        material::{AsBindGroup, Material, MaterialAssetMap, RenderMaterial, VertexFragmentShader},
+        render::{Extract, RenderGpu, RenderPlugin, SceneExtract},
     },
-    material::{AsBindGroup, Material, MaterialAssetMap, RenderMaterial, VertexFragmentShader},
-    render::{Extract, RenderGpu, RenderPlugin, SceneExtract},
 };
 use bevy_ecs::{
     prelude::*,
@@ -28,7 +32,7 @@ impl RenderPlugin for ImagePlugin {
         renderer.add_plugin(RenderAssetsPlugin::<RenderImage>::new());
         renderer.add_systems(
             SceneExtract,
-            (extract_images, extract_image_materials).chain(),
+            extract_image_materials.after(extract_render_asset::<RenderImage>),
         );
         renderer.world.init_resource::<ImagePipeline>();
     }
@@ -37,38 +41,6 @@ impl RenderPlugin for ImagePlugin {
 #[derive(Debug, Deref, DerefMut)]
 pub struct Image {
     pub image: image::RgbaImage,
-}
-
-pub fn extract_images(
-    images: Extract<Res<Assets<Image>>>,
-    mut render_images: ResMut<RenderAssets<RenderImage>>,
-    gpu: Res<RenderGpu>,
-) {
-    for (handle, image) in images.new_assets() {
-        let texture = gpu.device.create_texture_with_data(
-            &gpu.queue,
-            &wgpu::TextureDescriptor {
-                label: ImageMaterial::LABEL,
-                size: wgpu::Extent3d {
-                    width: image.width(),
-                    height: image.height(),
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8Unorm,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING,
-                view_formats: &[],
-            },
-            wgpu::util::TextureDataOrder::LayerMajor,
-            image,
-        );
-
-        let view = texture.create_view(&Default::default());
-
-        render_images.add(handle, RenderImage { texture, view });
-    }
 }
 
 pub fn extract_image_materials(
@@ -161,8 +133,41 @@ pub struct RenderImage {
     pub view: wgpu::TextureView,
 }
 
+impl RenderImage {
+    pub fn new(image: &Image, gpu: &Wgpu) -> Self {
+        let texture = gpu.device.create_texture_with_data(
+            &gpu.queue,
+            &wgpu::TextureDescriptor {
+                label: ImageMaterial::LABEL,
+                size: wgpu::Extent3d {
+                    width: image.width(),
+                    height: image.height(),
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            },
+            wgpu::util::TextureDataOrder::LayerMajor,
+            image,
+        );
+
+        let view = texture.create_view(&Default::default());
+
+        Self { texture, view }
+    }
+}
+
 impl RenderAsset for RenderImage {
     type Asset = Image;
+    type Param = SRes<RenderGpu>;
+
+    fn extract(image: &Self::Asset, gpu: &mut SystemParamItem<'_, '_, Self::Param>) -> Self {
+        Self::new(image, gpu)
+    }
 }
 
 impl AsBindGroup for ImageMaterial {
