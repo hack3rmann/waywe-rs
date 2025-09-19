@@ -4,7 +4,7 @@ members = [
     "deploy-tool",
     "dxt",
     "extractor",
-    "waywe-converter",
+    "converter",
     "runtime",
     "transmute-extra",
     "unite-json",
