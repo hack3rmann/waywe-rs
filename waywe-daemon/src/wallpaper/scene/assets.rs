@@ -55,6 +55,12 @@ impl<A: Asset> Assets<A> {
             .iter()
             .map(|(&id, asset)| (AssetHandle::new(id), asset))
     }
+
+    pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (AssetHandle<A>, &mut A)> + '_ {
+        self.map
+            .iter_mut()
+            .map(|(&id, asset)| (AssetHandle::new(id), asset))
+    }
 }
 
 impl<A: Asset> Default for Assets<A> {
@@ -103,12 +109,23 @@ pub trait RenderAsset: Send + Sync + 'static {
     fn extract(source: &Self::Asset, item: &mut SystemParamItem<'_, '_, Self::Param>) -> Self;
 }
 
-pub fn extract_render_asset<A: RenderAsset>(
+pub fn extract_new_render_assets<A: RenderAsset>(
     assets: Extract<Res<Assets<A::Asset>>>,
     mut render_assets: ResMut<RenderAssets<A>>,
     mut param: StaticSystemParam<A::Param>,
 ) {
     for (id, asset) in assets.new_assets() {
+        let render_asset = A::extract(asset, &mut param);
+        render_assets.add(id, render_asset);
+    }
+}
+
+pub fn extract_all_render_assets<A: RenderAsset>(
+    assets: Extract<Res<Assets<A::Asset>>>,
+    mut render_assets: ResMut<RenderAssets<A>>,
+    mut param: StaticSystemParam<A::Param>,
+) {
+    for (id, asset) in assets.iter() {
         let render_asset = A::extract(asset, &mut param);
         render_assets.add(id, render_asset);
     }
@@ -206,24 +223,40 @@ pub fn flush_assets<A: Asset>(mut assets: ResMut<Assets<A>>) {
 }
 
 pub struct RenderAssetsPlugin<A: RenderAsset> {
+    do_extact_all: bool,
     _p: PhantomData<A>,
 }
 
 impl<A: RenderAsset> RenderAssetsPlugin<A> {
-    pub const fn new() -> Self {
-        Self { _p: PhantomData }
+    pub const fn extract_new() -> Self {
+        Self {
+            do_extact_all: false,
+            _p: PhantomData,
+        }
+    }
+
+    pub const fn extract_all() -> Self {
+        Self {
+            do_extact_all: true,
+            _p: PhantomData,
+        }
     }
 }
 
 impl<A: RenderAsset> Default for RenderAssetsPlugin<A> {
     fn default() -> Self {
-        Self::new()
+        Self::extract_new()
     }
 }
 
 impl<A: RenderAsset> RenderPlugin for RenderAssetsPlugin<A> {
     fn init(self, renderer: &mut SceneRenderer) {
         renderer.world.init_resource::<RenderAssets<A>>();
-        renderer.add_systems(SceneExtract, extract_render_asset::<A>);
+
+        if self.do_extact_all {
+            renderer.add_systems(SceneExtract, extract_all_render_assets::<A>);
+        } else {
+            renderer.add_systems(SceneExtract, extract_new_render_assets::<A>);
+        }
     }
 }

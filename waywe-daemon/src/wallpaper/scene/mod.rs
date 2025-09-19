@@ -7,19 +7,20 @@ pub mod mesh;
 pub mod render;
 pub mod sprite;
 pub mod transform;
+pub mod video;
 
 use crate::{
     event_loop::{FrameError, FrameInfo},
-    runtime::{Runtime, RuntimeFeatures, wayland::MonitorId},
+    runtime::{wayland::MonitorId, Runtime, RuntimeFeatures},
     wallpaper::{
-        Wallpaper,
         scene::{
-            assets::Assets,
+            assets::{AssetHandle, Assets},
             image::{Image, ImageMaterial, ImagePlugin},
             mesh::{Mesh, Mesh3d, MeshMaterial, MeshPlugin},
             render::{SceneExtract, SceneRender},
             transform::{Transform, TransformPlugin},
-        },
+            video::{Video, VideoMaterial, VideoPlugin},
+        }, Wallpaper
     },
 };
 use bevy_ecs::{label::DynEq, prelude::*, schedule::ScheduleLabel, system::ScheduleSystem};
@@ -121,6 +122,7 @@ impl Scene {
         this.add_plugin(TransformPlugin);
         this.add_plugin(ImagePlugin);
         this.add_plugin(MeshPlugin);
+        this.add_plugin(VideoPlugin);
 
         this
     }
@@ -189,21 +191,59 @@ pub struct SceneTestWallpaper {
 #[derive(Component)]
 pub struct TimeScale(pub f32);
 
+#[derive(Resource)]
+pub struct QuadMesh(pub AssetHandle<Mesh>);
+
+impl FromWorld for QuadMesh {
+    fn from_world(world: &mut World) -> Self {
+        let mut meshes = world.resource_mut::<Assets<Mesh>>();
+        Self(meshes.add(Mesh::rect(Vec2::ONE)))
+    }
+}
+
 impl SceneTestWallpaper {
     pub fn new_test(monitor_id: MonitorId) -> Self {
         let mut scene = Scene::new(monitor_id);
 
         scene.add_systems(SceneUpdate, Self::rotate_meshes);
-        scene.add_systems(SceneStartup, Self::spawn_mesh);
+        scene.add_systems(SceneStartup, (Self::spawn_mesh, Self::spawn_videos));
+        scene.world.init_resource::<QuadMesh>();
 
         Self { scene }
+    }
+
+    pub fn spawn_videos(
+        mut commands: Commands,
+        mut videos: ResMut<Assets<Video>>,
+        mut materials: ResMut<Assets<VideoMaterial>>,
+        mesh: Res<QuadMesh>,
+    ) {
+        let video1 = videos.add(Video::new(c"target/test-video.mp4").unwrap());
+        let material1 = materials.add(VideoMaterial { video: video1 });
+
+        let video2 = videos.add(Video::new(c"target/test-video2.mp4").unwrap());
+        let material2 = materials.add(VideoMaterial { video: video2 });
+
+        commands.spawn((
+            Mesh3d(mesh.0),
+            MeshMaterial(material1),
+            Transform::default().scaled_by(Vec3::splat(0.6)),
+            TimeScale(0.5),
+        ));
+
+        commands.spawn((
+            Mesh3d(mesh.0),
+            MeshMaterial(material2),
+            Transform::default().scaled_by(Vec3::splat(0.6)),
+            TimeScale(0.3),
+        ));
     }
 
     pub fn spawn_mesh(
         mut commands: Commands,
         mut images: ResMut<Assets<Image>>,
         mut materials: ResMut<Assets<ImageMaterial>>,
-        mut meshes: ResMut<Assets<Mesh>>,
+        mesh: Res<QuadMesh>,
     ) {
         // FIXME(hack3rmann): use local image
         const PATH: &str = "target/test-image.png";
@@ -217,21 +257,20 @@ impl SceneTestWallpaper {
 
         let image = images.add(Image { image });
         let material = materials.add(ImageMaterial { image });
-        let mesh = meshes.add(Mesh::rect(Vec2::ONE));
 
         const SCALE: f32 = 0.6;
         let aspect_scale = Vec3::new(SCALE, SCALE * aspect_ratio, 1.0);
 
         commands.spawn((
-            Mesh3d(mesh),
-            Transform::from_translation(Vec3::new(-0.2, -0.2, 0.0)).scaled_by(aspect_scale),
+            Mesh3d(mesh.0),
+            Transform::default().scaled_by(aspect_scale),
             MeshMaterial(material),
             TimeScale(1.0),
         ));
 
         commands.spawn((
-            Mesh3d(mesh),
-            Transform::from_translation(Vec3::new(0.2, 0.2, 0.0)).scaled_by(aspect_scale),
+            Mesh3d(mesh.0),
+            Transform::default().scaled_by(aspect_scale),
             MeshMaterial(material),
             TimeScale(std::f32::consts::FRAC_PI_2),
         ));

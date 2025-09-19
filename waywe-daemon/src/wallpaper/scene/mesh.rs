@@ -8,15 +8,16 @@ use crate::{
         Monitor, ScenePlugin, Time,
         assets::{
             Asset, AssetHandle, Assets, AssetsPlugin, RenderAsset, RenderAssets,
-            RenderAssetsPlugin, extract_render_asset,
+            RenderAssetsPlugin, extract_new_render_assets,
         },
-        image::{DEFAULT_IMAGE_MATERIAL, ImageMaterial, extract_image_materials},
+        image::{ImageMaterial, extract_image_materials},
         material::{Material, MaterialAssetMap, RenderMaterial, RenderMaterialHandle},
         render::{
             EntityMap, Extract, MainEntity, MonitorPlugged, MonitorUnplugged, RenderGpu,
             RenderPlugin, SceneExtract, SceneRender, SceneRenderStage,
         },
         transform::{GlobalTransform, ModelMatrix, Transform},
+        video::{VideoMaterial, extract_video_materials},
     },
 };
 use bevy_ecs::{
@@ -41,16 +42,21 @@ impl ScenePlugin for MeshPlugin {
 
 impl RenderPlugin for MeshPlugin {
     fn init(self, renderer: &mut SceneRenderer) {
-        renderer.add_plugin(RenderAssetsPlugin::<RenderMesh>::new());
+        renderer.add_plugin(RenderAssetsPlugin::<RenderMesh>::extract_new());
         renderer.world.add_observer(add_monitor);
         renderer.world.add_observer(remove_monitor);
         renderer.world.init_resource::<Pipelines>();
         renderer.world.init_resource::<OngoingRender>();
         renderer.add_systems(
             SceneExtract,
-            extact_objects::<ImageMaterial>
-                .after(extract_image_materials)
-                .after(extract_render_asset::<RenderMesh>),
+            (
+                extact_objects::<ImageMaterial>
+                    .after(extract_image_materials)
+                    .after(extract_new_render_assets::<RenderMesh>),
+                extact_objects::<VideoMaterial>
+                    .after(extract_video_materials)
+                    .after(extract_new_render_assets::<RenderMesh>),
+            ),
         );
         renderer.add_systems(
             SceneRender,
@@ -205,7 +211,7 @@ impl Mesh {
 
 #[derive(Clone, Debug, Component)]
 // FIXME(hck3rmann): requireing a material
-#[require(Transform, MeshMaterial::<ImageMaterial>(DEFAULT_IMAGE_MATERIAL))]
+#[require(Transform)]
 pub struct Mesh3d(pub AssetHandle<Mesh>);
 
 #[derive(Component)]

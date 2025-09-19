@@ -310,6 +310,15 @@ impl Drop for FormatContext {
     }
 }
 
+impl fmt::Debug for FormatContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FormatContext")
+            .field("bit_rate", &self.bit_rate())
+            .field("streams", &self.streams())
+            .finish_non_exhaustive()
+    }
+}
+
 bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord, Hash)]
     pub struct DispositionFlags: i32 {

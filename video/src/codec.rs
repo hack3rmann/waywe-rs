@@ -454,6 +454,15 @@ impl Drop for CodecContext {
     }
 }
 
+impl fmt::Debug for CodecContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CodecContext")
+            .field("codec_id", &self.codec_id())
+            .field("codec", &self.codec())
+            .finish_non_exhaustive()
+    }
+}
+
 /// Codec ID
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]

@@ -5,7 +5,7 @@ use crate::{
         ScenePlugin,
         assets::{
             Asset, AssetHandle, AssetId, Assets, AssetsPlugin, RenderAsset, RenderAssets,
-            RenderAssetsPlugin, extract_render_asset,
+            RenderAssetsPlugin, extract_new_render_assets,
         },
         material::{AsBindGroup, Material, MaterialAssetMap, RenderMaterial, VertexFragmentShader},
         render::{Extract, RenderGpu, RenderPlugin, SceneExtract},
@@ -42,10 +42,10 @@ impl ScenePlugin for ImagePlugin {
 
 impl RenderPlugin for ImagePlugin {
     fn init(self, renderer: &mut SceneRenderer) {
-        renderer.add_plugin(RenderAssetsPlugin::<RenderImage>::new());
+        renderer.add_plugin(RenderAssetsPlugin::<RenderImage>::extract_new());
         renderer.add_systems(
             SceneExtract,
-            extract_image_materials.after(extract_render_asset::<RenderImage>),
+            extract_image_materials.after(extract_new_render_assets::<RenderImage>),
         );
         renderer.world.init_resource::<ImagePipeline>();
     }
