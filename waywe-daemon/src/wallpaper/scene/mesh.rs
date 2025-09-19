@@ -10,7 +10,7 @@ use crate::{
             Asset, AssetHandle, Assets, AssetsPlugin, RenderAsset, RenderAssets,
             RenderAssetsPlugin, extract_render_asset,
         },
-        image::{ImageMaterial, extract_image_materials},
+        image::{DEFAULT_IMAGE_MATERIAL, ImageMaterial, extract_image_materials},
         material::{Material, MaterialAssetMap, RenderMaterial, RenderMaterialHandle},
         render::{
             EntityMap, Extract, MainEntity, MonitorPlugged, MonitorUnplugged, RenderGpu,
@@ -204,7 +204,8 @@ impl Mesh {
 }
 
 #[derive(Clone, Debug, Component)]
-#[require(Transform)]
+// FIXME(hck3rmann): requireing a material
+#[require(Transform, MeshMaterial::<ImageMaterial>(DEFAULT_IMAGE_MATERIAL))]
 pub struct Mesh3d(pub AssetHandle<Mesh>);
 
 #[derive(Component)]

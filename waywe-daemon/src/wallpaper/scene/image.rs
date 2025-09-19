@@ -4,7 +4,7 @@ use crate::{
     wallpaper::scene::{
         ScenePlugin,
         assets::{
-            Asset, AssetHandle, Assets, AssetsPlugin, RenderAsset, RenderAssets,
+            Asset, AssetHandle, AssetId, Assets, AssetsPlugin, RenderAsset, RenderAssets,
             RenderAssetsPlugin, extract_render_asset,
         },
         material::{AsBindGroup, Material, MaterialAssetMap, RenderMaterial, VertexFragmentShader},
@@ -18,12 +18,25 @@ use bevy_ecs::{
 use derive_more::{Deref, DerefMut};
 use wgpu::util::DeviceExt;
 
+pub const DEFAULT_IMAGE: AssetHandle<Image> = AssetHandle::new(AssetId::new(1));
+pub const DEFAULT_IMAGE_MATERIAL: AssetHandle<ImageMaterial> = AssetHandle::new(AssetId::new(1));
+
 pub struct ImagePlugin;
 
 impl ScenePlugin for ImagePlugin {
     fn init(self, scene: &mut Scene) {
         scene.add_plugin(AssetsPlugin::<Image>::new());
         scene.add_plugin(AssetsPlugin::<ImageMaterial>::new());
+
+        let mut image_assets = scene.world.resource_mut::<Assets<Image>>();
+        let default_image = image_assets.add(Image::new_white_1x1());
+        debug_assert_eq!(default_image, DEFAULT_IMAGE);
+
+        let mut material_assets = scene.world.resource_mut::<Assets<ImageMaterial>>();
+        let default_material = material_assets.add(ImageMaterial {
+            image: default_image,
+        });
+        debug_assert_eq!(default_material, DEFAULT_IMAGE_MATERIAL);
     }
 }
 
@@ -41,6 +54,21 @@ impl RenderPlugin for ImagePlugin {
 #[derive(Debug, Deref, DerefMut)]
 pub struct Image {
     pub image: image::RgbaImage,
+}
+
+impl Image {
+    pub fn new_white_1x1() -> Self {
+        let mut image = image::RgbaImage::new(1, 1);
+        image.get_pixel_mut(0, 0).0 = [255; 4];
+
+        Self { image }
+    }
+}
+
+impl Default for Image {
+    fn default() -> Self {
+        Self::new_white_1x1()
+    }
 }
 
 pub fn extract_image_materials(
