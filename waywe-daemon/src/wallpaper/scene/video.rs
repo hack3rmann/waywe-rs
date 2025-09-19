@@ -2,14 +2,20 @@ use super::{Scene, render::SceneRenderer};
 use crate::{
     runtime::gpu::Wgpu,
     wallpaper::scene::{
-        assets::{Asset, AssetHandle, Assets, AssetsPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin}, material::{AsBindGroup, Material, MaterialAssetMap, RenderMaterial, VertexFragmentShader}, render::{Extract, RenderGpu, RenderPlugin, SceneExtract}, ScenePlugin, SceneUpdate
+        ScenePlugin, SceneUpdate, Time,
+        assets::{
+            Asset, AssetHandle, Assets, AssetsPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin,
+        },
+        material::{AsBindGroup, Material, MaterialAssetMap, RenderMaterial, VertexFragmentShader},
+        render::{Extract, RenderGpu, RenderPlugin, SceneExtract},
     },
 };
 use ash::vk::{self, PhysicalDeviceMemoryProperties};
 use bevy_ecs::{
     prelude::*,
-    system::{lifetimeless::SRes, StaticSystemParam, SystemParamItem},
+    system::{StaticSystemParam, SystemParamItem, lifetimeless::SRes},
 };
+use glam::UVec2;
 use std::{ffi::CString, os::fd::IntoRawFd as _, ptr, time::Duration};
 use video::{
     BackendError, Codec, CodecContext, FormatContext, Frame, MediaType, Packet, RatioI32,
@@ -35,9 +41,20 @@ impl RenderPlugin for VideoPlugin {
     }
 }
 
-pub fn advance_videos(mut videos: ResMut<Assets<Video>>) {
+pub fn advance_videos(mut videos: ResMut<Assets<Video>>, time: Res<Time>) {
     for (_id, video) in videos.iter_mut() {
-        video.next_frame();
+        let Some(duration) = video.frame.duration_in(video.time_base) else {
+            video.next_frame();
+            continue;
+        };
+        let duration = duration.to_duration();
+
+        if video.update_delay + time.delta >= duration {
+            video.next_frame();
+            video.update_delay = video.update_delay + time.delta - duration;
+        } else {
+            video.update_delay += time.delta;
+        }
     }
 }
 
@@ -52,6 +69,7 @@ pub struct Video {
     pub packet: Option<Packet>,
     pub frame: Frame,
     pub do_loop_video: bool,
+    pub update_delay: Duration,
 }
 
 impl Asset for Video {}
@@ -101,7 +119,20 @@ impl Video {
             frame: Frame::new(),
             path,
             do_loop_video: true,
+            update_delay: Duration::ZERO,
         })
+    }
+
+    pub fn frame_size(&self) -> UVec2 {
+        self.format_context.streams()[self.best_stream_index]
+            .codec_parameters()
+            .video_size()
+            .unwrap()
+    }
+
+    pub fn frame_aspect_ratio(&self) -> f32 {
+        let size = self.frame_size();
+        size.y as f32 / size.x as f32
     }
 
     pub fn next_frame(&mut self) {
@@ -567,17 +598,24 @@ pub fn extract_video_materials(
 ) {
     let mut image_params = image_params.into_inner();
 
-    for (id, material) in materials.new_assets() {
+    for (id, material) in materials.iter() {
         let bind_group_layout = VideoMaterial::bind_group_layout(&gpu.device);
         let bind_group =
             material.create_bind_group(&mut image_params, &gpu.device, &bind_group_layout);
 
-        let render_id = render_materials.add(RenderMaterial {
+        let render_material = RenderMaterial {
             bind_group_layout,
             bind_group,
             shader: pipeline.shader.clone(),
-        });
+        };
 
-        handle_map.set(id, render_id);
+        if let Some(render_id) = handle_map.get(id)
+            && let Some(stored_material) = render_materials.get_mut(render_id)
+        {
+            *stored_material = render_material;
+        } else {
+            let render_id = render_materials.add(render_material);
+            handle_map.set(id, render_id);
+        }
     }
 }
