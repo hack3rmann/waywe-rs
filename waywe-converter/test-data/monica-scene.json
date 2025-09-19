@@ -1,0 +1,153 @@
+{
+	"camera" : 
+	{
+		"center" : "0.000 0.000 -1.000",
+		"eye" : "0.000 0.000 0.000",
+		"up" : "0.000 1.000 0.000"
+	},
+	"general" : 
+	{
+		"sdfdfsdd": "sdfsd",
+		"ambientcolor" : "0.3 0.3 0.3",
+		"bloom" : false,
+		"bloomstrength" : 2,
+		"bloomthreshold" : 0.64999997615814209,
+		"camerafade" : true,
+		"cameraparallax" : false,
+		"cameraparallaxamount" : 0.5,
+		"cameraparallaxdelay" : 0.10000000149011612,
+		"cameraparallaxmouseinfluence" : 0,
+		"camerapreview" : true,
+		"camerashake" : false,
+		"camerashakeamplitude" : 0.5,
+		"camerashakeroughness" : 1,
+		"camerashakespeed" : 3,
+		"clearcolor" : "0.7 0.7 0.7",
+		"clearenabled" : null,
+		"orthogonalprojection" : 
+		{
+			"height" : 1440,
+			"width" : 2560
+		},
+		"skylightcolor" : "0.3 0.3 0.3"
+	},
+	"objects" : 
+	[
+		{
+			"angles" : "0.000 0.000 0.000",
+			"colorBlendMode" : 0,
+			"copybackground" : true,
+			"dependencies" : [ 12, 12 ],
+			"effects" : 
+			[
+				{
+					"file" : "effects/blur/effect.json",
+					"passes" : 
+					[
+						{},
+						{},
+						{
+							"combos" : 
+							{
+								"VERTICAL" : 1
+							}
+						},
+						{
+							"textures" : 
+							[
+								null,
+								"masks/blur_combine_mask_79cce2d5d2e6374596cf228b746919a57e178958",
+								"_rt_imageLayerComposite_12_a"
+							]
+						}
+					]
+				},
+				{
+					"file" : "effects/godrays/effect.json",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"ui_editor_properties_ray_threshold" : 0.37000000476837158
+							},
+							"textures" : 
+							[
+								null,
+								"godrays_downsample2_mask_bdbea347ab7838b0661ae6af118d7d24d301b354"
+							]
+						},
+						{
+							"constantshadervalues" : 
+							{
+								"ui_editor_properties_color_end" : "1 1 1",
+								"ui_editor_properties_color_start" : "1 1 1",
+								"ui_editor_properties_ray_intensity" : 0.2199999988079071,
+								"ui_editor_properties_ray_length" : 0.44999998807907104
+							}
+						},
+						{
+							"constantshadervalues" : 
+							{
+								"ui_editor_properties_blur_scale" : "0.79 0.79"
+							}
+						},
+						{
+							"combos" : 
+							{
+								"VERTICAL" : 1
+							},
+							"constantshadervalues" : 
+							{
+								"ui_editor_properties_blur_scale" : "0.79 0.79"
+							}
+						},
+						{
+							"textures" : [ null, "_rt_imageLayerComposite_12_b" ]
+						}
+					]
+				},
+				{
+					"file" : "effects/shake/effect.json",
+					"passes" : 
+					[
+						{
+							"constantshadervalues" : 
+							{
+								"ui_editor_properties_friction" : "1 1",
+								"ui_editor_properties_speed" : 1.2999999523162842,
+								"ui_editor_properties_strength" : 0.070000000298023224
+							},
+							"textures" : 
+							[
+								null,
+								"masks/shake_mask_df9dfdfcca478a6addc673f20c2e279283deb156",
+								"util/white"
+							]
+						}
+					]
+				}
+			],
+			"id" : 12,
+			"image" : "models/2fdlr1f1yag01.json",
+			"name" : "2fdlr1f1yag01",
+			"origin" : "1280.000 720.000 0.000",
+			"parallaxDepth" : "1.000 1.000",
+			"scale" : "1.000 1.000 1.000",
+			"size" : "2560.000 1440.000",
+			"visible" : true
+		},
+		{
+			"angles" : "0.000 0.000 0.000",
+			"id" : 123,
+			"image" : null,
+			"model" : null,
+			"name" : "Ember",
+			"origin" : "1260.000 120.000 1.000",
+			"parallaxDepth" : "1.000 1.000",
+			"particle" : "particles/presets/ember.json",
+			"particlesrc" : null,
+			"scale" : "1.000 1.000 1.000"
+		}
+	]
+}

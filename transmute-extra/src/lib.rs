@@ -1,5 +1,6 @@
 //! This crate contains useful functions that extend functionality of the safe_transmute crate
 
+#[cfg(unix)]
 use std::{ffi::CString, path::PathBuf};
 
 #[derive(thiserror::Error, Debug, Clone, Copy, Hash, Eq, PartialEq, Ord, PartialOrd, Default)]

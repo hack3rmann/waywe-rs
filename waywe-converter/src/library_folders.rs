@@ -1,8 +1,18 @@
 use std::borrow::Cow;
+use std::env::home_dir;
+use std::fs::File;
+use std::io;
+use std::io::Read;
+use std::path::PathBuf;
+use std::str::FromStr;
 
 use chumsky::Parser;
 use chumsky::prelude::*;
 use chumsky::text::digits;
+
+use crate::consts::WALPAPER_ENGINE_STEAM_ID;
+use crate::error::LocateError;
+use crate::error::LocateResult;
 
 #[derive(Clone, Debug, Hash, Default, PartialEq, PartialOrd, Eq, Ord)]
 pub struct LibraryFolder<'a> {
@@ -131,7 +141,7 @@ mod tests {
 
     #[test]
     fn test_apps() {
-        let fd = File::open("tests/apps_table_test").unwrap();
+        let fd = File::open("test-data/apps_table_test").unwrap();
         let mut fd = BufReader::new(fd);
         let mut input = String::new();
         fd.read_to_string(&mut input).unwrap();
@@ -145,21 +155,21 @@ mod tests {
 
     #[test]
     fn test_apps_empty() {
-        let fd = File::open("tests/apps_table_test_empty").unwrap();
+        let fd = File::open("test-data/apps_table_test_empty").unwrap();
         let mut fd = BufReader::new(fd);
         let mut input = String::new();
         fd.read_to_string(&mut input).unwrap();
 
         let res = apps().parse(&input).unwrap();
 
-        let gt = vec![];
+        let gt: Vec<usize> = vec![];
 
         assert_eq!(res, gt);
     }
 
     #[test]
     fn test_table() {
-        let fd = File::open("tests/table_test").unwrap();
+        let fd = File::open("test-data/table_test").unwrap();
         let mut fd = BufReader::new(fd);
         let mut input = String::new();
         fd.read_to_string(&mut input).unwrap();
@@ -181,7 +191,7 @@ mod tests {
 
     #[test]
     fn test_library_folders() {
-        let fd = File::open("tests/libraryfolders.vdf").unwrap();
+        let fd = File::open("test-data/libraryfolders.vdf").unwrap();
         let mut fd = BufReader::new(fd);
         let mut input = String::new();
         fd.read_to_string(&mut input).unwrap();
@@ -211,4 +221,51 @@ mod tests {
 
         assert_eq!(gt, res);
     }
+
+    #[test]
+    #[ignore = "requires wallpaper engine to be installed in /home/arno/home-ext/Games/steamapps/workshop/content/431960"]
+    fn library_folders_parse() {
+        let we_assets_location = locate_we_assets().unwrap();
+
+        assert_eq!(
+            we_assets_location,
+            PathBuf::from_str("/home/arno/home-ext/Games/Steam/steamapps/workshop/content/431960")
+                .unwrap()
+        )
+    }
+}
+
+pub fn locate_we_assets() -> LocateResult<PathBuf> {
+    let folders = home_dir()
+        .ok_or(LocateError::HomeDirError)?
+        .join(".steam/steam/steamapps/libraryfolders.vdf");
+
+    let folders = File::open(&folders).map_err(|_| LocateError::NotFound)?;
+    let mut folders = io::BufReader::new(folders);
+
+    let mut buf = String::new();
+    folders.read_to_string(&mut buf)?;
+
+    let library_folders = library_folders()
+        .parse(&buf)
+        .into_result()
+        .map_err(|_| LocateError::ParseError)?;
+
+    let mut we_installation_path = None;
+
+    for library_folder in library_folders.iter() {
+        for app_id in library_folder.apps_ids.iter() {
+            if app_id == &WALPAPER_ENGINE_STEAM_ID {
+                we_installation_path = Some(&library_folder.path);
+            }
+        }
+    }
+
+    let Some(we_installation_path) = we_installation_path else {
+        return Err(LocateError::NotFound);
+    };
+
+    Ok(PathBuf::from_str(we_installation_path)
+        .expect("infallible")
+        .join("steamapps/workshop/content/431960"))
 }

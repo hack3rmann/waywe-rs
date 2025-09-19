@@ -161,8 +161,8 @@ impl Wallpaper for VideoWallpaper {
 
             let raw_instance = adapter.shared_instance().raw_instance();
 
-            let memory_properties = raw_instance
-                .get_physical_device_memory_properties(adapter.raw_physical_device());
+            let memory_properties =
+                raw_instance.get_physical_device_memory_properties(adapter.raw_physical_device());
 
             let ext_format_info = vk::PhysicalDeviceExternalImageFormatInfo {
                 s_type: vk::StructureType::PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO,
@@ -215,10 +215,7 @@ impl Wallpaper for VideoWallpaper {
         };
 
         let texture_hal = unsafe {
-            let device = runtime
-                .wgpu
-                .device
-                .as_hal::<api::Vulkan>().unwrap();
+            let device = runtime.wgpu.device.as_hal::<api::Vulkan>().unwrap();
 
             let vk_device = device.raw_device();
 
@@ -264,8 +261,7 @@ impl Wallpaper for VideoWallpaper {
             };
 
             let drm_create_info = vk::ImageDrmFormatModifierExplicitCreateInfoEXT {
-                s_type:
-                    vk::StructureType::IMAGE_DRM_FORMAT_MODIFIER_EXPLICIT_CREATE_INFO_EXT,
+                s_type: vk::StructureType::IMAGE_DRM_FORMAT_MODIFIER_EXPLICIT_CREATE_INFO_EXT,
                 p_next: (&raw const format_list_info).cast(),
                 drm_format_modifier: dma_desc.objects[0].drm_format_modifier,
                 drm_format_modifier_plane_count: dma_desc.num_layers,
@@ -334,6 +330,7 @@ impl Wallpaper for VideoWallpaper {
                 .unwrap();
 
             wgpu::hal::vulkan::Device::texture_from_raw(
+                &device,
                 vk_image,
                 &wgpu::hal::TextureDescriptor {
                     label: Some("video-texture"),
