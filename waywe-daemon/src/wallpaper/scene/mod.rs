@@ -22,11 +22,13 @@ use crate::{
         },
     },
 };
-use bevy_ecs::{prelude::*, schedule::ScheduleLabel, system::ScheduleSystem};
+use bevy_ecs::{label::DynEq, prelude::*, schedule::ScheduleLabel, system::ScheduleSystem};
+use bitflags::bitflags;
 use derive_more::{Deref, DerefMut};
 use for_sure::Almost;
 use glam::{Vec2, Vec3};
 use std::{
+    any::Any,
     mem,
     result::Result,
     sync::atomic::{AtomicBool, Ordering::Relaxed},
@@ -69,30 +71,51 @@ pub struct DummyWorld(pub World);
 #[derive(Resource, Clone, Copy)]
 pub struct Monitor(pub MonitorId);
 
+bitflags! {
+    pub struct SceneFlags: u32 {
+        const STARTUP_DONE = 1;
+        const NO_UPDATE = 2;
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct SceneConfig {
+    no_update: bool,
+}
+
 pub struct Scene {
-    pub startup_done: bool,
+    flags: SceneFlags,
     pub world: World,
 }
 
 impl Scene {
     pub fn new(monitor_id: MonitorId) -> Self {
+        Self::new_with_config(monitor_id, SceneConfig::default())
+    }
+
+    pub fn new_with_config(monitor_id: MonitorId, config: SceneConfig) -> Self {
         let mut world = World::new();
 
-        let mut update = Schedule::new(SceneUpdate);
-        update.add_systems(update_time);
+        if !config.no_update {
+            let mut update = Schedule::new(SceneUpdate);
+            update.add_systems(update_time);
+            world.add_schedule(update);
+        }
+        world.init_resource::<Time>();
 
-        world.add_schedule(update);
         world.add_schedule(Schedule::new(SceneStartup));
         world.add_schedule(Schedule::new(ScenePostExtract));
 
         world.insert_resource(Monitor(monitor_id));
         world.init_resource::<DummyWorld>();
-        world.init_resource::<Time>();
 
-        let mut this = Self {
-            world,
-            startup_done: false,
-        };
+        let mut flags = SceneFlags::empty();
+
+        if config.no_update {
+            flags |= SceneFlags::NO_UPDATE;
+        }
+
+        let mut this = Self { world, flags };
 
         // FIXME: add default plugins in another way
         this.add_plugin(TransformPlugin);
@@ -104,21 +127,27 @@ impl Scene {
 
     pub fn add_systems<M>(
         &mut self,
-        label: impl ScheduleLabel,
+        label: impl ScheduleLabel + Any + Eq,
         systems: impl IntoScheduleConfigs<ScheduleSystem, M>,
     ) -> &mut Self {
+        if self.flags.contains(SceneFlags::NO_UPDATE) && label.dyn_eq(&SceneUpdate) {
+            return self;
+        }
+
         let mut schedules = self.world.get_resource_or_init::<Schedules>();
         schedules.add_systems(label, systems);
         self
     }
 
     pub fn update(&mut self) {
-        if !self.startup_done {
+        if !self.flags.contains(SceneFlags::STARTUP_DONE) {
             self.world.run_schedule(SceneStartup);
-            self.startup_done = true;
+            self.flags |= SceneFlags::STARTUP_DONE;
         }
 
-        self.world.run_schedule(SceneUpdate);
+        if !self.flags.contains(SceneFlags::NO_UPDATE) {
+            self.world.run_schedule(SceneUpdate);
+        }
     }
 
     pub fn extract(&mut self, render_world: &mut World) {
