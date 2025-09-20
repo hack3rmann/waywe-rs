@@ -1,4 +1,4 @@
-use super::{Wallpaper, render::Renderer};
+use super::{Wallpaper, render::Renderer, wallpaper::WallpaperBetter};
 use crate::{
     runtime::{
         gpu::Wgpu,
@@ -10,11 +10,13 @@ use crate::{
             Asset, AssetHandle, Assets, AssetsPlugin, RenderAsset, RenderAssets,
             RenderAssetsPlugin, extract_new_render_assets,
         },
+        extract::Extract,
         image::{ImageMaterial, extract_image_materials},
         material::{Material, MaterialAssetMap, RenderMaterial, RenderMaterialHandle},
+        plugin::Plugin,
         render::{
-            EntityMap, Extract, MainEntity, MonitorPlugged, MonitorUnplugged, RenderGpu,
-            RenderPlugin, SceneExtract, Render, SceneRenderStage,
+            EntityMap, MainEntity, MonitorPlugged, MonitorUnplugged, Render, RenderGpu,
+            RenderPlugin, SceneExtract, SceneRenderStage,
         },
         transform::{GlobalTransform, ModelMatrix, Transform},
         video::{VideoMaterial, extract_video_materials},
@@ -66,6 +68,41 @@ impl RenderPlugin for MeshPlugin {
                 finish_render.in_set(SceneRenderStage::Present),
             ),
         );
+    }
+}
+
+impl Plugin for MeshPlugin {
+    fn build(&self, wallpaper: &mut WallpaperBetter) {
+        wallpaper.add_plugins((
+            AssetsPlugin::<Mesh>::new(),
+            RenderAssetsPlugin::<RenderMesh>::extract_new(),
+        ));
+
+        wallpaper
+            .render
+            .add_observer(add_monitor)
+            .add_observer(remove_monitor)
+            .init_resource::<Pipelines>()
+            .init_resource::<OngoingRender>()
+            .add_systems(
+                SceneExtract,
+                (
+                    extact_objects::<ImageMaterial>
+                        .after(extract_image_materials)
+                        .after(extract_new_render_assets::<RenderMesh>),
+                    extact_objects::<VideoMaterial>
+                        .after(extract_video_materials)
+                        .after(extract_new_render_assets::<RenderMesh>),
+                ),
+            )
+            .add_systems(
+                Render,
+                (
+                    prepare_render.in_set(SceneRenderStage::PreRender),
+                    render_meshes.in_set(SceneRenderStage::Render),
+                    finish_render.in_set(SceneRenderStage::Present),
+                ),
+            );
     }
 }
 

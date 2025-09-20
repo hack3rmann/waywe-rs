@@ -1,6 +1,7 @@
-use super::render::Renderer;
+use super::{render::Renderer, wallpaper::WallpaperBetter};
 use crate::wallpaper::scene::{
     assets::{Asset, AssetHandle, AssetId, AssetsPlugin},
+    plugin::Plugin,
     render::RenderPlugin,
 };
 use bevy_ecs::{
@@ -15,6 +16,13 @@ impl RenderPlugin for MaterialPlugin {
     fn init(self, renderer: &mut Renderer) {
         renderer.add_plugin(AssetsPlugin::<RenderMaterial>::new());
         renderer.world.init_resource::<MaterialAssetMap>();
+    }
+}
+
+impl Plugin for MaterialPlugin {
+    fn build(&self, wallpaper: &mut WallpaperBetter) {
+        wallpaper.add_plugins(AssetsPlugin::<RenderMaterial>::new_render());
+        wallpaper.render.init_resource::<MaterialAssetMap>();
     }
 }
 

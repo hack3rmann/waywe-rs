@@ -2,15 +2,16 @@
 
 pub mod assets;
 pub mod image;
-pub mod image_scene;
 pub mod material;
 pub mod mesh;
 pub mod render;
-pub mod sprite;
 pub mod test_scene;
 pub mod transform;
 pub mod video;
 pub mod wallpaper;
+pub mod extract;
+pub mod subapp;
+pub mod plugin;
 
 use crate::{
     event_loop::FrameInfo,

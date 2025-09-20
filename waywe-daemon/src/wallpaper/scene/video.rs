@@ -1,13 +1,15 @@
-use super::{Wallpaper, render::Renderer};
+use super::{Wallpaper, render::Renderer, wallpaper::WallpaperBetter};
 use crate::{
     runtime::gpu::Wgpu,
     wallpaper::scene::{
-        ScenePlugin, Update, Time,
+        ScenePlugin, Time, Update,
         assets::{
             Asset, AssetHandle, Assets, AssetsPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin,
         },
+        extract::Extract,
         material::{AsBindGroup, Material, MaterialAssetMap, RenderMaterial, VertexFragmentShader},
-        render::{Extract, RenderGpu, RenderPlugin, SceneExtract},
+        plugin::Plugin,
+        render::{RenderGpu, RenderPlugin, SceneExtract},
     },
 };
 use ash::vk::{self, PhysicalDeviceMemoryProperties};
@@ -38,6 +40,22 @@ impl RenderPlugin for VideoPlugin {
         renderer.add_plugin(RenderAssetsPlugin::<RenderVideo>::extract_all());
         renderer.world.init_resource::<VideoPipeline>();
         renderer.add_systems(SceneExtract, extract_video_materials);
+    }
+}
+
+impl Plugin for VideoPlugin {
+    fn build(&self, wallpaper: &mut WallpaperBetter) {
+        wallpaper.add_plugins((
+            AssetsPlugin::<Video>::new(),
+            AssetsPlugin::<VideoMaterial>::new(),
+            RenderAssetsPlugin::<RenderVideo>::extract_all(),
+        ));
+
+        wallpaper.main.add_systems(Update, advance_videos);
+        wallpaper
+            .render
+            .init_resource::<VideoPipeline>()
+            .add_systems(SceneExtract, extract_video_materials);
     }
 }
 

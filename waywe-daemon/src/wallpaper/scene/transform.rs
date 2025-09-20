@@ -1,9 +1,11 @@
 #![allow(clippy::type_complexity)]
 
-use super::render::Renderer;
+use super::{render::Renderer, wallpaper::WallpaperBetter};
 use crate::wallpaper::scene::{
-    Wallpaper, ScenePlugin, Update,
-    render::{EntityMap, Extract, RenderPlugin, SceneExtract},
+    ScenePlugin, Update, Wallpaper,
+    extract::Extract,
+    plugin::Plugin,
+    render::{EntityMap, RenderPlugin, SceneExtract},
 };
 use bevy_ecs::prelude::*;
 use glam::{Mat4, Quat, Vec3};
@@ -20,6 +22,15 @@ impl ScenePlugin for TransformPlugin {
 impl RenderPlugin for TransformPlugin {
     fn init(self, renderer: &mut Renderer) {
         renderer.add_systems(SceneExtract, extract_transforms);
+    }
+}
+
+impl Plugin for TransformPlugin {
+    fn build(&self, wallpaper: &mut WallpaperBetter) {
+        wallpaper.main.add_systems(Update, propagate_transforms);
+        wallpaper
+            .render
+            .add_systems(SceneExtract, extract_transforms);
     }
 }
 

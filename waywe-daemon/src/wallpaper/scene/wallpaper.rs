@@ -1,10 +1,22 @@
 use crate::{
     event_loop::{FrameError, FrameInfo},
-    runtime::{wayland::MonitorId, Runtime, RuntimeFeatures},
+    runtime::{
+        Runtime, RuntimeFeatures,
+        gpu::Wgpu,
+        wayland::{MonitorId, Wayland},
+    },
     wallpaper::{
+        OldWallpaper,
         scene::{
-            assets::Assets, image::{Image, ImageMaterial}, mesh::{Mesh, Mesh3d, MeshMaterial}, render::{Renderer, Render}, transform::Transform, FrameRateSetting, Startup, Wallpaper, WallpaperConfig
-        }, OldWallpaper
+            FrameRateSetting, Startup, Wallpaper, WallpaperConfig,
+            assets::Assets,
+            image::{Image, ImageMaterial},
+            mesh::{Mesh, Mesh3d, MeshMaterial},
+            plugin::PluginGroup,
+            render::{Render, Renderer},
+            subapp::EcsApp,
+            transform::Transform,
+        },
     },
 };
 use bevy_ecs::prelude::*;
@@ -13,9 +25,24 @@ use for_sure::Almost;
 use glam::{Vec2, Vec3};
 use std::{
     path::PathBuf,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     thread,
 };
+
+pub struct WallpaperBetter {
+    pub main: EcsApp,
+    pub render: EcsApp,
+}
+
+impl WallpaperBetter {
+    pub fn add_plugins(&mut self, plugins: impl PluginGroup) -> &mut Self {
+        plugins.add_to_app(self);
+        self
+    }
+}
 
 pub struct WallpaperBuildConfig {
     pub monitor_id: MonitorId,
@@ -25,7 +52,68 @@ pub trait WallpaperBuilder {
     fn build(self, config: WallpaperBuildConfig) -> Wallpaper;
 
     #[expect(unused_variables)]
-    fn initialize_renderer(&mut self, renderer: &mut Renderer) {}
+    fn modify_renderer(&mut self, renderer: &mut Renderer) {}
+}
+
+pub struct PreparedWallpaper {
+    not_first_time: AtomicBool,
+    pub wallpaper: Wallpaper,
+    pub renderer: Renderer,
+}
+
+impl PreparedWallpaper {
+    pub fn build<B: WallpaperBuilder>(
+        mut builder: B,
+        config: WallpaperBuildConfig,
+        gpu: Arc<Wgpu>,
+        wayland: &Wayland,
+    ) -> Self {
+        let mut renderer = Renderer::new(gpu, wayland);
+        builder.modify_renderer(&mut renderer);
+        let wallpaper = builder.build(config);
+
+        Self {
+            not_first_time: AtomicBool::new(false),
+            wallpaper,
+            renderer,
+        }
+    }
+
+    pub fn frame(&mut self) -> Result<FrameInfo, FrameError> {
+        self.renderer.apply_queued();
+
+        if let FrameRateSetting::NoUpdate = self.wallpaper.world.resource::<FrameRateSetting>() {
+            self.wallpaper.startup();
+            self.wallpaper.extract(&mut self.renderer.world);
+            self.renderer.world.run_schedule(Render);
+        } else {
+            thread::scope(|s| {
+                let handle = s.spawn(|| {
+                    if self.not_first_time.fetch_or(true, Ordering::Relaxed) {
+                        self.renderer.world.run_schedule(Render);
+                    }
+                });
+
+                self.wallpaper.update();
+
+                handle.join().unwrap();
+            });
+        }
+
+        self.wallpaper.extract(&mut self.renderer.world);
+
+        let frame_info = match self.wallpaper.world.resource::<FrameRateSetting>() {
+            FrameRateSetting::TargetFrameDuration(duration) => FrameInfo {
+                target_frame_time: Some(*duration),
+            },
+            FrameRateSetting::NoUpdate => FrameInfo {
+                target_frame_time: None,
+            },
+            FrameRateSetting::GuessFromScene => FrameInfo::new_60_fps(),
+        };
+
+        Ok(frame_info)
+    }
 }
 
 pub struct ImageWallpaper {

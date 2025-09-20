@@ -1,7 +1,9 @@
-use super::Wallpaper;
+use super::{Wallpaper, wallpaper::WallpaperBetter};
 use crate::wallpaper::scene::{
-    ScenePlugin, PostExtract,
-    render::{Extract, RenderPlugin, SceneExtract, Renderer},
+    PostExtract, ScenePlugin,
+    extract::Extract,
+    plugin::{AddPlugins, Plugin},
+    render::{RenderPlugin, Renderer, SceneExtract},
 };
 use bevy_ecs::{
     prelude::*,
@@ -191,12 +193,23 @@ impl<A> hash::Hash for AssetHandle<A> {
 impl<A> Eq for AssetHandle<A> {}
 
 pub struct AssetsPlugin<A: Asset> {
+    add: AddPlugins,
     _p: PhantomData<A>,
 }
 
 impl<A: Asset> AssetsPlugin<A> {
     pub const fn new() -> Self {
-        Self { _p: PhantomData }
+        Self {
+            add: AddPlugins::MAIN,
+            _p: PhantomData,
+        }
+    }
+
+    pub const fn new_render() -> Self {
+        Self {
+            add: AddPlugins::RENDER,
+            _p: PhantomData,
+        }
     }
 }
 
@@ -216,6 +229,21 @@ impl<A: Asset> ScenePlugin for AssetsPlugin<A> {
 impl<A: Asset> RenderPlugin for AssetsPlugin<A> {
     fn init(self, renderer: &mut Renderer) {
         renderer.world.init_resource::<Assets<A>>();
+    }
+}
+
+impl<A: Asset> Plugin for AssetsPlugin<A> {
+    fn build(&self, wallpaper: &mut WallpaperBetter) {
+        if self.add.contains(AddPlugins::MAIN) {
+            wallpaper
+                .main
+                .add_systems(PostExtract, flush_assets::<A>)
+                .init_resource::<Assets<A>>();
+        }
+
+        if self.add.contains(AddPlugins::RENDER) {
+            wallpaper.render.init_resource::<Assets<A>>();
+        }
     }
 }
 
@@ -258,6 +286,22 @@ impl<A: RenderAsset> RenderPlugin for RenderAssetsPlugin<A> {
             renderer.add_systems(SceneExtract, extract_all_render_assets::<A>);
         } else {
             renderer.add_systems(SceneExtract, extract_new_render_assets::<A>);
+        }
+    }
+}
+
+impl<A: RenderAsset> Plugin for RenderAssetsPlugin<A> {
+    fn build(&self, wallpaper: &mut WallpaperBetter) {
+        wallpaper.render.init_resource::<RenderAssets<A>>();
+
+        if self.do_extact_all {
+            wallpaper
+                .render
+                .add_systems(SceneExtract, extract_all_render_assets::<A>);
+        } else {
+            wallpaper
+                .render
+                .add_systems(SceneExtract, extract_new_render_assets::<A>);
         }
     }
 }

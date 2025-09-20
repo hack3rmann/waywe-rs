@@ -1,4 +1,4 @@
-use super::{Wallpaper, render::Renderer};
+use super::{Wallpaper, render::Renderer, wallpaper::WallpaperBetter};
 use crate::{
     runtime::gpu::Wgpu,
     wallpaper::scene::{
@@ -7,8 +7,10 @@ use crate::{
             Asset, AssetHandle, AssetId, Assets, AssetsPlugin, RenderAsset, RenderAssets,
             RenderAssetsPlugin, extract_new_render_assets,
         },
+        extract::Extract,
         material::{AsBindGroup, Material, MaterialAssetMap, RenderMaterial, VertexFragmentShader},
-        render::{Extract, RenderGpu, RenderPlugin, SceneExtract},
+        plugin::Plugin,
+        render::{RenderGpu, RenderPlugin, SceneExtract},
     },
 };
 use bevy_ecs::{
@@ -48,6 +50,34 @@ impl RenderPlugin for ImagePlugin {
             extract_image_materials.after(extract_new_render_assets::<RenderImage>),
         );
         renderer.world.init_resource::<ImagePipeline>();
+    }
+}
+
+impl Plugin for ImagePlugin {
+    fn build(&self, wallpaper: &mut WallpaperBetter) {
+        wallpaper.add_plugins((
+            AssetsPlugin::<Image>::new(),
+            AssetsPlugin::<ImageMaterial>::new(),
+            RenderAssetsPlugin::<RenderImage>::extract_new(),
+        ));
+
+        let mut image_assets = wallpaper.main.resource_mut::<Assets<Image>>();
+        let default_image = image_assets.add(Image::new_white_1x1());
+        debug_assert_eq!(default_image, DEFAULT_IMAGE);
+
+        let mut material_assets = wallpaper.main.resource_mut::<Assets<ImageMaterial>>();
+        let default_material = material_assets.add(ImageMaterial {
+            image: default_image,
+        });
+        debug_assert_eq!(default_material, DEFAULT_IMAGE_MATERIAL);
+
+        wallpaper
+            .render
+            .add_systems(
+                SceneExtract,
+                extract_image_materials.after(extract_new_render_assets::<RenderImage>),
+            )
+            .init_resource::<ImagePipeline>();
     }
 }
 
