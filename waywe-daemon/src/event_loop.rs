@@ -26,10 +26,11 @@ use tracing::{debug, error};
 use video::RatioI32;
 
 pub struct EventLoop<A: App> {
+    // NOTE(hack3rmann): app should be dropped first to release all the resources from the runtime
+    app: A,
     runtime: Runtime,
     event_queue: EventQueue,
     event_handler: EventHandler<A>,
-    app: A,
     epoll: Epoll,
 }
 
