@@ -7,13 +7,17 @@ pub mod video_pipeline;
 
 use crate::{
     event_loop::{FrameError, FrameInfo},
-    runtime::{gpu::Wgpu, wayland::MonitorId, Runtime, RuntimeFeatures},
-    wallpaper::scene::{test_scene::SceneTestWallpaper, Startup},
+    runtime::{
+        Runtime, RuntimeFeatures,
+        gpu::Wgpu,
+        wayland::{MonitorId, Wayland},
+    },
+    wallpaper::scene::test_scene::SceneTestWallpaper,
 };
 use glam::UVec2;
 use image::{ImageWallpaper, ImageWallpaperCreationError};
 use runtime::WallpaperType;
-use std::{any::Any, path::Path};
+use std::{any::Any, path::Path, sync::Arc};
 use thiserror::Error;
 use transmute_extra::pathbuf_into_cstring;
 use video::{VideoWallpaper, VideoWallpaperCreationError};
@@ -74,7 +78,8 @@ impl IntoDynWallpaper for DynWallpaper {
 }
 
 pub fn create(
-    gpu: &Wgpu,
+    gpu: Arc<Wgpu>,
+    wayland: Arc<Wayland>,
     monitor_size: UVec2,
     path: &Path,
     ty: WallpaperType,
@@ -82,26 +87,40 @@ pub fn create(
 ) -> Result<DynWallpaper, WallpaperCreationError> {
     match ty {
         WallpaperType::Video => VideoWallpaper::new(
-            gpu,
+            &gpu,
             monitor_size,
             &pathbuf_into_cstring(path.to_owned()),
             monitor_id,
         )
         .map(IntoDynWallpaper::into_dyn_wallpaper)
         .map_err(WallpaperCreationError::from),
-        WallpaperType::Image => ImageWallpaper::new(gpu, monitor_size, path, monitor_id)
+        WallpaperType::Image => ImageWallpaper::new(&gpu, monitor_size, path, monitor_id)
             .map(IntoDynWallpaper::into_dyn_wallpaper)
             .map_err(WallpaperCreationError::from),
         WallpaperType::Scene => Ok({
-            use scene::wallpaper::{ImageWallpaper, *};
-            // FIXME:
-            let path = Path::new("/home/hack3rmann/Pictures/Wallpapers/wallhaven-6kx95l_2520x1680.png");
-            let builder = ImageWallpaper {
+            // use scene::wallpaper::{ImageWallpaper, *};
+            // // FIXME:
+            // let path = Path::new("/home/hack3rmann/Pictures/Wallpapers/wallhaven-6kx95l_2520x1680.png");
+            // let builder = ImageWallpaper {
+            //     path: path.to_owned(),
+            // };
+            // let mut wallpaper = builder.build(WallpaperBuildConfig { monitor_id });
+            // wallpaper.world.run_schedule(Startup);
+            // WallpaperWrapper(wallpaper).into_dyn_wallpaper()
+            use scene::wallpaper::*;
+
+            let mut wallpaper = Wallpaper::new(gpu, &wayland, monitor_id);
+
+            let path =
+                Path::new("/home/hack3rmann/Pictures/Wallpapers/wallhaven-6kx95l_2520x1680.png");
+
+            ImageWallpaper {
                 path: path.to_owned(),
-            };
-            let mut wallpaper = builder.build(WallpaperBuildConfig { monitor_id });
-            wallpaper.world.run_schedule(Startup);
-            WallpaperWrapper(wallpaper).into_dyn_wallpaper()
+            }
+            .build(&mut wallpaper);
+
+            let prepared = PreparedWallpaper::prepare(wallpaper);
+            WallpaperWrapper(prepared).into_dyn_wallpaper()
         }),
     }
 }

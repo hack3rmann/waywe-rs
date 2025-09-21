@@ -30,6 +30,12 @@ impl EcsApp {
         self
     }
 
+    pub fn add_schedule(&mut self, schedule: Schedule) -> &mut Self {
+        let mut schedules = self.world.get_resource_or_init::<Schedules>();
+        schedules.insert(schedule);
+        self
+    }
+
     pub fn insert_resource(&mut self, resource: impl Resource) -> &mut Self {
         self.world.insert_resource(resource);
         self
@@ -64,23 +70,6 @@ impl EcsApp {
     ) -> &mut Self {
         let mut schedules = self.world.resource_mut::<Schedules>();
         schedules.configure_sets(schedule, sets);
-        self
-    }
-
-    pub fn add_schedule(&mut self, schedule: Schedule) -> &mut Self {
-        let mut schedules = self.world.resource_mut::<Schedules>();
-        schedules.insert(schedule);
-        self
-    }
-
-    pub fn init_schedule(&mut self, label: impl ScheduleLabel) -> &mut Self {
-        let label = label.intern();
-        let mut schedules = self.world.resource_mut::<Schedules>();
-
-        if !schedules.contains(label) {
-            schedules.insert(Schedule::new(label));
-        }
-
         self
     }
 

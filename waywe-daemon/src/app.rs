@@ -305,6 +305,7 @@ impl Handle<NewWallpaperEvent> for VideoApp {
         for monitor_id in monitor_ids {
             let path = path.clone();
             let gpu = Arc::clone(&runtime.wgpu);
+            let wayland = Arc::clone(&runtime.wayland);
 
             let monitors = runtime.wayland.client_state.monitors.read().unwrap();
             let monitor = &monitors[&monitor_id];
@@ -323,16 +324,17 @@ impl Handle<NewWallpaperEvent> for VideoApp {
             }
 
             runtime.task_pool.spawn(move |mut emitter| {
-                let event = match wallpaper::create(&gpu, monitor_size, &path, ty, monitor_id) {
-                    Ok(wallpaper) => WallpaperPreparedEvent {
-                        wallpaper,
-                        monitor_id,
-                    },
-                    Err(error) => {
-                        error!(?error, "failed to create wallpaper");
-                        return;
-                    }
-                };
+                let event =
+                    match wallpaper::create(gpu, wayland, monitor_size, &path, ty, monitor_id) {
+                        Ok(wallpaper) => WallpaperPreparedEvent {
+                            wallpaper,
+                            monitor_id,
+                        },
+                        Err(error) => {
+                            error!(?error, "failed to create wallpaper");
+                            return;
+                        }
+                    };
 
                 emitter.emit(event).unwrap();
             });

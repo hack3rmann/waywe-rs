@@ -1,8 +1,8 @@
 #![allow(clippy::type_complexity)]
 
-use super::{render::Renderer, wallpaper::WallpaperBetter};
+use super::{render::Renderer, wallpaper::Wallpaper};
 use crate::wallpaper::scene::{
-    ScenePlugin, Update, Wallpaper,
+    ScenePlugin, Update, OldEcsWallpaper,
     extract::Extract,
     plugin::Plugin,
     render::{EntityMap, RenderPlugin, SceneExtract},
@@ -14,7 +14,7 @@ use smallvec::SmallVec;
 pub struct TransformPlugin;
 
 impl ScenePlugin for TransformPlugin {
-    fn init(self, scene: &mut Wallpaper) {
+    fn init(self, scene: &mut OldEcsWallpaper) {
         scene.add_systems(Update, propagate_transforms);
     }
 }
@@ -26,7 +26,7 @@ impl RenderPlugin for TransformPlugin {
 }
 
 impl Plugin for TransformPlugin {
-    fn build(&self, wallpaper: &mut WallpaperBetter) {
+    fn build(&self, wallpaper: &mut Wallpaper) {
         wallpaper.main.add_systems(Update, propagate_transforms);
         wallpaper
             .render
@@ -164,7 +164,7 @@ mod tests {
 
     #[test]
     fn simple_propagate() {
-        let mut scene = Wallpaper::new(MONITOR_ID);
+        let mut scene = OldEcsWallpaper::new(MONITOR_ID);
 
         scene.add_plugin(TransformPlugin);
 

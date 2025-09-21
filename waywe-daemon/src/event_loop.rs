@@ -111,11 +111,7 @@ impl<A: App> EventLoop<A> {
             }
 
             self.runtime.task_pool.erase_finished();
-
-            self.runtime.wayland.display.roundtrip(
-                self.runtime.wayland.main_queue.as_mut(),
-                self.runtime.wayland.client_state.as_ref(),
-            );
+            self.runtime.wayland.display_roundtrip();
 
             if let Err(error) = self.event_queue.populate_events_from_custom()
                 && !matches!(error, AbsorbError::TryRecv(TryRecvError::Empty))

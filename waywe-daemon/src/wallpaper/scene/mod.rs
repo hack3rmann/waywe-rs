@@ -1,17 +1,18 @@
 #![allow(clippy::type_complexity, clippy::too_many_arguments)]
 
 pub mod assets;
+pub mod extract;
 pub mod image;
 pub mod material;
 pub mod mesh;
+pub mod plugin;
 pub mod render;
+pub mod subapp;
 pub mod test_scene;
+pub mod time;
 pub mod transform;
 pub mod video;
 pub mod wallpaper;
-pub mod extract;
-pub mod subapp;
-pub mod plugin;
 
 use crate::{
     event_loop::FrameInfo,
@@ -21,6 +22,7 @@ use crate::{
         image::ImagePlugin,
         mesh::MeshPlugin,
         render::SceneExtract,
+        time::{Time, update_time},
         transform::TransformPlugin,
         video::{Video, VideoPlugin},
     },
@@ -28,28 +30,7 @@ use crate::{
 use bevy_ecs::{label::DynEq, prelude::*, schedule::ScheduleLabel, system::ScheduleSystem};
 use bitflags::bitflags;
 use derive_more::{Deref, DerefMut};
-use std::{
-    any::Any,
-    mem,
-    time::{Duration, Instant},
-};
-
-#[derive(Resource)]
-pub struct Time {
-    pub prev: Instant,
-    pub elapsed: Duration,
-    pub delta: Duration,
-}
-
-impl Default for Time {
-    fn default() -> Self {
-        Self {
-            prev: Instant::now(),
-            elapsed: Duration::ZERO,
-            delta: Duration::ZERO,
-        }
-    }
-}
+use std::{any::Any, mem, time::Duration};
 
 #[derive(Clone, Copy, Resource, Debug, PartialEq)]
 pub enum FrameRateSetting {
@@ -90,6 +71,7 @@ pub struct DummyWorld(pub World);
 pub struct Monitor(pub MonitorId);
 
 bitflags! {
+    #[derive(Clone, Copy, Debug, PartialEq, Default, Eq, PartialOrd, Ord, Hash, Resource)]
     pub struct WallpaperFlags: u32 {
         const STARTUP_DONE = 1;
         const NO_UPDATE = 2;
@@ -101,12 +83,12 @@ pub struct WallpaperConfig {
     pub framerate: FrameRateSetting,
 }
 
-pub struct Wallpaper {
+pub struct OldEcsWallpaper {
     flags: WallpaperFlags,
     pub world: World,
 }
 
-impl Wallpaper {
+impl OldEcsWallpaper {
     pub fn new(monitor_id: MonitorId) -> Self {
         Self::new_with_config(monitor_id, WallpaperConfig::default())
     }
@@ -216,15 +198,6 @@ pub fn guess_framerate(videos: Res<Assets<Video>>, mut setting: ResMut<FrameRate
     *setting = FrameRateSetting::TargetFrameDuration(min_duration);
 }
 
-pub fn update_time(mut time: ResMut<Time>) {
-    let now = Instant::now();
-    let delta = now.duration_since(time.prev);
-
-    time.delta = delta;
-    time.elapsed += delta;
-    time.prev = now;
-}
-
 pub trait ScenePlugin {
-    fn init(self, scene: &mut Wallpaper);
+    fn init(self, scene: &mut OldEcsWallpaper);
 }

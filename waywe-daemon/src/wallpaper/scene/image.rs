@@ -1,4 +1,4 @@
-use super::{Wallpaper, render::Renderer, wallpaper::WallpaperBetter};
+use super::{OldEcsWallpaper, render::Renderer, wallpaper::Wallpaper};
 use crate::{
     runtime::gpu::Wgpu,
     wallpaper::scene::{
@@ -26,7 +26,7 @@ pub const DEFAULT_IMAGE_MATERIAL: AssetHandle<ImageMaterial> = AssetHandle::new(
 pub struct ImagePlugin;
 
 impl ScenePlugin for ImagePlugin {
-    fn init(self, scene: &mut Wallpaper) {
+    fn init(self, scene: &mut OldEcsWallpaper) {
         scene.add_plugin(AssetsPlugin::<Image>::new());
         scene.add_plugin(AssetsPlugin::<ImageMaterial>::new());
 
@@ -54,7 +54,7 @@ impl RenderPlugin for ImagePlugin {
 }
 
 impl Plugin for ImagePlugin {
-    fn build(&self, wallpaper: &mut WallpaperBetter) {
+    fn build(&self, wallpaper: &mut Wallpaper) {
         wallpaper.add_plugins((
             AssetsPlugin::<Image>::new(),
             AssetsPlugin::<ImageMaterial>::new(),

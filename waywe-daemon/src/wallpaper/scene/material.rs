@@ -1,4 +1,4 @@
-use super::{render::Renderer, wallpaper::WallpaperBetter};
+use super::{render::Renderer, wallpaper::Wallpaper};
 use crate::wallpaper::scene::{
     assets::{Asset, AssetHandle, AssetId, AssetsPlugin},
     plugin::Plugin,
@@ -20,7 +20,7 @@ impl RenderPlugin for MaterialPlugin {
 }
 
 impl Plugin for MaterialPlugin {
-    fn build(&self, wallpaper: &mut WallpaperBetter) {
+    fn build(&self, wallpaper: &mut Wallpaper) {
         wallpaper.add_plugins(AssetsPlugin::<RenderMaterial>::new_render());
         wallpaper.render.init_resource::<MaterialAssetMap>();
     }

@@ -1,6 +1,6 @@
 use crate::wallpaper::scene::{
     image::ImagePlugin, material::MaterialPlugin, mesh::MeshPlugin, transform::TransformPlugin,
-    video::VideoPlugin, wallpaper::WallpaperBetter,
+    video::VideoPlugin, wallpaper::Wallpaper,
 };
 use bitflags::bitflags;
 use static_assertions::assert_obj_safe;
@@ -21,16 +21,16 @@ impl Default for AddPlugins {
 }
 
 pub trait Plugin {
-    fn build(&self, wallpaper: &mut WallpaperBetter);
+    fn build(&self, wallpaper: &mut Wallpaper);
 }
 assert_obj_safe!(Plugin);
 
 pub trait PluginGroup {
-    fn add_to_app(self, wallpaper: &mut WallpaperBetter);
+    fn add_to_app(self, wallpaper: &mut Wallpaper);
 }
 
 impl<P: Plugin> PluginGroup for P {
-    fn add_to_app(self, wallpaper: &mut WallpaperBetter) {
+    fn add_to_app(self, wallpaper: &mut Wallpaper) {
         self.build(wallpaper);
     }
 }
@@ -53,7 +53,7 @@ macro_rules! define_plugin_group {
 
         impl PluginGroup for $Group {
             #[allow(unused_variables)]
-            fn add_to_app(self, wallpaper: &mut WallpaperBetter) {
+            fn add_to_app(self, wallpaper: &mut Wallpaper) {
                 $(
                     $Plugin.add_to_app(wallpaper);
                 )*
@@ -80,7 +80,7 @@ macro_rules! impl_plugin_group_tuple {
             $( $T: PluginGroup ),*
         {
             #[allow(unused_variables)]
-            fn add_to_app(self, wallpaper: &mut WallpaperBetter) {
+            fn add_to_app(self, wallpaper: &mut Wallpaper) {
                 let ( $($t,)* ) = self;
                 $(
                     $t .add_to_app(wallpaper);

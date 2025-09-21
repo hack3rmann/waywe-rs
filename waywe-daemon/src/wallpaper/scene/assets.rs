@@ -1,4 +1,4 @@
-use super::{Wallpaper, wallpaper::WallpaperBetter};
+use super::{OldEcsWallpaper, wallpaper::Wallpaper};
 use crate::wallpaper::scene::{
     PostExtract, ScenePlugin,
     extract::Extract,
@@ -220,7 +220,7 @@ impl<A: Asset> Default for AssetsPlugin<A> {
 }
 
 impl<A: Asset> ScenePlugin for AssetsPlugin<A> {
-    fn init(self, scene: &mut Wallpaper) {
+    fn init(self, scene: &mut OldEcsWallpaper) {
         scene.add_systems(PostExtract, flush_assets::<A>);
         scene.world.init_resource::<Assets<A>>();
     }
@@ -233,7 +233,7 @@ impl<A: Asset> RenderPlugin for AssetsPlugin<A> {
 }
 
 impl<A: Asset> Plugin for AssetsPlugin<A> {
-    fn build(&self, wallpaper: &mut WallpaperBetter) {
+    fn build(&self, wallpaper: &mut Wallpaper) {
         if self.add.contains(AddPlugins::MAIN) {
             wallpaper
                 .main
@@ -291,7 +291,7 @@ impl<A: RenderAsset> RenderPlugin for RenderAssetsPlugin<A> {
 }
 
 impl<A: RenderAsset> Plugin for RenderAssetsPlugin<A> {
-    fn build(&self, wallpaper: &mut WallpaperBetter) {
+    fn build(&self, wallpaper: &mut Wallpaper) {
         wallpaper.render.init_resource::<RenderAssets<A>>();
 
         if self.do_extact_all {

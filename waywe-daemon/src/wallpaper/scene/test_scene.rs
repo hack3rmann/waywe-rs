@@ -4,7 +4,7 @@ use crate::{
     wallpaper::{
         OldWallpaper as OldWallpaper,
         scene::{
-            FrameRateSetting, WallpaperConfig, WallpaperFlags, Startup, Update, Time, Wallpaper,
+            FrameRateSetting, WallpaperConfig, WallpaperFlags, Startup, Update, Time, OldEcsWallpaper,
             assets::{AssetHandle, Assets},
             image::{Image, ImageMaterial},
             mesh::{Mesh, Mesh3d, MeshMaterial, Vertex},
@@ -24,7 +24,7 @@ use std::{
 };
 
 pub struct SceneTestWallpaper {
-    pub scene: Wallpaper,
+    pub scene: OldEcsWallpaper,
 }
 
 #[derive(Component)]
@@ -110,7 +110,7 @@ impl FromWorld for TestAssets {
 
 impl SceneTestWallpaper {
     pub fn new_test(monitor_id: MonitorId) -> Self {
-        let mut scene = Wallpaper::new_with_config(
+        let mut scene = OldEcsWallpaper::new_with_config(
             monitor_id,
             WallpaperConfig {
                 framerate: FrameRateSetting::GuessFromScene,

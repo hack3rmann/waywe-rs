@@ -1,4 +1,4 @@
-use super::{Wallpaper, render::Renderer, wallpaper::WallpaperBetter};
+use super::{OldEcsWallpaper, render::Renderer, wallpaper::Wallpaper};
 use crate::{
     runtime::gpu::Wgpu,
     wallpaper::scene::{
@@ -28,7 +28,7 @@ use wgpu::wgc::api;
 pub struct VideoPlugin;
 
 impl ScenePlugin for VideoPlugin {
-    fn init(self, scene: &mut Wallpaper) {
+    fn init(self, scene: &mut OldEcsWallpaper) {
         scene.add_plugin(AssetsPlugin::<Video>::new());
         scene.add_plugin(AssetsPlugin::<VideoMaterial>::new());
         scene.add_systems(Update, advance_videos);
@@ -44,7 +44,7 @@ impl RenderPlugin for VideoPlugin {
 }
 
 impl Plugin for VideoPlugin {
-    fn build(&self, wallpaper: &mut WallpaperBetter) {
+    fn build(&self, wallpaper: &mut Wallpaper) {
         wallpaper.add_plugins((
             AssetsPlugin::<Video>::new(),
             AssetsPlugin::<VideoMaterial>::new(),

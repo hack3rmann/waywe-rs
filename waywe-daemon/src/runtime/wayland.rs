@@ -503,12 +503,19 @@ pub struct MonitorSurface {
 
 pub struct Wayland {
     pub client_state: Pin<Box<ClientState>>,
-    pub main_queue: Pin<Box<WlEventQueue<ClientState>>>,
+    pub main_queue: RwLock<Pin<Box<WlEventQueue<ClientState>>>>,
     pub display: WlDisplay<ClientState>,
     pub registry: WlObjectHandle<WlRegistry<ClientState>>,
 }
 
 impl Wayland {
+    pub fn display_roundtrip(&self) {
+        let mut main_queue = self.main_queue.write().unwrap();
+
+        self.display
+            .roundtrip(main_queue.as_mut(), self.client_state.as_ref());
+    }
+
     pub fn new(events: EventEmitter) -> Self {
         let mut client_state = Box::pin(ClientState::new(events));
         let display = WlDisplay::connect(client_state.as_ref()).unwrap();
@@ -553,7 +560,7 @@ impl Wayland {
         Self {
             client_state,
             display,
-            main_queue: queue,
+            main_queue: RwLock::new(queue),
             registry,
         }
     }

@@ -251,12 +251,14 @@ fn create_surface(
     info: &MonitorInfo,
     id: MonitorId,
 ) -> Surface {
-    let handle = wayland
-        .main_queue
-        .as_ref()
-        .storage()
-        .object(info.surface)
-        .raw_window_handle();
+    let handle = {
+        let queue = wayland.main_queue.read().unwrap();
+        queue
+            .as_ref()
+            .storage()
+            .object(info.surface)
+            .raw_window_handle()
+    };
 
     let surface = unsafe {
         instance

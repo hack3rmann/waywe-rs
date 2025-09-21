@@ -4,8 +4,12 @@ use crate::{
         wayland::{MonitorId, Wayland},
     },
     wallpaper::scene::{
-        Time, image::ImagePlugin, material::MaterialPlugin, mesh::MeshPlugin,
-        transform::TransformPlugin, update_time, video::VideoPlugin,
+        image::ImagePlugin,
+        material::MaterialPlugin,
+        mesh::MeshPlugin,
+        time::{Time, update_time},
+        transform::TransformPlugin,
+        video::VideoPlugin,
     },
 };
 use bevy_ecs::{prelude::*, schedule::ScheduleLabel, system::ScheduleSystem};

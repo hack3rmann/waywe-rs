@@ -50,7 +50,7 @@ pub struct Runtime {
     pub video: Almost<Video>,
     pub wgpu: Almost<Arc<Wgpu>>,
     pub scene_renderer: Almost<RwLock<Renderer>>,
-    pub wayland: Wayland,
+    pub wayland: Arc<Wayland>,
     pub ipc: IpcSocket<Server, DaemonCommand>,
     pub control_flow: ControlFlow,
     pub task_pool: TaskPool,
@@ -60,7 +60,7 @@ impl Runtime {
     pub fn new(wayland: Wayland, control_flow: ControlFlow, task_pool: TaskPool) -> Self {
         Self {
             timer: Timer::default(),
-            wayland,
+            wayland: Arc::new(wayland),
             wgpu: Nil,
             video: Nil,
             scene_renderer: Nil,
