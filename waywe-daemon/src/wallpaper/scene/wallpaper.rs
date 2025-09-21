@@ -6,25 +6,19 @@ use crate::{
     },
     wallpaper::scene::{
         DummyWorld, FrameRateSetting, MainWorld, Monitor, PostExtract, PostStartup, Startup, Time,
-        Update, WallpaperConfig, WallpaperFlags,
-        assets::Assets,
-        guess_framerate,
-        image::{Image, ImageMaterial},
-        mesh::{Mesh, Mesh3d, MeshMaterial},
-        plugin::{DefaultPlugins, PluginGroup},
+        Update, WallpaperConfig, WallpaperFlags, guess_framerate,
+        plugin::PluginGroup,
         render::{
             EntityMap, MonitorPlugged, QueuedPlugEvents, Render, RenderGpu, SceneExtract,
             SceneRenderStage,
         },
         subapp::EcsApp,
         time::update_time,
-        transform::Transform,
     },
 };
 use bevy_ecs::prelude::*;
 use derive_more::{Deref, DerefMut};
-use glam::{Vec2, Vec3};
-use std::{mem, path::PathBuf, sync::Arc};
+use std::{mem, sync::Arc};
 
 #[derive(Debug)]
 pub struct Wallpaper {
@@ -142,6 +136,7 @@ impl PreparedWallpaper {
             }
         }
 
+        // TODO(hack3rmann): parallelize
         self.main.world.run_schedule(Update);
         self.run_extract();
         self.render.world.run_schedule(Render);
@@ -170,58 +165,4 @@ pub trait WallpaperBuilder {
     fn frame_rate(&self) -> FrameRateSetting {
         FrameRateSetting::CAP_TO_60_FPS
     }
-}
-
-pub struct ImageWallpaper {
-    pub path: PathBuf,
-}
-
-#[derive(Resource, Deref)]
-pub struct ImagePath(pub PathBuf);
-
-impl WallpaperBuilder for ImageWallpaper {
-    fn build(self, wallpaper: &mut Wallpaper) {
-        wallpaper.add_plugins(DefaultPlugins);
-
-        // TODO(hack3rmann): modify build config
-        //
-        // let mut scene = Wallpaper::new_with_config(
-        //     config.monitor_id,
-        //     WallpaperConfig {
-        //         framerate: FrameRateSetting::NoUpdate,
-        //     },
-        // );
-
-        wallpaper
-            .main
-            .insert_resource(ImagePath(self.path))
-            .add_systems(Startup, setup);
-    }
-}
-
-pub fn setup(
-    mut commands: Commands,
-    path: Res<ImagePath>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut images: ResMut<Assets<Image>>,
-    mut materials: ResMut<Assets<ImageMaterial>>,
-) {
-    let image = ::image::ImageReader::open(&**path)
-        .unwrap()
-        .decode()
-        .unwrap()
-        .into_rgba8();
-
-    // TODO(hack3rmann): scale with respect to monitor's aspect ratio
-    let aspect_ratio = image.height() as f32 / image.width() as f32;
-
-    let mesh = meshes.add(Mesh::rect(Vec2::ONE));
-    let image = images.add(Image { image });
-    let material = materials.add(ImageMaterial { image });
-
-    commands.spawn((
-        Mesh3d(mesh),
-        MeshMaterial(material),
-        Transform::default().scaled_by(Vec3::new(1.0, aspect_ratio, 1.0)),
-    ));
 }

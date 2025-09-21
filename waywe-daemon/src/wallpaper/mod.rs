@@ -1,3 +1,4 @@
+pub mod default;
 pub mod scene;
 
 use crate::{
@@ -5,7 +6,10 @@ use crate::{
         gpu::Wgpu,
         wayland::{MonitorId, Wayland},
     },
-    wallpaper::scene::wallpaper::PreparedWallpaper,
+    wallpaper::{
+        default::{image::ImageWallpaper, test::SceneTestWallpaper},
+        scene::wallpaper::{PreparedWallpaper, Wallpaper, WallpaperBuilder as _},
+    },
 };
 use runtime::WallpaperType;
 use std::{path::Path, sync::Arc};
@@ -24,20 +28,20 @@ pub fn create(
     ty: WallpaperType,
     monitor_id: MonitorId,
 ) -> PreparedWallpaper {
+    let mut wallpaper = Wallpaper::new(gpu, &wayland, monitor_id);
+
     match ty {
         WallpaperType::Image => {
-            use scene::wallpaper::*;
-
-            let mut wallpaper = Wallpaper::new(gpu, &wayland, monitor_id);
-
             ImageWallpaper {
                 path: path.to_owned(),
             }
             .build(&mut wallpaper);
-
-            PreparedWallpaper::prepare(wallpaper)
+        }
+        WallpaperType::Scene => {
+            SceneTestWallpaper.build(&mut wallpaper);
         }
         WallpaperType::Video => todo!(),
-        WallpaperType::Scene => todo!(),
     }
+
+    PreparedWallpaper::prepare(wallpaper)
 }

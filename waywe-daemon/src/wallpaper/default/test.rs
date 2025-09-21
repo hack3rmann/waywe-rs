@@ -1,13 +1,13 @@
-use super::wallpaper::Wallpaper;
 use crate::wallpaper::scene::{
-    Startup, Time, Update,
+    Startup, Update,
     assets::{AssetHandle, Assets},
     image::{Image, ImageMaterial},
     mesh::{Mesh, Mesh3d, MeshMaterial, Vertex},
     plugin::DefaultPlugins,
+    time::Time,
     transform::Transform,
     video::{Video, VideoMaterial},
-    wallpaper::WallpaperBuilder,
+    wallpaper::{Wallpaper, WallpaperBuilder},
 };
 use bevy_ecs::prelude::*;
 use glam::{Quat, Vec2, Vec3};

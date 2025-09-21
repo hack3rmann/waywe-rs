@@ -11,6 +11,9 @@ pub enum DaemonCommand {
         path: PathBuf,
         monitor: Option<String>,
     },
+    SetScene {
+        monitor: Option<String>,
+    },
     Pause {
         monitor: Option<String>,
     },

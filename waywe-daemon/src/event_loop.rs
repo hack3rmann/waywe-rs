@@ -15,6 +15,7 @@ use rustix::io::Errno;
 use std::{
     io::{self},
     os::fd::AsFd as _,
+    path::PathBuf,
     sync::{Once, atomic::Ordering, mpsc::TryRecvError},
     time::Duration,
     vec::Drain,
@@ -239,6 +240,17 @@ impl EventQueue {
                 self.add(NewWallpaperEvent {
                     path,
                     ty: WallpaperType::Image,
+                    target,
+                });
+            }
+            DaemonCommand::SetScene { monitor } => {
+                let Some(target) = get_target(monitor.as_deref()) else {
+                    return Ok(());
+                };
+
+                self.add(NewWallpaperEvent {
+                    path: PathBuf::default(),
+                    ty: WallpaperType::Scene,
                     target,
                 });
             }

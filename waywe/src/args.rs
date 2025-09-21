@@ -26,6 +26,12 @@ pub enum Command {
         /// Path to the image
         path: PathBuf,
     },
+    /// Set s scene as a wallpaper
+    Scene {
+        /// Monitor to set wallpaper on
+        #[arg(short, long)]
+        monitor: Option<String>,
+    },
     /// Start the daemon process
     Start,
     /// Get path to the current wallpaper

@@ -8,7 +8,6 @@ pub mod mesh;
 pub mod plugin;
 pub mod render;
 pub mod subapp;
-pub mod test_scene;
 pub mod time;
 pub mod transform;
 pub mod video;

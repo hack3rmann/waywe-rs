@@ -174,6 +174,12 @@ pub fn execute_image(
     })
 }
 
+pub fn execute_scene(monitor_name: Option<String>) -> Result<DaemonCommand, ExecuteError> {
+    Ok(DaemonCommand::SetScene {
+        monitor: monitor_name,
+    })
+}
+
 pub fn execute_pause(monitor_name: Option<String>) -> Result<DaemonCommand, ExecuteError> {
     Ok(DaemonCommand::Pause {
         monitor: monitor_name,
