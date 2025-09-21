@@ -19,7 +19,8 @@ use super::wallpaper::Wallpaper;
 use crate::wallpaper::scene::{
     PostExtract,
     asset_server::{
-        AssetDropEvent, AssetHandle, AssetId, AssetIdGenerator, AssetServer, UntypedAssetHandle,
+        AssetDropEvent, AssetHandle, AssetId, AssetIdGenerator, AssetIdHashMap, AssetServer,
+        UntypedAssetHandle,
     },
     extract::Extract,
     plugin::{AddPlugins, Plugin},
@@ -31,17 +32,19 @@ use bevy_ecs::{
 };
 use crossbeam::channel::{self, Receiver, Sender};
 use smallvec::SmallVec;
-use std::{collections::HashMap, marker::PhantomData};
+use std::marker::PhantomData;
 use tracing::error;
+
+pub type IdSmallVec = SmallVec<[AssetId; 4]>;
 
 /// Collection of assets of a specific type.
 ///
 /// Assets are stored with unique IDs and can be accessed by handle.
 #[derive(Resource)]
 pub struct Assets<A: Asset> {
-    map: HashMap<AssetId, A>,
-    new_ids: SmallVec<[AssetId; 4]>,
-    remove_ids: SmallVec<[AssetId; 4]>,
+    map: AssetIdHashMap<A>,
+    new_ids: IdSmallVec,
+    remove_ids: IdSmallVec,
     drop_receiver: Receiver<AssetDropEvent>,
     drop_sender: Sender<AssetDropEvent>,
     id_generator: AssetIdGenerator,
@@ -52,7 +55,7 @@ impl<A: Asset> Assets<A> {
         let (drop_sender, drop_receiver) = channel::unbounded();
 
         Self {
-            map: HashMap::new(),
+            map: AssetIdHashMap::default(),
             new_ids: SmallVec::new(),
             remove_ids: SmallVec::new(),
             drop_receiver,
@@ -137,14 +140,14 @@ impl<A: Asset> FromWorld for Assets<A> {
 
 #[derive(Resource)]
 pub struct RefAssets<A: Asset> {
-    map: HashMap<AssetId, A>,
-    removed_ids: SmallVec<[AssetId; 4]>,
+    map: AssetIdHashMap<A>,
+    removed_ids: IdSmallVec,
 }
 
 impl<A: Asset> RefAssets<A> {
     pub fn new() -> Self {
         Self {
-            map: HashMap::new(),
+            map: AssetIdHashMap::default(),
             removed_ids: SmallVec::new(),
         }
     }
@@ -297,15 +300,15 @@ pub trait Asset: Send + Sync + 'static {}
 /// Collection of GPU-ready assets.
 #[derive(Resource)]
 pub struct RenderAssets<A: RenderAsset> {
-    map: HashMap<AssetId, A>,
-    removed_ids: SmallVec<[AssetId; 4]>,
+    map: AssetIdHashMap<A>,
+    removed_ids: IdSmallVec,
 }
 
 impl<A: RenderAsset> RenderAssets<A> {
     /// Create a new empty render asset collection.
     pub fn new() -> Self {
         Self {
-            map: HashMap::new(),
+            map: AssetIdHashMap::default(),
             removed_ids: SmallVec::new(),
         }
     }

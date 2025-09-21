@@ -4,9 +4,13 @@ use crate::wallpaper::scene::{
     plugin::Plugin,
     render::SceneExtract,
 };
-use bevy_ecs::prelude::*;
+use bevy_ecs::{
+    entity::{EntityHash, EntityHasher},
+    prelude::*,
+};
 use crossbeam::channel::Sender;
 use std::{
+    collections::HashMap,
     fmt, hash,
     marker::PhantomData,
     ops::Deref,
@@ -201,7 +205,7 @@ impl AssetHandleInner {
 
 impl Drop for AssetHandleInner {
     fn drop(&mut self) {
-        // NOTE(hack3rmann): returns error if drop event has not been received.
+        // NOTE(hack3rmann): returns error if drop event has not received.
         // But it is fine, because it such case all asset resources have deallocated
         // at this point
         _ = self.drop_sender.send(AssetDropEvent(self.id));
@@ -236,3 +240,7 @@ impl hash::Hash for AssetHandleInner {
 
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AssetDropEvent(pub AssetId);
+
+pub type AssetIdHash = EntityHash;
+pub type AssetIdHasher = EntityHasher;
+pub type AssetIdHashMap<T> = HashMap<AssetId, T, AssetIdHash>;
