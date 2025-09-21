@@ -109,6 +109,7 @@
 
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
+pub mod asset_server;
 pub mod assets;
 pub mod cursor;
 pub mod extract;
@@ -122,7 +123,6 @@ pub mod time;
 pub mod transform;
 pub mod video;
 pub mod wallpaper;
-pub mod asset_server;
 
 use crate::{
     event_loop::FrameInfo,

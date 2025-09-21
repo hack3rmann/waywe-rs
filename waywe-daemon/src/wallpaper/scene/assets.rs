@@ -84,9 +84,14 @@ impl<A: Asset> Assets<A> {
     /// Add an asset to the collection and return a handle to it.
     pub fn add(&mut self, asset: A) -> AssetHandle<A> {
         let handle = self.next_handle();
-        self.map.insert(handle.id(), asset);
+        _ = self.map.insert(handle.id(), asset);
         self.new_ids.push(handle.id());
         handle
+    }
+
+    pub fn insert(&mut self, id: AssetId, asset: A) {
+        _ = self.map.insert(id, asset);
+        self.new_ids.push(id);
     }
 
     /// Get a reference to an asset by handle.

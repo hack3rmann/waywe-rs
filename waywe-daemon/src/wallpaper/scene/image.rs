@@ -23,7 +23,7 @@ use crate::{
             extract_new_render_assets,
         },
         extract::Extract,
-        material::{AsBindGroup, Material, MaterialAssetMap, RenderMaterial, VertexFragmentShader},
+        material::{AsBindGroup, Material, RenderMaterial, VertexFragmentShader},
         plugin::Plugin,
         render::{RenderGpu, SceneExtract},
     },
@@ -88,7 +88,6 @@ pub fn extract_image_materials(
     materials: Extract<Res<Assets<ImageMaterial>>>,
     mut render_materials: ResMut<Assets<RenderMaterial>>,
     image_params: StaticSystemParam<<ImageMaterial as AsBindGroup>::Param>,
-    mut handle_map: ResMut<MaterialAssetMap>,
     pipeline: Res<ImagePipeline>,
     gpu: Res<RenderGpu>,
 ) {
@@ -99,13 +98,14 @@ pub fn extract_image_materials(
         let bind_group =
             material.create_bind_group(&mut image_params, &gpu.device, &bind_group_layout);
 
-        let render = render_materials.add(RenderMaterial {
-            bind_group_layout,
-            bind_group,
-            shader: pipeline.shader.clone(),
-        });
-
-        handle_map.set(id, render);
+        render_materials.insert(
+            id,
+            RenderMaterial {
+                bind_group_layout,
+                bind_group,
+                shader: pipeline.shader.clone(),
+            },
+        );
     }
 }
 

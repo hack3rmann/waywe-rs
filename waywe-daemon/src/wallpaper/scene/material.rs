@@ -16,7 +16,7 @@
 
 use super::wallpaper::Wallpaper;
 use crate::wallpaper::scene::{
-    asset_server::{AssetHandle, AssetId},
+    asset_server::UntypedAssetHandle,
     assets::{Asset, AssetsPlugin},
     plugin::Plugin,
 };
@@ -24,7 +24,6 @@ use bevy_ecs::{
     prelude::*,
     system::{SystemParam, SystemParamItem},
 };
-use std::collections::HashMap;
 
 /// Plugin for material functionality.
 ///
@@ -34,7 +33,6 @@ pub struct MaterialPlugin;
 impl Plugin for MaterialPlugin {
     fn build(&self, wallpaper: &mut Wallpaper) {
         wallpaper.add_plugins(AssetsPlugin::<RenderMaterial>::new_render());
-        wallpaper.render.init_resource::<MaterialAssetMap>();
     }
 }
 
@@ -96,20 +94,4 @@ impl Asset for RenderMaterial {}
 
 /// Handle to a render material component.
 #[derive(Component, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct RenderMaterialHandle(pub AssetHandle<RenderMaterial>);
-
-/// Maps material assets to their render counterparts.
-#[derive(Resource, Default)]
-pub struct MaterialAssetMap(pub HashMap<AssetId, AssetHandle<RenderMaterial>>);
-
-impl MaterialAssetMap {
-    /// Map a material asset to its render counterpart.
-    pub fn set(&mut self, id: AssetId, render_handle: AssetHandle<RenderMaterial>) {
-        _ = self.0.insert(id, render_handle);
-    }
-
-    /// Get the render counterpart for a material asset.
-    pub fn get(&self, id: AssetId) -> Option<AssetHandle<RenderMaterial>> {
-        self.0.get(&id).cloned()
-    }
-}
+pub struct RenderMaterialHandle(pub UntypedAssetHandle);

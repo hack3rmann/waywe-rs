@@ -21,7 +21,7 @@ use crate::{
         asset_server::AssetHandle,
         assets::{Asset, Assets, AssetsPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin},
         extract::Extract,
-        material::{AsBindGroup, Material, MaterialAssetMap, RenderMaterial, VertexFragmentShader},
+        material::{AsBindGroup, Material, RenderMaterial, VertexFragmentShader},
         plugin::Plugin,
         render::{RenderGpu, SceneExtract},
     },
@@ -644,7 +644,6 @@ pub fn extract_video_materials(
     materials: Extract<Res<Assets<VideoMaterial>>>,
     mut render_materials: ResMut<Assets<RenderMaterial>>,
     image_params: StaticSystemParam<<VideoMaterial as AsBindGroup>::Param>,
-    mut handle_map: ResMut<MaterialAssetMap>,
     pipeline: Res<VideoPipeline>,
     gpu: Res<RenderGpu>,
 ) {
@@ -661,13 +660,6 @@ pub fn extract_video_materials(
             shader: pipeline.shader.clone(),
         };
 
-        if let Some(render) = handle_map.get(id)
-            && let Some(stored_material) = render_materials.get_mut(render.id())
-        {
-            *stored_material = render_material;
-        } else {
-            let render = render_materials.add(render_material);
-            handle_map.set(id, render);
-        }
+        render_materials.insert(id, render_material);
     }
 }

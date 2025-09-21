@@ -31,7 +31,7 @@ use crate::{
         },
         extract::Extract,
         image::{ImageMaterial, extract_image_materials},
-        material::{Material, MaterialAssetMap, RenderMaterial, RenderMaterialHandle},
+        material::{Material, RenderMaterial, RenderMaterialHandle},
         plugin::Plugin,
         render::{EntityMap, MainEntity, Render, RenderGpu, SceneExtract, SceneRenderStage},
         time::Time,
@@ -268,7 +268,6 @@ pub fn extact_objects<M: Material>(
     mut commands: Commands,
     mut entity_map: ResMut<EntityMap>,
     monitor: Res<Monitor>,
-    asset_map: Res<MaterialAssetMap>,
     mesh_query: Extract<
         Query<(Entity, &Mesh3d, &MeshMaterial<M>, &GlobalTransform), Changed<Mesh3d>>,
     >,
@@ -277,22 +276,20 @@ pub fn extact_objects<M: Material>(
     mut pipelines: ResMut<MeshPipelines>,
 ) {
     for (id, Mesh3d(mesh), MeshMaterial(material), transform) in &mesh_query {
-        let render_material = asset_map.get(material.id()).unwrap();
-
         let render_id = commands
             .spawn((
                 MainEntity(id),
                 RenderMeshHandle(mesh.clone()),
-                RenderMaterialHandle(render_material.clone()),
+                RenderMaterialHandle(material.clone().into_untyped()),
                 ModelMatrix(transform.0.to_model()),
             ))
             .id();
 
-        let material = materials.get(render_material.id()).unwrap();
+        let render_material = materials.get(material.id()).unwrap();
 
         pipelines
-            .entry(render_material.id())
-            .or_insert_with(|| MeshPipeline::new(&gpu, monitor.id, material));
+            .entry(material.id())
+            .or_insert_with(|| MeshPipeline::new(&gpu, monitor.id, render_material));
 
         entity_map.insert(id, render_id);
     }

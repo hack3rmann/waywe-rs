@@ -102,6 +102,10 @@ impl<A> AssetHandle<A> {
             _p: PhantomData,
         }
     }
+
+    pub fn into_untyped(self) -> UntypedAssetHandle {
+        self.untyped
+    }
 }
 
 impl<A> Deref for AssetHandle<A> {
@@ -157,6 +161,14 @@ impl<A> hash::Hash for AssetHandle<A> {
 
 #[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub struct UntypedAssetHandle(Arc<AssetHandleInner>);
+
+impl Deref for UntypedAssetHandle {
+    type Target = AssetHandleInner;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 impl UntypedAssetHandle {
     pub fn new(id: AssetId, drop_sender: Sender<AssetDropEvent>) -> Self {
