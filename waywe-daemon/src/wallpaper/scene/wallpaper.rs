@@ -17,8 +17,7 @@ use crate::{
     },
 };
 use bevy_ecs::prelude::*;
-use derive_more::{Deref, DerefMut};
-use std::{mem, sync::Arc};
+use std::{mem, sync::Arc, thread};
 
 #[derive(Debug)]
 pub struct Wallpaper {
@@ -124,30 +123,50 @@ impl Wallpaper {
     }
 }
 
-#[derive(Debug, Deref, DerefMut)]
-pub struct PreparedWallpaper(pub Wallpaper);
+#[derive(Debug)]
+pub struct PreparedWallpaper {
+    first_time: bool,
+    pub wallpaper: Wallpaper,
+}
 
 impl PreparedWallpaper {
     pub fn prepare(mut wallpaper: Wallpaper) -> Self {
         wallpaper.main.world.run_schedule(Startup);
-        Self(wallpaper)
+
+        Self {
+            first_time: true,
+            wallpaper,
+        }
     }
 
     pub fn frame(&mut self) -> Result<FrameInfo, FrameError> {
-        if let Some(QueuedPlugEvents(events)) =
-            self.render.world.remove_resource::<QueuedPlugEvents>()
+        if let Some(QueuedPlugEvents(events)) = self
+            .wallpaper
+            .render
+            .world
+            .remove_resource::<QueuedPlugEvents>()
         {
             for event in events {
-                self.render.world.trigger(event);
+                self.wallpaper.render.world.trigger(event);
             }
         }
 
-        // TODO(hack3rmann): parallelize
-        self.main.world.run_schedule(Update);
-        self.run_extract();
-        self.render.world.run_schedule(Render);
+        if self.first_time {
+            self.wallpaper.main.world.run_schedule(Update);
+            self.wallpaper.run_extract();
+            self.wallpaper.render.world.run_schedule(Render);
+            self.first_time = false;
+        } else {
+            thread::scope(|s| {
+                let handle = s.spawn(|| self.wallpaper.main.world.run_schedule(Update));
+                self.wallpaper.render.world.run_schedule(Render);
+                handle.join().unwrap();
+            });
 
-        let frame_info = match self.main.resource::<FrameRateSetting>() {
+            self.wallpaper.run_extract();
+        }
+
+        let frame_info = match self.wallpaper.main.resource::<FrameRateSetting>() {
             FrameRateSetting::TargetFrameDuration(duration) => FrameInfo {
                 target_frame_time: Some(*duration),
             },

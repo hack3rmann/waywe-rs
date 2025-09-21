@@ -181,6 +181,7 @@ impl Handle<WaylandEvent> for VideoApp {
 
                 for wallpaper in self.wallpapers.values_mut() {
                     wallpaper
+                        .wallpaper
                         .render
                         .world
                         .trigger(MonitorPlugged { id: monitor_id });
@@ -216,6 +217,7 @@ impl Handle<WaylandEvent> for VideoApp {
 
                 for wallpaper in self.wallpapers.values_mut() {
                     wallpaper
+                        .wallpaper
                         .render
                         .world
                         .trigger(MonitorUnplugged { id: monitor_id });
