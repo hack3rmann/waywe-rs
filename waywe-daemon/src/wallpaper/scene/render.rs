@@ -1,8 +1,8 @@
 use crate::runtime::{gpu::Wgpu, wayland::MonitorId};
-use bevy_ecs::{prelude::*, schedule::ScheduleLabel};
+use bevy_ecs::{entity::EntityHashMap, prelude::*, schedule::ScheduleLabel};
 use derive_more::{Deref, DerefMut};
 use smallvec::SmallVec;
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 #[derive(Component, Clone, Copy)]
 pub struct MainEntity(pub Entity);
@@ -39,4 +39,4 @@ pub struct MonitorUnplugged {
 }
 
 #[derive(Resource, Default, Clone, Deref, DerefMut)]
-pub struct EntityMap(pub HashMap<Entity, Entity>);
+pub struct EntityMap(pub EntityHashMap<Entity>);

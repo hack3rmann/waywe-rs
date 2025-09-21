@@ -15,7 +15,7 @@ pub struct TransformPlugin;
 
 impl Plugin for TransformPlugin {
     fn build(&self, wallpaper: &mut Wallpaper) {
-        wallpaper.main.add_systems(Update, propagate_transforms);
+        wallpaper.main.add_systems(Update, (propagate_transforms, propagate_simple_transforms));
         wallpaper
             .render
             .add_systems(SceneExtract, extract_transforms);
@@ -82,11 +82,24 @@ impl Default for Transform {
 #[derive(Debug, Default, PartialEq, Clone, Copy, Component)]
 pub struct GlobalTransform(pub Transform);
 
+pub fn propagate_simple_transforms(
+    mut commands: Commands,
+    transforms: Query<
+        (Entity, &Transform),
+        (Changed<Transform>, Without<ChildOf>, Without<Children>),
+    >,
+) {
+    for (id, &transform) in &transforms {
+        commands.entity(id).insert(GlobalTransform(transform));
+    }
+}
+
 // TODO: make it faster
+// TODO: use (Changed<ChildOf>, Changed<Transform>)
 pub fn propagate_transforms(
     mut entity_stack: Local<SmallVec<[(Entity, Transform); 16]>>,
     mut commands: Commands,
-    roots: Query<(Entity, &Transform), Without<ChildOf>>,
+    roots: Query<(Entity, &Transform), (Without<ChildOf>, With<Children>)>,
     children: Query<&Children>,
     transforms: Query<&Transform>,
 ) {
