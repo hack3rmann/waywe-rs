@@ -540,6 +540,11 @@ fn impl_composite_event(interface: &Interface, events: &[&Message<'_>]) -> Token
         .map(|event| event.name.to_case(Case::Pascal))
         .collect::<Vec<_>>();
 
+    let event_docs = events
+        .iter()
+        .map(|event| format_doc_string(DocDescription::from_outer(event.description.as_ref())))
+        .collect::<Vec<_>>();
+
     let event_idents = event_names
         .iter()
         .map(|name| Ident::new(name, Span::call_site()))
@@ -558,6 +563,7 @@ fn impl_composite_event(interface: &Interface, events: &[&Message<'_>]) -> Token
         #[derive(Clone, Debug)]
         pub enum Event #lifetime {
             #(
+                #[doc = #event_docs ]
                 #event_idents ( #event_idents #event_lifetimes ) ,
             )*
         }
