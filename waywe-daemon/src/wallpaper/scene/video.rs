@@ -18,7 +18,8 @@ use bevy_ecs::{
     system::{StaticSystemParam, SystemParamItem, lifetimeless::SRes},
 };
 use glam::UVec2;
-use std::{ffi::CString, os::fd::IntoRawFd as _, ptr, time::Duration};
+use transmute_extra::pathbuf_into_cstring;
+use std::{ffi::CString, os::fd::IntoRawFd as _, path::PathBuf, ptr, time::Duration};
 use video::{
     BackendError, Codec, CodecContext, FormatContext, Frame, MediaType, Packet, RatioI32,
     VideoPixelFormat, acceleration::VaSurfaceHandle,
@@ -77,8 +78,8 @@ pub struct Video {
 impl Asset for Video {}
 
 impl Video {
-    pub fn new(path: impl Into<CString>) -> Result<Self, BackendError> {
-        let path = path.into();
+    pub fn new(path: impl Into<PathBuf>) -> Result<Self, BackendError> {
+        let path = pathbuf_into_cstring(path.into());
         let format_context = FormatContext::from_input(&path)?;
         let best_stream = format_context.find_best_stream(MediaType::Video)?;
 

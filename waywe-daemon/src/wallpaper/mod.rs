@@ -7,7 +7,7 @@ use crate::{
         wayland::{MonitorId, Wayland},
     },
     wallpaper::{
-        default::{image::ImageWallpaper, test::SceneTestWallpaper},
+        default::{image::ImageWallpaper, test::SceneTestWallpaper, video::VideoWallpaper},
         scene::wallpaper::{PreparedWallpaper, Wallpaper, WallpaperBuilder as _},
     },
 };
@@ -40,7 +40,12 @@ pub fn create(
         WallpaperType::Scene => {
             SceneTestWallpaper.build(&mut wallpaper);
         }
-        WallpaperType::Video => todo!(),
+        WallpaperType::Video => {
+            VideoWallpaper {
+                path: path.to_owned(),
+            }
+            .build(&mut wallpaper);
+        }
     }
 
     PreparedWallpaper::prepare(wallpaper)

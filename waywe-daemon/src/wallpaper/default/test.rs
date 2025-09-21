@@ -60,11 +60,11 @@ impl FromWorld for TestAssets {
 
         let mut videos = world.resource_mut::<Assets<Video>>();
 
-        let video1 = Video::new(c"target/test-video.mp4").unwrap();
+        let video1 = Video::new("target/test-video.mp4").unwrap();
         let video1_aspect_ratio = video1.frame_aspect_ratio();
         let video1_handle = videos.add(video1);
 
-        let video2 = Video::new(c"target/test-video2.mp4").unwrap();
+        let video2 = Video::new("target/test-video2.mp4").unwrap();
         let video2_aspect_ratio = video2.frame_aspect_ratio();
         let video2_handle = videos.add(video2);
 

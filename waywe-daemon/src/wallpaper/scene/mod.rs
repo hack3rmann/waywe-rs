@@ -21,6 +21,7 @@ use crate::{
 use bevy_ecs::{prelude::*, schedule::ScheduleLabel};
 use bitflags::bitflags;
 use derive_more::{Deref, DerefMut};
+use glam::UVec2;
 use std::time::Duration;
 
 #[derive(Clone, Copy, Resource, Debug, PartialEq)]
@@ -59,7 +60,16 @@ pub struct MainWorld(pub World);
 pub struct DummyWorld(pub World);
 
 #[derive(Resource, Clone, Copy)]
-pub struct Monitor(pub MonitorId);
+pub struct Monitor {
+    pub id: MonitorId,
+    pub size: UVec2,
+}
+
+impl Monitor {
+    pub const fn aspect_ratio(self) -> f32 {
+        self.size.y as f32 / self.size.x as f32
+    }
+}
 
 bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Default, Eq, PartialOrd, Ord, Hash, Resource)]

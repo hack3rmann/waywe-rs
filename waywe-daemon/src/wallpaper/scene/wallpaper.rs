@@ -62,7 +62,7 @@ impl Wallpaper {
         render
     }
 
-    pub fn make_main(monitor_id: MonitorId, config: WallpaperConfig) -> EcsApp {
+    pub fn make_main(monitor: Monitor, config: WallpaperConfig) -> EcsApp {
         let mut main = EcsApp::default();
         let mut flags = WallpaperFlags::empty();
 
@@ -75,7 +75,7 @@ impl Wallpaper {
         }
 
         main.insert_resource(config.framerate)
-            .insert_resource(Monitor(monitor_id))
+            .insert_resource(monitor)
             .insert_resource(flags)
             .init_resource::<Time>()
             .init_resource::<DummyWorld>()
@@ -87,10 +87,16 @@ impl Wallpaper {
     }
 
     pub fn new(gpu: Arc<Wgpu>, wayland: &Wayland, monitor_id: MonitorId) -> Self {
+        let monitor_size = wayland.client_state.monitor_size(monitor_id).unwrap();
+        let monitor = Monitor {
+            id: monitor_id,
+            size: monitor_size,
+        };
+
         Self {
             render: Self::make_render(gpu, wayland),
             // TODO(hack3rmann): allow custom config
-            main: Self::make_main(monitor_id, WallpaperConfig::default()),
+            main: Self::make_main(monitor, WallpaperConfig::default()),
         }
     }
 

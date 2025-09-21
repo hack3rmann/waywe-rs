@@ -269,8 +269,7 @@ pub fn extact_objects<M: Material>(
     materials: Res<Assets<RenderMaterial>>,
     mut pipelines: ResMut<Pipelines>,
 ) {
-    let monitor_id = monitor_id.0;
-    let pipelines = pipelines.get_mut(&monitor_id).unwrap();
+    let pipelines = pipelines.get_mut(&monitor_id.id).unwrap();
 
     for (id, &Mesh3d(mesh_id), &MeshMaterial(material_id), transform) in &mesh_query {
         let render_material_id = asset_map.get(material_id).unwrap();
@@ -279,7 +278,7 @@ pub fn extact_objects<M: Material>(
             .spawn((
                 MainEntity(id),
                 RenderMeshHandle(mesh_id),
-                AttachedMonitor(monitor_id),
+                AttachedMonitor(monitor_id.id),
                 RenderMaterialHandle(render_material_id),
                 ModelMatrix(transform.0.to_model()),
             ))
@@ -289,7 +288,7 @@ pub fn extact_objects<M: Material>(
 
         pipelines
             .entry(render_material_id)
-            .or_insert_with(|| MeshPipeline::new(&gpu, monitor_id, material));
+            .or_insert_with(|| MeshPipeline::new(&gpu, monitor_id.id, material));
 
         entity_map.insert(id, render_id);
     }
