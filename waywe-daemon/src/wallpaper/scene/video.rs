@@ -18,8 +18,8 @@ use bevy_ecs::{
     system::{StaticSystemParam, SystemParamItem, lifetimeless::SRes},
 };
 use glam::UVec2;
-use transmute_extra::pathbuf_into_cstring;
 use std::{ffi::CString, os::fd::IntoRawFd as _, path::PathBuf, ptr, time::Duration};
+use transmute_extra::pathbuf_into_cstring;
 use video::{
     BackendError, Codec, CodecContext, FormatContext, Frame, MediaType, Packet, RatioI32,
     VideoPixelFormat, acceleration::VaSurfaceHandle,

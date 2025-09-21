@@ -1,4 +1,11 @@
-use bevy_ecs::{component::Tick, system::{ReadOnlySystemParam, Res, SystemMeta, SystemParam, SystemParamItem, SystemParamValidationError, SystemState}, world::{unsafe_world_cell::UnsafeWorldCell, World}};
+use bevy_ecs::{
+    component::Tick,
+    system::{
+        ReadOnlySystemParam, Res, SystemMeta, SystemParam, SystemParamItem,
+        SystemParamValidationError, SystemState,
+    },
+    world::{World, unsafe_world_cell::UnsafeWorldCell},
+};
 
 use crate::wallpaper::scene::MainWorld;
 

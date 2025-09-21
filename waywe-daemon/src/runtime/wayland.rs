@@ -14,13 +14,23 @@ use std::{
 };
 use wayland_client::{
     interface::{
-        WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlOutputNameEvent, WlPointerEvent, WlRegionAddRequest, WlRegionDestroyRequest, WlRegistryEvent, WlRegistryGlobalEvent, WlRegistryGlobalRemoveEvent, WlSeatCapabilitiesEvent, WlSeatCapability, WlSeatGetPointerRequest, WlSurfaceCommitRequest, WlSurfaceSetBufferScaleRequest, WlSurfaceSetOpaqueRegionRequest, ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellLayer, ZwlrLayerSurfaceAckConfigureRequest, ZwlrLayerSurfaceAnchor, ZwlrLayerSurfaceConfigureEvent, ZwlrLayerSurfaceKeyboardInteractivity, ZwlrLayerSurfaceSetAnchorRequest, ZwlrLayerSurfaceSetExclusiveZoneRequest, ZwlrLayerSurfaceSetKeyboardInteractivityRequest, ZwlrLayerSurfaceSetMarginRequest
+        WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlOutputNameEvent,
+        WlPointerEvent, WlRegionAddRequest, WlRegionDestroyRequest, WlRegistryEvent,
+        WlRegistryGlobalEvent, WlRegistryGlobalRemoveEvent, WlSeatCapabilitiesEvent,
+        WlSeatCapability, WlSeatGetPointerRequest, WlSurfaceCommitRequest,
+        WlSurfaceSetBufferScaleRequest, WlSurfaceSetOpaqueRegionRequest,
+        ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellLayer,
+        ZwlrLayerSurfaceAckConfigureRequest, ZwlrLayerSurfaceAnchor,
+        ZwlrLayerSurfaceConfigureEvent, ZwlrLayerSurfaceKeyboardInteractivity,
+        ZwlrLayerSurfaceSetAnchorRequest, ZwlrLayerSurfaceSetExclusiveZoneRequest,
+        ZwlrLayerSurfaceSetKeyboardInteractivityRequest, ZwlrLayerSurfaceSetMarginRequest,
     },
     object::{HasObjectType, WlObjectId, WlObjectType},
     sys::{
         display::WlDisplay,
         object::{
-            dispatch::Dispatch, event_queue::WlEventQueue, registry::WlRegistry, FromProxy, WlObject, WlObjectHandle
+            FromProxy, WlObject, WlObjectHandle, dispatch::Dispatch, event_queue::WlEventQueue,
+            registry::WlRegistry,
         },
         object_storage::WlObjectStorage,
         proxy::WlProxy,
@@ -33,6 +43,7 @@ pub enum WaylandEvent {
     ResizeRequested { monitor_id: MonitorId, size: UVec2 },
     MonitorPlugged { id: MonitorId },
     MonitorUnplugged { id: MonitorId },
+    // TODO(hack3rmann): implement approach from <https://github.com/cjacker/wl-find-cursor/blob/main/main.c>
     CursorMoved { position: UVec2 },
 }
 

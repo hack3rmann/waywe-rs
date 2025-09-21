@@ -26,4 +26,3 @@ pub fn update_time(mut time: ResMut<Time>) {
     time.elapsed += delta;
     time.prev = now;
 }
-

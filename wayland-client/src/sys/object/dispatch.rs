@@ -54,7 +54,8 @@ pub trait Dispatch: HasObjectType + 'static {
         state: &Self::State,
         storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
-    ) {}
+    ) {
+    }
 }
 
 /// Failes compilation if dispatch implementation for `T` is not empty
