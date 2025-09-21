@@ -15,7 +15,9 @@ pub struct TransformPlugin;
 
 impl Plugin for TransformPlugin {
     fn build(&self, wallpaper: &mut Wallpaper) {
-        wallpaper.main.add_systems(Update, (propagate_transforms, propagate_simple_transforms));
+        wallpaper
+            .main
+            .add_systems(Update, (propagate_transforms, propagate_simple_transforms));
         wallpaper
             .render
             .add_systems(SceneExtract, extract_transforms);
@@ -83,14 +85,13 @@ impl Default for Transform {
 pub struct GlobalTransform(pub Transform);
 
 pub fn propagate_simple_transforms(
-    mut commands: Commands,
-    transforms: Query<
-        (Entity, &Transform),
+    mut transforms: Query<
+        (&Transform, &mut GlobalTransform),
         (Changed<Transform>, Without<ChildOf>, Without<Children>),
     >,
 ) {
-    for (id, &transform) in &transforms {
-        commands.entity(id).insert(GlobalTransform(transform));
+    for (&transform, mut global_transform) in &mut transforms {
+        *global_transform = GlobalTransform(transform);
     }
 }
 
