@@ -1,3 +1,18 @@
+//! Video playback and rendering components.
+//!
+//! This module provides components and systems for playing and displaying
+//! video files as textures in wallpapers.
+//!
+//! # Core Types
+//!
+//! - [`Video`]: Video file asset
+//! - [`VideoMaterial`]: Material that displays a video
+//! - [`RenderVideo`]: GPU-ready video texture
+//!
+//! # Plugins
+//!
+//! - [`VideoPlugin`]: Adds video functionality to a wallpaper
+
 use super::wallpaper::Wallpaper;
 use crate::{
     runtime::gpu::Wgpu,
@@ -26,6 +41,9 @@ use video::{
 };
 use wgpu::wgc::api;
 
+/// Plugin for video functionality.
+///
+/// Adds systems and resources for playing and displaying videos.
 pub struct VideoPlugin;
 
 impl Plugin for VideoPlugin {
@@ -44,6 +62,7 @@ impl Plugin for VideoPlugin {
     }
 }
 
+/// System to advance video frames over time.
 pub fn advance_videos(mut videos: ResMut<Assets<Video>>, time: Res<Time>) {
     for (_id, video) in videos.iter_mut() {
         let Some(duration) = video.frame.duration_in(video.time_base) else {
@@ -61,23 +80,35 @@ pub fn advance_videos(mut videos: ResMut<Assets<Video>>, time: Res<Time>) {
     }
 }
 
+/// Video file asset.
 #[derive(Debug)]
 pub struct Video {
+    /// Path to the video file.
     pub path: CString,
+    /// Format context for the video file.
     pub format_context: FormatContext,
+    /// Codec context for decoding frames.
     pub codec_context: CodecContext,
+    /// Time base for the video stream.
     pub time_base: RatioI32,
+    /// Index of the best video stream.
     pub best_stream_index: usize,
+    /// Fallback frame duration if not specified in the file.
     pub frame_time_fallback: Duration,
+    /// Current packet being processed.
     pub packet: Option<Packet>,
+    /// Current frame.
     pub frame: Frame,
+    /// Whether to loop the video when it ends.
     pub do_loop_video: bool,
+    /// Delay accumulated between frame updates.
     pub update_delay: Duration,
 }
 
 impl Asset for Video {}
 
 impl Video {
+    /// Create a new video from a file path.
     pub fn new(path: impl Into<PathBuf>) -> Result<Self, BackendError> {
         let path = pathbuf_into_cstring(path.into());
         let format_context = FormatContext::from_input(&path)?;
@@ -126,6 +157,7 @@ impl Video {
         })
     }
 
+    /// Get the size of video frames in pixels.
     pub fn frame_size(&self) -> UVec2 {
         self.format_context.streams()[self.best_stream_index]
             .codec_parameters()
@@ -133,11 +165,13 @@ impl Video {
             .unwrap()
     }
 
+    /// Get the aspect ratio of the video (height/width).
     pub fn frame_aspect_ratio(&self) -> f32 {
         let size = self.frame_size();
         size.y as f32 / size.x as f32
     }
 
+    /// Advance to the next frame in the video.
     pub fn next_frame(&mut self) {
         loop {
             if self.packet.is_none() {
@@ -180,14 +214,19 @@ impl Video {
     }
 }
 
+/// GPU-ready video texture.
 #[derive(Debug)]
 pub struct RenderVideo {
+    /// The GPU texture containing the video frame.
     pub texture: wgpu::Texture,
+    /// View of the Y plane for YUV textures.
     pub texture_y_plane: wgpu::TextureView,
+    /// View of the UV plane for YUV textures.
     pub texture_uv_plane: wgpu::TextureView,
 }
 
 impl RenderVideo {
+    /// Get memory properties for the GPU adapter.
     pub fn get_memory_properties(adapter: &wgpu::Adapter) -> PhysicalDeviceMemoryProperties {
         let adapter = unsafe { adapter.as_hal::<api::Vulkan>().unwrap() };
         let raw_instance = adapter.shared_instance().raw_instance();
@@ -248,6 +287,7 @@ impl RenderVideo {
         memory_properties
     }
 
+    /// Create a GPU texture from a VA surface.
     pub fn create_texture(gpu: &Wgpu, surface: VaSurfaceHandle) -> wgpu::Texture {
         let dma_desc = *surface.desc();
         let dma_buf_fd = surface.into_fd().into_raw_fd();
@@ -420,6 +460,7 @@ impl RenderVideo {
         }
     }
 
+    /// Export a video frame as a GPU texture.
     pub fn export_from(video: &Video, gpu: &Wgpu) -> Self {
         let Some(va_display) = video.codec_context.va_display() else {
             panic!("failed to retrieve libva display");
@@ -465,13 +506,17 @@ impl RenderAsset for RenderVideo {
     }
 }
 
+/// GPU pipeline for rendering videos.
 #[derive(Resource)]
 pub struct VideoPipeline {
+    /// Sampler for texture filtering.
     pub sampler: wgpu::Sampler,
+    /// Shaders for vertex and fragment processing.
     pub shader: VertexFragmentShader,
 }
 
 impl VideoPipeline {
+    /// Create a new video pipeline.
     pub fn new(device: &wgpu::Device) -> Self {
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("image-material"),
@@ -493,7 +538,9 @@ impl FromWorld for VideoPipeline {
     }
 }
 
+/// Material that displays a video.
 pub struct VideoMaterial {
+    /// The video to display.
     pub video: AssetHandle<Video>,
 }
 
@@ -591,6 +638,9 @@ impl AsBindGroup for VideoMaterial {
     }
 }
 
+/// System to extract video materials for rendering.
+///
+/// Converts [`VideoMaterial`] assets into GPU-ready [`RenderMaterial`] assets.
 pub fn extract_video_materials(
     materials: Extract<Res<Assets<VideoMaterial>>>,
     mut render_materials: ResMut<Assets<RenderMaterial>>,

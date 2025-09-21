@@ -1,4 +1,19 @@
-#![allow(clippy::type_complexity)]
+//! Transform components and systems for positioning entities.
+//!
+//! This module provides components and systems for positioning, scaling,
+//! and rotating entities in 2D space.
+//!
+//! # Components
+//!
+//! - [`Transform`]: Local transformation (position, scale, rotation)
+//! - [`GlobalTransform`]: World-space transformation
+//! - [`ModelMatrix`]: Transformation matrix for rendering
+//!
+//! # Systems
+//!
+//! - [`propagate_transforms`]: Update world-space transforms from hierarchy
+//! - [`propagate_simple_transforms`]: Update simple transforms without hierarchy
+//! - [`extract_transforms`]: Extract transforms for rendering
 
 use super::wallpaper::Wallpaper;
 use crate::wallpaper::scene::{
@@ -11,6 +26,9 @@ use bevy_ecs::prelude::*;
 use glam::{Mat4, Quat, Vec3};
 use smallvec::SmallVec;
 
+/// Plugin for transform functionality.
+///
+/// Adds systems for updating and extracting transforms.
 pub struct TransformPlugin;
 
 impl Plugin for TransformPlugin {
@@ -24,21 +42,29 @@ impl Plugin for TransformPlugin {
     }
 }
 
+/// Local transformation component.
+///
+/// Defines the position, scale, and rotation of an entity relative to its parent.
 #[derive(Debug, PartialEq, Clone, Copy, Component)]
 #[require(GlobalTransform)]
 pub struct Transform {
+    /// Translation (position) in 3D space.
     pub translation: Vec3,
+    /// Scale factors along each axis.
     pub scale: Vec3,
+    /// Rotation as a quaternion.
     pub rotation: Quat,
 }
 
 impl Transform {
+    /// Default transform (no translation, unit scale, no rotation).
     pub const DEFAULT: Self = Self {
         translation: Vec3::ZERO,
         scale: Vec3::ONE,
         rotation: Quat::IDENTITY,
     };
 
+    /// Create a transform with a specific translation.
     pub const fn from_translation(translation: Vec3) -> Self {
         Self {
             translation,
@@ -46,6 +72,7 @@ impl Transform {
         }
     }
 
+    /// Set the translation of this transform.
     pub const fn with_translation(self, translation: Vec3) -> Self {
         Self {
             translation,
@@ -53,6 +80,7 @@ impl Transform {
         }
     }
 
+    /// Scale this transform by additional factors.
     pub fn scaled_by(self, scale: Vec3) -> Self {
         Self {
             scale: self.scale * scale,
@@ -60,6 +88,7 @@ impl Transform {
         }
     }
 
+    /// Combine this transform with another transform.
     pub fn combine(self, other: Self) -> Self {
         Self {
             translation: self.translation + other.translation,
@@ -68,6 +97,7 @@ impl Transform {
         }
     }
 
+    /// Convert this transform to a model matrix.
     pub fn to_model(self) -> Mat4 {
         Mat4::from_translation(self.translation)
             * Mat4::from_quat(self.rotation)
@@ -81,9 +111,17 @@ impl Default for Transform {
     }
 }
 
+/// Global (world-space) transformation component.
+///
+/// Represents the absolute position, scale, and rotation of an entity
+/// in world space, calculated from the hierarchy.
 #[derive(Debug, Default, PartialEq, Clone, Copy, Component)]
 pub struct GlobalTransform(pub Transform);
 
+/// System to update simple transforms (no hierarchy).
+///
+/// Updates [`GlobalTransform`] components for entities that don't have
+/// parents or children.
 pub fn propagate_simple_transforms(
     mut transforms: Query<
         (&Transform, &mut GlobalTransform),
@@ -95,8 +133,10 @@ pub fn propagate_simple_transforms(
     }
 }
 
-// TODO: make it faster
-// TODO: use (Changed<ChildOf>, Changed<Transform>)
+/// System to propagate transforms through the hierarchy.
+///
+/// Updates [`GlobalTransform`] components for entities with parents and children,
+/// ensuring child transforms are correctly calculated relative to their parents.
 pub fn propagate_transforms(
     mut entity_stack: Local<SmallVec<[(Entity, Transform); 16]>>,
     mut commands: Commands,
@@ -136,9 +176,15 @@ pub fn propagate_transforms(
     }
 }
 
+/// Model matrix for rendering.
+///
+/// A 4x4 transformation matrix that can be directly used in shaders.
 #[derive(Debug, Default, PartialEq, Clone, Copy, Component)]
 pub struct ModelMatrix(pub Mat4);
 
+/// System to extract transforms for rendering.
+///
+/// Copies transform data from the main world to the render world.
 pub fn extract_transforms(
     entity_map: Res<EntityMap>,
     mut commands: Commands,

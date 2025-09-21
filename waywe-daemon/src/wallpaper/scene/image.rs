@@ -1,3 +1,18 @@
+//! Image loading and rendering components.
+//!
+//! This module provides components and systems for loading and displaying
+//! images in wallpapers.
+//!
+//! # Components
+//!
+//! - [`Image`]: Raw image data
+//! - [`ImageMaterial`]: Material that displays an image
+//! - [`RenderImage`]: GPU-ready image data
+//!
+//! # Plugins
+//!
+//! - [`ImagePlugin`]: Adds image functionality to a wallpaper
+
 use super::wallpaper::Wallpaper;
 use crate::{
     runtime::gpu::Wgpu,
@@ -19,9 +34,14 @@ use bevy_ecs::{
 use derive_more::{Deref, DerefMut};
 use wgpu::util::DeviceExt;
 
+/// Handle to the default 1x1 white image.
 pub const DEFAULT_IMAGE: AssetHandle<Image> = AssetHandle::new(AssetId::new(1));
+/// Handle to the default image material.
 pub const DEFAULT_IMAGE_MATERIAL: AssetHandle<ImageMaterial> = AssetHandle::new(AssetId::new(1));
 
+/// Plugin for image functionality.
+///
+/// Adds systems and resources for loading and displaying images.
 pub struct ImagePlugin;
 
 impl Plugin for ImagePlugin {
@@ -52,12 +72,15 @@ impl Plugin for ImagePlugin {
     }
 }
 
+/// Image asset containing raw pixel data.
 #[derive(Debug, Deref, DerefMut)]
 pub struct Image {
+    /// The underlying image data.
     pub image: image::RgbaImage,
 }
 
 impl Image {
+    /// Create a new 1x1 white image.
     pub fn new_white_1x1() -> Self {
         let mut image = image::RgbaImage::new(1, 1);
         image.get_pixel_mut(0, 0).0 = [255; 4];
@@ -72,6 +95,9 @@ impl Default for Image {
     }
 }
 
+/// System to extract image materials for rendering.
+///
+/// Converts [`ImageMaterial`] assets into GPU-ready [`RenderMaterial`] assets.
 pub fn extract_image_materials(
     materials: Extract<Res<Assets<ImageMaterial>>>,
     mut render_materials: ResMut<Assets<RenderMaterial>>,
@@ -99,13 +125,17 @@ pub fn extract_image_materials(
 
 impl Asset for Image {}
 
+/// GPU pipeline for rendering images.
 #[derive(Resource)]
 pub struct ImagePipeline {
+    /// Sampler for texture filtering.
     pub sampler: wgpu::Sampler,
+    /// Shaders for vertex and fragment processing.
     pub shader: VertexFragmentShader,
 }
 
 impl ImagePipeline {
+    /// Create a new image pipeline.
     pub fn new(device: &wgpu::Device) -> Self {
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("image-material"),
@@ -127,7 +157,9 @@ impl FromWorld for ImagePipeline {
     }
 }
 
+/// Material that displays an image.
 pub struct ImageMaterial {
+    /// The image to display.
     pub image: AssetHandle<Image>,
 }
 
@@ -157,12 +189,16 @@ impl Material for ImageMaterial {
     }
 }
 
+/// GPU-ready image data.
 pub struct RenderImage {
+    /// The GPU texture.
     pub texture: wgpu::Texture,
+    /// A view of the texture for rendering.
     pub view: wgpu::TextureView,
 }
 
 impl RenderImage {
+    /// Create a new render image from image data.
     pub fn new(image: &Image, gpu: &Wgpu) -> Self {
         let texture = gpu.device.create_texture_with_data(
             &gpu.queue,

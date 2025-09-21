@@ -1,3 +1,41 @@
+//! Main wallpaper management and rendering.
+//!
+//! This module provides the core [`Wallpaper`] struct that manages the
+//! two ECS worlds (main and render) and coordinates the rendering loop.
+//!
+//! # Architecture
+//!
+//! The wallpaper system uses a dual-world architecture:
+//!
+//! 1. **Main World**: Runs logic updates on a separate thread
+//! 2. **Render World**: Handles GPU rendering and presentation
+//!
+//! Each frame, the main world updates logic, then data is extracted to
+//! the render world, which then performs rendering.
+//!
+//! # Usage
+//!
+//! ```rust
+//! use waywe_daemon::wallpaper::scene::{
+//!     wallpaper::Wallpaper,
+//!     plugin::DefaultPlugins,
+//! };
+//!
+//! // Create a new wallpaper
+//! // let mut wallpaper = Wallpaper::new(gpu, wayland, monitor_id);
+//!
+//! // Add plugins for functionality
+//! // wallpaper.add_plugins(DefaultPlugins);
+//!
+//! // Prepare for rendering
+//! // let mut prepared = PreparedWallpaper::prepare(wallpaper);
+//!
+//! // Run the frame loop
+//! // loop {
+//! //     prepared.frame()?;
+//! // }
+//! ```
+
 use crate::{
     event_loop::{FrameError, FrameInfo},
     runtime::{
@@ -19,13 +57,18 @@ use crate::{
 use bevy_ecs::prelude::*;
 use std::{mem, sync::Arc, thread};
 
-#[derive(Debug)]
+/// Main wallpaper controller.
+///
+/// Manages the dual ECS world architecture and coordinates rendering.
 pub struct Wallpaper {
+    /// Main world for logic updates.
     pub main: EcsApp,
+    /// Render world for GPU operations.
     pub render: EcsApp,
 }
 
 impl Wallpaper {
+    /// Create the render world with appropriate systems and resources.
     fn make_render(gpu: Arc<Wgpu>, wayland: &Wayland) -> EcsApp {
         let mut render = EcsApp::default();
 
@@ -61,6 +104,7 @@ impl Wallpaper {
         render
     }
 
+    /// Create the main world with appropriate systems and resources.
     pub fn make_main(monitor: Monitor, config: WallpaperConfig) -> EcsApp {
         let mut main = EcsApp::default();
         let mut flags = WallpaperFlags::empty();
@@ -85,6 +129,7 @@ impl Wallpaper {
         main
     }
 
+    /// Create a new wallpaper for a specific monitor.
     pub fn new(gpu: Arc<Wgpu>, wayland: &Wayland, monitor_id: MonitorId) -> Self {
         let monitor_size = wayland.client_state.monitor_size(monitor_id).unwrap();
         let monitor = Monitor {
@@ -99,6 +144,9 @@ impl Wallpaper {
         }
     }
 
+    /// Extract data from the main world to the render world.
+    ///
+    /// This is called each frame to synchronize the two worlds.
     pub fn run_extract(&mut self) {
         let DummyWorld(temp_world) = self
             .main
@@ -117,19 +165,27 @@ impl Wallpaper {
         self.main.world.run_schedule(PostExtract);
     }
 
+    /// Add plugins to extend wallpaper functionality.
     pub fn add_plugins(&mut self, plugins: impl PluginGroup) -> &mut Self {
         plugins.add_to_app(self);
         self
     }
 }
 
-#[derive(Debug)]
+/// A wallpaper that has been prepared for rendering.
+///
+/// This wrapper handles the frame loop and synchronization between
+/// the main and render worlds.
 pub struct PreparedWallpaper {
     first_time: bool,
+    /// The wallpaper being managed.
     pub wallpaper: Wallpaper,
 }
 
 impl PreparedWallpaper {
+    /// Prepare a wallpaper for rendering.
+    ///
+    /// This runs the startup schedule and prepares the wallpaper for the frame loop.
     pub fn prepare(mut wallpaper: Wallpaper) -> Self {
         wallpaper.main.world.run_schedule(Startup);
 
@@ -139,6 +195,9 @@ impl PreparedWallpaper {
         }
     }
 
+    /// Run one frame of the wallpaper.
+    ///
+    /// This updates logic, extracts data to the render world, and renders the frame.
     pub fn frame(&mut self) -> Result<FrameInfo, FrameError> {
         if let Some(QueuedPlugEvents(events)) = self
             .wallpaper
@@ -180,13 +239,18 @@ impl PreparedWallpaper {
     }
 }
 
+/// Configuration for building a wallpaper.
 pub struct WallpaperBuildConfig {
+    /// The monitor ID to render to.
     pub monitor_id: MonitorId,
 }
 
+/// Trait for building custom wallpapers.
 pub trait WallpaperBuilder {
+    /// Build the wallpaper by adding entities, components, and systems.
     fn build(self, wallpaper: &mut Wallpaper);
 
+    /// Get the frame rate setting for this wallpaper.
     fn frame_rate(&self) -> FrameRateSetting {
         FrameRateSetting::CAP_TO_60_FPS
     }

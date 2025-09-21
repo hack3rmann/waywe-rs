@@ -1,3 +1,24 @@
+//! Extraction system for transferring data between worlds.
+//!
+//! This module provides the [`Extract`] system parameter, which allows
+//! systems in the render world to access data from the main world.
+//!
+//! # Usage
+//!
+//! ```rust
+//! use bevy_ecs::prelude::*;
+//! use crate::wallpaper::scene::extract::Extract;
+//!
+//! fn extract_system(
+//!     // Access data from the main world
+//!     main_query: Extract<Query<&MyComponent>>,
+//!     // Access resources from the render world
+//!     render_resource: Res<MyRenderResource>,
+//! ) {
+//!     // Process data from both worlds
+//! }
+//! ```
+
 use bevy_ecs::{
     component::Tick,
     system::{
@@ -9,6 +30,10 @@ use bevy_ecs::{
 
 use crate::wallpaper::scene::MainWorld;
 
+/// System parameter for extracting data from the main world.
+///
+/// This allows systems in the render world to access data from the main world
+/// during the extraction phase.
 pub struct Extract<'w, 's, P>
 where
     P: ReadOnlySystemParam + 'static,
@@ -16,6 +41,7 @@ where
     item: SystemParamItem<'w, 's, P>,
 }
 
+/// State for the extract system parameter.
 pub struct ExtractState<P: SystemParam + 'static> {
     state: SystemState<P>,
     main_world_state: <Res<'static, MainWorld> as SystemParam>::State,

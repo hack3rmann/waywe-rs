@@ -1,3 +1,24 @@
+//! Mesh rendering system for geometric shapes.
+//!
+//! This module provides components and systems for rendering geometric
+//! shapes (meshes) with materials.
+//!
+//! # Core Types
+//!
+//! - [`Mesh`]: Geometric shape data
+//! - [`Mesh3d`]: Component to render a mesh
+//! - [`MeshMaterial`]: Material to apply to a mesh
+//! - [`RenderMesh`]: GPU-ready mesh data
+//!
+//! # Components
+//!
+//! - [`Vertex`]: Position data for mesh vertices
+//! - [`PushConst`]: Uniform data passed to shaders
+//!
+//! # Plugins
+//!
+//! - [`MeshPlugin`]: Adds mesh rendering functionality to a wallpaper
+
 use super::wallpaper::Wallpaper;
 use crate::{
     runtime::{
@@ -35,6 +56,9 @@ use itertools::Itertools;
 use smallvec::{SmallVec, smallvec};
 use std::{collections::HashMap, mem};
 
+/// Plugin for mesh rendering functionality.
+///
+/// Adds systems and resources for rendering geometric shapes.
 pub struct MeshPlugin;
 
 impl Plugin for MeshPlugin {
@@ -72,29 +96,38 @@ impl Plugin for MeshPlugin {
     }
 }
 
+/// Vertex position data.
 #[repr(transparent)]
 #[derive(Default, PartialEq, Debug, Clone, Copy, Pod, Zeroable)]
 pub struct Vertex(pub Vec3);
 
+/// Push constants passed to shaders.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 pub struct PushConst {
+    /// Model-view-projection matrix.
     pub mvp: Mat4,
+    /// Current time for animations.
     pub time: f32,
-    /// Padding for shaders, should be zeroed
+    /// Padding for shaders, should be zeroed.
     pub _padding: [u32; 3],
 }
 
+/// Collection of mesh pipelines for a specific material.
 #[derive(Default, Debug, Deref, DerefMut)]
 pub struct MeshPipelines(pub HashMap<AssetHandle<RenderMaterial>, MeshPipeline>);
 
+/// Render pipeline for meshes.
 #[derive(Debug)]
 pub struct MeshPipeline {
+    /// Pipeline layout.
     pub layout: wgpu::PipelineLayout,
+    /// Render pipeline.
     pub pipeline: wgpu::RenderPipeline,
 }
 
 impl MeshPipeline {
+    /// Create a new mesh pipeline for a specific material and monitor.
     pub fn new(gpu: &Wgpu, monitor_id: MonitorId, material: &RenderMaterial) -> Self {
         let layout = gpu
             .device
@@ -165,11 +198,11 @@ impl MeshPipeline {
     }
 }
 
-// FIXME(hack3rmann): remove monitor dependence
+/// Collection of pipelines for all monitors.
 #[derive(Resource, Default, Deref, DerefMut)]
 pub struct Pipelines(pub MonitorMap<MeshPipelines>);
 
-// TODO(hack3rmann): add materials for a specific monitor only
+/// Observer system to add pipelines when a monitor is plugged in.
 pub fn add_monitor(
     plugged: Trigger<MonitorPlugged>,
     mut pipelines: ResMut<Pipelines>,
@@ -187,18 +220,22 @@ pub fn add_monitor(
     );
 }
 
+/// Observer system to remove pipelines when a monitor is unplugged.
 pub fn remove_monitor(unplugged: Trigger<MonitorUnplugged>, mut pipelines: ResMut<Pipelines>) {
     _ = pipelines.remove(&unplugged.id);
 }
 
+/// Geometric mesh asset.
 #[derive(Default)]
 pub struct Mesh {
+    /// Vertices defining the mesh geometry.
     pub vertices: SmallVec<[Vertex; 12]>,
 }
 
 impl Asset for Mesh {}
 
 impl Mesh {
+    /// Create a rectangular mesh.
     pub fn rect(sizes: Vec2) -> Self {
         Self {
             vertices: smallvec![
@@ -213,15 +250,19 @@ impl Mesh {
     }
 }
 
+/// Component to render a mesh.
 #[derive(Clone, Debug, Component)]
 #[require(Transform)]
 pub struct Mesh3d(pub AssetHandle<Mesh>);
 
+/// Component to apply a material to a mesh.
 #[derive(Component)]
 pub struct MeshMaterial<M: Material>(pub AssetHandle<M>);
 
+/// GPU-ready mesh data.
 #[derive(Clone, Debug)]
 pub struct RenderMesh {
+    /// Vertex buffer.
     pub vertices: wgpu::Buffer,
 }
 
@@ -235,6 +276,7 @@ impl RenderAsset for RenderMesh {
 }
 
 impl RenderMesh {
+    /// Create a new render mesh from mesh data.
     pub fn new(mesh: &Mesh, gpu: &Wgpu) -> Self {
         use wgpu::util::DeviceExt as _;
 
@@ -250,13 +292,16 @@ impl RenderMesh {
     }
 }
 
+/// Handle to a render mesh component.
 #[derive(Component)]
 #[require(ModelMatrix)]
 pub struct RenderMeshHandle(pub AssetHandle<Mesh>);
 
+/// Component indicating which monitor an entity is attached to.
 #[derive(Component, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 pub struct AttachedMonitor(pub MonitorId);
 
+/// System to extract mesh objects for rendering.
 pub fn extact_objects<M: Material>(
     mut commands: Commands,
     mut entity_map: ResMut<EntityMap>,
@@ -294,6 +339,7 @@ pub fn extact_objects<M: Material>(
     }
 }
 
+/// System to render meshes.
 pub fn render_meshes(
     pipelines: Res<Pipelines>,
     materials: Res<Assets<RenderMaterial>>,
@@ -376,13 +422,18 @@ pub fn render_meshes(
     }
 }
 
+/// Resource tracking ongoing render operations.
 #[derive(Resource, Default)]
 pub struct OngoingRender {
+    /// Command encoder for building render commands.
     pub encoder: Almost<wgpu::CommandEncoder>,
+    /// Current surface textures for each monitor.
     pub surfaces: MonitorMap<wgpu::SurfaceTexture>,
+    /// Texture views for each monitor.
     pub outputs: MonitorMap<wgpu::TextureView>,
 }
 
+/// System to prepare for rendering.
 pub fn prepare_render(mut render: ResMut<OngoingRender>, gpu: Res<RenderGpu>) {
     render.encoder = Value(gpu.device.create_command_encoder(&Default::default()));
     render.surfaces = gpu
@@ -399,6 +450,7 @@ pub fn prepare_render(mut render: ResMut<OngoingRender>, gpu: Res<RenderGpu>) {
         .collect();
 }
 
+/// System to finish rendering and present frames.
 pub fn finish_render(mut render: ResMut<OngoingRender>, gpu: Res<RenderGpu>) {
     render.outputs.clear();
 
