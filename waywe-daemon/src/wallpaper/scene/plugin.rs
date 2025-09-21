@@ -136,13 +136,13 @@ define_plugin_group! {
     /// - [`CursorPlugin`]: Cursor interaction
     #[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
     pub struct DefaultPlugins(
-        AssetServerPlugin,
         TransformPlugin,
-        ImagePlugin,
-        MeshPlugin,
-        VideoPlugin,
-        MaterialPlugin,
         CursorPlugin,
+        AssetServerPlugin,
+        MaterialPlugin,
+        ImagePlugin,
+        VideoPlugin,
+        MeshPlugin,
     );
 }
 

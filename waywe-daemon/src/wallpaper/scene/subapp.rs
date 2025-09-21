@@ -49,6 +49,10 @@ impl EcsApp {
         self
     }
 
+    pub fn get_resource_or_init<R: Resource + FromWorld>(&mut self) -> Mut<'_, R> {
+        self.world.get_resource_or_init::<R>()
+    }
+
     /// Insert a resource into the world.
     pub fn insert_resource(&mut self, resource: impl Resource) -> &mut Self {
         self.world.insert_resource(resource);

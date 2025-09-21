@@ -26,12 +26,12 @@ use crate::{
         Monitor,
         asset_server::{AssetHandle, AssetId},
         assets::{
-            Asset, Assets, AssetsPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin,
+            Asset, AssetsPlugin, RefAssets, RenderAsset, RenderAssets, RenderAssetsPlugin,
             extract_new_render_assets,
         },
         extract::Extract,
         image::{ImageMaterial, extract_image_materials},
-        material::{Material, RenderMaterial, RenderMaterialHandle},
+        material::{Material, RenderMaterial, RenderMaterialId},
         plugin::Plugin,
         render::{EntityMap, MainEntity, Render, RenderGpu, SceneExtract, SceneRenderStage},
         time::Time,
@@ -272,7 +272,7 @@ pub fn extact_objects<M: Material>(
         Query<(Entity, &Mesh3d, &MeshMaterial<M>, &GlobalTransform), Changed<Mesh3d>>,
     >,
     gpu: Res<RenderGpu>,
-    materials: Res<Assets<RenderMaterial>>,
+    materials: Res<RefAssets<RenderMaterial>>,
     mut pipelines: ResMut<MeshPipelines>,
 ) {
     for (id, Mesh3d(mesh), MeshMaterial(material), transform) in &mesh_query {
@@ -280,7 +280,7 @@ pub fn extact_objects<M: Material>(
             .spawn((
                 MainEntity(id),
                 RenderMeshHandle(mesh.clone()),
-                RenderMaterialHandle(material.clone().into_untyped()),
+                RenderMaterialId(material.id()),
                 ModelMatrix(transform.0.to_model()),
             ))
             .id();
@@ -298,26 +298,26 @@ pub fn extact_objects<M: Material>(
 /// System to render meshes.
 pub fn render_meshes(
     pipelines: Res<MeshPipelines>,
-    materials: Res<Assets<RenderMaterial>>,
+    materials: Res<RefAssets<RenderMaterial>>,
     meshes: Res<RenderAssets<RenderMesh>>,
-    mesh_handles: Query<(&RenderMeshHandle, &ModelMatrix, &RenderMaterialHandle)>,
+    mesh_handles: Query<(&RenderMeshHandle, &ModelMatrix, &RenderMaterialId)>,
     mut render: ResMut<OngoingRender>,
     time: Res<Time>,
     monitor: Res<Monitor>,
 ) {
     let mesh_handles = mesh_handles
         .iter()
-        .sort::<&RenderMaterialHandle>()
+        .sort::<&RenderMaterialId>()
         .chunk_by(|&(_, _, handle)| handle);
 
-    for (RenderMaterialHandle(material), mesh_handles) in &mesh_handles {
+    for (&RenderMaterialId(material_id), mesh_handles) in &mesh_handles {
         let target_surface = Almost::unwrap(Almost::take(&mut render.output));
         let aspect_ratio = monitor.aspect_ratio();
         let camera_view =
             Mat4::orthographic_rh(-1.0, 1.0, -aspect_ratio, aspect_ratio, -10.0, 10.0);
 
-        let pipeline = pipelines.get(&material.id()).unwrap();
-        let material = materials.get(material.id()).unwrap();
+        let pipeline = pipelines.get(&material_id).unwrap();
+        let material = materials.get(material_id).unwrap();
 
         {
             let mut pass = render

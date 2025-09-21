@@ -14,22 +14,6 @@
 //!
 //! - [`AssetsPlugin`]: Manage assets of type T in the main world
 //! - [`RenderAssetsPlugin`]: Manage GPU-ready assets of type T in the render world
-//!
-//! # Usage
-//!
-//! ```rust
-//! use waywe_daemon::wallpaper::scene::{
-//!     assets::{Assets, AssetHandle},
-//!     image::Image,
-//! };
-//!
-//! // Add an asset
-//! // let mut images = wallpaper.main.resource_mut::<Assets<Image>>();
-//! // let handle: AssetHandle<Image> = images.add(Image::new_white_1x1());
-//!
-//! // Use the asset
-//! // wallpaper.main.world.spawn(handle);
-//! ```
 
 use super::wallpaper::Wallpaper;
 use crate::wallpaper::scene::{
@@ -56,6 +40,7 @@ use std::{collections::HashMap, marker::PhantomData};
 pub struct Assets<A: Asset> {
     map: HashMap<AssetId, A>,
     new_ids: SmallVec<[AssetId; 4]>,
+    remove_ids: SmallVec<[AssetId; 4]>,
     drop_receiver: Receiver<AssetDropEvent>,
     drop_sender: Sender<AssetDropEvent>,
     id_generator: AssetIdGenerator,
@@ -70,6 +55,7 @@ impl<A: Asset> Assets<A> {
         Self {
             map: HashMap::new(),
             new_ids: SmallVec::new(),
+            remove_ids: SmallVec::new(),
             drop_receiver,
             drop_sender,
             id_generator,
@@ -89,11 +75,6 @@ impl<A: Asset> Assets<A> {
         handle
     }
 
-    pub fn insert(&mut self, id: AssetId, asset: A) {
-        _ = self.map.insert(id, asset);
-        self.new_ids.push(id);
-    }
-
     /// Get a reference to an asset by handle.
     pub fn get(&self, id: AssetId) -> Option<&A> {
         self.map.get(&id)
@@ -111,11 +92,19 @@ impl<A: Asset> Assets<A> {
         self.new_ids.iter().map(|&id| (id, &self.map[&id]))
     }
 
-    /// Clear the list of new assets.
+    pub fn removed_assets(&self) -> &[AssetId] {
+        &self.remove_ids
+    }
+
+    /// Clear the list of new assets and remove droppped assets.
     ///
     /// This should be called after extracting new assets to the render world.
     pub fn flush(&mut self) {
         self.new_ids.clear();
+
+        for id in self.remove_ids.drain(..) {
+            _ = self.map.remove(&id);
+        }
     }
 
     /// Iterate over all assets.
@@ -129,8 +118,8 @@ impl<A: Asset> Assets<A> {
     }
 
     pub fn remove_droppped(&mut self) {
-        while let Ok(event) = self.drop_receiver.try_recv() {
-            _ = self.map.remove(&event.0);
+        while let Ok(AssetDropEvent(id)) = self.drop_receiver.try_recv() {
+            self.remove_ids.push(id);
         }
     }
 }
@@ -138,6 +127,51 @@ impl<A: Asset> Assets<A> {
 impl<A: Asset> FromWorld for Assets<A> {
     fn from_world(world: &mut World) -> Self {
         world.resource::<AssetServer>().make_assets()
+    }
+}
+
+#[derive(Resource)]
+pub struct RefAssets<A: Asset> {
+    map: HashMap<AssetId, A>,
+    drop_receivers: SmallVec<[Receiver<AssetDropEvent>; 4]>,
+}
+
+impl<A: Asset> RefAssets<A> {
+    pub fn new() -> Self {
+        Self {
+            map: HashMap::new(),
+            drop_receivers: SmallVec::new(),
+        }
+    }
+
+    pub fn get(&self, id: AssetId) -> Option<&A> {
+        self.map.get(&id)
+    }
+
+    pub fn get_mut(&mut self, id: AssetId) -> Option<&mut A> {
+        self.map.get_mut(&id)
+    }
+
+    pub fn add_dependency<T: Asset>(&mut self, assets: &Assets<T>) {
+        self.drop_receivers.push(assets.drop_receiver.clone());
+    }
+
+    pub fn insert(&mut self, id: AssetId, asset: A) {
+        self.map.insert(id, asset);
+    }
+
+    pub fn remove_droppped(&mut self) {
+        for receiver in &self.drop_receivers {
+            while let Ok(AssetDropEvent(id)) = receiver.try_recv() {
+                _ = self.map.remove(&id);
+            }
+        }
+    }
+}
+
+impl<A: Asset> Default for RefAssets<A> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -150,13 +184,15 @@ pub trait Asset: Send + Sync + 'static {}
 #[derive(Resource)]
 pub struct RenderAssets<A: RenderAsset> {
     map: HashMap<AssetId, A>,
+    drop_receiver: Receiver<AssetDropEvent>,
 }
 
 impl<A: RenderAsset> RenderAssets<A> {
     /// Create a new empty render asset collection.
-    pub fn new() -> Self {
+    pub fn new(drop_receiver: Receiver<AssetDropEvent>) -> Self {
         Self {
             map: HashMap::new(),
+            drop_receiver,
         }
     }
 
@@ -174,11 +210,11 @@ impl<A: RenderAsset> RenderAssets<A> {
     pub fn get(&self, id: AssetId) -> Option<&A> {
         self.map.get(&id)
     }
-}
 
-impl<A: RenderAsset> Default for RenderAssets<A> {
-    fn default() -> Self {
-        Self::new()
+    pub fn remove_droppped(&mut self) {
+        while let Ok(event) = self.drop_receiver.try_recv() {
+            _ = self.map.remove(&event.0);
+        }
     }
 }
 
@@ -191,6 +227,12 @@ pub trait RenderAsset: Send + Sync + 'static {
 
     /// Extract a render asset from a source asset.
     fn extract(source: &Self::Asset, item: &mut SystemParamItem<'_, '_, Self::Param>) -> Self;
+}
+
+#[derive(SystemSet, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub enum AssetsExtract {
+    #[default]
+    Stage,
 }
 
 /// System to extract new render assets.
@@ -307,16 +349,20 @@ impl<A: RenderAsset> Default for RenderAssetsPlugin<A> {
 
 impl<A: RenderAsset> Plugin for RenderAssetsPlugin<A> {
     fn build(&self, wallpaper: &mut Wallpaper) {
-        wallpaper.render.init_resource::<RenderAssets<A>>();
+        let assets = wallpaper.main.get_resource_or_init::<Assets<A::Asset>>();
+        let render_assets = RenderAssets::<A>::new(assets.drop_receiver.clone());
+        wallpaper.render.insert_resource(render_assets);
 
         if self.do_extact_all {
-            wallpaper
-                .render
-                .add_systems(SceneExtract, extract_all_render_assets::<A>);
+            wallpaper.render.add_systems(
+                SceneExtract,
+                extract_all_render_assets::<A>.in_set(AssetsExtract::Stage),
+            );
         } else {
-            wallpaper
-                .render
-                .add_systems(SceneExtract, extract_new_render_assets::<A>);
+            wallpaper.render.add_systems(
+                SceneExtract,
+                extract_new_render_assets::<A>.in_set(AssetsExtract::Stage),
+            );
         }
     }
 }

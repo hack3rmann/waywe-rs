@@ -33,7 +33,7 @@ use crate::wallpaper::scene::{
 };
 use bevy_ecs::prelude::*;
 use glam::{Quat, Vec2, Vec3};
-use smallvec::smallvec;
+use smallvec::{SmallVec, smallvec};
 
 /// A test wallpaper with multiple meshes and animations.
 ///
@@ -52,7 +52,7 @@ impl WallpaperBuilder for SceneTestWallpaper {
 
         wallpaper
             .main
-            .add_systems(Update, rotate_meshes)
+            .add_systems(Update, (rotate_meshes, despawn_entities))
             .add_systems(Startup, (spawn_mesh, spawn_videos))
             .init_resource::<TestAssets>();
     }
@@ -84,9 +84,10 @@ pub struct TestAssets {
     /// The second test video asset.
     pub video2: AssetHandle<Video>,
     /// A material for the second test video.
-    pub video2_material: AssetHandle<VideoMaterial>,
+    pub video2_material: Option<AssetHandle<VideoMaterial>>,
     /// The aspect ratio of the second test video.
     pub video2_aspect_ratio: f32,
+    pub despawn_entities: SmallVec<[Entity; 2]>,
 }
 
 impl FromWorld for TestAssets {
@@ -153,7 +154,8 @@ impl FromWorld for TestAssets {
             video1_material,
             video2: video2_handle,
             video2_aspect_ratio,
-            video2_material,
+            video2_material: Some(video2_material),
+            despawn_entities: SmallVec::new(),
         }
     }
 }
@@ -162,7 +164,7 @@ impl FromWorld for TestAssets {
 ///
 /// This system creates entities for playing videos with appropriate scaling
 /// and time scaling factors for animation.
-pub fn spawn_videos(mut commands: Commands, assets: Res<TestAssets>) {
+pub fn spawn_videos(mut commands: Commands, mut assets: ResMut<TestAssets>) {
     const SCALE: f32 = 0.6;
 
     commands.spawn((
@@ -172,19 +174,35 @@ pub fn spawn_videos(mut commands: Commands, assets: Res<TestAssets>) {
         TimeScale(0.5),
     ));
 
-    commands.spawn((
-        Mesh3d(assets.quad_mesh.clone()),
-        MeshMaterial(assets.video2_material.clone()),
-        Transform::default().scaled_by(Vec3::new(SCALE, assets.video2_aspect_ratio * SCALE, 1.0)),
-        TimeScale(0.3),
-    ));
+    let entity1 = commands
+        .spawn((
+            Mesh3d(assets.quad_mesh.clone()),
+            MeshMaterial(assets.video2_material.clone().unwrap()),
+            Transform::default().scaled_by(Vec3::new(
+                SCALE,
+                assets.video2_aspect_ratio * SCALE,
+                1.0,
+            )),
+            TimeScale(0.3),
+        ))
+        .id();
 
-    commands.spawn((
-        Mesh3d(assets.triangle_mesh.clone()),
-        MeshMaterial(assets.video2_material.clone()),
-        Transform::default().scaled_by(Vec3::new(SCALE, assets.video2_aspect_ratio * SCALE, 1.0)),
-        TimeScale(0.8),
-    ));
+    let entity2 = commands
+        .spawn((
+            Mesh3d(assets.triangle_mesh.clone()),
+            MeshMaterial(assets.video2_material.clone().unwrap()),
+            Transform::default().scaled_by(Vec3::new(
+                SCALE,
+                assets.video2_aspect_ratio * SCALE,
+                1.0,
+            )),
+            TimeScale(0.8),
+        ))
+        .id();
+
+    assets
+        .despawn_entities
+        .extend_from_slice(&[entity1, entity2]);
 }
 
 /// System that spawns image entities.
@@ -229,5 +247,15 @@ pub fn rotate_meshes(
         transform.translation.y = 0.5 * (time_scale * time).sin() + 0.2 * cursor_pos.y;
 
         transform.rotation = Quat::from_axis_angle(Vec3::X + time_scale * Vec3::Y, time);
+    }
+}
+
+pub fn despawn_entities(mut commands: Commands, mut assets: ResMut<TestAssets>, time: Res<Time>) {
+    if time.elapsed.as_secs_f32() > 2.0 {
+        assets.video2_material = None;
+
+        for id in assets.despawn_entities.drain(..) {
+            commands.entity(id).despawn();
+        }
     }
 }

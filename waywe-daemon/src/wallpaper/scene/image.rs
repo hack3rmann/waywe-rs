@@ -19,8 +19,8 @@ use crate::{
     wallpaper::scene::{
         asset_server::AssetHandle,
         assets::{
-            Asset, Assets, AssetsPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin,
-            extract_new_render_assets,
+            Asset, Assets, AssetsExtract, AssetsPlugin, RefAssets, RenderAsset, RenderAssets,
+            RenderAssetsPlugin,
         },
         extract::Extract,
         material::{AsBindGroup, Material, RenderMaterial, VertexFragmentShader},
@@ -48,11 +48,17 @@ impl Plugin for ImagePlugin {
             RenderAssetsPlugin::<RenderImage>::extract_new(),
         ));
 
+        let assets = wallpaper.main.resource::<Assets<Image>>();
+        wallpaper
+            .render
+            .resource_mut::<RefAssets<RenderMaterial>>()
+            .add_dependency(assets);
+
         wallpaper
             .render
             .add_systems(
                 SceneExtract,
-                extract_image_materials.after(extract_new_render_assets::<RenderImage>),
+                extract_image_materials.after(AssetsExtract::Stage),
             )
             .init_resource::<ImagePipeline>();
     }
@@ -86,7 +92,7 @@ impl Default for Image {
 /// Converts [`ImageMaterial`] assets into GPU-ready [`RenderMaterial`] assets.
 pub fn extract_image_materials(
     materials: Extract<Res<Assets<ImageMaterial>>>,
-    mut render_materials: ResMut<Assets<RenderMaterial>>,
+    mut render_materials: ResMut<RefAssets<RenderMaterial>>,
     image_params: StaticSystemParam<<ImageMaterial as AsBindGroup>::Param>,
     pipeline: Res<ImagePipeline>,
     gpu: Res<RenderGpu>,

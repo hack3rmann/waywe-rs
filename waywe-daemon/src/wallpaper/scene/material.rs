@@ -16,8 +16,8 @@
 
 use super::wallpaper::Wallpaper;
 use crate::wallpaper::scene::{
-    asset_server::UntypedAssetHandle,
-    assets::{Asset, AssetsPlugin},
+    asset_server::AssetId,
+    assets::{Asset, RefAssets},
     plugin::Plugin,
 };
 use bevy_ecs::{
@@ -32,7 +32,9 @@ pub struct MaterialPlugin;
 
 impl Plugin for MaterialPlugin {
     fn build(&self, wallpaper: &mut Wallpaper) {
-        wallpaper.add_plugins(AssetsPlugin::<RenderMaterial>::new_render());
+        wallpaper
+            .render
+            .init_resource::<RefAssets<RenderMaterial>>();
     }
 }
 
@@ -94,4 +96,4 @@ impl Asset for RenderMaterial {}
 
 /// Handle to a render material component.
 #[derive(Component, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct RenderMaterialHandle(pub UntypedAssetHandle);
+pub struct RenderMaterialId(pub AssetId);

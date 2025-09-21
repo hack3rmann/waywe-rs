@@ -103,6 +103,10 @@ impl<A> AssetHandle<A> {
         }
     }
 
+    pub fn ref_count(&self) -> usize {
+        self.untyped.ref_count()
+    }
+
     pub fn into_untyped(self) -> UntypedAssetHandle {
         self.untyped
     }
@@ -173,6 +177,10 @@ impl Deref for UntypedAssetHandle {
 impl UntypedAssetHandle {
     pub fn new(id: AssetId, drop_sender: Sender<AssetDropEvent>) -> Self {
         Self(Arc::new(AssetHandleInner::new(id, drop_sender)))
+    }
+
+    pub fn ref_count(&self) -> usize {
+        Arc::strong_count(&self.0)
     }
 }
 

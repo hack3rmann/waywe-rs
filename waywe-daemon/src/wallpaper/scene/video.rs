@@ -19,7 +19,10 @@ use crate::{
     wallpaper::scene::{
         Time, Update,
         asset_server::AssetHandle,
-        assets::{Asset, Assets, AssetsPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin},
+        assets::{
+            Asset, Assets, AssetsExtract, AssetsPlugin, RefAssets, RenderAsset, RenderAssets,
+            RenderAssetsPlugin,
+        },
         extract::Extract,
         material::{AsBindGroup, Material, RenderMaterial, VertexFragmentShader},
         plugin::Plugin,
@@ -53,11 +56,20 @@ impl Plugin for VideoPlugin {
             RenderAssetsPlugin::<RenderVideo>::extract_all(),
         ));
 
+        let assets = wallpaper.main.resource::<Assets<Video>>();
+        wallpaper
+            .render
+            .resource_mut::<RefAssets<RenderMaterial>>()
+            .add_dependency(assets);
+
         wallpaper.main.add_systems(Update, advance_videos);
         wallpaper
             .render
             .init_resource::<VideoPipeline>()
-            .add_systems(SceneExtract, extract_video_materials);
+            .add_systems(
+                SceneExtract,
+                extract_video_materials.after(AssetsExtract::Stage),
+            );
     }
 }
 
@@ -642,7 +654,7 @@ impl AsBindGroup for VideoMaterial {
 /// Converts [`VideoMaterial`] assets into GPU-ready [`RenderMaterial`] assets.
 pub fn extract_video_materials(
     materials: Extract<Res<Assets<VideoMaterial>>>,
-    mut render_materials: ResMut<Assets<RenderMaterial>>,
+    mut render_materials: ResMut<RefAssets<RenderMaterial>>,
     image_params: StaticSystemParam<<VideoMaterial as AsBindGroup>::Param>,
     pipeline: Res<VideoPipeline>,
     gpu: Res<RenderGpu>,
