@@ -1,6 +1,6 @@
 use crate::wallpaper::scene::{
-    image::ImagePlugin, material::MaterialPlugin, mesh::MeshPlugin, transform::TransformPlugin,
-    video::VideoPlugin, wallpaper::Wallpaper,
+    cursor::CursorPlugin, image::ImagePlugin, material::MaterialPlugin, mesh::MeshPlugin,
+    transform::TransformPlugin, video::VideoPlugin, wallpaper::Wallpaper,
 };
 use bitflags::bitflags;
 use static_assertions::assert_obj_safe;
@@ -70,6 +70,7 @@ define_plugin_group! {
         MeshPlugin,
         VideoPlugin,
         MaterialPlugin,
+        CursorPlugin,
     );
 }
 

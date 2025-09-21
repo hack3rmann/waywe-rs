@@ -14,21 +14,13 @@ use std::{
 };
 use wayland_client::{
     interface::{
-        WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlOutputNameEvent,
-        WlRegionAddRequest, WlRegionDestroyRequest, WlRegistryEvent, WlRegistryGlobalEvent,
-        WlRegistryGlobalRemoveEvent, WlSurfaceCommitRequest, WlSurfaceSetBufferScaleRequest,
-        WlSurfaceSetOpaqueRegionRequest, ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellLayer,
-        ZwlrLayerSurfaceAckConfigureRequest, ZwlrLayerSurfaceAnchor,
-        ZwlrLayerSurfaceConfigureEvent, ZwlrLayerSurfaceKeyboardInteractivity,
-        ZwlrLayerSurfaceSetAnchorRequest, ZwlrLayerSurfaceSetExclusiveZoneRequest,
-        ZwlrLayerSurfaceSetKeyboardInteractivityRequest, ZwlrLayerSurfaceSetMarginRequest,
+        WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlOutputNameEvent, WlPointerEvent, WlRegionAddRequest, WlRegionDestroyRequest, WlRegistryEvent, WlRegistryGlobalEvent, WlRegistryGlobalRemoveEvent, WlSeatCapabilitiesEvent, WlSeatCapability, WlSeatGetPointerRequest, WlSurfaceCommitRequest, WlSurfaceSetBufferScaleRequest, WlSurfaceSetOpaqueRegionRequest, ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellLayer, ZwlrLayerSurfaceAckConfigureRequest, ZwlrLayerSurfaceAnchor, ZwlrLayerSurfaceConfigureEvent, ZwlrLayerSurfaceKeyboardInteractivity, ZwlrLayerSurfaceSetAnchorRequest, ZwlrLayerSurfaceSetExclusiveZoneRequest, ZwlrLayerSurfaceSetKeyboardInteractivityRequest, ZwlrLayerSurfaceSetMarginRequest
     },
     object::{HasObjectType, WlObjectId, WlObjectType},
     sys::{
         display::WlDisplay,
         object::{
-            FromProxy, WlObject, WlObjectHandle, dispatch::Dispatch, event_queue::WlEventQueue,
-            registry::WlRegistry,
+            dispatch::Dispatch, event_queue::WlEventQueue, registry::WlRegistry, FromProxy, WlObject, WlObjectHandle
         },
         object_storage::WlObjectStorage,
         proxy::WlProxy,
@@ -41,6 +33,7 @@ pub enum WaylandEvent {
     ResizeRequested { monitor_id: MonitorId, size: UVec2 },
     MonitorPlugged { id: MonitorId },
     MonitorUnplugged { id: MonitorId },
+    CursorMoved { position: UVec2 },
 }
 
 pub type MonitorId = WlObjectId;
@@ -105,6 +98,7 @@ impl ClientState {
     }
 }
 
+#[derive(Default)]
 pub struct Compositor;
 
 impl HasObjectType for Compositor {
@@ -116,12 +110,87 @@ impl Dispatch for Compositor {
     const ALLOW_EMPTY_DISPATCH: bool = true;
 }
 
-impl FromProxy for Compositor {
-    fn from_proxy(_: &WlProxy) -> Self {
-        Self
+pub struct Seat {
+    handle: WlObjectHandle<Self>,
+    pointer: Option<WlObjectHandle<Pointer>>,
+}
+
+impl FromProxy for Seat {
+    fn from_proxy(proxy: &WlProxy) -> Self {
+        Self {
+            handle: WlObjectHandle::new(proxy.id()),
+            pointer: None,
+        }
     }
 }
 
+impl HasObjectType for Seat {
+    const OBJECT_TYPE: WlObjectType = WlObjectType::Seat;
+}
+
+impl Dispatch for Seat {
+    type State = ClientState;
+
+    fn dispatch(
+        &mut self,
+        _: &Self::State,
+        storage: &mut WlObjectStorage<Self::State>,
+        message: WlMessage<'_>,
+    ) {
+        let Some(event) = message.as_event::<WlSeatCapabilitiesEvent>() else {
+            return;
+        };
+
+        if !event.capabilities.contains(WlSeatCapability::POINTER) {
+            return;
+        }
+
+        let mut storage = Pin::new(storage);
+        let mut buf = WlStackMessageBuffer::new();
+
+        let pointer: WlObjectHandle<Pointer> =
+            self.handle
+                .create_object(&mut buf, storage.as_mut(), WlSeatGetPointerRequest);
+
+        self.pointer = Some(pointer)
+    }
+}
+
+#[derive(Default)]
+pub struct Pointer;
+
+impl HasObjectType for Pointer {
+    const OBJECT_TYPE: WlObjectType = WlObjectType::Pointer;
+}
+
+impl Dispatch for Pointer {
+    type State = ClientState;
+
+    fn dispatch(
+        &mut self,
+        state: &Self::State,
+        _storage: &mut WlObjectStorage<Self::State>,
+        message: WlMessage<'_>,
+    ) {
+        let Some(event) = message.as_event::<WlPointerEvent>() else {
+            return;
+        };
+
+        let WlPointerEvent::Motion(motion) = event else {
+            return;
+        };
+
+        let position = UVec2::new(
+            motion.surface_x.to_int().cast_unsigned(),
+            motion.surface_y.to_int().cast_unsigned(),
+        );
+
+        let mut events = state.events.lock().unwrap();
+        events.emit(WaylandEvent::CursorMoved { position }).unwrap();
+    }
+}
+
+#[derive(Default)]
 pub struct LayerShell;
 
 impl HasObjectType for LayerShell {
@@ -133,12 +202,7 @@ impl Dispatch for LayerShell {
     const ALLOW_EMPTY_DISPATCH: bool = true;
 }
 
-impl FromProxy for LayerShell {
-    fn from_proxy(_: &WlProxy) -> Self {
-        Self
-    }
-}
-
+#[derive(Default)]
 pub struct Surface;
 
 impl HasObjectType for Surface {
@@ -148,12 +212,6 @@ impl HasObjectType for Surface {
 impl Dispatch for Surface {
     type State = ClientState;
     const ALLOW_EMPTY_DISPATCH: bool = true;
-}
-
-impl FromProxy for Surface {
-    fn from_proxy(_: &WlProxy) -> Self {
-        Self
-    }
 }
 
 pub struct LayerSurface {
@@ -540,6 +598,8 @@ impl Wayland {
         let layer_shell = registry
             .bind::<LayerShell>(&mut buf, storage.as_mut())
             .unwrap();
+
+        let _seat = registry.bind::<Seat>(&mut buf, storage.as_mut()).unwrap();
 
         client_state.globals = Some(Globals {
             compositor,

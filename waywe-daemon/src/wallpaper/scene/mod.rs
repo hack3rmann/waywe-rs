@@ -12,6 +12,7 @@ pub mod time;
 pub mod transform;
 pub mod video;
 pub mod wallpaper;
+pub mod cursor;
 
 use crate::{
     event_loop::FrameInfo,

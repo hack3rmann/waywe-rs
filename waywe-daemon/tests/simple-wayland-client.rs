@@ -32,6 +32,7 @@ pub struct ClientState {
     pub next_height: AtomicU32,
 }
 
+#[derive(Default)]
 pub struct WlCompositor;
 
 impl Dispatch for WlCompositor {
@@ -50,12 +51,6 @@ impl Dispatch for WlCompositor {
 }
 
 assert_dispatch_is_empty!(WlCompositor);
-
-impl FromProxy for WlCompositor {
-    fn from_proxy(_: &WlProxy) -> Self {
-        Self
-    }
-}
 
 impl HasObjectType for WlCompositor {
     const OBJECT_TYPE: WlObjectType = WlObjectType::Compositor;
@@ -97,6 +92,7 @@ impl HasObjectType for WlWmBase {
     const OBJECT_TYPE: WlObjectType = WlObjectType::XdgWmBase;
 }
 
+#[derive(Default)]
 pub struct WlSurface;
 
 impl Dispatch for WlSurface {
@@ -118,12 +114,6 @@ assert_dispatch_is_empty!(WlSurface);
 
 impl HasObjectType for WlSurface {
     const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
-}
-
-impl FromProxy for WlSurface {
-    fn from_proxy(_: &WlProxy) -> Self {
-        Self
-    }
 }
 
 pub struct WlXdgSurface {
@@ -198,12 +188,6 @@ impl Dispatch for WlToplevel {
 
 impl HasObjectType for WlToplevel {
     const OBJECT_TYPE: WlObjectType = WlObjectType::XdgToplevel;
-}
-
-impl FromProxy for WlToplevel {
-    fn from_proxy(_: &WlProxy) -> Self {
-        Self
-    }
 }
 
 fn get_window_handle_from_surface(surface: &WlObject<WlSurface>) -> RawWindowHandle {

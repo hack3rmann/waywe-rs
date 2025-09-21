@@ -32,6 +32,13 @@ pub trait FromProxy: Sized {
     fn from_proxy(proxy: &WlProxy) -> Self;
 }
 
+impl<D: Default> FromProxy for D {
+    /// The default implementation for `FromProxy`
+    fn from_proxy(_: &WlProxy) -> Self {
+        Self::default()
+    }
+}
+
 /// Lightweight object handle with assocciated data type
 pub struct WlObjectHandle<T> {
     id: WlObjectId,

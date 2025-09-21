@@ -37,10 +37,6 @@ macro_rules! define_empty_dispatchers {
                 const OBJECT_TYPE: wayland_client::WlObjectType = wayland_client::WlObjectType:: $Name;
             }
 
-            impl wayland_client::FromProxy for $Name {
-                fn from_proxy(_: &wayland_client::WlProxy) -> Self { Self }
-            }
-
             impl wayland_client::Dispatch for $Name {
                 type State = wayland_client::NoState;
 
@@ -75,7 +71,7 @@ define_empty_dispatchers! {
     LayerShell,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct WlLayerSurface {
     pub handle: WlObjectHandle<Self>,
 }

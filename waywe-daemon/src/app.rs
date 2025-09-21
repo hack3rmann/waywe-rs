@@ -8,6 +8,7 @@ use crate::{
     wallpaper::{
         self,
         scene::{
+            cursor::CursorMoved,
             render::{MonitorPlugged, MonitorUnplugged},
             wallpaper::PreparedWallpaper,
         },
@@ -221,6 +222,15 @@ impl Handle<WaylandEvent> for VideoApp {
                         .render
                         .world
                         .trigger(MonitorUnplugged { id: monitor_id });
+                }
+            }
+            WaylandEvent::CursorMoved { position } => {
+                for wallpaper in self.wallpapers.values_mut() {
+                    wallpaper
+                        .wallpaper
+                        .main
+                        .world
+                        .trigger(CursorMoved { position });
                 }
             }
         }

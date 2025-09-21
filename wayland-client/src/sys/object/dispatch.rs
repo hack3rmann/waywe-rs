@@ -48,14 +48,13 @@ pub trait Dispatch: HasObjectType + 'static {
     const ALLOW_EMPTY_DISPATCH: bool = false;
 
     /// Dispatch incoming events
+    #[expect(unused_variables)]
     fn dispatch(
         &mut self,
-        _state: &Self::State,
-        _storage: &mut WlObjectStorage<Self::State>,
-        _message: WlMessage<'_>,
-    ) {
-        // do nothing
-    }
+        state: &Self::State,
+        storage: &mut WlObjectStorage<Self::State>,
+        message: WlMessage<'_>,
+    ) {}
 }
 
 /// Failes compilation if dispatch implementation for `T` is not empty

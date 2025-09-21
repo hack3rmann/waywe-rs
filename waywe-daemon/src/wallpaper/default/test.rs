@@ -1,6 +1,7 @@
 use crate::wallpaper::scene::{
-    Startup, Update,
+    Monitor, Startup, Update,
     assets::{AssetHandle, Assets},
+    cursor::Cursor,
     image::{Image, ImageMaterial},
     mesh::{Mesh, Mesh3d, MeshMaterial, Vertex},
     plugin::DefaultPlugins,
@@ -155,12 +156,16 @@ pub fn spawn_mesh(mut commands: Commands, assets: Res<TestAssets>) {
 pub fn rotate_meshes(
     mut transforms: Query<(&mut Transform, &TimeScale), With<Mesh3d>>,
     time: Res<Time>,
+    monitor: Res<Monitor>,
+    cursor: Res<Cursor>,
 ) {
     let time = time.elapsed.as_secs_f32();
 
+    let cursor_pos = 0.5 * cursor.position.as_vec2() / monitor.size.as_vec2() - Vec2::splat(0.5);
+
     for (mut transform, &TimeScale(time_scale)) in &mut transforms {
-        transform.translation.x = 0.5 * (time_scale * time).cos();
-        transform.translation.y = 0.5 * (time_scale * time).sin();
+        transform.translation.x = 0.5 * (time_scale * time).cos() + 0.2 * cursor_pos.x;
+        transform.translation.y = 0.5 * (time_scale * time).sin() + 0.2 * cursor_pos.y;
 
         transform.rotation = Quat::from_axis_angle(Vec3::X + time_scale * Vec3::Y, time);
     }
