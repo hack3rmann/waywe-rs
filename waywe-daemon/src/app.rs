@@ -2,24 +2,25 @@ use crate::{
     event::{EventHandler, Handle},
     event_loop::{App, FrameError, FrameInfo, WallpaperTarget},
     runtime::{
-        Runtime,
+        Runtime, RuntimeFeatures,
         wayland::{MonitorId, MonitorMap, WaylandEvent},
     },
     wallpaper::{
-        self, DynWallpaper, IntoDynWallpaper, RenderState, RequiredFeaturesExt as _,
-        scene::render::{MonitorPlugged, MonitorUnplugged},
-        transition::{TransitionConfig, TransitionWallpaper},
+        self,
+        scene::{
+            render::{MonitorPlugged, MonitorUnplugged},
+            wallpaper::PreparedWallpaper,
+        },
     },
 };
 use for_sure::Almost;
-use glam::Vec2;
 use runtime::{
     WallpaperType,
     config::Config,
     profile::{Monitor, SetupProfile},
 };
 use smallvec::{SmallVec, smallvec};
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{path::PathBuf, sync::Arc};
 use tracing::{debug, error};
 
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -48,7 +49,7 @@ impl WallpaperState {
 
 #[derive(Default)]
 pub struct VideoApp {
-    pub wallpapers: MonitorMap<DynWallpaper>,
+    pub wallpapers: MonitorMap<PreparedWallpaper>,
     pub wallpaper_states: MonitorMap<WallpaperState>,
     pub config: Config,
     pub do_force_frame: bool,
@@ -64,56 +65,18 @@ impl VideoApp {
 
     pub fn set_wallpaper(
         &mut self,
-        runtime: &Runtime,
-        wallpaper: impl IntoDynWallpaper,
+        _: &Runtime,
+        wallpaper: PreparedWallpaper,
         monitor_id: MonitorId,
     ) {
-        let wallpaper = wallpaper.into_dyn_wallpaper();
-
-        let centre = self.config.animation.center_position.get();
-        let aspect_ratio = runtime
-            .wayland
-            .client_state
-            .aspect_ratio(monitor_id)
-            .unwrap();
-
-        let config = TransitionConfig {
-            duration: Duration::from_millis(self.config.animation.duration_milliseconds),
-            direction: self.config.animation.direction,
-            interpolation: self.config.animation.easing,
-            centre: Vec2::new(centre.x * aspect_ratio, centre.y),
-        };
-
-        let wallpaper = match self.wallpapers.remove(&monitor_id) {
-            None => wallpaper,
-            Some(from) => TransitionWallpaper::new(runtime, from, wallpaper, config, monitor_id)
-                .into_dyn_wallpaper(),
-        };
-
         self.wallpapers.insert(monitor_id, wallpaper);
         self.wallpaper_states
             .insert(monitor_id, WallpaperState::Running);
     }
-
-    pub fn resolve_transitions(&mut self) {
-        let keys = self
-            .wallpapers
-            .keys()
-            .copied()
-            .collect::<SmallVec<[_; 4]>>();
-
-        for monitor_id in keys {
-            let unresolved_wallpaper = self.wallpapers.remove(&monitor_id).unwrap();
-            self.wallpapers.insert(
-                monitor_id,
-                TransitionWallpaper::try_resolve_any(unresolved_wallpaper),
-            );
-        }
-    }
 }
 
 pub struct WallpaperPreparedEvent {
-    pub wallpaper: DynWallpaper,
+    pub wallpaper: PreparedWallpaper,
     pub monitor_id: MonitorId,
 }
 
@@ -140,44 +103,21 @@ impl App for VideoApp {
     }
 
     async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
-        self.resolve_transitions();
-
         if Almost::is_nil(&runtime.wgpu) {
             return Err(FrameError::NoWorkToDo);
         }
 
         // FIXME(hack3rmann): multiple monitors
         let mut result = Err(FrameError::NoWorkToDo);
-        // let surfaces = runtime.wgpu.surfaces.read().unwrap();
 
         for (&monitor_id, wallpaper) in self.wallpapers.iter_mut() {
-            if !self.do_force_frame && wallpaper.render_state() == RenderState::Done {
-                continue;
-            }
-
             if let Some(&state) = self.wallpaper_states.get(&monitor_id)
                 && state.is_paused()
             {
                 continue;
             }
 
-            // FIXME:
-            result = wallpaper.free_frame(runtime);
-
-            // let surface_texture = surfaces[&monitor_id].surface.get_current_texture().unwrap();
-            // let surface_view = surface_texture.texture.create_view(&Default::default());
-            //
-            // let mut encoder = runtime
-            //     .wgpu
-            //     .device
-            //     .create_command_encoder(&Default::default());
-            //
-            // // FIXME(hack3rmann): handle different framerates
-            // result = wallpaper.frame(runtime, &mut encoder, &surface_view);
-            //
-            // _ = runtime.wgpu.queue.submit([encoder.finish()]);
-            //
-            // surface_texture.present();
+            result = wallpaper.frame();
         }
 
         if let Err(FrameError::NoWorkToDo) = &result {
@@ -239,9 +179,11 @@ impl Handle<WaylandEvent> for VideoApp {
                     runtime.wgpu.register_surface(&runtime.wayland, monitor_id);
                 }
 
-                if Almost::is_value(&runtime.scene_renderer) {
-                    let mut renderer = runtime.scene_renderer.write().unwrap();
-                    renderer.trigger(MonitorPlugged { id: monitor_id });
+                for wallpaper in self.wallpapers.values_mut() {
+                    wallpaper
+                        .render
+                        .world
+                        .trigger(MonitorPlugged { id: monitor_id });
                 }
 
                 let monitors = runtime.wayland.client_state.monitors.read().unwrap();
@@ -253,17 +195,10 @@ impl Handle<WaylandEvent> for VideoApp {
                 if let Ok(mut profile) = SetupProfile::read()
                     && let Some(info) = profile.monitors.remove(&monitor_name)
                 {
-                    // FIXME:
-                    let _event = NewWallpaperEvent {
+                    let event = NewWallpaperEvent {
                         path: info.path,
                         ty: info.wallpaper_type,
                         target: WallpaperTarget::ForMonitor(monitor_id),
-                    };
-
-                    let event = NewWallpaperEvent {
-                        path: Default::default(),
-                        ty: WallpaperType::Scene,
-                        target: WallpaperTarget::ForAll,
                     };
 
                     runtime.task_pool.emitter.emit(event).unwrap();
@@ -279,9 +214,11 @@ impl Handle<WaylandEvent> for VideoApp {
 
                 runtime.wgpu.unregister_surface(monitor_id);
 
-                if Almost::is_value(&runtime.scene_renderer) {
-                    let mut renderer = runtime.scene_renderer.write().unwrap();
-                    renderer.trigger(MonitorUnplugged { id: monitor_id });
+                for wallpaper in self.wallpapers.values_mut() {
+                    wallpaper
+                        .render
+                        .world
+                        .trigger(MonitorUnplugged { id: monitor_id });
                 }
             }
         }
@@ -292,7 +229,8 @@ impl Handle<NewWallpaperEvent> for VideoApp {
     async fn handle(&mut self, runtime: &mut Runtime, event: NewWallpaperEvent) {
         let NewWallpaperEvent { path, ty, target } = event;
 
-        runtime.enable(ty.required_features()).await;
+        // FIXME(hack3rmann): remove runtime features
+        runtime.enable(RuntimeFeatures::GPU).await;
 
         let monitor_ids: SmallVec<[MonitorId; 4]> = match target {
             WallpaperTarget::ForAll => {
@@ -309,7 +247,6 @@ impl Handle<NewWallpaperEvent> for VideoApp {
 
             let monitors = runtime.wayland.client_state.monitors.read().unwrap();
             let monitor = &monitors[&monitor_id];
-            let monitor_size = monitor.size.unwrap();
             let monitor_name = Arc::clone(monitor.name.as_ref().unwrap());
             let monitor_profile = Monitor {
                 wallpaper_type: ty,
@@ -324,17 +261,10 @@ impl Handle<NewWallpaperEvent> for VideoApp {
             }
 
             runtime.task_pool.spawn(move |mut emitter| {
-                let event =
-                    match wallpaper::create(gpu, wayland, monitor_size, &path, ty, monitor_id) {
-                        Ok(wallpaper) => WallpaperPreparedEvent {
-                            wallpaper,
-                            monitor_id,
-                        },
-                        Err(error) => {
-                            error!(?error, "failed to create wallpaper");
-                            return;
-                        }
-                    };
+                let event = WallpaperPreparedEvent {
+                    wallpaper: wallpaper::create(gpu, wayland, &path, ty, monitor_id),
+                    monitor_id,
+                };
 
                 emitter.emit(event).unwrap();
             });

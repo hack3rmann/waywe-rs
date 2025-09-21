@@ -1,15 +1,15 @@
-use super::{OldEcsWallpaper, render::Renderer, wallpaper::Wallpaper};
+use super::wallpaper::Wallpaper;
 use crate::{
     runtime::gpu::Wgpu,
     wallpaper::scene::{
-        ScenePlugin, Time, Update,
+        Time, Update,
         assets::{
             Asset, AssetHandle, Assets, AssetsPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin,
         },
         extract::Extract,
         material::{AsBindGroup, Material, MaterialAssetMap, RenderMaterial, VertexFragmentShader},
         plugin::Plugin,
-        render::{RenderGpu, RenderPlugin, SceneExtract},
+        render::{RenderGpu, SceneExtract},
     },
 };
 use ash::vk::{self, PhysicalDeviceMemoryProperties};
@@ -26,22 +26,6 @@ use video::{
 use wgpu::wgc::api;
 
 pub struct VideoPlugin;
-
-impl ScenePlugin for VideoPlugin {
-    fn init(self, scene: &mut OldEcsWallpaper) {
-        scene.add_plugin(AssetsPlugin::<Video>::new());
-        scene.add_plugin(AssetsPlugin::<VideoMaterial>::new());
-        scene.add_systems(Update, advance_videos);
-    }
-}
-
-impl RenderPlugin for VideoPlugin {
-    fn init(self, renderer: &mut Renderer) {
-        renderer.add_plugin(RenderAssetsPlugin::<RenderVideo>::extract_all());
-        renderer.world.init_resource::<VideoPipeline>();
-        renderer.add_systems(SceneExtract, extract_video_materials);
-    }
-}
 
 impl Plugin for VideoPlugin {
     fn build(&self, wallpaper: &mut Wallpaper) {

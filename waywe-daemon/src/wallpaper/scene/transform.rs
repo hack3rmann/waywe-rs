@@ -1,29 +1,17 @@
 #![allow(clippy::type_complexity)]
 
-use super::{render::Renderer, wallpaper::Wallpaper};
+use super::wallpaper::Wallpaper;
 use crate::wallpaper::scene::{
-    ScenePlugin, Update, OldEcsWallpaper,
+    Update,
     extract::Extract,
     plugin::Plugin,
-    render::{EntityMap, RenderPlugin, SceneExtract},
+    render::{EntityMap, SceneExtract},
 };
 use bevy_ecs::prelude::*;
 use glam::{Mat4, Quat, Vec3};
 use smallvec::SmallVec;
 
 pub struct TransformPlugin;
-
-impl ScenePlugin for TransformPlugin {
-    fn init(self, scene: &mut OldEcsWallpaper) {
-        scene.add_systems(Update, propagate_transforms);
-    }
-}
-
-impl RenderPlugin for TransformPlugin {
-    fn init(self, renderer: &mut Renderer) {
-        renderer.add_systems(SceneExtract, extract_transforms);
-    }
-}
 
 impl Plugin for TransformPlugin {
     fn build(&self, wallpaper: &mut Wallpaper) {
@@ -152,54 +140,5 @@ pub fn extract_transforms(
         };
 
         entity.insert(ModelMatrix(transform.to_model()));
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::runtime::wayland::MonitorId;
-
-    const MONITOR_ID: MonitorId = MonitorId::new(1).unwrap();
-
-    #[test]
-    fn simple_propagate() {
-        let mut scene = OldEcsWallpaper::new(MONITOR_ID);
-
-        scene.add_plugin(TransformPlugin);
-
-        let r21 = scene
-            .world
-            .spawn(Transform::from_translation(3.0 * Vec3::ONE))
-            .id();
-
-        let r1 = scene
-            .world
-            .spawn(Transform::from_translation(Vec3::ONE))
-            .id();
-
-        let r2 = scene
-            .world
-            .spawn(Transform::from_translation(2.0 * Vec3::ONE))
-            .add_child(r21)
-            .id();
-
-        let root = scene
-            .world
-            .spawn(Transform::from_translation(Vec3::ONE))
-            .add_children(&[r1, r2])
-            .id();
-
-        scene.update();
-
-        let root = scene.world.entity(root).get::<GlobalTransform>().unwrap().0;
-        let r2 = scene.world.entity(r2).get::<GlobalTransform>().unwrap().0;
-        let r1 = scene.world.entity(r1).get::<GlobalTransform>().unwrap().0;
-        let r21 = scene.world.entity(r21).get::<GlobalTransform>().unwrap().0;
-
-        assert_eq!(root.translation, Vec3::ONE);
-        assert_eq!(r1.translation, 2.0 * Vec3::ONE);
-        assert_eq!(r2.translation, 3.0 * Vec3::ONE);
-        assert_eq!(r21.translation, 6.0 * Vec3::ONE);
     }
 }

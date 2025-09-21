@@ -1,8 +1,7 @@
-use super::{OldEcsWallpaper, render::Renderer, wallpaper::Wallpaper};
+use super::wallpaper::Wallpaper;
 use crate::{
     runtime::gpu::Wgpu,
     wallpaper::scene::{
-        ScenePlugin,
         assets::{
             Asset, AssetHandle, AssetId, Assets, AssetsPlugin, RenderAsset, RenderAssets,
             RenderAssetsPlugin, extract_new_render_assets,
@@ -10,7 +9,7 @@ use crate::{
         extract::Extract,
         material::{AsBindGroup, Material, MaterialAssetMap, RenderMaterial, VertexFragmentShader},
         plugin::Plugin,
-        render::{RenderGpu, RenderPlugin, SceneExtract},
+        render::{RenderGpu, SceneExtract},
     },
 };
 use bevy_ecs::{
@@ -24,34 +23,6 @@ pub const DEFAULT_IMAGE: AssetHandle<Image> = AssetHandle::new(AssetId::new(1));
 pub const DEFAULT_IMAGE_MATERIAL: AssetHandle<ImageMaterial> = AssetHandle::new(AssetId::new(1));
 
 pub struct ImagePlugin;
-
-impl ScenePlugin for ImagePlugin {
-    fn init(self, scene: &mut OldEcsWallpaper) {
-        scene.add_plugin(AssetsPlugin::<Image>::new());
-        scene.add_plugin(AssetsPlugin::<ImageMaterial>::new());
-
-        let mut image_assets = scene.world.resource_mut::<Assets<Image>>();
-        let default_image = image_assets.add(Image::new_white_1x1());
-        debug_assert_eq!(default_image, DEFAULT_IMAGE);
-
-        let mut material_assets = scene.world.resource_mut::<Assets<ImageMaterial>>();
-        let default_material = material_assets.add(ImageMaterial {
-            image: default_image,
-        });
-        debug_assert_eq!(default_material, DEFAULT_IMAGE_MATERIAL);
-    }
-}
-
-impl RenderPlugin for ImagePlugin {
-    fn init(self, renderer: &mut Renderer) {
-        renderer.add_plugin(RenderAssetsPlugin::<RenderImage>::extract_new());
-        renderer.add_systems(
-            SceneExtract,
-            extract_image_materials.after(extract_new_render_assets::<RenderImage>),
-        );
-        renderer.world.init_resource::<ImagePipeline>();
-    }
-}
 
 impl Plugin for ImagePlugin {
     fn build(&self, wallpaper: &mut Wallpaper) {

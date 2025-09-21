@@ -1,9 +1,9 @@
-use super::{OldEcsWallpaper, wallpaper::Wallpaper};
+use super::wallpaper::Wallpaper;
 use crate::wallpaper::scene::{
-    PostExtract, ScenePlugin,
+    PostExtract,
     extract::Extract,
     plugin::{AddPlugins, Plugin},
-    render::{RenderPlugin, Renderer, SceneExtract},
+    render::SceneExtract,
 };
 use bevy_ecs::{
     prelude::*,
@@ -219,19 +219,6 @@ impl<A: Asset> Default for AssetsPlugin<A> {
     }
 }
 
-impl<A: Asset> ScenePlugin for AssetsPlugin<A> {
-    fn init(self, scene: &mut OldEcsWallpaper) {
-        scene.add_systems(PostExtract, flush_assets::<A>);
-        scene.world.init_resource::<Assets<A>>();
-    }
-}
-
-impl<A: Asset> RenderPlugin for AssetsPlugin<A> {
-    fn init(self, renderer: &mut Renderer) {
-        renderer.world.init_resource::<Assets<A>>();
-    }
-}
-
 impl<A: Asset> Plugin for AssetsPlugin<A> {
     fn build(&self, wallpaper: &mut Wallpaper) {
         if self.add.contains(AddPlugins::MAIN) {
@@ -275,18 +262,6 @@ impl<A: RenderAsset> RenderAssetsPlugin<A> {
 impl<A: RenderAsset> Default for RenderAssetsPlugin<A> {
     fn default() -> Self {
         Self::extract_new()
-    }
-}
-
-impl<A: RenderAsset> RenderPlugin for RenderAssetsPlugin<A> {
-    fn init(self, renderer: &mut Renderer) {
-        renderer.world.init_resource::<RenderAssets<A>>();
-
-        if self.do_extact_all {
-            renderer.add_systems(SceneExtract, extract_all_render_assets::<A>);
-        } else {
-            renderer.add_systems(SceneExtract, extract_new_render_assets::<A>);
-        }
     }
 }
 

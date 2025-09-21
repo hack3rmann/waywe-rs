@@ -1,16 +1,26 @@
-use super::{OldEcsWallpaper, render::Renderer, wallpaper::Wallpaper};
+use super::wallpaper::Wallpaper;
 use crate::{
     runtime::{
         gpu::Wgpu,
         wayland::{MonitorId, MonitorMap},
     },
     wallpaper::scene::{
+        Monitor,
         assets::{
-            extract_new_render_assets, Asset, AssetHandle, Assets, AssetsPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin
-        }, extract::Extract, image::{extract_image_materials, ImageMaterial}, material::{Material, MaterialAssetMap, RenderMaterial, RenderMaterialHandle}, plugin::Plugin, render::{
+            Asset, AssetHandle, Assets, AssetsPlugin, RenderAsset, RenderAssets,
+            RenderAssetsPlugin, extract_new_render_assets,
+        },
+        extract::Extract,
+        image::{ImageMaterial, extract_image_materials},
+        material::{Material, MaterialAssetMap, RenderMaterial, RenderMaterialHandle},
+        plugin::Plugin,
+        render::{
             EntityMap, MainEntity, MonitorPlugged, MonitorUnplugged, Render, RenderGpu,
-            RenderPlugin, SceneExtract, SceneRenderStage,
-        }, time::Time, transform::{GlobalTransform, ModelMatrix, Transform}, video::{extract_video_materials, VideoMaterial}, Monitor, ScenePlugin
+            SceneExtract, SceneRenderStage,
+        },
+        time::Time,
+        transform::{GlobalTransform, ModelMatrix, Transform},
+        video::{VideoMaterial, extract_video_materials},
     },
 };
 use bevy_ecs::{
@@ -26,41 +36,6 @@ use smallvec::{SmallVec, smallvec};
 use std::{collections::HashMap, mem};
 
 pub struct MeshPlugin;
-
-impl ScenePlugin for MeshPlugin {
-    fn init(self, scene: &mut OldEcsWallpaper) {
-        scene.add_plugin(AssetsPlugin::<Mesh>::new());
-    }
-}
-
-impl RenderPlugin for MeshPlugin {
-    fn init(self, renderer: &mut Renderer) {
-        renderer.add_plugin(RenderAssetsPlugin::<RenderMesh>::extract_new());
-        renderer.world.add_observer(add_monitor);
-        renderer.world.add_observer(remove_monitor);
-        renderer.world.init_resource::<Pipelines>();
-        renderer.world.init_resource::<OngoingRender>();
-        renderer.add_systems(
-            SceneExtract,
-            (
-                extact_objects::<ImageMaterial>
-                    .after(extract_image_materials)
-                    .after(extract_new_render_assets::<RenderMesh>),
-                extact_objects::<VideoMaterial>
-                    .after(extract_video_materials)
-                    .after(extract_new_render_assets::<RenderMesh>),
-            ),
-        );
-        renderer.add_systems(
-            Render,
-            (
-                prepare_render.in_set(SceneRenderStage::PreRender),
-                render_meshes.in_set(SceneRenderStage::Render),
-                finish_render.in_set(SceneRenderStage::Present),
-            ),
-        );
-    }
-}
 
 impl Plugin for MeshPlugin {
     fn build(&self, wallpaper: &mut Wallpaper) {

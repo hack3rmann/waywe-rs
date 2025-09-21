@@ -1,8 +1,7 @@
-use super::{render::Renderer, wallpaper::Wallpaper};
+use super::wallpaper::Wallpaper;
 use crate::wallpaper::scene::{
     assets::{Asset, AssetHandle, AssetId, AssetsPlugin},
     plugin::Plugin,
-    render::RenderPlugin,
 };
 use bevy_ecs::{
     prelude::*,
@@ -11,13 +10,6 @@ use bevy_ecs::{
 use std::{any::TypeId, collections::HashMap};
 
 pub struct MaterialPlugin;
-
-impl RenderPlugin for MaterialPlugin {
-    fn init(self, renderer: &mut Renderer) {
-        renderer.add_plugin(AssetsPlugin::<RenderMaterial>::new());
-        renderer.world.init_resource::<MaterialAssetMap>();
-    }
-}
 
 impl Plugin for MaterialPlugin {
     fn build(&self, wallpaper: &mut Wallpaper) {

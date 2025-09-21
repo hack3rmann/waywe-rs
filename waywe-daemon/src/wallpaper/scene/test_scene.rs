@@ -1,30 +1,30 @@
-use crate::{
-    event_loop::{FrameError, FrameInfo},
-    runtime::{Runtime, RuntimeFeatures, wayland::MonitorId},
-    wallpaper::{
-        OldWallpaper as OldWallpaper,
-        scene::{
-            FrameRateSetting, WallpaperConfig, WallpaperFlags, Startup, Update, Time, OldEcsWallpaper,
-            assets::{AssetHandle, Assets},
-            image::{Image, ImageMaterial},
-            mesh::{Mesh, Mesh3d, MeshMaterial, Vertex},
-            render::Render,
-            transform::Transform,
-            video::{Video, VideoMaterial},
-        },
-    },
+use super::wallpaper::Wallpaper;
+use crate::wallpaper::scene::{
+    Startup, Time, Update,
+    assets::{AssetHandle, Assets},
+    image::{Image, ImageMaterial},
+    mesh::{Mesh, Mesh3d, MeshMaterial, Vertex},
+    plugin::DefaultPlugins,
+    transform::Transform,
+    video::{Video, VideoMaterial},
+    wallpaper::WallpaperBuilder,
 };
 use bevy_ecs::prelude::*;
-use for_sure::Almost;
 use glam::{Quat, Vec2, Vec3};
 use smallvec::smallvec;
-use std::{
-    sync::atomic::{AtomicBool, Ordering},
-    thread,
-};
 
-pub struct SceneTestWallpaper {
-    pub scene: OldEcsWallpaper,
+pub struct SceneTestWallpaper;
+
+impl WallpaperBuilder for SceneTestWallpaper {
+    fn build(self, wallpaper: &mut Wallpaper) {
+        wallpaper.add_plugins(DefaultPlugins);
+
+        wallpaper
+            .main
+            .add_systems(Update, rotate_meshes)
+            .add_systems(Startup, (spawn_mesh, spawn_videos))
+            .init_resource::<TestAssets>();
+    }
 }
 
 #[derive(Component)]
@@ -108,151 +108,60 @@ impl FromWorld for TestAssets {
     }
 }
 
-impl SceneTestWallpaper {
-    pub fn new_test(monitor_id: MonitorId) -> Self {
-        let mut scene = OldEcsWallpaper::new_with_config(
-            monitor_id,
-            WallpaperConfig {
-                framerate: FrameRateSetting::GuessFromScene,
-            },
-        );
+pub fn spawn_videos(mut commands: Commands, assets: Res<TestAssets>) {
+    const SCALE: f32 = 0.6;
 
-        scene.add_systems(Update, Self::rotate_meshes);
-        scene.add_systems(Startup, (Self::spawn_mesh, Self::spawn_videos));
-        scene.world.init_resource::<TestAssets>();
+    commands.spawn((
+        Mesh3d(assets.quad_mesh),
+        MeshMaterial(assets.video1_material),
+        Transform::default().scaled_by(Vec3::new(SCALE, assets.video1_aspect_ratio * SCALE, 1.0)),
+        TimeScale(0.5),
+    ));
 
-        scene.world.run_schedule(Startup);
-        scene.flags |= WallpaperFlags::STARTUP_DONE;
+    commands.spawn((
+        Mesh3d(assets.quad_mesh),
+        MeshMaterial(assets.video2_material),
+        Transform::default().scaled_by(Vec3::new(SCALE, assets.video2_aspect_ratio * SCALE, 1.0)),
+        TimeScale(0.3),
+    ));
 
-        Self { scene }
-    }
-
-    pub fn spawn_videos(mut commands: Commands, assets: Res<TestAssets>) {
-        const SCALE: f32 = 0.6;
-
-        commands.spawn((
-            Mesh3d(assets.quad_mesh),
-            MeshMaterial(assets.video1_material),
-            Transform::default().scaled_by(Vec3::new(
-                SCALE,
-                assets.video1_aspect_ratio * SCALE,
-                1.0,
-            )),
-            TimeScale(0.5),
-        ));
-
-        commands.spawn((
-            Mesh3d(assets.quad_mesh),
-            MeshMaterial(assets.video2_material),
-            Transform::default().scaled_by(Vec3::new(
-                SCALE,
-                assets.video2_aspect_ratio * SCALE,
-                1.0,
-            )),
-            TimeScale(0.3),
-        ));
-
-        commands.spawn((
-            Mesh3d(assets.triangle_mesh),
-            MeshMaterial(assets.video2_material),
-            Transform::default().scaled_by(Vec3::new(
-                SCALE,
-                assets.video2_aspect_ratio * SCALE,
-                1.0,
-            )),
-            TimeScale(0.8),
-        ));
-    }
-
-    pub fn spawn_mesh(mut commands: Commands, assets: Res<TestAssets>) {
-        const SCALE: f32 = 0.6;
-        let aspect_scale = Vec3::new(SCALE, SCALE * assets.image_aspect_ratio, 1.0);
-
-        commands.spawn((
-            Mesh3d(assets.quad_mesh),
-            Transform::default().scaled_by(aspect_scale),
-            MeshMaterial(assets.image_material),
-            TimeScale(1.0),
-        ));
-
-        commands.spawn((
-            Mesh3d(assets.quad_mesh),
-            Transform::default().scaled_by(aspect_scale),
-            MeshMaterial(assets.image_material),
-            TimeScale(std::f32::consts::FRAC_PI_2),
-        ));
-    }
-
-    pub fn rotate_meshes(
-        mut transforms: Query<(&mut Transform, &TimeScale), With<Mesh3d>>,
-        time: Res<Time>,
-    ) {
-        let time = time.elapsed.as_secs_f32();
-
-        for (mut transform, &TimeScale(time_scale)) in &mut transforms {
-            transform.translation.x = 0.5 * (time_scale * time).cos();
-            transform.translation.y = 0.5 * (time_scale * time).sin();
-
-            transform.rotation = Quat::from_axis_angle(Vec3::X + time_scale * Vec3::Y, time);
-        }
-    }
+    commands.spawn((
+        Mesh3d(assets.triangle_mesh),
+        MeshMaterial(assets.video2_material),
+        Transform::default().scaled_by(Vec3::new(SCALE, assets.video2_aspect_ratio * SCALE, 1.0)),
+        TimeScale(0.8),
+    ));
 }
 
-impl OldWallpaper for SceneTestWallpaper {
-    fn frame(
-        &mut self,
-        _: &Runtime,
-        _: &mut wgpu::CommandEncoder,
-        _: &wgpu::TextureView,
-    ) -> Result<FrameInfo, FrameError> {
-        Err(FrameError::NoWorkToDo)
-    }
+pub fn spawn_mesh(mut commands: Commands, assets: Res<TestAssets>) {
+    const SCALE: f32 = 0.6;
+    let aspect_scale = Vec3::new(SCALE, SCALE * assets.image_aspect_ratio, 1.0);
 
-    fn free_frame(&mut self, runtime: &Runtime) -> Result<FrameInfo, FrameError> {
-        if Almost::is_nil(&runtime.scene_renderer) {
-            return Err(FrameError::Skip);
-        }
+    commands.spawn((
+        Mesh3d(assets.quad_mesh),
+        Transform::default().scaled_by(aspect_scale),
+        MeshMaterial(assets.image_material),
+        TimeScale(1.0),
+    ));
 
-        {
-            let mut renderer = runtime.scene_renderer.write().unwrap();
-            renderer.apply_queued();
-        }
+    commands.spawn((
+        Mesh3d(assets.quad_mesh),
+        Transform::default().scaled_by(aspect_scale),
+        MeshMaterial(assets.image_material),
+        TimeScale(std::f32::consts::FRAC_PI_2),
+    ));
+}
 
-        static NOT_FIRST_TIME: AtomicBool = AtomicBool::new(false);
+pub fn rotate_meshes(
+    mut transforms: Query<(&mut Transform, &TimeScale), With<Mesh3d>>,
+    time: Res<Time>,
+) {
+    let time = time.elapsed.as_secs_f32();
 
-        thread::scope(|s| {
-            let handle = s.spawn(|| {
-                if NOT_FIRST_TIME.fetch_or(true, Ordering::Relaxed) {
-                    let mut renderer = runtime.scene_renderer.write().unwrap();
-                    renderer.world.run_schedule(Render);
-                }
-            });
+    for (mut transform, &TimeScale(time_scale)) in &mut transforms {
+        transform.translation.x = 0.5 * (time_scale * time).cos();
+        transform.translation.y = 0.5 * (time_scale * time).sin();
 
-            self.scene.update();
-
-            handle.join().unwrap();
-        });
-
-        let mut renderer = runtime.scene_renderer.write().unwrap();
-        self.scene.extract(&mut renderer.world);
-
-        let frame_info = match self.scene.world.resource::<FrameRateSetting>() {
-            FrameRateSetting::TargetFrameDuration(duration) => FrameInfo {
-                target_frame_time: Some(*duration),
-            },
-            FrameRateSetting::NoUpdate => FrameInfo {
-                target_frame_time: None,
-            },
-            FrameRateSetting::GuessFromScene => FrameInfo::new_60_fps(),
-        };
-
-        Ok(frame_info)
-    }
-
-    fn required_features() -> RuntimeFeatures
-    where
-        Self: Sized,
-    {
-        RuntimeFeatures::SCENE_RENDERER
+        transform.rotation = Quat::from_axis_angle(Vec3::X + time_scale * Vec3::Y, time);
     }
 }

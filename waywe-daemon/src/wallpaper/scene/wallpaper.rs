@@ -1,28 +1,24 @@
 use crate::{
     event_loop::{FrameError, FrameInfo},
     runtime::{
-        Runtime, RuntimeFeatures,
         gpu::Wgpu,
         wayland::{MonitorId, Wayland},
     },
-    wallpaper::{
-        OldWallpaper,
-        scene::{
-            DummyWorld, FrameRateSetting, MainWorld, Monitor, PostExtract, PostStartup, Startup,
-            Time, Update, WallpaperConfig, WallpaperFlags,
-            assets::Assets,
-            guess_framerate,
-            image::{Image, ImageMaterial},
-            mesh::{Mesh, Mesh3d, MeshMaterial},
-            plugin::{DefaultPlugins, PluginGroup},
-            render::{
-                EntityMap, MonitorPlugged, QueuedPlugEvents, Render, RenderGpu, SceneExtract,
-                SceneRenderStage,
-            },
-            subapp::EcsApp,
-            time::update_time,
-            transform::Transform,
+    wallpaper::scene::{
+        DummyWorld, FrameRateSetting, MainWorld, Monitor, PostExtract, PostStartup, Startup, Time,
+        Update, WallpaperConfig, WallpaperFlags,
+        assets::Assets,
+        guess_framerate,
+        image::{Image, ImageMaterial},
+        mesh::{Mesh, Mesh3d, MeshMaterial},
+        plugin::{DefaultPlugins, PluginGroup},
+        render::{
+            EntityMap, MonitorPlugged, QueuedPlugEvents, Render, RenderGpu, SceneExtract,
+            SceneRenderStage,
         },
+        subapp::EcsApp,
+        time::update_time,
+        transform::Transform,
     },
 };
 use bevy_ecs::prelude::*;
@@ -210,16 +206,17 @@ pub fn setup(
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<ImageMaterial>>,
 ) {
-    let image_data = ::image::ImageReader::open(&**path)
+    let image = ::image::ImageReader::open(&**path)
         .unwrap()
         .decode()
         .unwrap()
         .into_rgba8();
 
-    let aspect_ratio = image_data.height() as f32 / image_data.width() as f32;
+    // TODO(hack3rmann): scale with respect to monitor's aspect ratio
+    let aspect_ratio = image.height() as f32 / image.width() as f32;
 
     let mesh = meshes.add(Mesh::rect(Vec2::ONE));
-    let image = images.add(Image { image: image_data });
+    let image = images.add(Image { image });
     let material = materials.add(ImageMaterial { image });
 
     commands.spawn((
@@ -227,29 +224,4 @@ pub fn setup(
         MeshMaterial(material),
         Transform::default().scaled_by(Vec3::new(1.0, aspect_ratio, 1.0)),
     ));
-}
-
-#[derive(Deref, DerefMut)]
-pub struct WallpaperWrapper(pub PreparedWallpaper);
-
-impl OldWallpaper for WallpaperWrapper {
-    fn frame(
-        &mut self,
-        _: &Runtime,
-        _: &mut wgpu::CommandEncoder,
-        _: &wgpu::TextureView,
-    ) -> Result<FrameInfo, FrameError> {
-        Err(FrameError::NoWorkToDo)
-    }
-
-    fn free_frame(&mut self, _: &Runtime) -> Result<FrameInfo, FrameError> {
-        self.0.frame()
-    }
-
-    fn required_features() -> RuntimeFeatures
-    where
-        Self: Sized,
-    {
-        RuntimeFeatures::SCENE_RENDERER
-    }
 }
