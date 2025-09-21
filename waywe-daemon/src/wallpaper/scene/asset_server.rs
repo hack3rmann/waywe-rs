@@ -1,7 +1,8 @@
 use super::wallpaper::Wallpaper;
 use crate::wallpaper::scene::{
-    assets::{Asset, Assets},
+    assets::{Asset, Assets, AssetsExtract},
     plugin::Plugin,
+    render::SceneExtract,
 };
 use bevy_ecs::prelude::*;
 use crossbeam::channel::Sender;
@@ -22,6 +23,15 @@ impl Plugin for AssetServerPlugin {
         let server = AssetServer::default();
         wallpaper.main.insert_resource(server.clone());
         wallpaper.render.insert_resource(server);
+        wallpaper.render.configure_sets(
+            SceneExtract,
+            (
+                AssetsExtract::MainToRender,
+                AssetsExtract::AssetsToRef,
+                AssetsExtract::RefToRef,
+            )
+                .chain(),
+        );
     }
 }
 

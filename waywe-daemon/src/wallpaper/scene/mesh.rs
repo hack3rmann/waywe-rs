@@ -24,16 +24,16 @@ use crate::{
     runtime::{gpu::Wgpu, wayland::MonitorId},
     wallpaper::scene::{
         Monitor,
-        asset_server::{AssetHandle, AssetId},
+        asset_server::AssetHandle,
         assets::{
-            Asset, AssetsPlugin, RefAssets, RenderAsset, RenderAssets, RenderAssetsPlugin,
-            extract_new_render_assets,
+            Asset, AssetsPlugin, RefAssets, RefAssetsPlugin, RefAssetsRefDependencyPlugin,
+            RenderAsset, RenderAssets, RenderAssetsPlugin, extract_new_render_assets,
         },
         extract::Extract,
         image::{ImageMaterial, extract_image_materials},
         material::{Material, RenderMaterial, RenderMaterialId},
         plugin::Plugin,
-        render::{EntityMap, MainEntity, Render, RenderGpu, SceneExtract, RenderStage},
+        render::{EntityMap, MainEntity, Render, RenderGpu, RenderStage, SceneExtract},
         time::Time,
         transform::{GlobalTransform, ModelMatrix, Transform},
         video::{VideoMaterial, extract_video_materials},
@@ -44,12 +44,11 @@ use bevy_ecs::{
     system::{SystemParamItem, lifetimeless::SRes},
 };
 use bytemuck::{Pod, Zeroable};
-use derive_more::{Deref, DerefMut};
 use for_sure::prelude::*;
 use glam::{Mat4, Vec2, Vec3};
 use itertools::Itertools;
 use smallvec::{SmallVec, smallvec};
-use std::{collections::HashMap, mem};
+use std::mem;
 
 /// Plugin for mesh rendering functionality.
 ///
@@ -61,11 +60,12 @@ impl Plugin for MeshPlugin {
         wallpaper.add_plugins((
             AssetsPlugin::<Mesh>::new(),
             RenderAssetsPlugin::<RenderMesh>::extract_new(),
+            RefAssetsPlugin::<MeshPipeline>::new(),
+            RefAssetsRefDependencyPlugin::<MeshPipeline, RenderMaterial>::new(),
         ));
 
         wallpaper
             .render
-            .init_resource::<MeshPipelines>()
             .init_resource::<OngoingRender>()
             .add_systems(
                 SceneExtract,
@@ -107,10 +107,6 @@ pub struct PushConst {
     pub _padding: [u32; 3],
 }
 
-/// Collection of mesh pipelines for a specific material.
-#[derive(Default, Resource, Debug, Deref, DerefMut)]
-pub struct MeshPipelines(pub HashMap<AssetId, MeshPipeline>);
-
 /// Render pipeline for meshes.
 #[derive(Debug)]
 pub struct MeshPipeline {
@@ -119,6 +115,8 @@ pub struct MeshPipeline {
     /// Render pipeline.
     pub pipeline: wgpu::RenderPipeline,
 }
+
+impl Asset for MeshPipeline {}
 
 impl MeshPipeline {
     /// Create a new mesh pipeline for a specific material and monitor.
@@ -274,7 +272,7 @@ pub fn extact_objects<M: Material>(
     >,
     gpu: Res<RenderGpu>,
     materials: Res<RefAssets<RenderMaterial>>,
-    mut pipelines: ResMut<MeshPipelines>,
+    mut pipelines: ResMut<RefAssets<MeshPipeline>>,
 ) {
     for (id, Mesh3d(mesh), MeshMaterial(material), transform) in &mesh_query {
         let render_id = commands
@@ -288,9 +286,9 @@ pub fn extact_objects<M: Material>(
 
         let render_material = materials.get(material.id()).unwrap();
 
-        pipelines
-            .entry(material.id())
-            .or_insert_with(|| MeshPipeline::new(&gpu, monitor.id, render_material));
+        pipelines.insert_with(material.id(), || {
+            MeshPipeline::new(&gpu, monitor.id, render_material)
+        });
 
         entity_map.insert(id, render_id);
     }
@@ -316,7 +314,7 @@ pub fn despawn_removed_entities(
 
 /// System to render meshes.
 pub fn render_meshes(
-    pipelines: Res<MeshPipelines>,
+    pipelines: Res<RefAssets<MeshPipeline>>,
     materials: Res<RefAssets<RenderMaterial>>,
     meshes: Res<RenderAssets<RenderMesh>>,
     mesh_handles: Query<(&RenderMeshHandle, &ModelMatrix, &RenderMaterialId)>,
@@ -335,7 +333,7 @@ pub fn render_meshes(
         let camera_view =
             Mat4::orthographic_rh(-1.0, 1.0, -aspect_ratio, aspect_ratio, -10.0, 10.0);
 
-        let pipeline = pipelines.get(&material_id).unwrap();
+        let pipeline = pipelines.get(material_id).unwrap();
         let material = materials.get(material_id).unwrap();
 
         {

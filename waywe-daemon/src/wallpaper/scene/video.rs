@@ -56,7 +56,7 @@ impl Plugin for VideoPlugin {
             .init_resource::<VideoPipeline>()
             .add_systems(
                 SceneExtract,
-                extract_video_materials.after(AssetsExtract::Stage),
+                extract_video_materials.after(AssetsExtract::MainToRender),
             );
     }
 }

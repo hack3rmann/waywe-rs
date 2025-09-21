@@ -23,7 +23,7 @@ use crate::wallpaper::scene::{
     },
     extract::Extract,
     plugin::{AddPlugins, Plugin},
-    render::SceneExtract,
+    render::{Render, SceneExtract},
 };
 use bevy_ecs::{
     prelude::*,
@@ -138,12 +138,14 @@ impl<A: Asset> FromWorld for Assets<A> {
 #[derive(Resource)]
 pub struct RefAssets<A: Asset> {
     map: HashMap<AssetId, A>,
+    removed_ids: SmallVec<[AssetId; 4]>,
 }
 
 impl<A: Asset> RefAssets<A> {
     pub fn new() -> Self {
         Self {
             map: HashMap::new(),
+            removed_ids: SmallVec::new(),
         }
     }
 
@@ -159,13 +161,27 @@ impl<A: Asset> RefAssets<A> {
         self.map.insert(id, asset);
     }
 
+    pub fn insert_with(&mut self, id: AssetId, make_asset: impl FnOnce() -> A) {
+        self.map.entry(id).or_insert_with(make_asset);
+    }
+
     pub fn remove(&mut self, id: AssetId) {
-        if self.map.remove(&id).is_none() {
-            error!(
-                ?id,
-                ref_asset_type = std::any::type_name::<A>(),
-                "trying to remove assets that does not exist"
-            );
+        self.removed_ids.push(id);
+    }
+
+    pub fn removed_assets(&self) -> &[AssetId] {
+        &self.removed_ids
+    }
+
+    pub fn flush(&mut self) {
+        for id in self.removed_ids.drain(..) {
+            if self.map.remove(&id).is_none() {
+                error!(
+                    ?id,
+                    ref_asset_type = std::any::type_name::<A>(),
+                    "trying to remove assets that does not exist"
+                );
+            }
         }
     }
 }
@@ -176,12 +192,25 @@ impl<A: Asset> Default for RefAssets<A> {
     }
 }
 
+pub fn flush_ref_assets<R: Asset>(mut assets: ResMut<RefAssets<R>>) {
+    assets.flush();
+}
+
 pub fn cleanup_ref_assets<R: Asset, A: Asset>(
     assets: Extract<Res<Assets<A>>>,
     mut ref_assets: ResMut<RefAssets<R>>,
 ) {
     for &id in assets.removed_assets() {
         ref_assets.remove(id);
+    }
+}
+
+pub fn cleanup_ref_to_ref_assets<R1: Asset, R2: Asset>(
+    from: Res<RefAssets<R1>>,
+    mut to: ResMut<RefAssets<R2>>,
+) {
+    for &id in from.removed_assets() {
+        to.remove(id);
     }
 }
 
@@ -203,7 +232,10 @@ impl<A> Default for RefAssetsPlugin<A> {
 
 impl<A: Asset> Plugin for RefAssetsPlugin<A> {
     fn build(&self, wallpaper: &mut Wallpaper) {
-        wallpaper.render.init_resource::<RefAssets<A>>();
+        wallpaper
+            .render
+            .init_resource::<RefAssets<A>>()
+            .add_systems(Render, flush_ref_assets::<A>);
     }
 }
 
@@ -225,9 +257,35 @@ impl<R, A> Default for RefAssetsDependencyPlugin<R, A> {
 
 impl<R: Asset, A: Asset> Plugin for RefAssetsDependencyPlugin<R, A> {
     fn build(&self, wallpaper: &mut Wallpaper) {
-        wallpaper
-            .render
-            .add_systems(SceneExtract, cleanup_ref_assets::<R, A>);
+        wallpaper.render.add_systems(
+            SceneExtract,
+            cleanup_ref_assets::<R, A>.in_set(AssetsExtract::AssetsToRef),
+        );
+    }
+}
+
+pub struct RefAssetsRefDependencyPlugin<R1, R2> {
+    _p: PhantomData<(R1, R2)>,
+}
+
+impl<R1, R2> RefAssetsRefDependencyPlugin<R1, R2> {
+    pub const fn new() -> Self {
+        Self { _p: PhantomData }
+    }
+}
+
+impl<R1, R2> Default for RefAssetsRefDependencyPlugin<R1, R2> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<R1: Asset, R2: Asset> Plugin for RefAssetsRefDependencyPlugin<R1, R2> {
+    fn build(&self, wallpaper: &mut Wallpaper) {
+        wallpaper.render.add_systems(
+            SceneExtract,
+            cleanup_ref_to_ref_assets::<R1, R2>.in_set(AssetsExtract::RefToRef),
+        );
     }
 }
 
@@ -288,7 +346,9 @@ pub trait RenderAsset: Send + Sync + 'static {
 #[derive(SystemSet, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum AssetsExtract {
     #[default]
-    Stage,
+    MainToRender,
+    AssetsToRef,
+    RefToRef,
 }
 
 /// System to extract new render assets.
@@ -412,12 +472,12 @@ impl<A: RenderAsset> Plugin for RenderAssetsPlugin<A> {
         if self.do_extact_all {
             wallpaper.render.add_systems(
                 SceneExtract,
-                extract_all_render_assets::<A>.in_set(AssetsExtract::Stage),
+                extract_all_render_assets::<A>.in_set(AssetsExtract::MainToRender),
             );
         } else {
             wallpaper.render.add_systems(
                 SceneExtract,
-                extract_new_render_assets::<A>.in_set(AssetsExtract::Stage),
+                extract_new_render_assets::<A>.in_set(AssetsExtract::MainToRender),
             );
         }
     }

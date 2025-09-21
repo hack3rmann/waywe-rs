@@ -53,7 +53,7 @@ impl Plugin for ImagePlugin {
             .render
             .add_systems(
                 SceneExtract,
-                extract_image_materials.after(AssetsExtract::Stage),
+                extract_image_materials.after(AssetsExtract::MainToRender),
             )
             .init_resource::<ImagePipeline>();
     }
