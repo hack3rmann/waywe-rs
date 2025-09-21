@@ -1,3 +1,25 @@
+//! Static image wallpaper implementation.
+//!
+//! This module provides an implementation for displaying a static image as a wallpaper.
+//! The image is automatically scaled to fit the screen while maintaining its aspect ratio.
+//!
+//! # Usage
+//!
+//! ```rust
+//! use waywe_daemon::wallpaper::default::image::ImageWallpaper;
+//! use waywe_daemon::wallpaper::scene::wallpaper::Wallpaper;
+//! use std::path::PathBuf;
+//!
+//! let image_wallpaper = ImageWallpaper {
+//!     path: PathBuf::from("path/to/image.png"),
+//! };
+//!
+//! // The wallpaper will be built with:
+//! // - No update schedule (static wallpaper)
+//! // - DefaultPlugins for basic functionality
+//! // - A quad mesh with the image as a texture
+//! ```
+
 use crate::wallpaper::scene::{
     FrameRateSetting, Monitor, Startup,
     assets::Assets,
@@ -12,14 +34,25 @@ use derive_more::Deref;
 use glam::{Vec2, Vec3};
 use std::path::PathBuf;
 
+/// A wallpaper that displays a static image.
+///
+/// This wallpaper implementation loads an image from a file path and displays
+/// it as a fullscreen wallpaper. The image is automatically scaled to fit
+/// the screen while maintaining its aspect ratio.
 pub struct ImageWallpaper {
+    /// Path to the image file to display.
     pub path: PathBuf,
 }
 
+/// Resource that holds the image path during initialization.
 #[derive(Resource, Deref)]
 pub struct ImagePath(pub PathBuf);
 
 impl WallpaperBuilder for ImageWallpaper {
+    /// Build the image wallpaper by setting up the scene.
+    ///
+    /// This adds the default plugins, inserts the image path as a resource,
+    /// and adds the setup system to the startup schedule.
     fn build(self, wallpaper: &mut Wallpaper) {
         wallpaper.add_plugins(DefaultPlugins);
 
@@ -29,11 +62,18 @@ impl WallpaperBuilder for ImageWallpaper {
             .add_systems(Startup, setup);
     }
 
+    /// Get the frame rate setting for this wallpaper.
+    ///
+    /// Image wallpapers use [`FrameRateSetting::NoUpdate`] since they are static.
     fn frame_rate(&self) -> FrameRateSetting {
         FrameRateSetting::NoUpdate
     }
 }
 
+/// System that sets up the image wallpaper scene.
+///
+/// This system loads the image, creates a mesh to display it on, and spawns
+/// an entity with the appropriate components to render the image.
 pub fn setup(
     mut commands: Commands,
     path: Res<ImagePath>,

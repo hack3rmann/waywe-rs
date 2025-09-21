@@ -1,3 +1,23 @@
+//! Test wallpaper implementation with animations.
+//!
+//! This module provides a test wallpaper with multiple meshes, videos, and animations
+//! for testing the scene system. It includes both static images and videos with
+//! rotating and moving elements.
+//!
+//! # Usage
+//!
+//! ```rust
+//! use waywe_daemon::wallpaper::default::test::SceneTestWallpaper;
+//! use waywe_daemon::wallpaper::scene::wallpaper::Wallpaper;
+//!
+//! let test_wallpaper = SceneTestWallpaper;
+//!
+//! // The wallpaper will be built with:
+//! //! - DefaultPlugins for basic functionality
+//! //! - Multiple meshes with images and videos
+//! //! - Animation systems that respond to time and cursor position
+//! ```
+
 use crate::wallpaper::scene::{
     Monitor, Startup, Update,
     assets::{AssetHandle, Assets},
@@ -14,9 +34,18 @@ use bevy_ecs::prelude::*;
 use glam::{Quat, Vec2, Vec3};
 use smallvec::smallvec;
 
+/// A test wallpaper with multiple meshes and animations.
+///
+/// This wallpaper implementation is designed for testing the scene system.
+/// It includes multiple meshes with both images and videos, and animation
+/// systems that respond to time and cursor position.
 pub struct SceneTestWallpaper;
 
 impl WallpaperBuilder for SceneTestWallpaper {
+    /// Build the test wallpaper by setting up the scene.
+    ///
+    /// This adds the default plugins, initializes test assets, and adds
+    /// systems for startup and updates.
     fn build(self, wallpaper: &mut Wallpaper) {
         wallpaper.add_plugins(DefaultPlugins);
 
@@ -28,25 +57,42 @@ impl WallpaperBuilder for SceneTestWallpaper {
     }
 }
 
+/// Component that controls the time scale for animation.
 #[derive(Component)]
 pub struct TimeScale(pub f32);
 
+/// Resource that holds pre-loaded test assets.
 #[derive(Resource)]
 pub struct TestAssets {
+    /// A quad mesh for rendering.
     pub quad_mesh: AssetHandle<Mesh>,
+    /// A triangle mesh for rendering.
     pub triangle_mesh: AssetHandle<Mesh>,
+    /// A test image asset.
     pub image: AssetHandle<Image>,
+    /// The aspect ratio of the test image.
     pub image_aspect_ratio: f32,
+    /// A material for the test image.
     pub image_material: AssetHandle<ImageMaterial>,
+    /// The first test video asset.
     pub video1: AssetHandle<Video>,
+    /// A material for the first test video.
     pub video1_material: AssetHandle<VideoMaterial>,
+    /// The aspect ratio of the first test video.
     pub video1_aspect_ratio: f32,
+    /// The second test video asset.
     pub video2: AssetHandle<Video>,
+    /// A material for the second test video.
     pub video2_material: AssetHandle<VideoMaterial>,
+    /// The aspect ratio of the second test video.
     pub video2_aspect_ratio: f32,
 }
 
 impl FromWorld for TestAssets {
+    /// Load test assets from the world.
+    ///
+    /// This creates meshes, loads images and videos, and sets up materials
+    /// for use in the test wallpaper.
     fn from_world(world: &mut World) -> Self {
         let mut meshes = world.resource_mut::<Assets<Mesh>>();
 
@@ -109,6 +155,10 @@ impl FromWorld for TestAssets {
     }
 }
 
+/// System that spawns video entities.
+///
+/// This system creates entities for playing videos with appropriate scaling
+/// and time scaling factors for animation.
 pub fn spawn_videos(mut commands: Commands, assets: Res<TestAssets>) {
     const SCALE: f32 = 0.6;
 
@@ -134,6 +184,10 @@ pub fn spawn_videos(mut commands: Commands, assets: Res<TestAssets>) {
     ));
 }
 
+/// System that spawns image entities.
+///
+/// This system creates entities for displaying images with appropriate scaling
+/// and time scaling factors for animation.
 pub fn spawn_mesh(mut commands: Commands, assets: Res<TestAssets>) {
     const SCALE: f32 = 0.6;
     let aspect_scale = Vec3::new(SCALE, SCALE * assets.image_aspect_ratio, 1.0);
@@ -153,6 +207,10 @@ pub fn spawn_mesh(mut commands: Commands, assets: Res<TestAssets>) {
     ));
 }
 
+/// System that animates meshes over time.
+///
+/// This system rotates and moves meshes based on elapsed time and cursor position.
+/// Each mesh can have a different time scale for unique animation behavior.
 pub fn rotate_meshes(
     mut transforms: Query<(&mut Transform, &TimeScale), With<Mesh3d>>,
     time: Res<Time>,
