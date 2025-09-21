@@ -33,7 +33,7 @@ use crate::{
         image::{ImageMaterial, extract_image_materials},
         material::{Material, RenderMaterial, RenderMaterialId},
         plugin::Plugin,
-        render::{EntityMap, MainEntity, Render, RenderGpu, SceneExtract, SceneRenderStage},
+        render::{EntityMap, MainEntity, Render, RenderGpu, SceneExtract, RenderStage},
         time::Time,
         transform::{GlobalTransform, ModelMatrix, Transform},
         video::{VideoMaterial, extract_video_materials},
@@ -76,14 +76,15 @@ impl Plugin for MeshPlugin {
                     extact_objects::<VideoMaterial>
                         .after(extract_video_materials)
                         .after(extract_new_render_assets::<RenderMesh>),
+                    despawn_removed_entities,
                 ),
             )
             .add_systems(
                 Render,
                 (
-                    prepare_render.in_set(SceneRenderStage::PreRender),
-                    render_meshes.in_set(SceneRenderStage::Render),
-                    finish_render.in_set(SceneRenderStage::Present),
+                    prepare_render.in_set(RenderStage::PreRender),
+                    render_meshes.in_set(RenderStage::Render),
+                    finish_render.in_set(RenderStage::Present),
                 ),
             );
     }
@@ -292,6 +293,24 @@ pub fn extact_objects<M: Material>(
             .or_insert_with(|| MeshPipeline::new(&gpu, monitor.id, render_material));
 
         entity_map.insert(id, render_id);
+    }
+}
+
+pub fn despawn_removed_entities(
+    mut commands: Commands,
+    mut despawned: Extract<RemovedComponents<Mesh3d>>,
+    mut entity_map: ResMut<EntityMap>,
+) {
+    for id in despawned.read() {
+        let Some(render_id) = entity_map.remove(&id) else {
+            continue;
+        };
+
+        let Ok(mut render_entity) = commands.get_entity(render_id) else {
+            continue;
+        };
+
+        render_entity.despawn();
     }
 }
 

@@ -75,14 +75,10 @@ pub struct TestAssets {
     pub image_aspect_ratio: f32,
     /// A material for the test image.
     pub image_material: AssetHandle<ImageMaterial>,
-    /// The first test video asset.
-    pub video1: AssetHandle<Video>,
     /// A material for the first test video.
     pub video1_material: AssetHandle<VideoMaterial>,
     /// The aspect ratio of the first test video.
     pub video1_aspect_ratio: f32,
-    /// The second test video asset.
-    pub video2: AssetHandle<Video>,
     /// A material for the second test video.
     pub video2_material: Option<AssetHandle<VideoMaterial>>,
     /// The aspect ratio of the second test video.
@@ -137,10 +133,10 @@ impl FromWorld for TestAssets {
 
         let mut video_materials = world.resource_mut::<Assets<VideoMaterial>>();
         let video1_material = video_materials.add(VideoMaterial {
-            video: video1_handle.clone(),
+            video: video1_handle,
         });
         let video2_material = video_materials.add(VideoMaterial {
-            video: video2_handle.clone(),
+            video: video2_handle,
         });
 
         Self {
@@ -149,10 +145,8 @@ impl FromWorld for TestAssets {
             image,
             image_aspect_ratio,
             image_material,
-            video1: video1_handle,
             video1_aspect_ratio,
             video1_material,
-            video2: video2_handle,
             video2_aspect_ratio,
             video2_material: Some(video2_material),
             despawn_entities: SmallVec::new(),

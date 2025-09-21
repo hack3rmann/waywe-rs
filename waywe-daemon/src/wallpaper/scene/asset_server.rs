@@ -4,7 +4,7 @@ use crate::wallpaper::scene::{
     plugin::Plugin,
 };
 use bevy_ecs::prelude::*;
-use crossbeam::channel::{self, Receiver, Sender};
+use crossbeam::channel::Sender;
 use std::{
     fmt, hash,
     marker::PhantomData,
@@ -59,28 +59,17 @@ impl Deref for AssetServer {
 #[derive(Debug)]
 pub struct AssetServerInner {
     id_generator: AssetIdGenerator,
-    drop_receiver: Receiver<AssetDropEvent>,
-    drop_sender: Sender<AssetDropEvent>,
 }
 
 impl AssetServerInner {
     pub fn new() -> Self {
-        let (drop_sender, drop_receiver) = channel::unbounded();
         let id_generator = AssetIdGenerator::new();
 
-        Self {
-            id_generator,
-            drop_receiver,
-            drop_sender,
-        }
+        Self { id_generator }
     }
 
     pub fn make_assets<A: Asset>(&self) -> Assets<A> {
-        Assets::new(
-            self.drop_receiver.clone(),
-            self.drop_sender.clone(),
-            self.id_generator.clone(),
-        )
+        Assets::new(self.id_generator.clone())
     }
 }
 

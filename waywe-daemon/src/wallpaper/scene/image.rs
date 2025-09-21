@@ -19,8 +19,8 @@ use crate::{
     wallpaper::scene::{
         asset_server::AssetHandle,
         assets::{
-            Asset, Assets, AssetsExtract, AssetsPlugin, RefAssets, RenderAsset, RenderAssets,
-            RenderAssetsPlugin,
+            Asset, Assets, AssetsExtract, AssetsPlugin, RefAssets, RefAssetsDependencyPlugin,
+            RenderAsset, RenderAssets, RenderAssetsPlugin,
         },
         extract::Extract,
         material::{AsBindGroup, Material, RenderMaterial, VertexFragmentShader},
@@ -46,13 +46,8 @@ impl Plugin for ImagePlugin {
             AssetsPlugin::<Image>::new(),
             AssetsPlugin::<ImageMaterial>::new(),
             RenderAssetsPlugin::<RenderImage>::extract_new(),
+            RefAssetsDependencyPlugin::<RenderMaterial, ImageMaterial>::new(),
         ));
-
-        let assets = wallpaper.main.resource::<Assets<Image>>();
-        wallpaper
-            .render
-            .resource_mut::<RefAssets<RenderMaterial>>()
-            .add_dependency(assets);
 
         wallpaper
             .render

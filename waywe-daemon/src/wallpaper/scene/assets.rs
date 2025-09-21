@@ -29,9 +29,10 @@ use bevy_ecs::{
     prelude::*,
     system::{StaticSystemParam, SystemParam, SystemParamItem},
 };
-use crossbeam::channel::{Receiver, Sender};
+use crossbeam::channel::{self, Receiver, Sender};
 use smallvec::SmallVec;
 use std::{collections::HashMap, marker::PhantomData};
+use tracing::error;
 
 /// Collection of assets of a specific type.
 ///
@@ -47,11 +48,9 @@ pub struct Assets<A: Asset> {
 }
 
 impl<A: Asset> Assets<A> {
-    pub fn new(
-        drop_receiver: Receiver<AssetDropEvent>,
-        drop_sender: Sender<AssetDropEvent>,
-        id_generator: AssetIdGenerator,
-    ) -> Self {
+    pub fn new(id_generator: AssetIdGenerator) -> Self {
+        let (drop_sender, drop_receiver) = channel::unbounded();
+
         Self {
             map: HashMap::new(),
             new_ids: SmallVec::new(),
@@ -103,7 +102,13 @@ impl<A: Asset> Assets<A> {
         self.new_ids.clear();
 
         for id in self.remove_ids.drain(..) {
-            _ = self.map.remove(&id);
+            if self.map.remove(&id).is_none() {
+                error!(
+                    ?id,
+                    asset_type = std::any::type_name::<A>(),
+                    "trying to remove assets that does not exist"
+                );
+            }
         }
     }
 
@@ -133,14 +138,12 @@ impl<A: Asset> FromWorld for Assets<A> {
 #[derive(Resource)]
 pub struct RefAssets<A: Asset> {
     map: HashMap<AssetId, A>,
-    drop_receivers: SmallVec<[Receiver<AssetDropEvent>; 4]>,
 }
 
 impl<A: Asset> RefAssets<A> {
     pub fn new() -> Self {
         Self {
             map: HashMap::new(),
-            drop_receivers: SmallVec::new(),
         }
     }
 
@@ -152,19 +155,17 @@ impl<A: Asset> RefAssets<A> {
         self.map.get_mut(&id)
     }
 
-    pub fn add_dependency<T: Asset>(&mut self, assets: &Assets<T>) {
-        self.drop_receivers.push(assets.drop_receiver.clone());
-    }
-
     pub fn insert(&mut self, id: AssetId, asset: A) {
         self.map.insert(id, asset);
     }
 
-    pub fn remove_droppped(&mut self) {
-        for receiver in &self.drop_receivers {
-            while let Ok(AssetDropEvent(id)) = receiver.try_recv() {
-                _ = self.map.remove(&id);
-            }
+    pub fn remove(&mut self, id: AssetId) {
+        if self.map.remove(&id).is_none() {
+            error!(
+                ?id,
+                ref_asset_type = std::any::type_name::<A>(),
+                "trying to remove assets that does not exist"
+            );
         }
     }
 }
@@ -172,6 +173,61 @@ impl<A: Asset> RefAssets<A> {
 impl<A: Asset> Default for RefAssets<A> {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+pub fn cleanup_ref_assets<R: Asset, A: Asset>(
+    assets: Extract<Res<Assets<A>>>,
+    mut ref_assets: ResMut<RefAssets<R>>,
+) {
+    for &id in assets.removed_assets() {
+        ref_assets.remove(id);
+    }
+}
+
+pub struct RefAssetsPlugin<A> {
+    _p: PhantomData<A>,
+}
+
+impl<A> RefAssetsPlugin<A> {
+    pub const fn new() -> Self {
+        Self { _p: PhantomData }
+    }
+}
+
+impl<A> Default for RefAssetsPlugin<A> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<A: Asset> Plugin for RefAssetsPlugin<A> {
+    fn build(&self, wallpaper: &mut Wallpaper) {
+        wallpaper.render.init_resource::<RefAssets<A>>();
+    }
+}
+
+pub struct RefAssetsDependencyPlugin<R, A> {
+    _p: PhantomData<(R, A)>,
+}
+
+impl<R, A> RefAssetsDependencyPlugin<R, A> {
+    pub const fn new() -> Self {
+        Self { _p: PhantomData }
+    }
+}
+
+impl<R, A> Default for RefAssetsDependencyPlugin<R, A> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<R: Asset, A: Asset> Plugin for RefAssetsDependencyPlugin<R, A> {
+    fn build(&self, wallpaper: &mut Wallpaper) {
+        wallpaper
+            .render
+            .add_systems(SceneExtract, cleanup_ref_assets::<R, A>);
     }
 }
 

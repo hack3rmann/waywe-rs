@@ -46,7 +46,7 @@ use crate::{
         DummyWorld, FrameRateSetting, MainWorld, Monitor, PostExtract, PostStartup, Startup, Time,
         Update, WallpaperConfig, WallpaperFlags, guess_framerate,
         plugin::PluginGroup,
-        render::{EntityMap, Render, RenderGpu, SceneExtract, SceneRenderStage},
+        render::{EntityMap, Render, RenderGpu, SceneExtract, RenderStage},
         subapp::EcsApp,
         time::update_time,
     },
@@ -72,14 +72,14 @@ impl Wallpaper {
         let mut render_schedule = Schedule::new(Render);
         render_schedule.configure_sets(
             (
-                SceneRenderStage::Update,
-                SceneRenderStage::PreRender,
-                SceneRenderStage::Render,
-                SceneRenderStage::Present,
+                RenderStage::Update,
+                RenderStage::PreRender,
+                RenderStage::Render,
+                RenderStage::Present,
             )
                 .chain(),
         );
-        render_schedule.add_systems(update_time.in_set(SceneRenderStage::Update));
+        render_schedule.add_systems(update_time.in_set(RenderStage::Update));
 
         render
             .init_resource::<Time>()

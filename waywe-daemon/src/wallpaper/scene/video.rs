@@ -17,16 +17,9 @@ use super::wallpaper::Wallpaper;
 use crate::{
     runtime::gpu::Wgpu,
     wallpaper::scene::{
-        Time, Update,
-        asset_server::AssetHandle,
-        assets::{
-            Asset, Assets, AssetsExtract, AssetsPlugin, RefAssets, RenderAsset, RenderAssets,
-            RenderAssetsPlugin,
-        },
-        extract::Extract,
-        material::{AsBindGroup, Material, RenderMaterial, VertexFragmentShader},
-        plugin::Plugin,
-        render::{RenderGpu, SceneExtract},
+        asset_server::AssetHandle, assets::{
+            Asset, Assets, AssetsExtract, AssetsPlugin, RefAssets, RefAssetsDependencyPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin
+        }, extract::Extract, material::{AsBindGroup, Material, RenderMaterial, VertexFragmentShader}, plugin::Plugin, render::{RenderGpu, SceneExtract}, Time, Update
     },
 };
 use ash::vk::{self, PhysicalDeviceMemoryProperties};
@@ -54,13 +47,8 @@ impl Plugin for VideoPlugin {
             AssetsPlugin::<Video>::new(),
             AssetsPlugin::<VideoMaterial>::new(),
             RenderAssetsPlugin::<RenderVideo>::extract_all(),
+            RefAssetsDependencyPlugin::<RenderMaterial, VideoMaterial>::new(),
         ));
-
-        let assets = wallpaper.main.resource::<Assets<Video>>();
-        wallpaper
-            .render
-            .resource_mut::<RefAssets<RenderMaterial>>()
-            .add_dependency(assets);
 
         wallpaper.main.add_systems(Update, advance_videos);
         wallpaper
