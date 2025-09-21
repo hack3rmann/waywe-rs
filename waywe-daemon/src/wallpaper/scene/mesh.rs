@@ -165,6 +165,7 @@ impl MeshPipeline {
     }
 }
 
+// FIXME(hack3rmann): remove monitor dependence
 #[derive(Resource, Default, Deref, DerefMut)]
 pub struct Pipelines(pub MonitorMap<MeshPipelines>);
 
@@ -213,7 +214,6 @@ impl Mesh {
 }
 
 #[derive(Clone, Debug, Component)]
-// FIXME(hck3rmann): requireing a material
 #[require(Transform)]
 pub struct Mesh3d(pub AssetHandle<Mesh>);
 

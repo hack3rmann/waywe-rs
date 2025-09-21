@@ -3209,6 +3209,7 @@ dependencies = [
  "itertools 0.14.0",
  "libc",
  "raw-window-handle",
+ "rayon",
  "reusable-box",
  "runtime",
  "rustix",

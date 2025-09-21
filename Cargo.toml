@@ -37,6 +37,7 @@ transmute-extra = { path = "transmute-extra" }
 thiserror = "2.0.11"
 safe-transmute = "0.11.3"
 rayon = "1.10.0"
+orx-parallel = "3.2.0"
 bitflags = "2.9.0"
 tracing = "0.1.41"
 static_assertions = "1.1.0"
