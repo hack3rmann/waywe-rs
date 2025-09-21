@@ -67,8 +67,6 @@ pub struct TimeScale(pub f32);
 pub struct TestAssets {
     /// A quad mesh for rendering.
     pub quad_mesh: AssetHandle<Mesh>,
-    /// A triangle mesh for rendering.
-    pub triangle_mesh: AssetHandle<Mesh>,
     /// A test image asset.
     pub image: AssetHandle<Image>,
     /// The aspect ratio of the test image.
@@ -93,15 +91,7 @@ impl FromWorld for TestAssets {
     /// for use in the test wallpaper.
     fn from_world(world: &mut World) -> Self {
         let mut meshes = world.resource_mut::<Assets<Mesh>>();
-
         let quad_mesh = meshes.add(Mesh::rect(Vec2::ONE));
-        let triangle_mesh = meshes.add(Mesh {
-            vertices: smallvec![
-                Vertex(Vec3::new(-0.5, -0.5, 0.0)),
-                Vertex(Vec3::new(0.5, -0.5, 0.0)),
-                Vertex(Vec3::new(0.0, 0.5, 0.0)),
-            ],
-        });
 
         let mut videos = world.resource_mut::<Assets<Video>>();
 
@@ -141,7 +131,6 @@ impl FromWorld for TestAssets {
 
         Self {
             quad_mesh,
-            triangle_mesh,
             image,
             image_aspect_ratio,
             image_material,
@@ -158,7 +147,11 @@ impl FromWorld for TestAssets {
 ///
 /// This system creates entities for playing videos with appropriate scaling
 /// and time scaling factors for animation.
-pub fn spawn_videos(mut commands: Commands, mut assets: ResMut<TestAssets>) {
+pub fn spawn_videos(
+    mut commands: Commands,
+    mut assets: ResMut<TestAssets>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
     const SCALE: f32 = 0.6;
 
     commands.spawn((
@@ -181,9 +174,17 @@ pub fn spawn_videos(mut commands: Commands, mut assets: ResMut<TestAssets>) {
         ))
         .id();
 
+    let triangle_mesh = meshes.add(Mesh {
+        vertices: smallvec![
+            Vertex(Vec3::new(-0.5, -0.5, 0.0)),
+            Vertex(Vec3::new(0.5, -0.5, 0.0)),
+            Vertex(Vec3::new(0.0, 0.5, 0.0)),
+        ],
+    });
+
     let entity2 = commands
         .spawn((
-            Mesh3d(assets.triangle_mesh.clone()),
+            Mesh3d(triangle_mesh),
             MeshMaterial(assets.video2_material.clone().unwrap()),
             Transform::default().scaled_by(Vec3::new(
                 SCALE,

@@ -17,9 +17,16 @@ use super::wallpaper::Wallpaper;
 use crate::{
     runtime::gpu::Wgpu,
     wallpaper::scene::{
-        asset_server::AssetHandle, assets::{
-            Asset, Assets, AssetsExtract, AssetsPlugin, RefAssets, RefAssetsDependencyPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin
-        }, extract::Extract, material::{AsBindGroup, Material, RenderMaterial, VertexFragmentShader}, plugin::Plugin, render::{RenderGpu, SceneExtract}, Time, Update
+        Time, Update,
+        asset_server::AssetHandle,
+        assets::{
+            Asset, Assets, AssetsExtract, AssetsPlugin, RefAssets, RefAssetsDependencyPlugin,
+            RenderAsset, RenderAssets, RenderAssetsPlugin,
+        },
+        extract::Extract,
+        material::{AsBindGroup, Material, RenderMaterial, VertexFragmentShader},
+        plugin::Plugin,
+        render::{RenderGpu, SceneExtract},
     },
 };
 use ash::vk::{self, PhysicalDeviceMemoryProperties};

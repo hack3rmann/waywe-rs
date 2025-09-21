@@ -46,7 +46,7 @@ use crate::{
         DummyWorld, FrameRateSetting, MainWorld, Monitor, PostExtract, PostStartup, Startup, Time,
         Update, WallpaperConfig, WallpaperFlags, guess_framerate,
         plugin::PluginGroup,
-        render::{EntityMap, Render, RenderGpu, SceneExtract, RenderStage},
+        render::{EntityMap, Render, RenderGpu, RenderStage, SceneExtract},
         subapp::EcsApp,
         time::update_time,
     },

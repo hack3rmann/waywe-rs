@@ -23,7 +23,7 @@ use crate::wallpaper::scene::{
     },
     extract::Extract,
     plugin::{AddPlugins, Plugin},
-    render::{Render, SceneExtract},
+    render::{Render, RenderStage, SceneExtract},
 };
 use bevy_ecs::{
     prelude::*,
@@ -298,15 +298,15 @@ pub trait Asset: Send + Sync + 'static {}
 #[derive(Resource)]
 pub struct RenderAssets<A: RenderAsset> {
     map: HashMap<AssetId, A>,
-    drop_receiver: Receiver<AssetDropEvent>,
+    removed_ids: SmallVec<[AssetId; 4]>,
 }
 
 impl<A: RenderAsset> RenderAssets<A> {
     /// Create a new empty render asset collection.
-    pub fn new(drop_receiver: Receiver<AssetDropEvent>) -> Self {
+    pub fn new() -> Self {
         Self {
             map: HashMap::new(),
-            drop_receiver,
+            removed_ids: SmallVec::new(),
         }
     }
 
@@ -316,8 +316,8 @@ impl<A: RenderAsset> RenderAssets<A> {
     }
 
     /// Remove a render asset.
-    pub fn remove(&mut self, id: AssetId) -> Option<A> {
-        self.map.remove(&id)
+    pub fn remove(&mut self, id: AssetId) {
+        self.removed_ids.push(id);
     }
 
     /// Get a reference to a render asset by handle.
@@ -325,10 +325,22 @@ impl<A: RenderAsset> RenderAssets<A> {
         self.map.get(&id)
     }
 
-    pub fn remove_droppped(&mut self) {
-        while let Ok(event) = self.drop_receiver.try_recv() {
-            _ = self.map.remove(&event.0);
+    pub fn flush(&mut self) {
+        for id in self.removed_ids.drain(..) {
+            if self.map.remove(&id).is_none() {
+                error!(
+                    ?id,
+                    ref_asset_type = std::any::type_name::<A>(),
+                    "trying to remove assets that does not exist"
+                );
+            }
         }
+    }
+}
+
+impl<A: RenderAsset> Default for RenderAssets<A> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -378,6 +390,19 @@ pub fn extract_all_render_assets<A: RenderAsset>(
         let render_asset = A::extract(asset, &mut param);
         render_assets.add(id, render_asset);
     }
+}
+
+pub fn remove_render_assets<A: RenderAsset>(
+    assets: Extract<Res<Assets<A::Asset>>>,
+    mut render_assets: ResMut<RenderAssets<A>>,
+) {
+    for &id in assets.removed_assets() {
+        render_assets.remove(id);
+    }
+}
+
+pub fn flush_render_assets<A: RenderAsset>(mut assets: ResMut<RenderAssets<A>>) {
+    assets.flush();
 }
 
 /// Plugin for managing assets in the main world.
@@ -465,9 +490,15 @@ impl<A: RenderAsset> Default for RenderAssetsPlugin<A> {
 
 impl<A: RenderAsset> Plugin for RenderAssetsPlugin<A> {
     fn build(&self, wallpaper: &mut Wallpaper) {
-        let assets = wallpaper.main.get_resource_or_init::<Assets<A::Asset>>();
-        let render_assets = RenderAssets::<A>::new(assets.drop_receiver.clone());
-        wallpaper.render.insert_resource(render_assets);
+        wallpaper.render.init_resource::<RenderAssets<A>>();
+
+        wallpaper
+            .render
+            .add_systems(
+                SceneExtract,
+                remove_render_assets::<A>.in_set(AssetsExtract::MainToRender),
+            )
+            .add_systems(Render, flush_render_assets::<A>.in_set(RenderStage::Update));
 
         if self.do_extact_all {
             wallpaper.render.add_systems(

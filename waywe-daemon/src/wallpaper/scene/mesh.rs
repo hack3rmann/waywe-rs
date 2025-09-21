@@ -24,7 +24,7 @@ use crate::{
     runtime::{gpu::Wgpu, wayland::MonitorId},
     wallpaper::scene::{
         Monitor,
-        asset_server::AssetHandle,
+        asset_server::{AssetHandle, AssetId},
         assets::{
             Asset, AssetsPlugin, RefAssets, RefAssetsPlugin, RefAssetsRefDependencyPlugin,
             RenderAsset, RenderAssets, RenderAssetsPlugin, extract_new_render_assets,
@@ -260,7 +260,7 @@ impl RenderMesh {
 /// Handle to a render mesh component.
 #[derive(Component)]
 #[require(ModelMatrix)]
-pub struct RenderMeshHandle(pub AssetHandle<Mesh>);
+pub struct RenderMeshId(pub AssetId);
 
 /// System to extract mesh objects for rendering.
 pub fn extact_objects<M: Material>(
@@ -278,7 +278,7 @@ pub fn extact_objects<M: Material>(
         let render_id = commands
             .spawn((
                 MainEntity(id),
-                RenderMeshHandle(mesh.clone()),
+                RenderMeshId(mesh.id()),
                 RenderMaterialId(material.id()),
                 ModelMatrix(transform.0.to_model()),
             ))
@@ -317,7 +317,7 @@ pub fn render_meshes(
     pipelines: Res<RefAssets<MeshPipeline>>,
     materials: Res<RefAssets<RenderMaterial>>,
     meshes: Res<RenderAssets<RenderMesh>>,
-    mesh_handles: Query<(&RenderMeshHandle, &ModelMatrix, &RenderMaterialId)>,
+    mesh_handles: Query<(&RenderMeshId, &ModelMatrix, &RenderMaterialId)>,
     mut render: ResMut<OngoingRender>,
     time: Res<Time>,
     monitor: Res<Monitor>,
@@ -358,8 +358,8 @@ pub fn render_meshes(
             pass.set_pipeline(&pipeline.pipeline);
             pass.set_bind_group(0, &material.bind_group, &[]);
 
-            for (RenderMeshHandle(mesh_handle), &ModelMatrix(model), _) in mesh_handles {
-                let mesh = meshes.get(mesh_handle.id()).unwrap();
+            for (&RenderMeshId(mesh_id), &ModelMatrix(model), _) in mesh_handles {
+                let mesh = meshes.get(mesh_id).unwrap();
                 let n_vertices = mesh.vertices.size() / mem::size_of::<Vertex>() as u64;
 
                 pass.set_vertex_buffer(0, mesh.vertices.slice(..));
