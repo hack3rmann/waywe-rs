@@ -94,7 +94,7 @@ pub struct RenderMaterial {
 impl Asset for RenderMaterial {}
 
 /// Handle to a render material component.
-#[derive(Component, Clone, Copy, Debug)]
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RenderMaterialHandle(pub AssetHandle<RenderMaterial>);
 
 /// Maps material assets to their render counterparts.

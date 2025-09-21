@@ -7,11 +7,7 @@ use crate::{
     },
     wallpaper::{
         self,
-        scene::{
-            cursor::CursorMoved,
-            render::{MonitorPlugged, MonitorUnplugged},
-            wallpaper::PreparedWallpaper,
-        },
+        scene::{cursor::CursorMoved, wallpaper::PreparedWallpaper},
     },
 };
 use for_sure::Almost;
@@ -180,14 +176,6 @@ impl Handle<WaylandEvent> for VideoApp {
                     runtime.wgpu.register_surface(&runtime.wayland, monitor_id);
                 }
 
-                for wallpaper in self.wallpapers.values_mut() {
-                    wallpaper
-                        .wallpaper
-                        .render
-                        .world
-                        .trigger(MonitorPlugged { id: monitor_id });
-                }
-
                 let monitors = runtime.wayland.client_state.monitors.read().unwrap();
                 let monitor = &monitors[&monitor_id];
                 let monitor_name = Arc::clone(monitor.name.as_ref().unwrap());
@@ -215,14 +203,6 @@ impl Handle<WaylandEvent> for VideoApp {
                 _ = self.wallpaper_states.remove(&monitor_id);
 
                 runtime.wgpu.unregister_surface(monitor_id);
-
-                for wallpaper in self.wallpapers.values_mut() {
-                    wallpaper
-                        .wallpaper
-                        .render
-                        .world
-                        .trigger(MonitorUnplugged { id: monitor_id });
-                }
             }
             WaylandEvent::CursorMoved { position } => {
                 for wallpaper in self.wallpapers.values_mut() {

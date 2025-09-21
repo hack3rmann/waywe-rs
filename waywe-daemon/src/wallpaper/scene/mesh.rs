@@ -21,10 +21,7 @@
 
 use super::wallpaper::Wallpaper;
 use crate::{
-    runtime::{
-        gpu::Wgpu,
-        wayland::{MonitorId, MonitorMap},
-    },
+    runtime::{gpu::Wgpu, wayland::MonitorId},
     wallpaper::scene::{
         Monitor,
         assets::{
@@ -35,10 +32,7 @@ use crate::{
         image::{ImageMaterial, extract_image_materials},
         material::{Material, MaterialAssetMap, RenderMaterial, RenderMaterialHandle},
         plugin::Plugin,
-        render::{
-            EntityMap, MainEntity, MonitorPlugged, MonitorUnplugged, Render, RenderGpu,
-            SceneExtract, SceneRenderStage,
-        },
+        render::{EntityMap, MainEntity, Render, RenderGpu, SceneExtract, SceneRenderStage},
         time::Time,
         transform::{GlobalTransform, ModelMatrix, Transform},
         video::{VideoMaterial, extract_video_materials},
@@ -70,9 +64,7 @@ impl Plugin for MeshPlugin {
 
         wallpaper
             .render
-            .add_observer(add_monitor)
-            .add_observer(remove_monitor)
-            .init_resource::<Pipelines>()
+            .init_resource::<MeshPipelines>()
             .init_resource::<OngoingRender>()
             .add_systems(
                 SceneExtract,
@@ -114,7 +106,7 @@ pub struct PushConst {
 }
 
 /// Collection of mesh pipelines for a specific material.
-#[derive(Default, Debug, Deref, DerefMut)]
+#[derive(Default, Resource, Debug, Deref, DerefMut)]
 pub struct MeshPipelines(pub HashMap<AssetHandle<RenderMaterial>, MeshPipeline>);
 
 /// Render pipeline for meshes.
@@ -198,33 +190,6 @@ impl MeshPipeline {
     }
 }
 
-/// Collection of pipelines for all monitors.
-#[derive(Resource, Default, Deref, DerefMut)]
-pub struct Pipelines(pub MonitorMap<MeshPipelines>);
-
-/// Observer system to add pipelines when a monitor is plugged in.
-pub fn add_monitor(
-    plugged: Trigger<MonitorPlugged>,
-    mut pipelines: ResMut<Pipelines>,
-    materials: Res<Assets<RenderMaterial>>,
-    gpu: Res<RenderGpu>,
-) {
-    pipelines.insert(
-        plugged.id,
-        MeshPipelines(
-            materials
-                .iter()
-                .map(|(handle, material)| (handle, MeshPipeline::new(&gpu, plugged.id, material)))
-                .collect(),
-        ),
-    );
-}
-
-/// Observer system to remove pipelines when a monitor is unplugged.
-pub fn remove_monitor(unplugged: Trigger<MonitorUnplugged>, mut pipelines: ResMut<Pipelines>) {
-    _ = pipelines.remove(&unplugged.id);
-}
-
 /// Geometric mesh asset.
 #[derive(Default)]
 pub struct Mesh {
@@ -297,25 +262,19 @@ impl RenderMesh {
 #[require(ModelMatrix)]
 pub struct RenderMeshHandle(pub AssetHandle<Mesh>);
 
-/// Component indicating which monitor an entity is attached to.
-#[derive(Component, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
-pub struct AttachedMonitor(pub MonitorId);
-
 /// System to extract mesh objects for rendering.
 pub fn extact_objects<M: Material>(
     mut commands: Commands,
     mut entity_map: ResMut<EntityMap>,
-    monitor_id: Extract<Res<Monitor>>,
+    monitor: Res<Monitor>,
     asset_map: Res<MaterialAssetMap>,
     mesh_query: Extract<
         Query<(Entity, &Mesh3d, &MeshMaterial<M>, &GlobalTransform), Changed<Mesh3d>>,
     >,
     gpu: Res<RenderGpu>,
     materials: Res<Assets<RenderMaterial>>,
-    mut pipelines: ResMut<Pipelines>,
+    mut pipelines: ResMut<MeshPipelines>,
 ) {
-    let pipelines = pipelines.get_mut(&monitor_id.id).unwrap();
-
     for (id, &Mesh3d(mesh_id), &MeshMaterial(material_id), transform) in &mesh_query {
         let render_material_id = asset_map.get(material_id).unwrap();
 
@@ -323,7 +282,6 @@ pub fn extact_objects<M: Material>(
             .spawn((
                 MainEntity(id),
                 RenderMeshHandle(mesh_id),
-                AttachedMonitor(monitor_id.id),
                 RenderMaterialHandle(render_material_id),
                 ModelMatrix(transform.0.to_model()),
             ))
@@ -333,7 +291,7 @@ pub fn extact_objects<M: Material>(
 
         pipelines
             .entry(render_material_id)
-            .or_insert_with(|| MeshPipeline::new(&gpu, monitor_id.id, material));
+            .or_insert_with(|| MeshPipeline::new(&gpu, monitor.id, material));
 
         entity_map.insert(id, render_id);
     }
@@ -341,34 +299,27 @@ pub fn extact_objects<M: Material>(
 
 /// System to render meshes.
 pub fn render_meshes(
-    pipelines: Res<Pipelines>,
+    pipelines: Res<MeshPipelines>,
     materials: Res<Assets<RenderMaterial>>,
     meshes: Res<RenderAssets<RenderMesh>>,
-    mesh_handles: Query<(
-        &RenderMeshHandle,
-        &RenderMaterialHandle,
-        &AttachedMonitor,
-        &ModelMatrix,
-    )>,
+    mesh_handles: Query<(&RenderMeshHandle, &ModelMatrix, &RenderMaterialHandle)>,
     mut render: ResMut<OngoingRender>,
     time: Res<Time>,
-    gpu: Res<RenderGpu>,
+    monitor: Res<Monitor>,
 ) {
     let mesh_handles = mesh_handles
         .iter()
-        .sort::<&AttachedMonitor>()
-        .chunk_by(|&(_, _, id, _)| id);
+        .sort::<&RenderMaterialHandle>()
+        .chunk_by(|&(_, _, handle)| handle);
 
-    for (&AttachedMonitor(monitor_id), mesh_handles) in &mesh_handles {
-        let monitor_pipelines = &pipelines[&monitor_id];
-        let target_surface = render.outputs.remove(&monitor_id).unwrap();
-        let aspect_ratio = {
-            let surfaces = gpu.surfaces.read().unwrap();
-            let config = &surfaces.get(&monitor_id).unwrap().config;
-            config.height as f32 / config.width as f32
-        };
+    for (&RenderMaterialHandle(material_id), mesh_handles) in &mesh_handles {
+        let target_surface = Almost::unwrap(Almost::take(&mut render.output));
+        let aspect_ratio = monitor.aspect_ratio();
         let camera_view =
             Mat4::orthographic_rh(-1.0, 1.0, -aspect_ratio, aspect_ratio, -10.0, 10.0);
+
+        let pipeline = pipelines.get(&material_id).unwrap();
+        let material = materials.get(material_id).unwrap();
 
         {
             let mut pass = render
@@ -389,20 +340,14 @@ pub fn render_meshes(
                     occlusion_query_set: None,
                 });
 
-            for (
-                &RenderMeshHandle(mesh_id),
-                &RenderMaterialHandle(material_id),
-                _,
-                &ModelMatrix(model),
-            ) in mesh_handles
-            {
-                let material = materials.get(material_id).unwrap();
-                let pipeline = monitor_pipelines.get(&material_id).unwrap();
-                let mesh = meshes.get(mesh_id).unwrap();
+            pass.set_pipeline(&pipeline.pipeline);
+            pass.set_bind_group(0, &material.bind_group, &[]);
 
-                pass.set_pipeline(&pipeline.pipeline);
+            for (&RenderMeshHandle(mesh_id), &ModelMatrix(model), _) in mesh_handles {
+                let mesh = meshes.get(mesh_id).unwrap();
+                let n_vertices = mesh.vertices.size() / mem::size_of::<Vertex>() as u64;
+
                 pass.set_vertex_buffer(0, mesh.vertices.slice(..));
-                pass.set_bind_group(0, &material.bind_group, &[]);
                 pass.set_push_constants(
                     wgpu::ShaderStages::VERTEX_FRAGMENT,
                     0,
@@ -413,12 +358,11 @@ pub fn render_meshes(
                     }),
                 );
 
-                let n_vertices = mesh.vertices.size() / mem::size_of::<Vertex>() as u64;
                 pass.draw(0..n_vertices as u32, 0..1);
             }
         }
 
-        _ = render.outputs.insert(monitor_id, target_surface);
+        render.output = Value(target_surface);
     }
 }
 
@@ -427,37 +371,32 @@ pub fn render_meshes(
 pub struct OngoingRender {
     /// Command encoder for building render commands.
     pub encoder: Almost<wgpu::CommandEncoder>,
-    /// Current surface textures for each monitor.
-    pub surfaces: MonitorMap<wgpu::SurfaceTexture>,
-    /// Texture views for each monitor.
-    pub outputs: MonitorMap<wgpu::TextureView>,
+    /// Current surface texture
+    pub surface: Almost<wgpu::SurfaceTexture>,
+    /// Surface texture view
+    pub output: Almost<wgpu::TextureView>,
 }
 
 /// System to prepare for rendering.
-pub fn prepare_render(mut render: ResMut<OngoingRender>, gpu: Res<RenderGpu>) {
+pub fn prepare_render(
+    monitor: Res<Monitor>,
+    mut render: ResMut<OngoingRender>,
+    gpu: Res<RenderGpu>,
+) {
     render.encoder = Value(gpu.device.create_command_encoder(&Default::default()));
-    render.surfaces = gpu
-        .surfaces
-        .read()
-        .unwrap()
-        .iter()
-        .map(|(&id, surface)| (id, surface.surface.get_current_texture().unwrap()))
-        .collect();
-    render.outputs = render
-        .surfaces
-        .iter()
-        .map(|(&id, surface)| (id, surface.texture.create_view(&Default::default())))
-        .collect();
+
+    let surfaces = gpu.surfaces.read().unwrap();
+
+    render.surface = Value(surfaces[&monitor.id].surface.get_current_texture().unwrap());
+    render.output = Value(render.surface.texture.create_view(&Default::default()));
 }
 
 /// System to finish rendering and present frames.
 pub fn finish_render(mut render: ResMut<OngoingRender>, gpu: Res<RenderGpu>) {
-    render.outputs.clear();
+    render.output = Nil;
 
     let encoder = Almost::unwrap(Almost::take(&mut render.encoder));
     gpu.queue.submit([encoder.finish()]);
 
-    for surface in mem::take(&mut render.surfaces).into_values() {
-        surface.present();
-    }
+    Almost::unwrap(Almost::take(&mut render.surface)).present();
 }

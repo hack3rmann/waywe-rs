@@ -46,10 +46,7 @@ use crate::{
         DummyWorld, FrameRateSetting, MainWorld, Monitor, PostExtract, PostStartup, Startup, Time,
         Update, WallpaperConfig, WallpaperFlags, guess_framerate,
         plugin::PluginGroup,
-        render::{
-            EntityMap, MonitorPlugged, QueuedPlugEvents, Render, RenderGpu, SceneExtract,
-            SceneRenderStage,
-        },
+        render::{EntityMap, Render, RenderGpu, SceneExtract, SceneRenderStage},
         subapp::EcsApp,
         time::update_time,
     },
@@ -69,7 +66,7 @@ pub struct Wallpaper {
 
 impl Wallpaper {
     /// Create the render world with appropriate systems and resources.
-    fn make_render(gpu: Arc<Wgpu>, wayland: &Wayland) -> EcsApp {
+    fn make_render(gpu: Arc<Wgpu>, monitor: Monitor) -> EcsApp {
         let mut render = EcsApp::default();
 
         let mut render_schedule = Schedule::new(Render);
@@ -84,22 +81,13 @@ impl Wallpaper {
         );
         render_schedule.add_systems(update_time.in_set(SceneRenderStage::Update));
 
-        let queued_plug_events = wayland
-            .client_state
-            .monitors
-            .read()
-            .unwrap()
-            .keys()
-            .map(|&id| MonitorPlugged { id })
-            .collect();
-
         render
             .init_resource::<Time>()
             .init_resource::<EntityMap>()
             .insert_resource(RenderGpu(gpu))
+            .insert_resource(monitor)
             .add_schedule(Schedule::new(SceneExtract))
-            .add_schedule(render_schedule)
-            .insert_resource(QueuedPlugEvents(queued_plug_events));
+            .add_schedule(render_schedule);
 
         render
     }
@@ -138,7 +126,7 @@ impl Wallpaper {
         };
 
         Self {
-            render: Self::make_render(gpu, wayland),
+            render: Self::make_render(gpu, monitor),
             // TODO(hack3rmann): allow custom config
             main: Self::make_main(monitor, WallpaperConfig::default()),
         }
@@ -199,17 +187,6 @@ impl PreparedWallpaper {
     ///
     /// This updates logic, extracts data to the render world, and renders the frame.
     pub fn frame(&mut self) -> Result<FrameInfo, FrameError> {
-        if let Some(QueuedPlugEvents(events)) = self
-            .wallpaper
-            .render
-            .world
-            .remove_resource::<QueuedPlugEvents>()
-        {
-            for event in events {
-                self.wallpaper.render.world.trigger(event);
-            }
-        }
-
         if self.first_time {
             self.wallpaper.main.world.run_schedule(Update);
             self.wallpaper.run_extract();

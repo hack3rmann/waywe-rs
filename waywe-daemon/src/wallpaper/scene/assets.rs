@@ -259,13 +259,25 @@ impl<A> PartialEq for AssetHandle<A> {
     }
 }
 
+impl<A> Eq for AssetHandle<A> {}
+
+impl<A> PartialOrd for AssetHandle<A> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<A> Ord for AssetHandle<A> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.id.cmp(&other.id)
+    }
+}
+
 impl<A> hash::Hash for AssetHandle<A> {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         <AssetId as hash::Hash>::hash(&self.id, state);
     }
 }
-
-impl<A> Eq for AssetHandle<A> {}
 
 /// Plugin for managing assets in the main world.
 pub struct AssetsPlugin<A: Asset> {
