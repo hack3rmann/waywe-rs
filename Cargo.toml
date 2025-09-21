@@ -43,7 +43,7 @@ static_assertions = "1.1.0"
 tracing-test = "0.2.5"
 paste = "1.0.15"
 smallvec = { version = "1.14.0", features = ["union", "serde", "const_generics", "const_new", "write"] }
-tracing-subscriber = "0.3.19"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 glam = { version = "0.30.3", features = ["bytemuck", "serde"] }
 video = { path = "video" }
 rustix = { version = "0.38.44", features = ["fs", "net", "process", "mm", "shm", "event"] }

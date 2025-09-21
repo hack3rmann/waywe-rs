@@ -17,6 +17,7 @@ use std::{
     io::{self, ErrorKind},
 };
 use tracing::error;
+use tracing_subscriber::EnvFilter;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -27,7 +28,13 @@ struct Args {
 }
 
 fn main() {
-    tracing_subscriber::fmt().with_writer(io::stderr).init();
+    let filter = EnvFilter::builder()
+        .parse("wgpu_hal::vulkan::instance=warn")
+        .unwrap();
+    tracing_subscriber::fmt()
+        .with_writer(io::stderr)
+        .with_env_filter(filter)
+        .init();
 
     let args = Args::parse();
 
