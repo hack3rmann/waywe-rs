@@ -18,9 +18,8 @@ use crate::{
     runtime::gpu::Wgpu,
     wallpaper::scene::{
         Time, Update,
-        assets::{
-            Asset, AssetHandle, Assets, AssetsPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin,
-        },
+        asset_server::AssetHandle,
+        assets::{Asset, Assets, AssetsPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin},
         extract::Extract,
         material::{AsBindGroup, Material, MaterialAssetMap, RenderMaterial, VertexFragmentShader},
         plugin::Plugin,
@@ -615,7 +614,7 @@ impl AsBindGroup for VideoMaterial {
         device: &wgpu::Device,
         layout: &wgpu::BindGroupLayout,
     ) -> wgpu::BindGroup {
-        let video = assets.get(self.video).unwrap();
+        let video = assets.get(self.video.id()).unwrap();
 
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Self::LABEL,
@@ -662,13 +661,13 @@ pub fn extract_video_materials(
             shader: pipeline.shader.clone(),
         };
 
-        if let Some(render_id) = handle_map.get(id)
-            && let Some(stored_material) = render_materials.get_mut(render_id)
+        if let Some(render) = handle_map.get(id)
+            && let Some(stored_material) = render_materials.get_mut(render.id())
         {
             *stored_material = render_material;
         } else {
-            let render_id = render_materials.add(render_material);
-            handle_map.set(id, render_id);
+            let render = render_materials.add(render_material);
+            handle_map.set(id, render);
         }
     }
 }

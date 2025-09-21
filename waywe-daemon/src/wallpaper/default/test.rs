@@ -20,7 +20,8 @@
 
 use crate::wallpaper::scene::{
     Monitor, Startup, Update,
-    assets::{AssetHandle, Assets},
+    asset_server::AssetHandle,
+    assets::Assets,
     cursor::Cursor,
     image::{Image, ImageMaterial},
     mesh::{Mesh, Mesh3d, MeshMaterial, Vertex},
@@ -129,14 +130,16 @@ impl FromWorld for TestAssets {
         let image = images.add(Image { image });
 
         let mut image_materials = world.resource_mut::<Assets<ImageMaterial>>();
-        let image_material = image_materials.add(ImageMaterial { image });
+        let image_material = image_materials.add(ImageMaterial {
+            image: image.clone(),
+        });
 
         let mut video_materials = world.resource_mut::<Assets<VideoMaterial>>();
         let video1_material = video_materials.add(VideoMaterial {
-            video: video1_handle,
+            video: video1_handle.clone(),
         });
         let video2_material = video_materials.add(VideoMaterial {
-            video: video2_handle,
+            video: video2_handle.clone(),
         });
 
         Self {
@@ -163,22 +166,22 @@ pub fn spawn_videos(mut commands: Commands, assets: Res<TestAssets>) {
     const SCALE: f32 = 0.6;
 
     commands.spawn((
-        Mesh3d(assets.quad_mesh),
-        MeshMaterial(assets.video1_material),
+        Mesh3d(assets.quad_mesh.clone()),
+        MeshMaterial(assets.video1_material.clone()),
         Transform::default().scaled_by(Vec3::new(SCALE, assets.video1_aspect_ratio * SCALE, 1.0)),
         TimeScale(0.5),
     ));
 
     commands.spawn((
-        Mesh3d(assets.quad_mesh),
-        MeshMaterial(assets.video2_material),
+        Mesh3d(assets.quad_mesh.clone()),
+        MeshMaterial(assets.video2_material.clone()),
         Transform::default().scaled_by(Vec3::new(SCALE, assets.video2_aspect_ratio * SCALE, 1.0)),
         TimeScale(0.3),
     ));
 
     commands.spawn((
-        Mesh3d(assets.triangle_mesh),
-        MeshMaterial(assets.video2_material),
+        Mesh3d(assets.triangle_mesh.clone()),
+        MeshMaterial(assets.video2_material.clone()),
         Transform::default().scaled_by(Vec3::new(SCALE, assets.video2_aspect_ratio * SCALE, 1.0)),
         TimeScale(0.8),
     ));
@@ -193,16 +196,16 @@ pub fn spawn_mesh(mut commands: Commands, assets: Res<TestAssets>) {
     let aspect_scale = Vec3::new(SCALE, SCALE * assets.image_aspect_ratio, 1.0);
 
     commands.spawn((
-        Mesh3d(assets.quad_mesh),
+        Mesh3d(assets.quad_mesh.clone()),
         Transform::default().scaled_by(aspect_scale),
-        MeshMaterial(assets.image_material),
+        MeshMaterial(assets.image_material.clone()),
         TimeScale(1.0),
     ));
 
     commands.spawn((
-        Mesh3d(assets.quad_mesh),
+        Mesh3d(assets.quad_mesh.clone()),
         Transform::default().scaled_by(aspect_scale),
-        MeshMaterial(assets.image_material),
+        MeshMaterial(assets.image_material.clone()),
         TimeScale(std::f32::consts::FRAC_PI_2),
     ));
 }

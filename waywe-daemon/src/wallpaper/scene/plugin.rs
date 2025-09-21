@@ -43,8 +43,9 @@
 //! ```
 
 use crate::wallpaper::scene::{
-    cursor::CursorPlugin, image::ImagePlugin, material::MaterialPlugin, mesh::MeshPlugin,
-    transform::TransformPlugin, video::VideoPlugin, wallpaper::Wallpaper,
+    asset_server::AssetServerPlugin, cursor::CursorPlugin, image::ImagePlugin,
+    material::MaterialPlugin, mesh::MeshPlugin, transform::TransformPlugin, video::VideoPlugin,
+    wallpaper::Wallpaper,
 };
 use bitflags::bitflags;
 use static_assertions::assert_obj_safe;
@@ -135,6 +136,7 @@ define_plugin_group! {
     /// - [`CursorPlugin`]: Cursor interaction
     #[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
     pub struct DefaultPlugins(
+        AssetServerPlugin,
         TransformPlugin,
         ImagePlugin,
         MeshPlugin,

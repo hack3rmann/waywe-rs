@@ -24,9 +24,10 @@ use crate::{
     runtime::{gpu::Wgpu, wayland::MonitorId},
     wallpaper::scene::{
         Monitor,
+        asset_server::{AssetHandle, AssetId},
         assets::{
-            Asset, AssetHandle, Assets, AssetsPlugin, RenderAsset, RenderAssets,
-            RenderAssetsPlugin, extract_new_render_assets,
+            Asset, Assets, AssetsPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin,
+            extract_new_render_assets,
         },
         extract::Extract,
         image::{ImageMaterial, extract_image_materials},
@@ -107,7 +108,7 @@ pub struct PushConst {
 
 /// Collection of mesh pipelines for a specific material.
 #[derive(Default, Resource, Debug, Deref, DerefMut)]
-pub struct MeshPipelines(pub HashMap<AssetHandle<RenderMaterial>, MeshPipeline>);
+pub struct MeshPipelines(pub HashMap<AssetId, MeshPipeline>);
 
 /// Render pipeline for meshes.
 #[derive(Debug)]
@@ -275,22 +276,22 @@ pub fn extact_objects<M: Material>(
     materials: Res<Assets<RenderMaterial>>,
     mut pipelines: ResMut<MeshPipelines>,
 ) {
-    for (id, &Mesh3d(mesh_id), &MeshMaterial(material_id), transform) in &mesh_query {
-        let render_material_id = asset_map.get(material_id).unwrap();
+    for (id, Mesh3d(mesh), MeshMaterial(material), transform) in &mesh_query {
+        let render_material = asset_map.get(material.id()).unwrap();
 
         let render_id = commands
             .spawn((
                 MainEntity(id),
-                RenderMeshHandle(mesh_id),
-                RenderMaterialHandle(render_material_id),
+                RenderMeshHandle(mesh.clone()),
+                RenderMaterialHandle(render_material.clone()),
                 ModelMatrix(transform.0.to_model()),
             ))
             .id();
 
-        let material = materials.get(render_material_id).unwrap();
+        let material = materials.get(render_material.id()).unwrap();
 
         pipelines
-            .entry(render_material_id)
+            .entry(render_material.id())
             .or_insert_with(|| MeshPipeline::new(&gpu, monitor.id, material));
 
         entity_map.insert(id, render_id);
@@ -312,14 +313,14 @@ pub fn render_meshes(
         .sort::<&RenderMaterialHandle>()
         .chunk_by(|&(_, _, handle)| handle);
 
-    for (&RenderMaterialHandle(material_id), mesh_handles) in &mesh_handles {
+    for (RenderMaterialHandle(material), mesh_handles) in &mesh_handles {
         let target_surface = Almost::unwrap(Almost::take(&mut render.output));
         let aspect_ratio = monitor.aspect_ratio();
         let camera_view =
             Mat4::orthographic_rh(-1.0, 1.0, -aspect_ratio, aspect_ratio, -10.0, 10.0);
 
-        let pipeline = pipelines.get(&material_id).unwrap();
-        let material = materials.get(material_id).unwrap();
+        let pipeline = pipelines.get(&material.id()).unwrap();
+        let material = materials.get(material.id()).unwrap();
 
         {
             let mut pass = render
@@ -343,8 +344,8 @@ pub fn render_meshes(
             pass.set_pipeline(&pipeline.pipeline);
             pass.set_bind_group(0, &material.bind_group, &[]);
 
-            for (&RenderMeshHandle(mesh_id), &ModelMatrix(model), _) in mesh_handles {
-                let mesh = meshes.get(mesh_id).unwrap();
+            for (RenderMeshHandle(mesh_handle), &ModelMatrix(model), _) in mesh_handles {
+                let mesh = meshes.get(mesh_handle.id()).unwrap();
                 let n_vertices = mesh.vertices.size() / mem::size_of::<Vertex>() as u64;
 
                 pass.set_vertex_buffer(0, mesh.vertices.slice(..));

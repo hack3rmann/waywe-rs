@@ -34,6 +34,9 @@
 use super::wallpaper::Wallpaper;
 use crate::wallpaper::scene::{
     PostExtract,
+    asset_server::{
+        AssetDropEvent, AssetHandle, AssetId, AssetIdGenerator, AssetServer, UntypedAssetHandle,
+    },
     extract::Extract,
     plugin::{AddPlugins, Plugin},
     render::SceneExtract,
@@ -42,54 +45,65 @@ use bevy_ecs::{
     prelude::*,
     system::{StaticSystemParam, SystemParam, SystemParamItem},
 };
+use crossbeam::channel::{Receiver, Sender};
 use smallvec::SmallVec;
-use std::{collections::HashMap, fmt, hash, marker::PhantomData};
+use std::{collections::HashMap, marker::PhantomData};
 
 /// Collection of assets of a specific type.
 ///
 /// Assets are stored with unique IDs and can be accessed by handle.
 #[derive(Resource)]
 pub struct Assets<A: Asset> {
-    last_id: AssetId,
     map: HashMap<AssetId, A>,
     new_ids: SmallVec<[AssetId; 4]>,
+    drop_receiver: Receiver<AssetDropEvent>,
+    drop_sender: Sender<AssetDropEvent>,
+    id_generator: AssetIdGenerator,
 }
 
 impl<A: Asset> Assets<A> {
-    /// Create a new empty asset collection.
-    pub fn new() -> Self {
+    pub fn new(
+        drop_receiver: Receiver<AssetDropEvent>,
+        drop_sender: Sender<AssetDropEvent>,
+        id_generator: AssetIdGenerator,
+    ) -> Self {
         Self {
-            last_id: AssetId::DUMMY,
             map: HashMap::new(),
-            new_ids: SmallVec::new_const(),
+            new_ids: SmallVec::new(),
+            drop_receiver,
+            drop_sender,
+            id_generator,
         }
+    }
+
+    fn next_handle(&self) -> AssetHandle<A> {
+        let id = self.id_generator.next_id();
+        AssetHandle::new(UntypedAssetHandle::new(id, self.drop_sender.clone()))
     }
 
     /// Add an asset to the collection and return a handle to it.
     pub fn add(&mut self, asset: A) -> AssetHandle<A> {
-        self.last_id = self.last_id.next();
-        self.map.insert(self.last_id, asset);
-        self.new_ids.push(self.last_id);
-        AssetHandle::new(self.last_id)
+        let handle = self.next_handle();
+        self.map.insert(handle.id(), asset);
+        self.new_ids.push(handle.id());
+        handle
     }
 
     /// Get a reference to an asset by handle.
-    pub fn get(&self, handle: AssetHandle<A>) -> Option<&A> {
-        self.map.get(&handle.id)
+    pub fn get(&self, id: AssetId) -> Option<&A> {
+        self.map.get(&id)
     }
 
     /// Get a mutable reference to an asset by handle.
-    pub fn get_mut(&mut self, handle: AssetHandle<A>) -> Option<&mut A> {
-        self.map.get_mut(&handle.id)
+    pub fn get_mut(&mut self, id: AssetId) -> Option<&mut A> {
+        self.map.get_mut(&id)
     }
 
     /// Iterate over newly added assets.
     ///
     /// This is used during extraction to transfer new assets to the render world.
-    pub fn new_assets(&self) -> impl ExactSizeIterator<Item = (AssetHandle<A>, &A)> + '_ {
-        self.new_ids
-            .iter()
-            .map(|&id| (AssetHandle::new(id), &self.map[&id]))
+    pub fn new_assets(&self) -> impl ExactSizeIterator<Item = (AssetId, &A)> + '_ {
+        self.new_ids.iter().map(|&id| (id, &self.map[&id]))
     }
 
     /// Clear the list of new assets.
@@ -100,23 +114,25 @@ impl<A: Asset> Assets<A> {
     }
 
     /// Iterate over all assets.
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = (AssetHandle<A>, &A)> + '_ {
-        self.map
-            .iter()
-            .map(|(&id, asset)| (AssetHandle::new(id), asset))
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (AssetId, &A)> + '_ {
+        self.map.iter().map(|(&id, asset)| (id, asset))
     }
 
     /// Iterate over all assets with mutable references.
-    pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (AssetHandle<A>, &mut A)> + '_ {
-        self.map
-            .iter_mut()
-            .map(|(&id, asset)| (AssetHandle::new(id), asset))
+    pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (AssetId, &mut A)> + '_ {
+        self.map.iter_mut().map(|(&id, asset)| (id, asset))
+    }
+
+    pub fn remove_droppped(&mut self) {
+        while let Ok(event) = self.drop_receiver.try_recv() {
+            _ = self.map.remove(&event.0);
+        }
     }
 }
 
-impl<A: Asset> Default for Assets<A> {
-    fn default() -> Self {
-        Self::new()
+impl<A: Asset> FromWorld for Assets<A> {
+    fn from_world(world: &mut World) -> Self {
+        world.resource::<AssetServer>().make_assets()
     }
 }
 
@@ -140,18 +156,18 @@ impl<A: RenderAsset> RenderAssets<A> {
     }
 
     /// Add a render asset.
-    pub fn add(&mut self, handle: AssetHandle<A::Asset>, asset: A) {
-        _ = self.map.insert(handle.id, asset);
+    pub fn add(&mut self, id: AssetId, asset: A) {
+        _ = self.map.insert(id, asset);
     }
 
     /// Remove a render asset.
-    pub fn remove(&mut self, handle: AssetHandle<A::Asset>) -> Option<A> {
-        self.map.remove(&handle.id)
+    pub fn remove(&mut self, id: AssetId) -> Option<A> {
+        self.map.remove(&id)
     }
 
     /// Get a reference to a render asset by handle.
-    pub fn get(&self, handle: AssetHandle<A::Asset>) -> Option<&A> {
-        self.map.get(&handle.id)
+    pub fn get(&self, id: AssetId) -> Option<&A> {
+        self.map.get(&id)
     }
 }
 
@@ -201,84 +217,6 @@ pub fn extract_all_render_assets<A: RenderAsset>(
     }
 }
 
-/// Unique identifier for an asset.
-#[derive(Clone, Copy, Default, PartialEq, PartialOrd, Debug, Eq, Ord, Hash)]
-pub struct AssetId(pub u32);
-
-impl AssetId {
-    /// Dummy asset ID (0).
-    pub const DUMMY: Self = Self(0);
-
-    /// Create a new asset ID.
-    pub const fn new(value: u32) -> Self {
-        Self(value)
-    }
-
-    /// Get the next asset ID.
-    pub const fn next(self) -> Self {
-        Self(self.0 + 1)
-    }
-}
-
-/// Type-safe handle to an asset.
-///
-/// This struct ensures that assets are accessed with the correct type.
-pub struct AssetHandle<A> {
-    /// The ID of the asset.
-    pub id: AssetId,
-    _p: PhantomData<A>,
-}
-
-impl<A> AssetHandle<A> {
-    /// Create a new asset handle.
-    pub const fn new(id: AssetId) -> Self {
-        Self {
-            id,
-            _p: PhantomData,
-        }
-    }
-}
-
-impl<A> Clone for AssetHandle<A> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<A> Copy for AssetHandle<A> {}
-
-impl<A> fmt::Debug for AssetHandle<A> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("AssetHandle").field(&self.id).finish()
-    }
-}
-
-impl<A> PartialEq for AssetHandle<A> {
-    fn eq(&self, other: &Self) -> bool {
-        self.id.eq(&other.id)
-    }
-}
-
-impl<A> Eq for AssetHandle<A> {}
-
-impl<A> PartialOrd for AssetHandle<A> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl<A> Ord for AssetHandle<A> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.id.cmp(&other.id)
-    }
-}
-
-impl<A> hash::Hash for AssetHandle<A> {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        <AssetId as hash::Hash>::hash(&self.id, state);
-    }
-}
-
 /// Plugin for managing assets in the main world.
 pub struct AssetsPlugin<A: Asset> {
     add: AddPlugins,
@@ -314,7 +252,7 @@ impl<A: Asset> Plugin for AssetsPlugin<A> {
         if self.add.contains(AddPlugins::MAIN) {
             wallpaper
                 .main
-                .add_systems(PostExtract, flush_assets::<A>)
+                .add_systems(PostExtract, update_assets::<A>)
                 .init_resource::<Assets<A>>();
         }
 
@@ -327,8 +265,9 @@ impl<A: Asset> Plugin for AssetsPlugin<A> {
 /// System to flush new assets.
 ///
 /// This clears the list of new assets after they've been extracted.
-pub fn flush_assets<A: Asset>(mut assets: ResMut<Assets<A>>) {
+pub fn update_assets<A: Asset>(mut assets: ResMut<Assets<A>>) {
     assets.flush();
+    assets.remove_droppped();
 }
 
 /// Plugin for managing GPU-ready assets in the render world.

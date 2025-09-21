@@ -122,6 +122,7 @@ pub mod time;
 pub mod transform;
 pub mod video;
 pub mod wallpaper;
+pub mod asset_server;
 
 use crate::{
     event_loop::FrameInfo,

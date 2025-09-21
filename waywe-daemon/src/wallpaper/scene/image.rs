@@ -17,9 +17,10 @@ use super::wallpaper::Wallpaper;
 use crate::{
     runtime::gpu::Wgpu,
     wallpaper::scene::{
+        asset_server::AssetHandle,
         assets::{
-            Asset, AssetHandle, AssetId, Assets, AssetsPlugin, RenderAsset, RenderAssets,
-            RenderAssetsPlugin, extract_new_render_assets,
+            Asset, Assets, AssetsPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin,
+            extract_new_render_assets,
         },
         extract::Extract,
         material::{AsBindGroup, Material, MaterialAssetMap, RenderMaterial, VertexFragmentShader},
@@ -34,11 +35,6 @@ use bevy_ecs::{
 use derive_more::{Deref, DerefMut};
 use wgpu::util::DeviceExt;
 
-/// Handle to the default 1x1 white image.
-pub const DEFAULT_IMAGE: AssetHandle<Image> = AssetHandle::new(AssetId::new(1));
-/// Handle to the default image material.
-pub const DEFAULT_IMAGE_MATERIAL: AssetHandle<ImageMaterial> = AssetHandle::new(AssetId::new(1));
-
 /// Plugin for image functionality.
 ///
 /// Adds systems and resources for loading and displaying images.
@@ -51,16 +47,6 @@ impl Plugin for ImagePlugin {
             AssetsPlugin::<ImageMaterial>::new(),
             RenderAssetsPlugin::<RenderImage>::extract_new(),
         ));
-
-        let mut image_assets = wallpaper.main.resource_mut::<Assets<Image>>();
-        let default_image = image_assets.add(Image::new_white_1x1());
-        debug_assert_eq!(default_image, DEFAULT_IMAGE);
-
-        let mut material_assets = wallpaper.main.resource_mut::<Assets<ImageMaterial>>();
-        let default_material = material_assets.add(ImageMaterial {
-            image: default_image,
-        });
-        debug_assert_eq!(default_material, DEFAULT_IMAGE_MATERIAL);
 
         wallpaper
             .render
@@ -113,13 +99,13 @@ pub fn extract_image_materials(
         let bind_group =
             material.create_bind_group(&mut image_params, &gpu.device, &bind_group_layout);
 
-        let render_id = render_materials.add(RenderMaterial {
+        let render = render_materials.add(RenderMaterial {
             bind_group_layout,
             bind_group,
             shader: pipeline.shader.clone(),
         });
 
-        handle_map.set(id, render_id);
+        handle_map.set(id, render);
     }
 }
 
@@ -271,7 +257,7 @@ impl AsBindGroup for ImageMaterial {
         device: &wgpu::Device,
         layout: &wgpu::BindGroupLayout,
     ) -> wgpu::BindGroup {
-        let view = &image_assets.get(self.image).unwrap().view;
+        let view = &image_assets.get(self.image.id()).unwrap().view;
 
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Self::LABEL,
