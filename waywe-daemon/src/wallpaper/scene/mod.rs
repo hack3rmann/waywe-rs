@@ -161,7 +161,15 @@ impl Default for FrameRateSetting {
 
 /// Schedule label for the main update loop.
 #[derive(ScheduleLabel, Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PreUpdate;
+
+/// Schedule label for the main update loop.
+#[derive(ScheduleLabel, Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Update;
+
+/// Schedule label for the main update loop.
+#[derive(ScheduleLabel, Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PostUpdate;
 
 /// Schedule label for one-time startup systems.
 #[derive(ScheduleLabel, Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

@@ -20,7 +20,7 @@
 
 use crate::wallpaper::scene::{
     Monitor, Startup, Update,
-    asset_server::AssetHandle,
+    asset_server::{AssetHandle, AssetServer},
     assets::Assets,
     cursor::Cursor,
     image::{Image, ImageMaterial},
@@ -52,8 +52,8 @@ impl WallpaperBuilder for SceneTestWallpaper {
 
         wallpaper
             .main
+            .add_systems(Startup, (spawn_mesh, spawn_with_asset_server, spawn_videos))
             .add_systems(Update, (rotate_meshes, despawn_entities))
-            .add_systems(Startup, (spawn_mesh, spawn_videos))
             .init_resource::<TestAssets>();
     }
 }
@@ -143,6 +143,36 @@ impl FromWorld for TestAssets {
     }
 }
 
+pub fn spawn_with_asset_server(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut image_materials: ResMut<Assets<ImageMaterial>>,
+    mut video_materials: ResMut<Assets<VideoMaterial>>,
+    assets: Res<TestAssets>,
+) {
+    let image_material = image_materials.add(ImageMaterial {
+        image: asset_server.load("target/test-image2.png"),
+    });
+
+    let video_material = video_materials.add(VideoMaterial {
+        video: asset_server.load("target/test-video3.mp4"),
+    });
+
+    commands.spawn((
+        Mesh3d(assets.quad_mesh.clone()),
+        MeshMaterial(image_material),
+        Transform::default().scaled_by(Vec3::splat(0.1)),
+        TimeScale(0.4),
+    ));
+
+    commands.spawn((
+        Mesh3d(assets.quad_mesh.clone()),
+        MeshMaterial(video_material),
+        Transform::default().scaled_by(Vec3::splat(0.1)),
+        TimeScale(-0.4),
+    ));
+}
+
 /// System that spawns video entities.
 ///
 /// This system creates entities for playing videos with appropriate scaling
@@ -210,14 +240,18 @@ pub fn spawn_mesh(mut commands: Commands, assets: Res<TestAssets>) {
 
     commands.spawn((
         Mesh3d(assets.quad_mesh.clone()),
-        Transform::default().scaled_by(aspect_scale),
+        Transform::default()
+            .scaled_by(aspect_scale)
+            .scaled_by(Vec3::splat(0.5)),
         MeshMaterial(assets.image_material.clone()),
         TimeScale(1.0),
     ));
 
     commands.spawn((
         Mesh3d(assets.quad_mesh.clone()),
-        Transform::default().scaled_by(aspect_scale),
+        Transform::default()
+            .scaled_by(aspect_scale)
+            .scaled_by(Vec3::splat(0.5)),
         MeshMaterial(assets.image_material.clone()),
         TimeScale(std::f32::consts::FRAC_PI_2),
     ));
@@ -246,7 +280,7 @@ pub fn rotate_meshes(
 }
 
 pub fn despawn_entities(mut commands: Commands, mut assets: ResMut<TestAssets>, time: Res<Time>) {
-    if time.elapsed.as_secs_f32() > 2.0 {
+    if time.elapsed.as_secs_f32() > 4.0 {
         assets.video2_material = None;
 
         for id in assets.despawn_entities.drain(..) {

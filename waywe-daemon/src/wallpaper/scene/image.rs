@@ -13,11 +13,13 @@
 //!
 //! - [`ImagePlugin`]: Adds image functionality to a wallpaper
 
+use std::path::Path;
+
 use super::wallpaper::Wallpaper;
 use crate::{
     runtime::gpu::Wgpu,
     wallpaper::scene::{
-        asset_server::AssetHandle,
+        asset_server::{AssetHandle, AssetServerLoadPlugin, Load},
         assets::{
             Asset, Assets, AssetsExtract, AssetsPlugin, RefAssets, RefAssetsDependencyPlugin,
             RenderAsset, RenderAssets, RenderAssetsPlugin,
@@ -44,6 +46,7 @@ impl Plugin for ImagePlugin {
     fn build(&self, wallpaper: &mut Wallpaper) {
         wallpaper.add_plugins((
             AssetsPlugin::<Image>::new(),
+            AssetServerLoadPlugin::<Image>::new(),
             AssetsPlugin::<ImageMaterial>::new(),
             RenderAssetsPlugin::<RenderImage>::extract_new(),
             RefAssetsDependencyPlugin::<RenderMaterial, ImageMaterial>::new(),
@@ -71,6 +74,21 @@ impl Image {
     pub fn new_white_1x1() -> Self {
         let mut image = image::RgbaImage::new(1, 1);
         image.get_pixel_mut(0, 0).0 = [255; 4];
+
+        Self { image }
+    }
+}
+
+impl Load for Image {
+    fn load(path: &Path) -> Self
+    where
+        Self: Sized,
+    {
+        let image = ::image::ImageReader::open(path)
+            .unwrap()
+            .decode()
+            .unwrap()
+            .into_rgba8();
 
         Self { image }
     }

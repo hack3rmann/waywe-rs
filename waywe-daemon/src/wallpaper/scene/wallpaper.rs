@@ -43,8 +43,8 @@ use crate::{
         wayland::{MonitorId, Wayland},
     },
     wallpaper::scene::{
-        DummyWorld, FrameRateSetting, MainWorld, Monitor, PostExtract, PostStartup, Startup, Time,
-        Update, WallpaperConfig, WallpaperFlags, guess_framerate,
+        DummyWorld, FrameRateSetting, MainWorld, Monitor, PostExtract, PostStartup, PostUpdate,
+        PreUpdate, Startup, Time, Update, WallpaperConfig, WallpaperFlags, guess_framerate,
         plugin::PluginGroup,
         render::{EntityMap, Render, RenderGpu, RenderStage, SceneExtract},
         subapp::EcsApp,
@@ -100,7 +100,9 @@ impl Wallpaper {
         if !matches!(config.framerate, FrameRateSetting::NoUpdate) {
             let mut update = Schedule::new(Update);
             update.add_systems(update_time);
-            main.add_schedule(update);
+            main.add_schedule(update)
+                .add_schedule(Schedule::new(PreUpdate))
+                .add_schedule(Schedule::new(PostUpdate));
         } else {
             flags |= WallpaperFlags::NO_UPDATE;
         }
@@ -188,7 +190,10 @@ impl PreparedWallpaper {
     /// This updates logic, extracts data to the render world, and renders the frame.
     pub fn frame(&mut self) -> Result<FrameInfo, FrameError> {
         if self.first_time {
+            self.wallpaper.main.world.run_schedule(PreUpdate);
             self.wallpaper.main.world.run_schedule(Update);
+            self.wallpaper.main.world.run_schedule(PostUpdate);
+
             self.wallpaper.run_extract();
             self.wallpaper.render.world.run_schedule(Render);
             self.first_time = false;

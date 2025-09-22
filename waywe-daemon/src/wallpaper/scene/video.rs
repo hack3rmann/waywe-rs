@@ -18,7 +18,7 @@ use crate::{
     runtime::gpu::Wgpu,
     wallpaper::scene::{
         Time, Update,
-        asset_server::AssetHandle,
+        asset_server::{AssetHandle, AssetServerLoadPlugin, Load},
         assets::{
             Asset, Assets, AssetsExtract, AssetsPlugin, RefAssets, RefAssetsDependencyPlugin,
             RenderAsset, RenderAssets, RenderAssetsPlugin,
@@ -35,7 +35,13 @@ use bevy_ecs::{
     system::{StaticSystemParam, SystemParamItem, lifetimeless::SRes},
 };
 use glam::UVec2;
-use std::{ffi::CString, os::fd::IntoRawFd as _, path::PathBuf, ptr, time::Duration};
+use std::{
+    ffi::CString,
+    os::fd::IntoRawFd as _,
+    path::{Path, PathBuf},
+    ptr,
+    time::Duration,
+};
 use transmute_extra::pathbuf_into_cstring;
 use video::{
     BackendError, Codec, CodecContext, FormatContext, Frame, MediaType, Packet, RatioI32,
@@ -52,6 +58,7 @@ impl Plugin for VideoPlugin {
     fn build(&self, wallpaper: &mut Wallpaper) {
         wallpaper.add_plugins((
             AssetsPlugin::<Video>::new(),
+            AssetServerLoadPlugin::<Video>::new(),
             AssetsPlugin::<VideoMaterial>::new(),
             RenderAssetsPlugin::<RenderVideo>::extract_all(),
             RefAssetsDependencyPlugin::<RenderMaterial, VideoMaterial>::new(),
@@ -112,6 +119,15 @@ pub struct Video {
 }
 
 impl Asset for Video {}
+
+impl Load for Video {
+    fn load(path: &Path) -> Self
+    where
+        Self: Sized,
+    {
+        Self::new(path).unwrap()
+    }
+}
 
 impl Video {
     /// Create a new video from a file path.

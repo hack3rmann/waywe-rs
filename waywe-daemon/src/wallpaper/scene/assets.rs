@@ -69,11 +69,19 @@ impl<A: Asset> Assets<A> {
         AssetHandle::new(UntypedAssetHandle::new(id, self.drop_sender.clone()))
     }
 
+    pub fn get_drop_sender(&self) -> Sender<AssetDropEvent> {
+        self.drop_sender.clone()
+    }
+
+    pub fn insert(&mut self, id: AssetId, asset: A) {
+        _ = self.map.insert(id, asset);
+        self.new_ids.push(id);
+    }
+
     /// Add an asset to the collection and return a handle to it.
     pub fn add(&mut self, asset: A) -> AssetHandle<A> {
         let handle = self.next_handle();
-        _ = self.map.insert(handle.id(), asset);
-        self.new_ids.push(handle.id());
+        self.insert(handle.id(), asset);
         handle
     }
 

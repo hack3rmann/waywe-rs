@@ -1,21 +1,28 @@
 use super::wallpaper::Wallpaper;
-use crate::wallpaper::scene::{
-    assets::{Asset, Assets, AssetsExtract},
-    plugin::Plugin,
-    render::SceneExtract,
+use crate::{
+    box_ext::BoxExt,
+    wallpaper::scene::{
+        PreUpdate,
+        assets::{Asset, Assets, AssetsExtract},
+        plugin::Plugin,
+        render::SceneExtract,
+    },
 };
 use bevy_ecs::{
     entity::{EntityHash, EntityHasher},
     prelude::*,
 };
 use crossbeam::channel::Sender;
+use smallvec::SmallVec;
 use std::{
+    any::{Any, TypeId},
     collections::HashMap,
     fmt, hash,
     marker::PhantomData,
     ops::Deref,
+    path::{Path, PathBuf},
     sync::{
-        Arc,
+        Arc, Mutex, RwLock,
         atomic::{AtomicU64, Ordering::*},
     },
 };
@@ -37,6 +44,45 @@ impl Plugin for AssetServerPlugin {
                 .chain(),
         );
     }
+}
+
+#[derive(SystemSet, Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AssetServerSet {
+    #[default]
+    PopulateAssets,
+}
+
+pub struct AssetServerLoadPlugin<A> {
+    _p: PhantomData<A>,
+}
+
+impl<A> AssetServerLoadPlugin<A> {
+    pub const fn new() -> Self {
+        Self { _p: PhantomData }
+    }
+}
+
+impl<A> Default for AssetServerLoadPlugin<A> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<A: Asset + Load> Plugin for AssetServerLoadPlugin<A> {
+    fn build(&self, wallpaper: &mut Wallpaper) {
+        let server = wallpaper.main.resource::<AssetServer>();
+        let assets = wallpaper.main.resource::<Assets<A>>();
+        server.register_assets(assets);
+
+        wallpaper.main.add_systems(
+            PreUpdate,
+            populate_assets::<A>.in_set(AssetServerSet::PopulateAssets),
+        );
+    }
+}
+
+pub fn populate_assets<A: Asset + Load>(server: Res<AssetServer>, mut assets: ResMut<Assets<A>>) {
+    server.populate_assets(&mut assets);
 }
 
 #[derive(Clone, Default, Debug)]
@@ -73,17 +119,62 @@ impl Deref for AssetServer {
 #[derive(Debug)]
 pub struct AssetServerInner {
     id_generator: AssetIdGenerator,
+    loaded_assets: Mutex<HashMap<(PathBuf, TypeId), (AssetId, Box<dyn Any + Send>)>>,
+    drop_senders: RwLock<HashMap<TypeId, Sender<AssetDropEvent>>>,
 }
 
 impl AssetServerInner {
     pub fn new() -> Self {
         let id_generator = AssetIdGenerator::new();
 
-        Self { id_generator }
+        Self {
+            id_generator,
+            loaded_assets: Mutex::default(),
+            drop_senders: RwLock::default(),
+        }
+    }
+
+    pub fn register_assets<A: Asset>(&self, assets: &Assets<A>) {
+        let mut senders = self.drop_senders.write().unwrap();
+        senders.insert(TypeId::of::<A>(), assets.get_drop_sender());
     }
 
     pub fn make_assets<A: Asset>(&self) -> Assets<A> {
         Assets::new(self.id_generator.clone())
+    }
+
+    pub fn load<A: Asset + Load>(&self, path: impl Into<PathBuf>) -> AssetHandle<A> {
+        let path = path.into();
+        let asset = A::load(&path);
+        let id = self.id_generator.next_id();
+
+        {
+            let mut assets = self.loaded_assets.lock().unwrap();
+            assets.insert((path, TypeId::of::<A>()), (id, Box::new(asset)));
+        }
+
+        let drop_sender = {
+            let senders = self.drop_senders.read().unwrap();
+            senders[&TypeId::of::<A>()].clone()
+        };
+
+        AssetHandle::new(UntypedAssetHandle::new(id, drop_sender))
+    }
+
+    pub fn populate_assets<A: Asset + Load>(&self, assets: &mut Assets<A>) {
+        let mut loaded_assets = self.loaded_assets.lock().unwrap();
+
+        let keys: SmallVec<[_; 16]> = loaded_assets
+            .keys()
+            .filter(|(_, id)| id == &TypeId::of::<A>())
+            .cloned()
+            .collect();
+
+        for key in keys {
+            let (id, asset) = loaded_assets.remove(&key).unwrap();
+            let asset = asset.downcast::<A>().unwrap().into_inner();
+            assets.insert(id, asset);
+        }
     }
 }
 
@@ -244,3 +335,9 @@ pub struct AssetDropEvent(pub AssetId);
 pub type AssetIdHash = EntityHash;
 pub type AssetIdHasher = EntityHasher;
 pub type AssetIdHashMap<T> = HashMap<AssetId, T, AssetIdHash>;
+
+pub trait Load: Any + Send {
+    fn load(path: &Path) -> Self
+    where
+        Self: Sized;
+}
