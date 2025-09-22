@@ -229,14 +229,21 @@ pub struct MeshMaterial<M: Material>(pub AssetHandle<M>);
 pub struct RenderMesh {
     /// Vertex buffer.
     pub vertices: wgpu::Buffer,
+    pub n_vertices: u64,
 }
 
 impl RenderAsset for RenderMesh {
     type Asset = Mesh;
     type Param = SRes<RenderGpu>;
 
+    const REPLACE_ON_UPDATE: bool = false;
+
     fn extract(mesh: &Self::Asset, gpu: &mut SystemParamItem<'_, '_, Self::Param>) -> Self {
         Self::new(mesh, gpu)
+    }
+
+    fn update(&mut self, source: &Self::Asset, gpu: &mut SystemParamItem<'_, '_, Self::Param>) {
+        self.update_buffer(source, gpu);
     }
 }
 
@@ -249,11 +256,34 @@ impl RenderMesh {
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("test-mesh-buffer"),
-                usage: wgpu::BufferUsages::VERTEX,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
                 contents: bytemuck::cast_slice(&mesh.vertices),
             });
 
-        Self { vertices }
+        Self {
+            vertices,
+            n_vertices: mesh.vertices.len() as u64,
+        }
+    }
+
+    pub fn update_buffer(&mut self, mesh: &Mesh, gpu: &Wgpu) {
+        // Not enough capacity
+        if self.vertices.size() < mem::size_of_val(mesh.vertices.as_slice()) as u64 {
+            *self = Self::new(mesh, gpu);
+            return;
+        }
+
+        gpu.queue
+            .write_buffer(&self.vertices, 0, bytemuck::cast_slice(&mesh.vertices));
+        let index = gpu.queue.submit([]);
+        gpu.device.poll(wgpu::PollType::wait_for(index)).unwrap();
+
+        self.n_vertices = mesh.vertices.len() as u64;
+    }
+
+    pub fn buffer_slice(&self) -> wgpu::BufferSlice<'_> {
+        self.vertices
+            .slice(..self.n_vertices * mem::size_of::<Vertex>() as u64)
     }
 }
 
@@ -360,9 +390,8 @@ pub fn render_meshes(
 
             for (&RenderMeshId(mesh_id), &ModelMatrix(model), _) in mesh_handles {
                 let mesh = meshes.get(mesh_id).unwrap();
-                let n_vertices = mesh.vertices.size() / mem::size_of::<Vertex>() as u64;
 
-                pass.set_vertex_buffer(0, mesh.vertices.slice(..));
+                pass.set_vertex_buffer(0, mesh.buffer_slice());
                 pass.set_push_constants(
                     wgpu::ShaderStages::VERTEX_FRAGMENT,
                     0,
@@ -373,7 +402,7 @@ pub fn render_meshes(
                     }),
                 );
 
-                pass.draw(0..n_vertices as u32, 0..1);
+                pass.draw(0..mesh.n_vertices as u32, 0..1);
             }
         }
 

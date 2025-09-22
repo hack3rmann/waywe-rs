@@ -43,6 +43,7 @@ pub type IdSmallVec = SmallVec<[AssetId; 4]>;
 #[derive(Resource)]
 pub struct Assets<A: Asset> {
     map: AssetIdHashMap<A>,
+    changed_ids: IdSmallVec,
     new_ids: IdSmallVec,
     remove_ids: IdSmallVec,
     drop_receiver: Receiver<AssetDropEvent>,
@@ -56,6 +57,7 @@ impl<A: Asset> Assets<A> {
 
         Self {
             map: AssetIdHashMap::default(),
+            changed_ids: SmallVec::new(),
             new_ids: SmallVec::new(),
             remove_ids: SmallVec::new(),
             drop_receiver,
@@ -90,10 +92,13 @@ impl<A: Asset> Assets<A> {
         self.map.get(&id)
     }
 
+    pub fn set_changed(&mut self, id: AssetId) {
+        self.changed_ids.push(id);
+    }
+
     /// Get a mutable reference to an asset by handle.
     pub fn get_mut(&mut self, id: AssetId) -> Option<&mut A> {
-        // TODO(hack3rmann): separate updated and newly added assets
-        self.new_ids.push(id);
+        self.set_changed(id);
         self.map.get_mut(&id)
     }
 
@@ -102,6 +107,10 @@ impl<A: Asset> Assets<A> {
     /// This is used during extraction to transfer new assets to the render world.
     pub fn new_assets(&self) -> impl ExactSizeIterator<Item = (AssetId, &A)> + '_ {
         self.new_ids.iter().map(|&id| (id, &self.map[&id]))
+    }
+
+    pub fn changed_assets(&self) -> impl ExactSizeIterator<Item = (AssetId, &A)> + '_ {
+        self.changed_ids.iter().map(|&id| (id, &self.map[&id]))
     }
 
     pub fn removed_assets(&self) -> &[AssetId] {
@@ -338,6 +347,10 @@ impl<A: RenderAsset> RenderAssets<A> {
         self.map.get(&id)
     }
 
+    pub fn get_mut(&mut self, id: AssetId) -> Option<&mut A> {
+        self.map.get_mut(&id)
+    }
+
     pub fn flush(&mut self) {
         for id in self.removed_ids.drain(..) {
             if self.map.remove(&id).is_none() {
@@ -364,8 +377,18 @@ pub trait RenderAsset: Send + Sync + 'static {
     /// System parameters needed for extraction.
     type Param: SystemParam + 'static;
 
+    const REPLACE_ON_UPDATE: bool = true;
+
     /// Extract a render asset from a source asset.
     fn extract(source: &Self::Asset, item: &mut SystemParamItem<'_, '_, Self::Param>) -> Self;
+
+    #[expect(unused_variables)]
+    fn update(&mut self, source: &Self::Asset, item: &mut SystemParamItem<'_, '_, Self::Param>) {
+        debug_assert!(
+            Self::REPLACE_ON_UPDATE,
+            "unexpected unimplemented RenderAsset::update"
+        );
+    }
 }
 
 #[derive(SystemSet, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -385,7 +408,16 @@ pub fn extract_new_render_assets<A: RenderAsset>(
     mut render_assets: ResMut<RenderAssets<A>>,
     mut param: StaticSystemParam<A::Param>,
 ) {
-    for (id, asset) in assets.new_assets() {
+    let mut new_assets = assets.new_assets();
+    let mut all_assets = assets.new_assets().chain(assets.changed_assets());
+
+    let assets: &mut dyn Iterator<Item = (AssetId, &A::Asset)> = if A::REPLACE_ON_UPDATE {
+        &mut all_assets
+    } else {
+        &mut new_assets
+    };
+
+    for (id, asset) in assets {
         let render_asset = A::extract(asset, &mut param);
         render_assets.add(id, render_asset);
     }
@@ -402,6 +434,23 @@ pub fn extract_all_render_assets<A: RenderAsset>(
     for (id, asset) in assets.iter() {
         let render_asset = A::extract(asset, &mut param);
         render_assets.add(id, render_asset);
+    }
+}
+
+pub fn update_render_assets<A: RenderAsset>(
+    assets: Extract<Res<Assets<A::Asset>>>,
+    mut render_assets: ResMut<RenderAssets<A>>,
+    mut param: StaticSystemParam<A::Param>,
+) {
+    for (id, asset) in assets.changed_assets() {
+        let Some(render_asset) = render_assets.get_mut(id) else {
+            // just insert new asset
+            let render_asset = A::extract(asset, &mut param);
+            render_assets.add(id, render_asset);
+            continue;
+        };
+
+        render_asset.update(asset, &mut param);
     }
 }
 
@@ -522,6 +571,13 @@ impl<A: RenderAsset> Plugin for RenderAssetsPlugin<A> {
             wallpaper.render.add_systems(
                 SceneExtract,
                 extract_new_render_assets::<A>.in_set(AssetsExtract::MainToRender),
+            );
+        }
+
+        if !A::REPLACE_ON_UPDATE {
+            wallpaper.render.add_systems(
+                SceneExtract,
+                update_render_assets::<A>.in_set(AssetsExtract::MainToRender),
             );
         }
     }
