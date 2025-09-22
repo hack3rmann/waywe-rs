@@ -92,6 +92,8 @@ impl<A: Asset> Assets<A> {
 
     /// Get a mutable reference to an asset by handle.
     pub fn get_mut(&mut self, id: AssetId) -> Option<&mut A> {
+        // TODO(hack3rmann): separate updated and newly added assets
+        self.new_ids.push(id);
         self.map.get_mut(&id)
     }
 

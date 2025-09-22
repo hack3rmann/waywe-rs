@@ -2,7 +2,7 @@ use super::wallpaper::Wallpaper;
 use crate::{
     box_ext::BoxExt,
     wallpaper::scene::{
-        PreUpdate, Startup,
+        PostStartup, PreUpdate,
         assets::{Asset, Assets, AssetsExtract},
         plugin::Plugin,
         render::SceneExtract,
@@ -79,7 +79,7 @@ impl<A: Asset + Load> Plugin for AssetServerLoadPlugin<A> {
             populate_assets::<A>.in_set(AssetServerSet::PopulateAssets),
         );
         wallpaper.main.add_systems(
-            Startup,
+            PostStartup,
             populate_assets::<A>.in_set(AssetServerSet::PopulateAssets),
         );
     }

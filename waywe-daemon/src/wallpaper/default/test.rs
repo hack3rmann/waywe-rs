@@ -53,7 +53,7 @@ impl WallpaperBuilder for SceneTestWallpaper {
         wallpaper
             .main
             .add_systems(Startup, (spawn_mesh, spawn_with_asset_server, spawn_videos))
-            .add_systems(Update, (rotate_meshes, despawn_entities))
+            .add_systems(Update, (rotate_meshes, despawn_entities, update_quad_mesh))
             .init_resource::<TestAssets>();
     }
 }
@@ -141,6 +141,28 @@ impl FromWorld for TestAssets {
             despawn_entities: SmallVec::new(),
         }
     }
+}
+
+pub fn update_quad_mesh(
+    mut meshes: ResMut<Assets<Mesh>>,
+    assets: Res<TestAssets>,
+    time: Res<Time>,
+) {
+    if time.elapsed.as_secs_f32() < 5.0 {
+        return;
+    }
+
+    let Some(mesh) = meshes.get_mut(assets.quad_mesh.id()) else {
+        return;
+    };
+
+    *mesh = Mesh {
+        vertices: smallvec![
+            Vertex(Vec3::new(-0.5, -0.5, 0.0)),
+            Vertex(Vec3::new(0.5, -0.5, 0.0)),
+            Vertex(Vec3::new(0.0, 0.5, 0.0)),
+        ],
+    };
 }
 
 pub fn spawn_with_asset_server(
