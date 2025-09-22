@@ -144,11 +144,15 @@ impl FromWorld for TestAssets {
 }
 
 pub fn update_quad_mesh(
+    mut animation_start: Local<f32>,
     mut meshes: ResMut<Assets<Mesh>>,
     assets: Res<TestAssets>,
     time: Res<Time>,
 ) {
-    if time.elapsed.as_secs_f32() < 5.0 {
+    let time = time.elapsed.as_secs_f32();
+
+    if time < 5.0 {
+        *animation_start = time;
         return;
     }
 
@@ -156,13 +160,12 @@ pub fn update_quad_mesh(
         return;
     };
 
-    *mesh = Mesh {
-        vertices: smallvec![
-            Vertex(Vec3::new(-0.5, -0.5, 0.0)),
-            Vertex(Vec3::new(0.5, -0.5, 0.0)),
-            Vertex(Vec3::new(0.0, 0.5, 0.0)),
-        ],
-    };
+    // Ensure the animation is smooth
+    let t = 6.0 * (time - *animation_start);
+    let scale = t.sin();
+
+    mesh.vertices[1].0.z = scale;
+    mesh.vertices[5].0.z = scale;
 }
 
 pub fn spawn_with_asset_server(
