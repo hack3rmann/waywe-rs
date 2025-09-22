@@ -122,6 +122,7 @@ impl<A: Asset> Assets<A> {
     /// This should be called after extracting new assets to the render world.
     pub fn flush(&mut self) {
         self.new_ids.clear();
+        self.changed_ids.clear();
 
         for id in self.remove_ids.drain(..) {
             if self.map.remove(&id).is_none() {
