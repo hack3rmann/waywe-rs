@@ -367,44 +367,42 @@ pub fn render_meshes(
         let pipeline = pipelines.get(material_id).unwrap();
         let material = materials.get(material_id).unwrap();
 
-        {
-            let mut pass = render
-                .encoder
-                .begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("test-mesh-render"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &surface_view,
-                        depth_slice: None,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                });
+        let mut pass = render
+            .encoder
+            .begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("test-mesh-render"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &surface_view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
 
-            pass.set_pipeline(&pipeline.pipeline);
-            pass.set_bind_group(0, &material.bind_group, &[]);
+        pass.set_pipeline(&pipeline.pipeline);
+        pass.set_bind_group(0, &material.bind_group, &[]);
 
-            for (&RenderMeshId(mesh_id), &ModelMatrix(model), _) in mesh_handles {
-                let mesh = meshes.get(mesh_id).unwrap();
+        for (&RenderMeshId(mesh_id), &ModelMatrix(model), _) in mesh_handles {
+            let mesh = meshes.get(mesh_id).unwrap();
 
-                pass.set_vertex_buffer(0, mesh.buffer_slice());
-                pass.set_push_constants(
-                    wgpu::ShaderStages::VERTEX_FRAGMENT,
-                    0,
-                    bytemuck::bytes_of(&PushConst {
-                        time: time.elapsed.as_secs_f32(),
-                        mvp: camera_view * model,
-                        _padding: [0; 3],
-                    }),
-                );
+            pass.set_vertex_buffer(0, mesh.buffer_slice());
+            pass.set_push_constants(
+                wgpu::ShaderStages::VERTEX_FRAGMENT,
+                0,
+                bytemuck::bytes_of(&PushConst {
+                    time: time.elapsed.as_secs_f32(),
+                    mvp: camera_view * model,
+                    _padding: [0; 3],
+                }),
+            );
 
-                pass.draw(0..mesh.n_vertices as u32, 0..1);
-            }
+            pass.draw(0..mesh.n_vertices as u32, 0..1);
         }
     }
 }
