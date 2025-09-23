@@ -44,6 +44,7 @@ use bevy_ecs::{
     system::{SystemParamItem, lifetimeless::SRes},
 };
 use bytemuck::{Pod, Zeroable};
+use derive_more::Deref;
 use for_sure::prelude::*;
 use glam::{Mat4, Vec2, Vec3};
 use itertools::Itertools;
@@ -82,9 +83,9 @@ impl Plugin for MeshPlugin {
             .add_systems(
                 Render,
                 (
-                    prepare_render.in_set(RenderStage::PreRender),
+                    prepare_render.in_set(RenderStage::PrepareRender),
                     render_meshes.in_set(RenderStage::Render),
-                    finish_render.in_set(RenderStage::Present),
+                    finish_render.in_set(RenderStage::Finish),
                 ),
             );
     }
@@ -351,6 +352,7 @@ pub fn render_meshes(
     mut render: ResMut<OngoingRender>,
     time: Res<Time>,
     monitor: Res<Monitor>,
+    surface_view: Res<SurfaceView>,
 ) {
     let mesh_handles = mesh_handles
         .iter()
@@ -358,7 +360,6 @@ pub fn render_meshes(
         .chunk_by(|&(_, _, handle)| handle);
 
     for (&RenderMaterialId(material_id), mesh_handles) in &mesh_handles {
-        let target_surface = Almost::unwrap(Almost::take(&mut render.output));
         let aspect_ratio = monitor.aspect_ratio();
         let camera_view =
             Mat4::orthographic_rh(-1.0, 1.0, -aspect_ratio, aspect_ratio, -10.0, 10.0);
@@ -372,7 +373,7 @@ pub fn render_meshes(
                 .begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("test-mesh-render"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &target_surface,
+                        view: &surface_view,
                         depth_slice: None,
                         resolve_target: None,
                         ops: wgpu::Operations {
@@ -405,42 +406,31 @@ pub fn render_meshes(
                 pass.draw(0..mesh.n_vertices as u32, 0..1);
             }
         }
-
-        render.output = Value(target_surface);
     }
 }
+
+#[derive(Resource, Debug)]
+pub struct RenderResult {
+    pub encoder: wgpu::CommandEncoder,
+}
+
+#[derive(Resource, Deref)]
+pub struct SurfaceView(pub wgpu::TextureView);
 
 /// Resource tracking ongoing render operations.
 #[derive(Resource, Default)]
 pub struct OngoingRender {
     /// Command encoder for building render commands.
     pub encoder: Almost<wgpu::CommandEncoder>,
-    /// Current surface texture
-    pub surface: Almost<wgpu::SurfaceTexture>,
-    /// Surface texture view
-    pub output: Almost<wgpu::TextureView>,
 }
 
-/// System to prepare for rendering.
-pub fn prepare_render(
-    monitor: Res<Monitor>,
-    mut render: ResMut<OngoingRender>,
-    gpu: Res<RenderGpu>,
-) {
-    render.encoder = Value(gpu.device.create_command_encoder(&Default::default()));
-
-    let surfaces = gpu.surfaces.read().unwrap();
-
-    render.surface = Value(surfaces[&monitor.id].surface.get_current_texture().unwrap());
-    render.output = Value(render.surface.texture.create_view(&Default::default()));
+pub fn prepare_render(mut render: ResMut<OngoingRender>, gpu: Res<RenderGpu>) {
+    let encoder = gpu.device.create_command_encoder(&Default::default());
+    render.encoder = Value(encoder);
 }
 
 /// System to finish rendering and present frames.
-pub fn finish_render(mut render: ResMut<OngoingRender>, gpu: Res<RenderGpu>) {
-    render.output = Nil;
-
-    let encoder = Almost::unwrap(Almost::take(&mut render.encoder));
-    gpu.queue.submit([encoder.finish()]);
-
-    Almost::unwrap(Almost::take(&mut render.surface)).present();
+pub fn finish_render(mut commands: Commands, mut render: ResMut<OngoingRender>) {
+    let encoder = Almost::take_unwrap(&mut render.encoder);
+    commands.insert_resource(RenderResult { encoder });
 }

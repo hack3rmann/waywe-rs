@@ -7,7 +7,7 @@ use crate::{
     },
     wallpaper::{
         self,
-        scene::{cursor::CursorMoved, wallpaper::PreparedWallpaper},
+        scene::{cursor::CursorMoved, mesh::RenderResult, wallpaper::PreparedWallpaper},
     },
 };
 use for_sure::Almost;
@@ -114,7 +114,23 @@ impl App for VideoApp {
                 continue;
             }
 
-            result = wallpaper.frame();
+            let surfaces = runtime.wgpu.surfaces.read().unwrap();
+            let texture = surfaces[&monitor_id].surface.get_current_texture().unwrap();
+            let surface_view = texture.texture.create_view(&Default::default());
+
+            let RenderResult { encoder } = match wallpaper.frame(surface_view) {
+                Ok((info, current_result)) => {
+                    result = Ok(info);
+                    current_result
+                }
+                Err(error) => {
+                    result = Err(error);
+                    continue;
+                }
+            };
+
+            runtime.wgpu.queue.submit([encoder.finish()]);
+            texture.present();
         }
 
         if let Err(FrameError::NoWorkToDo) = &result {

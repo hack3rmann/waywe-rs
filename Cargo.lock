@@ -1068,9 +1068,9 @@ checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 
 [[package]]
 name = "for-sure"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61518ee5f9bb861c6ffc80ab890f97d2bd654957c0d37693cd39f84d47388a77"
+checksum = "cbb08cf6901636c621711376204e34f7f2b2d827c5cfa22ddfe27ce76b736ece"
 
 [[package]]
 name = "foreign-types"

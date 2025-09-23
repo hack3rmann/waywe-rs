@@ -31,11 +31,11 @@ pub enum RenderStage {
     #[default]
     Update,
     /// Prepare for rendering.
-    PreRender,
+    PrepareRender,
     /// Perform rendering operations.
     Render,
     /// Present the rendered frame.
-    Present,
+    Finish,
 }
 
 /// GPU resources available to the render world.

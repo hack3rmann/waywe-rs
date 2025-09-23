@@ -45,6 +45,7 @@ use crate::{
     wallpaper::scene::{
         DummyWorld, FrameRateSetting, MainWorld, Monitor, PostExtract, PostStartup, PostUpdate,
         PreUpdate, Startup, Time, Update, WallpaperConfig, WallpaperFlags, guess_framerate,
+        mesh::{RenderResult, SurfaceView},
         plugin::PluginGroup,
         render::{EntityMap, Render, RenderGpu, RenderStage, SceneExtract},
         subapp::EcsApp,
@@ -73,9 +74,9 @@ impl Wallpaper {
         render_schedule.configure_sets(
             (
                 RenderStage::Update,
-                RenderStage::PreRender,
+                RenderStage::PrepareRender,
                 RenderStage::Render,
-                RenderStage::Present,
+                RenderStage::Finish,
             )
                 .chain(),
         );
@@ -188,24 +189,61 @@ impl PreparedWallpaper {
     /// Run one frame of the wallpaper.
     ///
     /// This updates logic, extracts data to the render world, and renders the frame.
-    pub fn frame(&mut self) -> Result<FrameInfo, FrameError> {
-        if self.first_time {
+    pub fn frame(
+        &mut self,
+        surface_view: wgpu::TextureView,
+    ) -> Result<(FrameInfo, RenderResult), FrameError> {
+        let result = if self.first_time {
             self.wallpaper.main.world.run_schedule(PreUpdate);
             self.wallpaper.main.world.run_schedule(Update);
             self.wallpaper.main.world.run_schedule(PostUpdate);
 
             self.wallpaper.run_extract();
+
+            self.wallpaper
+                .render
+                .insert_resource(SurfaceView(surface_view));
             self.wallpaper.render.world.run_schedule(Render);
+            _ = self.wallpaper.render.world.remove_resource::<SurfaceView>();
+            let result = self
+                .wallpaper
+                .render
+                .world
+                .remove_resource::<RenderResult>()
+                .unwrap();
+
             self.first_time = false;
+
+            result
         } else {
-            thread::scope(|s| {
-                let handle = s.spawn(|| self.wallpaper.main.world.run_schedule(Update));
+            let result = thread::scope(|s| {
+                let handle = s.spawn(|| {
+                    self.wallpaper.main.world.run_schedule(PreUpdate);
+                    self.wallpaper.main.world.run_schedule(Update);
+                    self.wallpaper.main.world.run_schedule(PostUpdate);
+                });
+
+                self.wallpaper
+                    .render
+                    .insert_resource(SurfaceView(surface_view));
                 self.wallpaper.render.world.run_schedule(Render);
+                _ = self.wallpaper.render.world.remove_resource::<SurfaceView>();
+                let result = self
+                    .wallpaper
+                    .render
+                    .world
+                    .remove_resource::<RenderResult>()
+                    .unwrap();
+
                 handle.join().unwrap();
+
+                result
             });
 
             self.wallpaper.run_extract();
-        }
+
+            result
+        };
 
         let frame_info = match self.wallpaper.main.resource::<FrameRateSetting>() {
             FrameRateSetting::TargetFrameDuration(duration) => FrameInfo {
@@ -217,7 +255,7 @@ impl PreparedWallpaper {
             FrameRateSetting::GuessFromScene => FrameInfo::new_60_fps(),
         };
 
-        Ok(frame_info)
+        Ok((frame_info, result))
     }
 }
 
