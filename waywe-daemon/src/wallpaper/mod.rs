@@ -1,5 +1,6 @@
 pub mod default;
 pub mod scene;
+pub mod transition;
 
 use crate::{
     runtime::{

@@ -45,11 +45,14 @@ use bevy_ecs::{
 };
 use bytemuck::{Pod, Zeroable};
 use derive_more::Deref;
-use for_sure::prelude::*;
 use glam::{Mat4, Vec2, Vec3};
 use itertools::Itertools;
 use smallvec::{SmallVec, smallvec};
-use std::mem;
+use std::{
+    mem,
+    ops::{Deref, DerefMut},
+    ptr::NonNull,
+};
 
 /// Plugin for mesh rendering functionality.
 ///
@@ -67,7 +70,6 @@ impl Plugin for MeshPlugin {
 
         wallpaper
             .render
-            .init_resource::<OngoingRender>()
             .add_systems(
                 SceneExtract,
                 (
@@ -80,14 +82,7 @@ impl Plugin for MeshPlugin {
                     despawn_removed_entities,
                 ),
             )
-            .add_systems(
-                Render,
-                (
-                    prepare_render.in_set(RenderStage::PrepareRender),
-                    render_meshes.in_set(RenderStage::Render),
-                    finish_render.in_set(RenderStage::Finish),
-                ),
-            );
+            .add_systems(Render, render_meshes.in_set(RenderStage::Render));
     }
 }
 
@@ -349,7 +344,7 @@ pub fn render_meshes(
     materials: Res<RefAssets<RenderMaterial>>,
     meshes: Res<RenderAssets<RenderMesh>>,
     mesh_handles: Query<(&RenderMeshId, &ModelMatrix, &RenderMaterialId)>,
-    mut render: ResMut<OngoingRender>,
+    mut encoder: ResMut<CommandEncoder>,
     time: Res<Time>,
     monitor: Res<Monitor>,
     surface_view: Res<SurfaceView>,
@@ -367,23 +362,21 @@ pub fn render_meshes(
         let pipeline = pipelines.get(material_id).unwrap();
         let material = materials.get(material_id).unwrap();
 
-        let mut pass = render
-            .encoder
-            .begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("test-mesh-render"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &surface_view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("test-mesh-render"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &surface_view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
 
         pass.set_pipeline(&pipeline.pipeline);
         pass.set_bind_group(0, &material.bind_group, &[]);
@@ -407,28 +400,42 @@ pub fn render_meshes(
     }
 }
 
-#[derive(Resource, Debug)]
-pub struct RenderResult {
-    pub encoder: wgpu::CommandEncoder,
-}
-
 #[derive(Resource, Deref)]
 pub struct SurfaceView(pub wgpu::TextureView);
 
-/// Resource tracking ongoing render operations.
-#[derive(Resource, Default)]
-pub struct OngoingRender {
-    /// Command encoder for building render commands.
-    pub encoder: Almost<wgpu::CommandEncoder>,
+#[derive(Resource)]
+pub struct CommandEncoder(NonNull<wgpu::CommandEncoder>);
+
+unsafe impl Send for CommandEncoder {}
+unsafe impl Sync for CommandEncoder {}
+
+impl CommandEncoder {
+    /// # Safety
+    ///
+    /// - `encoder` must not be accessed while this struct exist
+    pub const unsafe fn new(encoder: &mut wgpu::CommandEncoder) -> Self {
+        Self(NonNull::from_mut(encoder))
+    }
+
+    pub const fn get(&self) -> &wgpu::CommandEncoder {
+        unsafe { self.0.as_ref() }
+    }
+
+    pub const fn get_mut(&mut self) -> &mut wgpu::CommandEncoder {
+        unsafe { self.0.as_mut() }
+    }
 }
 
-pub fn prepare_render(mut render: ResMut<OngoingRender>, gpu: Res<RenderGpu>) {
-    let encoder = gpu.device.create_command_encoder(&Default::default());
-    render.encoder = Value(encoder);
+impl Deref for CommandEncoder {
+    type Target = wgpu::CommandEncoder;
+
+    fn deref(&self) -> &Self::Target {
+        self.get()
+    }
 }
 
-/// System to finish rendering and present frames.
-pub fn finish_render(mut commands: Commands, mut render: ResMut<OngoingRender>) {
-    let encoder = Almost::take_unwrap(&mut render.encoder);
-    commands.insert_resource(RenderResult { encoder });
+impl DerefMut for CommandEncoder {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.get_mut()
+    }
 }

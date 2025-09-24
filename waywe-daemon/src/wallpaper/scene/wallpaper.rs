@@ -45,7 +45,7 @@ use crate::{
     wallpaper::scene::{
         DummyWorld, FrameRateSetting, MainWorld, Monitor, PostExtract, PostStartup, PostUpdate,
         PreUpdate, Startup, Time, Update, WallpaperConfig, WallpaperFlags, guess_framerate,
-        mesh::{RenderResult, SurfaceView},
+        mesh::{CommandEncoder, SurfaceView},
         plugin::PluginGroup,
         render::{EntityMap, Render, RenderGpu, RenderStage, SceneExtract},
         subapp::EcsApp,
@@ -163,6 +163,33 @@ impl Wallpaper {
     }
 }
 
+/// Runs render schedules. `render` should correspond to the rendering app
+fn run_render(
+    render: &mut EcsApp,
+    surface_view: wgpu::TextureView,
+    encoder: &mut wgpu::CommandEncoder,
+) {
+    render.insert_resource(SurfaceView(surface_view));
+    // Safety: we never access the encoder between insert and remove
+    render.insert_resource(unsafe { CommandEncoder::new(encoder) });
+
+    render.world.run_schedule(Render);
+
+    _ = render.world.remove_resource::<SurfaceView>();
+    render
+        .world
+        .remove_resource::<CommandEncoder>()
+        // Safety: remove the encoder
+        .expect("world should let go the encoder for the safety");
+}
+
+/// Runs update schedules. `main` should correspond to the main app
+fn run_update(main: &mut EcsApp) {
+    main.world.run_schedule(PreUpdate);
+    main.world.run_schedule(Update);
+    main.world.run_schedule(PostUpdate);
+}
+
 /// A wallpaper that has been prepared for rendering.
 ///
 /// This wrapper handles the frame loop and synchronization between
@@ -192,58 +219,23 @@ impl PreparedWallpaper {
     pub fn frame(
         &mut self,
         surface_view: wgpu::TextureView,
-    ) -> Result<(FrameInfo, RenderResult), FrameError> {
-        let result = if self.first_time {
-            self.wallpaper.main.world.run_schedule(PreUpdate);
-            self.wallpaper.main.world.run_schedule(Update);
-            self.wallpaper.main.world.run_schedule(PostUpdate);
-
+        encoder: &mut wgpu::CommandEncoder,
+    ) -> Result<FrameInfo, FrameError> {
+        if self.first_time {
+            run_update(&mut self.wallpaper.main);
             self.wallpaper.run_extract();
-
-            self.wallpaper
-                .render
-                .insert_resource(SurfaceView(surface_view));
-            self.wallpaper.render.world.run_schedule(Render);
-            _ = self.wallpaper.render.world.remove_resource::<SurfaceView>();
-            let result = self
-                .wallpaper
-                .render
-                .world
-                .remove_resource::<RenderResult>()
-                .unwrap();
+            run_render(&mut self.wallpaper.render, surface_view, encoder);
 
             self.first_time = false;
-
-            result
         } else {
-            let result = thread::scope(|s| {
-                let handle = s.spawn(|| {
-                    self.wallpaper.main.world.run_schedule(PreUpdate);
-                    self.wallpaper.main.world.run_schedule(Update);
-                    self.wallpaper.main.world.run_schedule(PostUpdate);
-                });
-
-                self.wallpaper
-                    .render
-                    .insert_resource(SurfaceView(surface_view));
-                self.wallpaper.render.world.run_schedule(Render);
-                _ = self.wallpaper.render.world.remove_resource::<SurfaceView>();
-                let result = self
-                    .wallpaper
-                    .render
-                    .world
-                    .remove_resource::<RenderResult>()
-                    .unwrap();
-
+            thread::scope(|s| {
+                let handle = s.spawn(|| run_update(&mut self.wallpaper.main));
+                run_render(&mut self.wallpaper.render, surface_view, encoder);
                 handle.join().unwrap();
-
-                result
             });
 
             self.wallpaper.run_extract();
-
-            result
-        };
+        }
 
         let frame_info = match self.wallpaper.main.resource::<FrameRateSetting>() {
             FrameRateSetting::TargetFrameDuration(duration) => FrameInfo {
@@ -255,7 +247,7 @@ impl PreparedWallpaper {
             FrameRateSetting::GuessFromScene => FrameInfo::new_60_fps(),
         };
 
-        Ok((frame_info, result))
+        Ok(frame_info)
     }
 }
 

@@ -1,0 +1,299 @@
+use crate::{
+    runtime::{gpu::Wgpu, wayland::MonitorId},
+    wallpaper::scene::wallpaper::PreparedWallpaper,
+};
+use bytemuck::{Pod, Zeroable};
+use for_sure::prelude::*;
+use glam::Vec2;
+use smallvec::SmallVec;
+use std::mem;
+use wgpu::util::{BufferInitDescriptor, DeviceExt};
+
+const SCREEN_TRIANGLE: [Vec2; 3] = [
+    Vec2::new(-1.0, -1.0),
+    Vec2::new(3.0, -1.0),
+    Vec2::new(-1.0, 3.0),
+];
+
+pub struct WallpaperTransitionState {
+    pub from: wgpu::TextureView,
+    pub to: wgpu::TextureView,
+    pub bind_group: wgpu::BindGroup,
+}
+
+impl WallpaperTransitionState {
+    pub fn new(gpu: &Wgpu, pipeline: &WallpaperTransitionPipeline) -> Self {
+        let surfaces = gpu.surfaces.read().unwrap();
+        let surface_config = &surfaces[&pipeline.monitor_id].config;
+
+        let state = gpu.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("transition"),
+            size: wgpu::Extent3d {
+                width: surface_config.width,
+                height: surface_config.height,
+                depth_or_array_layers: 2,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: surface_config.format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+
+        let from = state.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("transition-from"),
+            base_array_layer: 0,
+            array_layer_count: Some(1),
+            dimension: Some(wgpu::TextureViewDimension::D2),
+            ..Default::default()
+        });
+
+        let to = state.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("transition-from"),
+            base_array_layer: 1,
+            array_layer_count: Some(1),
+            dimension: Some(wgpu::TextureViewDimension::D2),
+            ..Default::default()
+        });
+
+        let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("transition-binds"),
+            layout: &pipeline.bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&from),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&to),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&pipeline.sampler),
+                },
+            ],
+        });
+
+        Self {
+            from,
+            to,
+            bind_group,
+        }
+    }
+}
+
+pub struct WallpaperTransitionPipeline {
+    pub monitor_id: MonitorId,
+    pub pipeline: wgpu::RenderPipeline,
+    pub bind_group_layout: wgpu::BindGroupLayout,
+    pub sampler: wgpu::Sampler,
+    pub vertices: wgpu::Buffer,
+}
+
+impl WallpaperTransitionPipeline {
+    pub fn new(gpu: &Wgpu, monitor_id: MonitorId) -> Self {
+        let vertices = gpu.device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("fullscreen-triangle"),
+            contents: bytemuck::cast_slice(&SCREEN_TRIANGLE),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let bind_group_layout =
+            gpu.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("waywe-transition-binds"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                    ],
+                });
+
+        let pipeline_layout = gpu
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("waywe-transition"),
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[wgpu::PushConstantRange {
+                    stages: wgpu::ShaderStages::FRAGMENT,
+                    range: 0..mem::size_of::<AnimationState>() as u32,
+                }],
+            });
+
+        let surface_format = {
+            let surfaces = gpu.surfaces.read().unwrap();
+            surfaces[&monitor_id].format
+        };
+
+        const VERTEX_SHADER_NAME: &str = "shaders/white-vertex.glsl";
+        const FRAGMENT_SHADER_NAME: &str = "shaders/transition.glsl";
+
+        gpu.use_shader(
+            VERTEX_SHADER_NAME,
+            wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Glsl {
+                    shader: include_str!("../shaders/fullscreen-vertex.glsl").into(),
+                    stage: wgpu::naga::ShaderStage::Vertex,
+                    defines: Default::default(),
+                },
+            },
+        );
+
+        gpu.use_shader(
+            FRAGMENT_SHADER_NAME,
+            wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Glsl {
+                    shader: include_str!("../shaders/transition.glsl").into(),
+                    stage: wgpu::naga::ShaderStage::Fragment,
+                    defines: &[],
+                },
+            },
+        );
+
+        let pipeline = gpu
+            .device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("image-pipeline"),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &gpu.shader_cache.get(VERTEX_SHADER_NAME).unwrap(),
+                    entry_point: Some("main"),
+                    compilation_options: wgpu::PipelineCompilationOptions {
+                        constants: &[],
+                        zero_initialize_workgroup_memory: false,
+                    },
+                    buffers: &[wgpu::VertexBufferLayout {
+                        array_stride: mem::size_of_val(&SCREEN_TRIANGLE[0]) as u64,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &[wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Float32x2,
+                            offset: 0,
+                            shader_location: 0,
+                        }],
+                    }],
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &gpu.shader_cache.get(FRAGMENT_SHADER_NAME).unwrap(),
+                    entry_point: Some("main"),
+                    compilation_options: wgpu::PipelineCompilationOptions {
+                        constants: &[],
+                        zero_initialize_workgroup_memory: false,
+                    },
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: surface_format,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    strip_index_format: None,
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: None,
+                    unclipped_depth: false,
+                    polygon_mode: wgpu::PolygonMode::Fill,
+                    conservative: false,
+                },
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState {
+                    count: 1,
+                    mask: !0,
+                    alpha_to_coverage_enabled: false,
+                },
+                multiview: None,
+                cache: None,
+            });
+
+        let sampler = gpu.device.create_sampler(&Default::default());
+
+        Self {
+            monitor_id,
+            pipeline,
+            bind_group_layout,
+            sampler,
+            vertices,
+        }
+    }
+
+    pub fn render(
+        &self,
+        state: &WallpaperTransitionState,
+        surface_view: &wgpu::TextureView,
+        encoder: &mut wgpu::CommandEncoder,
+        animation_state: &AnimationState,
+    ) {
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("transition-pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: surface_view,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+                depth_slice: None,
+                resolve_target: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+
+        pass.set_pipeline(&self.pipeline);
+        pass.set_bind_group(0, &state.bind_group, &[]);
+        pass.set_vertex_buffer(0, self.vertices.slice(..));
+        pass.set_push_constants(
+            wgpu::ShaderStages::FRAGMENT,
+            0,
+            bytemuck::bytes_of(animation_state),
+        );
+
+        pass.draw(0..SCREEN_TRIANGLE.len() as u32, 0..1);
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Default, Pod, Zeroable)]
+pub struct AnimationState {
+    pub centre: Vec2,
+    pub radius: f32,
+    pub direction: f32,
+}
+
+pub struct OngoingTransition {
+    /// Amount of work done in 0..=1
+    pub done_fraction: f32,
+}
+
+pub struct RunningWallpapers {
+    pub executing: Vec<PreparedWallpaper>,
+    pub ongoing_transitions: SmallVec<[OngoingTransition; 8]>,
+    pub transition_pipeline: Almost<WallpaperTransitionPipeline>,
+    pub transition_gpu_state: Almost<WallpaperTransitionState>,
+}
