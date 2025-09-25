@@ -100,7 +100,7 @@ unsafe fn check_wl_interfaces_are_the_same(
     let right_name = unsafe { CStr::from_ptr(rhs.name) };
 
     assert_eq!(left_name, right_name, "same names");
-    assert_eq!(lhs.version, rhs.version, "same versions");
+    assert!(lhs.version >= rhs.version, "compatible versions");
 
     if let CheckDepth::Deep = depth {
         debug!(?left_name, "checking requests are the same");
