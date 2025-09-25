@@ -447,7 +447,7 @@ impl RunningWallpapers {
             let Some(wallpaper) = self.executing.front_mut() else {
                 unreachable!()
             };
-            return wallpaper.frame(surface_view, encoder);
+            return Ok(wallpaper.frame(surface_view, encoder));
         }
 
         let mut wallpapers = self.executing.iter_mut();
@@ -456,11 +456,13 @@ impl RunningWallpapers {
             unreachable!()
         };
 
-        let mut result = first.frame(self.textures.from.clone(), encoder);
+        let mut frame_result = first.frame(self.textures.from.clone(), encoder);
 
         for (wallpaper, transition) in wallpapers.zip(&mut self.ongoing_transitions) {
             transition.update();
-            result = wallpaper.frame(self.textures.to.clone(), encoder);
+
+            let frame_info = wallpaper.frame(self.textures.to.clone(), encoder);
+            frame_result = frame_result.min_or_60_fps(frame_info);
 
             let state = AnimationState {
                 centre: transition.centre(),
@@ -480,7 +482,7 @@ impl RunningWallpapers {
             );
         }
 
-        result
+        Ok(frame_result)
     }
 
     pub fn wallpapers_mut(&mut self) -> &mut [PreparedWallpaper] {

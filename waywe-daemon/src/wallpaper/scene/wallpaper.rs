@@ -12,32 +12,9 @@
 //!
 //! Each frame, the main world updates logic, then data is extracted to
 //! the render world, which then performs rendering.
-//!
-//! # Usage
-//!
-//! ```rust
-//! use waywe_daemon::wallpaper::scene::{
-//!     wallpaper::Wallpaper,
-//!     plugin::DefaultPlugins,
-//! };
-//!
-//! // Create a new wallpaper
-//! // let mut wallpaper = Wallpaper::new(gpu, wayland, monitor_id);
-//!
-//! // Add plugins for functionality
-//! // wallpaper.add_plugins(DefaultPlugins);
-//!
-//! // Prepare for rendering
-//! // let mut prepared = PreparedWallpaper::prepare(wallpaper);
-//!
-//! // Run the frame loop
-//! // loop {
-//! //     prepared.frame()?;
-//! // }
-//! ```
 
 use crate::{
-    event_loop::{FrameError, FrameInfo},
+    event_loop::FrameInfo,
     runtime::{
         gpu::Wgpu,
         wayland::{MonitorId, Wayland},
@@ -222,7 +199,7 @@ impl PreparedWallpaper {
         &mut self,
         surface_view: wgpu::TextureView,
         encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<FrameInfo, FrameError> {
+    ) -> FrameInfo {
         if self.first_time {
             run_update(&mut self.wallpaper.main);
             self.wallpaper.run_extract();
@@ -239,7 +216,7 @@ impl PreparedWallpaper {
             self.wallpaper.run_extract();
         }
 
-        Ok(match self.wallpaper.main.resource::<FrameRateSetting>() {
+        match self.wallpaper.main.resource::<FrameRateSetting>() {
             FrameRateSetting::TargetFrameDuration(duration) => FrameInfo {
                 target_frame_time: Some(*duration),
             },
@@ -247,7 +224,7 @@ impl PreparedWallpaper {
             FrameRateSetting::NoUpdate => FrameInfo {
                 target_frame_time: None,
             },
-        })
+        }
     }
 }
 

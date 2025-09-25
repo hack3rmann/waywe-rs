@@ -303,7 +303,7 @@ impl FrameInfo {
         }
     }
 
-    pub fn best_with_60_fps(self, other: Self) -> Self {
+    pub fn min_or_60_fps(self, other: Self) -> Self {
         match (self.target_frame_time, other.target_frame_time) {
             (Some(time1), Some(time2)) => Self {
                 target_frame_time: Some(time1.min(time2).min(Self::MAX_FPS)),
@@ -312,7 +312,7 @@ impl FrameInfo {
                 target_frame_time: Some(time.min(Self::MAX_FPS)),
             },
             (None, None) => Self {
-                target_frame_time: Some(Self::MAX_FPS),
+                target_frame_time: None,
             },
         }
     }
