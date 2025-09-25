@@ -15,10 +15,13 @@
 //! - [`MaterialPlugin`]: Adds material functionality to a wallpaper
 
 use super::wallpaper::Wallpaper;
-use crate::wallpaper::scene::{
-    asset_server::AssetId,
-    assets::{Asset, RefAssetsPlugin},
-    plugin::Plugin,
+use crate::{
+    runtime::{gpu::Wgpu, shaders::ShaderDescriptor},
+    wallpaper::scene::{
+        asset_server::AssetId,
+        assets::{Asset, RefAssetsPlugin},
+        plugin::Plugin,
+    },
 };
 use bevy_ecs::{
     prelude::*,
@@ -52,8 +55,26 @@ impl Asset for VertexFragmentShader {}
 /// Materials define how surfaces should be rendered, including shaders
 /// and bind groups.
 pub trait Material: Asset + AsBindGroup {
-    /// Create the shaders for this material.
-    fn create_shader(device: &wgpu::Device) -> VertexFragmentShader;
+    type VertexShader: ShaderDescriptor;
+    type FragmentShader: ShaderDescriptor;
+
+    fn create_shader(gpu: &Wgpu) -> VertexFragmentShader {
+        gpu.require_shader::<Self::VertexShader>();
+        gpu.require_shader::<Self::FragmentShader>();
+
+        VertexFragmentShader {
+            vertex: gpu
+                .shader_cache
+                .get::<Self::VertexShader>()
+                .unwrap()
+                .clone(),
+            fragment: gpu
+                .shader_cache
+                .get::<Self::FragmentShader>()
+                .unwrap()
+                .clone(),
+        }
+    }
 }
 
 /// Trait for creating GPU bind groups.

@@ -17,7 +17,7 @@ use std::path::Path;
 
 use super::wallpaper::Wallpaper;
 use crate::{
-    runtime::gpu::Wgpu,
+    runtime::{gpu::Wgpu, shaders::ShaderDescriptor},
     wallpaper::scene::{
         asset_server::{AssetHandle, AssetServerLoadPlugin, Load},
         assets::{
@@ -141,15 +141,15 @@ pub struct ImagePipeline {
 
 impl ImagePipeline {
     /// Create a new image pipeline.
-    pub fn new(device: &wgpu::Device) -> Self {
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+    pub fn new(gpu: &Wgpu) -> Self {
+        let sampler = gpu.device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("image-material"),
             min_filter: wgpu::FilterMode::Linear,
             mag_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
 
-        let shader = ImageMaterial::create_shader(device);
+        let shader = ImageMaterial::create_shader(gpu);
 
         Self { sampler, shader }
     }
@@ -158,7 +158,37 @@ impl ImagePipeline {
 impl FromWorld for ImagePipeline {
     fn from_world(world: &mut World) -> Self {
         let gpu = world.resource::<RenderGpu>();
-        Self::new(&gpu.device)
+        Self::new(gpu)
+    }
+}
+
+pub struct SceneImageVertexShader;
+
+impl ShaderDescriptor for SceneImageVertexShader {
+    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
+        wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Glsl {
+                shader: include_str!("../../shaders/scene-image-vertex.glsl").into(),
+                stage: wgpu::naga::ShaderStage::Vertex,
+                defines: Default::default(),
+            },
+        }
+    }
+}
+
+pub struct SceneImageFragmentShader;
+
+impl ShaderDescriptor for SceneImageFragmentShader {
+    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
+        wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Glsl {
+                shader: include_str!("../../shaders/scene-image-fragment.glsl").into(),
+                stage: wgpu::naga::ShaderStage::Fragment,
+                defines: Default::default(),
+            },
+        }
     }
 }
 
@@ -171,27 +201,8 @@ pub struct ImageMaterial {
 impl Asset for ImageMaterial {}
 
 impl Material for ImageMaterial {
-    fn create_shader(device: &wgpu::Device) -> VertexFragmentShader {
-        let vertex = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("../../shaders/scene-image-vertex.glsl").into(),
-                stage: wgpu::naga::ShaderStage::Vertex,
-                defines: Default::default(),
-            },
-        });
-
-        let fragment = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("../../shaders/scene-image-fragment.glsl").into(),
-                stage: wgpu::naga::ShaderStage::Fragment,
-                defines: Default::default(),
-            },
-        });
-
-        VertexFragmentShader { vertex, fragment }
-    }
+    type VertexShader = SceneImageVertexShader;
+    type FragmentShader = SceneImageFragmentShader;
 }
 
 /// GPU-ready image data.

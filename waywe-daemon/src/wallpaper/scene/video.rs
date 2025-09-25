@@ -15,7 +15,7 @@
 
 use super::wallpaper::Wallpaper;
 use crate::{
-    runtime::gpu::Wgpu,
+    runtime::{gpu::Wgpu, shaders::ShaderDescriptor},
     wallpaper::scene::{
         Time, Update,
         asset_server::{AssetHandle, AssetServerLoadPlugin, Load},
@@ -24,6 +24,7 @@ use crate::{
             RenderAsset, RenderAssets, RenderAssetsPlugin,
         },
         extract::Extract,
+        image::SceneImageVertexShader,
         material::{AsBindGroup, Material, RenderMaterial, VertexFragmentShader},
         plugin::Plugin,
         render::{RenderGpu, SceneExtract},
@@ -539,15 +540,15 @@ pub struct VideoPipeline {
 
 impl VideoPipeline {
     /// Create a new video pipeline.
-    pub fn new(device: &wgpu::Device) -> Self {
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+    pub fn new(gpu: &Wgpu) -> Self {
+        let sampler = gpu.device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("image-material"),
             min_filter: wgpu::FilterMode::Linear,
             mag_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
 
-        let shader = VideoMaterial::create_shader(device);
+        let shader = VideoMaterial::create_shader(gpu);
 
         Self { sampler, shader }
     }
@@ -556,7 +557,22 @@ impl VideoPipeline {
 impl FromWorld for VideoPipeline {
     fn from_world(world: &mut World) -> Self {
         let gpu = world.resource::<RenderGpu>();
-        Self::new(&gpu.device)
+        Self::new(gpu)
+    }
+}
+
+pub struct SceneVideoFramgentShader;
+
+impl ShaderDescriptor for SceneVideoFramgentShader {
+    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
+        wgpu::ShaderModuleDescriptor {
+            label: Some("scene-video"),
+            source: wgpu::ShaderSource::Glsl {
+                shader: include_str!("../../shaders/scene-video-fragment.glsl").into(),
+                stage: wgpu::naga::ShaderStage::Fragment,
+                defines: Default::default(),
+            },
+        }
     }
 }
 
@@ -569,27 +585,8 @@ pub struct VideoMaterial {
 impl Asset for VideoMaterial {}
 
 impl Material for VideoMaterial {
-    fn create_shader(device: &wgpu::Device) -> VertexFragmentShader {
-        let vertex = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("../../shaders/scene-image-vertex.glsl").into(),
-                stage: wgpu::naga::ShaderStage::Vertex,
-                defines: Default::default(),
-            },
-        });
-
-        let fragment = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("../../shaders/scene-video-fragment.glsl").into(),
-                stage: wgpu::naga::ShaderStage::Fragment,
-                defines: Default::default(),
-            },
-        });
-
-        VertexFragmentShader { vertex, fragment }
-    }
+    type VertexShader = SceneImageVertexShader;
+    type FragmentShader = SceneVideoFramgentShader;
 }
 
 impl AsBindGroup for VideoMaterial {
