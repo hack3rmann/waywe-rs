@@ -1,59 +1,9 @@
 use super::wayland::{MonitorId, MonitorInfo, MonitorMap, SurfaceExtension, Wayland};
+use crate::runtime::shaders::{ShaderCache, ShaderDescriptor};
 use ash::vk;
 use glam::UVec2;
-use std::{
-    collections::HashMap,
-    ops::Deref,
-    sync::{RwLock, RwLockReadGuard},
-};
+use std::sync::RwLock;
 use wgpu::hal::{DeviceError, api};
-
-#[derive(Default)]
-pub struct ShaderCache {
-    shaders: RwLock<HashMap<&'static str, wgpu::ShaderModule>>,
-}
-
-impl ShaderCache {
-    pub fn contains(&self, id: &str) -> bool {
-        self.shaders.read().unwrap().contains_key(id)
-    }
-
-    pub fn insert_with(
-        &self,
-        id: &'static str,
-        create_shader: impl FnOnce() -> wgpu::ShaderModule,
-    ) {
-        if self.contains(id) {
-            return;
-        }
-
-        let mut map = self.shaders.write().unwrap();
-        map.insert(id, create_shader());
-    }
-
-    pub fn get(&self, id: &'static str) -> Option<RwLockShaderReadGuard<'_>> {
-        let shaders = self.shaders.read().unwrap();
-
-        if !shaders.contains_key(id) {
-            return None;
-        }
-
-        Some(RwLockShaderReadGuard { shaders, id })
-    }
-}
-
-pub struct RwLockShaderReadGuard<'s> {
-    shaders: RwLockReadGuard<'s, HashMap<&'static str, wgpu::ShaderModule>>,
-    id: &'static str,
-}
-
-impl Deref for RwLockShaderReadGuard<'_> {
-    type Target = wgpu::ShaderModule;
-
-    fn deref(&self) -> &Self::Target {
-        &self.shaders[self.id]
-    }
-}
 
 pub struct Surface {
     pub surface: wgpu::Surface<'static>,
@@ -237,9 +187,8 @@ impl Wgpu {
         surfaces.insert(monitor_id, surface);
     }
 
-    pub fn use_shader(&self, id: &'static str, desc: wgpu::ShaderModuleDescriptor) {
-        self.shader_cache
-            .insert_with(id, || self.device.create_shader_module(desc));
+    pub fn require_shader<S: ShaderDescriptor>(&self) {
+        self.shader_cache.initialize::<S>(&self.device);
     }
 }
 

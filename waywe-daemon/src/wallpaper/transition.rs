@@ -1,6 +1,6 @@
 use crate::{
     event_loop::{FrameError, FrameInfo},
-    runtime::{gpu::Wgpu, wayland::MonitorId},
+    runtime::{gpu::Wgpu, shaders::ShaderDescriptor, wayland::MonitorId},
     wallpaper::scene::wallpaper::PreparedWallpaper,
 };
 use bytemuck::{Pod, Zeroable};
@@ -92,9 +92,35 @@ impl WallpaperTransitionState {
             bind_group,
         }
     }
+}
 
-    pub fn swap_textures(&mut self) {
-        mem::swap(&mut self.from, &mut self.to);
+pub struct FullScreenVertexShader;
+
+impl ShaderDescriptor for FullScreenVertexShader {
+    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
+        wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Glsl {
+                shader: include_str!("../shaders/fullscreen-vertex.glsl").into(),
+                stage: wgpu::naga::ShaderStage::Vertex,
+                defines: Default::default(),
+            },
+        }
+    }
+}
+
+pub struct FullScreenFragmentShader;
+
+impl ShaderDescriptor for FullScreenFragmentShader {
+    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
+        wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Glsl {
+                shader: include_str!("../shaders/transition.glsl").into(),
+                stage: wgpu::naga::ShaderStage::Fragment,
+                defines: &[],
+            },
+        }
     }
 }
 
@@ -108,6 +134,9 @@ pub struct WallpaperTransitionPipeline {
 
 impl WallpaperTransitionPipeline {
     pub fn new(gpu: &Wgpu, monitor_id: MonitorId) -> Self {
+        gpu.require_shader::<FullScreenVertexShader>();
+        gpu.require_shader::<FullScreenFragmentShader>();
+
         let vertices = gpu.device.create_buffer_init(&BufferInitDescriptor {
             label: Some("fullscreen-triangle"),
             contents: bytemuck::cast_slice(&SCREEN_TRIANGLE),
@@ -164,40 +193,13 @@ impl WallpaperTransitionPipeline {
             surfaces[&monitor_id].format
         };
 
-        const VERTEX_SHADER_NAME: &str = "shaders/white-vertex.glsl";
-        const FRAGMENT_SHADER_NAME: &str = "shaders/transition.glsl";
-
-        gpu.use_shader(
-            VERTEX_SHADER_NAME,
-            wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Glsl {
-                    shader: include_str!("../shaders/fullscreen-vertex.glsl").into(),
-                    stage: wgpu::naga::ShaderStage::Vertex,
-                    defines: Default::default(),
-                },
-            },
-        );
-
-        gpu.use_shader(
-            FRAGMENT_SHADER_NAME,
-            wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Glsl {
-                    shader: include_str!("../shaders/transition.glsl").into(),
-                    stage: wgpu::naga::ShaderStage::Fragment,
-                    defines: &[],
-                },
-            },
-        );
-
         let pipeline = gpu
             .device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("image-pipeline"),
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
-                    module: &gpu.shader_cache.get(VERTEX_SHADER_NAME).unwrap(),
+                    module: &gpu.shader_cache.get::<FullScreenVertexShader>().unwrap(),
                     entry_point: Some("main"),
                     compilation_options: wgpu::PipelineCompilationOptions {
                         constants: &[],
@@ -214,7 +216,7 @@ impl WallpaperTransitionPipeline {
                     }],
                 },
                 fragment: Some(wgpu::FragmentState {
-                    module: &gpu.shader_cache.get(FRAGMENT_SHADER_NAME).unwrap(),
+                    module: &gpu.shader_cache.get::<FullScreenFragmentShader>().unwrap(),
                     entry_point: Some("main"),
                     compilation_options: wgpu::PipelineCompilationOptions {
                         constants: &[],

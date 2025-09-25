@@ -9,6 +9,7 @@ use video::Video;
 use wayland::Wayland;
 
 pub mod gpu;
+pub mod shaders;
 pub mod timer;
 pub mod video;
 pub mod wayland;

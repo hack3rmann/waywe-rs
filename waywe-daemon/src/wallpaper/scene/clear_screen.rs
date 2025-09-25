@@ -1,6 +1,6 @@
 use super::wallpaper::Wallpaper;
 use crate::{
-    runtime::{gpu::Wgpu, wayland::MonitorId},
+    runtime::{gpu::Wgpu, shaders::ShaderDescriptor, wayland::MonitorId},
     wallpaper::scene::{
         Monitor,
         mesh::{CommandEncoder, SurfaceView},
@@ -38,38 +38,43 @@ impl ClearColor {
     }
 }
 
+pub struct NoOpVertexShader;
+
+impl ShaderDescriptor for NoOpVertexShader {
+    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
+        wgpu::ShaderModuleDescriptor {
+            label: Some("noop-vertex"),
+            source: wgpu::ShaderSource::Glsl {
+                shader: include_str!("../../shaders/noop-vertex.glsl").into(),
+                stage: wgpu::naga::ShaderStage::Vertex,
+                defines: Default::default(),
+            },
+        }
+    }
+}
+
+pub struct NoOpFragmentShader;
+
+impl ShaderDescriptor for NoOpFragmentShader {
+    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
+        wgpu::ShaderModuleDescriptor {
+            label: Some("noop-fragment"),
+            source: wgpu::ShaderSource::Glsl {
+                shader: include_str!("../../shaders/noop-fragment.glsl").into(),
+                stage: wgpu::naga::ShaderStage::Fragment,
+                defines: Default::default(),
+            },
+        }
+    }
+}
+
 #[derive(Resource, Deref)]
 pub struct ClearPipeline(pub wgpu::RenderPipeline);
 
 impl ClearPipeline {
     pub fn new(gpu: &Wgpu, monitor_id: MonitorId) -> Self {
-        // TODO(hack3rmann): make unique shader ids
-        const VERTEX_SHADER: &str = "shaders/noop-vertex.glsl";
-        const FRAGMENT_SHADER: &str = "shaders/noop-fragment.glsl";
-
-        gpu.use_shader(
-            VERTEX_SHADER,
-            wgpu::ShaderModuleDescriptor {
-                label: Some("noop-vertex"),
-                source: wgpu::ShaderSource::Glsl {
-                    shader: include_str!("../../shaders/noop-vertex.glsl").into(),
-                    stage: wgpu::naga::ShaderStage::Vertex,
-                    defines: Default::default(),
-                },
-            },
-        );
-
-        gpu.use_shader(
-            FRAGMENT_SHADER,
-            wgpu::ShaderModuleDescriptor {
-                label: Some("noop-vertex"),
-                source: wgpu::ShaderSource::Glsl {
-                    shader: include_str!("../../shaders/noop-fragment.glsl").into(),
-                    stage: wgpu::naga::ShaderStage::Fragment,
-                    defines: Default::default(),
-                },
-            },
-        );
+        gpu.require_shader::<NoOpVertexShader>();
+        gpu.require_shader::<NoOpFragmentShader>();
 
         let layout = gpu
             .device
@@ -85,7 +90,7 @@ impl ClearPipeline {
                 label: Some("image-pipeline"),
                 layout: Some(&layout),
                 vertex: wgpu::VertexState {
-                    module: &gpu.shader_cache.get(VERTEX_SHADER).unwrap(),
+                    module: &gpu.shader_cache.get::<NoOpVertexShader>().unwrap(),
                     entry_point: Some("main"),
                     compilation_options: wgpu::PipelineCompilationOptions {
                         constants: &[],
@@ -94,7 +99,7 @@ impl ClearPipeline {
                     buffers: &[],
                 },
                 fragment: Some(wgpu::FragmentState {
-                    module: &gpu.shader_cache.get(FRAGMENT_SHADER).unwrap(),
+                    module: &gpu.shader_cache.get::<NoOpFragmentShader>().unwrap(),
                     entry_point: Some("main"),
                     compilation_options: wgpu::PipelineCompilationOptions {
                         constants: &[],
