@@ -59,15 +59,8 @@ impl WallpaperBuilder for VideoWallpaper {
         wallpaper
             .main
             .insert_resource(VideoPath(self.path))
+            .insert_resource(FrameRateSetting::GuessFromScene)
             .add_systems(Startup, setup);
-    }
-
-    /// Get the frame rate setting for this wallpaper.
-    ///
-    /// Video wallpapers use [`FrameRateSetting::GuessFromScene`] to automatically
-    /// determine the appropriate frame rate based on the video content.
-    fn frame_rate(&self) -> FrameRateSetting {
-        FrameRateSetting::GuessFromScene
     }
 }
 

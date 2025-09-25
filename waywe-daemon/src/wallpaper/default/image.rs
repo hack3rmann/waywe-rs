@@ -58,15 +58,9 @@ impl WallpaperBuilder for ImageWallpaper {
 
         wallpaper
             .main
+            .insert_resource(FrameRateSetting::NoUpdate)
             .insert_resource(ImagePath(self.path))
             .add_systems(Startup, setup);
-    }
-
-    /// Get the frame rate setting for this wallpaper.
-    ///
-    /// Image wallpapers use [`FrameRateSetting::NoUpdate`] since they are static.
-    fn frame_rate(&self) -> FrameRateSetting {
-        FrameRateSetting::NoUpdate
     }
 }
 

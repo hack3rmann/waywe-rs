@@ -85,6 +85,7 @@ impl Wallpaper {
         render
             .init_resource::<Time>()
             .init_resource::<EntityMap>()
+            .init_resource::<FrameRateSetting>()
             .insert_resource(RenderGpu(gpu))
             .insert_resource(monitor)
             .add_schedule(Schedule::new(SceneExtract))
@@ -237,13 +238,15 @@ impl PreparedWallpaper {
             self.wallpaper.run_extract();
         }
 
-        match self.wallpaper.main.resource::<FrameRateSetting>() {
-            FrameRateSetting::TargetFrameDuration(duration) => Ok(FrameInfo {
+        Ok(match self.wallpaper.main.resource::<FrameRateSetting>() {
+            FrameRateSetting::TargetFrameDuration(duration) => FrameInfo {
                 target_frame_time: Some(*duration),
-            }),
-            FrameRateSetting::GuessFromScene => Ok(FrameInfo::new_60_fps()),
-            FrameRateSetting::NoUpdate => Err(FrameError::NoWorkToDo),
-        }
+            },
+            FrameRateSetting::GuessFromScene => FrameInfo::new_60_fps(),
+            FrameRateSetting::NoUpdate => FrameInfo {
+                target_frame_time: None,
+            },
+        })
     }
 }
 
@@ -257,9 +260,4 @@ pub struct WallpaperBuildConfig {
 pub trait WallpaperBuilder {
     /// Build the wallpaper by adding entities, components, and systems.
     fn build(self, wallpaper: &mut Wallpaper);
-
-    /// Get the frame rate setting for this wallpaper.
-    fn frame_rate(&self) -> FrameRateSetting {
-        FrameRateSetting::CAP_TO_60_FPS
-    }
 }
