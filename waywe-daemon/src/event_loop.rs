@@ -99,6 +99,12 @@ impl<A: App> EventLoop<A> {
                         }
                     }
 
+                    // Dispatch all wayland events first
+                    if polled_fds.contains(&self.runtime.wayland.display) {
+                        self.runtime.wayland.display_roundtrip();
+                        continue;
+                    }
+
                     self.runtime.timer.mark_block_end();
                 }
                 ControlFlow::ShouldStop => {
