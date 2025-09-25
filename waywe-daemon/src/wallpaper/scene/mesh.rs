@@ -82,13 +82,7 @@ impl Plugin for MeshPlugin {
                     despawn_removed_entities,
                 ),
             )
-            .add_systems(
-                Render,
-                (
-                    clear_surface.in_set(RenderStage::PrepareRender),
-                    render_meshes.in_set(RenderStage::Render),
-                ),
-            );
+            .add_systems(Render, render_meshes.in_set(RenderStage::Render));
     }
 }
 
@@ -290,7 +284,7 @@ impl RenderMesh {
 }
 
 /// Handle to a render mesh component.
-#[derive(Component)]
+#[derive(Component, Clone, Copy, Debug)]
 #[require(ModelMatrix)]
 pub struct RenderMeshId(pub AssetId);
 
@@ -346,6 +340,7 @@ pub fn despawn_removed_entities(
 
 /// System to render meshes.
 pub fn render_meshes(
+    mut mesh_handles_cache: Local<Vec<(RenderMeshId, ModelMatrix)>>,
     pipelines: Res<RefAssets<MeshPipeline>>,
     materials: Res<RefAssets<RenderMaterial>>,
     meshes: Res<RenderAssets<RenderMesh>>,
@@ -361,6 +356,14 @@ pub fn render_meshes(
         .chunk_by(|&(_, _, handle)| handle);
 
     for (&RenderMaterialId(material_id), mesh_handles) in &mesh_handles {
+        mesh_handles_cache.clear();
+        mesh_handles_cache.extend(mesh_handles.map(|(&id, &model, _)| (id, model)));
+        mesh_handles_cache.sort_unstable_by_key(|&(RenderMeshId(id), _)| id);
+
+        let mesh_handles = mesh_handles_cache
+            .iter()
+            .chunk_by(|&(RenderMeshId(id), _)| id);
+
         let aspect_ratio = monitor.aspect_ratio();
         let camera_view =
             Mat4::orthographic_rh(-1.0, 1.0, -aspect_ratio, aspect_ratio, -10.0, 10.0);
@@ -387,28 +390,25 @@ pub fn render_meshes(
         pass.set_pipeline(&pipeline.pipeline);
         pass.set_bind_group(0, &material.bind_group, &[]);
 
-        for (&RenderMeshId(mesh_id), &ModelMatrix(model), _) in mesh_handles {
-            // TODO(hack3rmann): group by mesh index + use instancing
+        for (&mesh_id, model_matrices) in &mesh_handles {
             let mesh = meshes.get(mesh_id).unwrap();
-
             pass.set_vertex_buffer(0, mesh.buffer_slice());
-            pass.set_push_constants(
-                wgpu::ShaderStages::VERTEX_FRAGMENT,
-                0,
-                bytemuck::bytes_of(&PushConst {
-                    time: time.elapsed.as_secs_f32(),
-                    mvp: camera_view * model,
-                    _padding: [0; 3],
-                }),
-            );
 
-            pass.draw(0..mesh.n_vertices as u32, 0..1);
+            for &(_, ModelMatrix(model)) in model_matrices {
+                pass.set_push_constants(
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                    0,
+                    bytemuck::bytes_of(&PushConst {
+                        time: time.elapsed.as_secs_f32(),
+                        mvp: camera_view * model,
+                        _padding: [0; 3],
+                    }),
+                );
+
+                pass.draw(0..mesh.n_vertices as u32, 0..1);
+            }
         }
     }
-}
-
-pub fn clear_surface(mut _encoder: ResMut<CommandEncoder>, _surface_view: Res<SurfaceView>) {
-    // TODO: clear the surface
 }
 
 #[derive(Resource, Deref)]
