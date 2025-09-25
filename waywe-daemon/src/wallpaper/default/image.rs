@@ -92,6 +92,7 @@ pub fn setup(
     let monitor_aspect_ratio = monitor.aspect_ratio();
     let aspect_ratio = image.height() as f32 / image.width() as f32;
 
+    // FIXME(hack3rmann): scaling issue with wallhaven-eyw5qw
     let scale = if aspect_ratio < 1.0 {
         Vec3::new(
             monitor_aspect_ratio / aspect_ratio,

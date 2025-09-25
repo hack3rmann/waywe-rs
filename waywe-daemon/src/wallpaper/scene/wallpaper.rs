@@ -237,17 +237,13 @@ impl PreparedWallpaper {
             self.wallpaper.run_extract();
         }
 
-        let frame_info = match self.wallpaper.main.resource::<FrameRateSetting>() {
-            FrameRateSetting::TargetFrameDuration(duration) => FrameInfo {
+        match self.wallpaper.main.resource::<FrameRateSetting>() {
+            FrameRateSetting::TargetFrameDuration(duration) => Ok(FrameInfo {
                 target_frame_time: Some(*duration),
-            },
-            FrameRateSetting::NoUpdate => FrameInfo {
-                target_frame_time: None,
-            },
-            FrameRateSetting::GuessFromScene => FrameInfo::new_60_fps(),
-        };
-
-        Ok(frame_info)
+            }),
+            FrameRateSetting::GuessFromScene => Ok(FrameInfo::new_60_fps()),
+            FrameRateSetting::NoUpdate => Err(FrameError::NoWorkToDo),
+        }
     }
 }
 

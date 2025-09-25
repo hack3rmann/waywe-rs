@@ -6,8 +6,10 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use for_sure::prelude::*;
 use glam::{UVec2, Vec2};
+use runtime::config::{AnimationConfig, AnimationDirection};
 use smallvec::SmallVec;
 use std::{
+    collections::VecDeque,
     mem,
     time::{Duration, Instant},
 };
@@ -266,7 +268,7 @@ impl WallpaperTransitionPipeline {
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: surface_view,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                     store: wgpu::StoreOp::Store,
                 },
                 depth_slice: None,
@@ -304,17 +306,40 @@ pub struct OngoingTransition {
     pub scale: f32,
     pub start_time: Instant,
     pub animation_duration: Duration,
+    pub direction: AnimationDirection,
+    pub centre: Vec2,
 }
 
 impl OngoingTransition {
-    pub fn new(scale: f32) -> Self {
+    pub fn new(aspect_ratio: f32, config: &AnimationConfig) -> Self {
+        let corners = [
+            Vec2::new(-1.0 / aspect_ratio, -1.0),
+            Vec2::new(1.0 / aspect_ratio, -1.0),
+            Vec2::new(1.0 / aspect_ratio, 1.0),
+            Vec2::new(-1.0 / aspect_ratio, 1.0),
+        ];
+
+        let stretched_centre = config.center_position.get();
+        let centre = Vec2::new(stretched_centre.x / aspect_ratio, stretched_centre.y);
+
+        let scale = centre
+            .distance(corners[0])
+            .max(centre.distance(corners[1]))
+            .max(centre.distance(corners[2]))
+            .max(centre.distance(corners[3]));
+
         Self {
             done_fraction: 0.0,
             scale,
             start_time: Instant::now(),
-            // TODO(hack3rmann): use config
-            animation_duration: Duration::new(1, 0),
+            animation_duration: Duration::from_millis(config.duration_milliseconds),
+            direction: config.direction,
+            centre,
         }
+    }
+
+    pub fn centre(&self) -> Vec2 {
+        self.centre
     }
 
     pub fn update(&mut self) {
@@ -327,50 +352,67 @@ impl OngoingTransition {
     }
 
     pub fn amount(&self) -> f32 {
-        self.done_fraction * self.scale
+        self.amount_with_easing(|t| t)
+    }
+
+    #[inline]
+    pub fn amount_with_easing(&self, ease: impl FnOnce(f32) -> f32) -> f32 {
+        let t = match self.direction {
+            AnimationDirection::Out => self.done_fraction,
+            AnimationDirection::In => 1.0 - self.done_fraction,
+        };
+        ease(t) * self.scale
+    }
+
+    pub fn direction(&self) -> f32 {
+        match self.direction {
+            AnimationDirection::Out => 1.0,
+            AnimationDirection::In => -1.0,
+        }
     }
 }
 
 pub struct RunningWallpapers {
     pub monitor_id: MonitorId,
     pub aspect_ratio: f32,
-    pub executing: Vec<PreparedWallpaper>,
+    pub executing: VecDeque<PreparedWallpaper>,
     pub ongoing_transitions: SmallVec<[OngoingTransition; 8]>,
     pub transition_pipeline: Almost<WallpaperTransitionPipeline>,
     pub textures: Almost<WallpaperTransitionState>,
+    pub config: AnimationConfig,
 }
 
 impl RunningWallpapers {
-    pub const fn new(monitor_id: MonitorId, monitor_size: UVec2) -> Self {
+    pub const fn new(monitor_id: MonitorId, monitor_size: UVec2, config: AnimationConfig) -> Self {
         Self {
             monitor_id,
             aspect_ratio: monitor_size.y as f32 / monitor_size.x as f32,
-            executing: vec![],
+            executing: VecDeque::new(),
             ongoing_transitions: SmallVec::new_const(),
             transition_pipeline: Nil,
             textures: Nil,
+            config,
         }
     }
 
     pub fn enqueue_wallpaper(&mut self, wallpaper: PreparedWallpaper) {
-        self.executing.push(wallpaper);
-
-        let scale = Vec2::new(1.0 / self.aspect_ratio, 1.0).length();
+        self.executing.push_back(wallpaper);
 
         if self.executing.len() >= 2 {
-            self.ongoing_transitions.push(OngoingTransition::new(scale));
+            self.ongoing_transitions
+                .push(OngoingTransition::new(self.aspect_ratio, &self.config));
         }
     }
 
     pub fn remove_finished(&mut self) {
-        while !self.ongoing_transitions.is_empty() {
-            if !self.ongoing_transitions[0].is_finished() {
-                break;
-            }
+        let n_unfinished = self
+            .ongoing_transitions
+            .iter()
+            .take_while(|t| t.is_finished())
+            .count();
 
-            _ = self.ongoing_transitions.remove(0);
-            _ = self.executing.remove(0);
-        }
+        _ = self.ongoing_transitions.drain(..n_unfinished);
+        _ = self.executing.drain(..n_unfinished);
     }
 
     pub fn is_transitioning(&self) -> bool {
@@ -399,32 +441,35 @@ impl RunningWallpapers {
 
         let surface_view = surface.create_view(&Default::default());
 
-        match self.executing.as_mut_slice() {
-            [] => return Err(FrameError::NoWorkToDo),
-            [wallpaper] => return wallpaper.frame(surface_view, encoder),
-            _ => {}
+        if self.executing.is_empty() {
+            return Err(FrameError::NoWorkToDo);
+        } else if self.executing.len() == 1 {
+            let Some(wallpaper) = self.executing.front_mut() else {
+                unreachable!()
+            };
+            return wallpaper.frame(surface_view, encoder);
         }
 
-        let ([first], tail) = self.executing.split_at_mut(1) else {
+        let mut wallpapers = self.executing.iter_mut();
+
+        let Some(first) = wallpapers.next() else {
             unreachable!()
         };
 
         let mut result = first.frame(self.textures.from.clone(), encoder);
 
-        for (wallpaper, transition) in tail.iter_mut().zip(&mut self.ongoing_transitions) {
+        for (wallpaper, transition) in wallpapers.zip(&mut self.ongoing_transitions) {
             transition.update();
             result = wallpaper.frame(self.textures.to.clone(), encoder);
 
-            self.transition_pipeline.render(
-                &self.textures,
-                &surface_view,
-                encoder,
-                &AnimationState {
-                    centre: Vec2::ZERO,
-                    radius: transition.amount(),
-                    direction: 1.0,
-                },
-            );
+            let state = AnimationState {
+                centre: transition.centre(),
+                radius: transition.amount_with_easing(self.config.easing.get()),
+                direction: transition.direction(),
+            };
+
+            self.transition_pipeline
+                .render(&self.textures, &surface_view, encoder, &state);
 
             // TODO(hack3rmann): we can avoid copying the texture by swapping bind groups
             // with third intermediate texture
@@ -439,6 +484,6 @@ impl RunningWallpapers {
     }
 
     pub fn wallpapers_mut(&mut self) -> &mut [PreparedWallpaper] {
-        &mut self.executing
+        self.executing.make_contiguous()
     }
 }

@@ -73,7 +73,8 @@ impl VideoApp {
                     let monitors = runtime.wayland.client_state.monitors.read().unwrap();
                     monitors[&monitor_id].size.unwrap()
                 };
-                let mut wallpapers = RunningWallpapers::new(monitor_id, size);
+                let mut wallpapers =
+                    RunningWallpapers::new(monitor_id, size, self.config.animation.clone());
                 wallpapers.enqueue_wallpaper(wallpaper);
                 entry.insert(wallpapers);
             }
@@ -129,8 +130,11 @@ impl App for VideoApp {
                 continue;
             }
 
-            let surfaces = runtime.wgpu.surfaces.read().unwrap();
-            let surface = surfaces[&monitor_id].surface.get_current_texture().unwrap();
+            let surface = {
+                let surfaces = runtime.wgpu.surfaces.read().unwrap();
+                surfaces[&monitor_id].surface.get_current_texture().unwrap()
+            };
+
             let mut encoder = runtime
                 .wgpu
                 .device

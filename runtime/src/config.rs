@@ -9,7 +9,7 @@ pub struct Config {
     pub animation: AnimationConfig,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct AnimationConfig {
     #[serde(default = "get_default_duration")]
