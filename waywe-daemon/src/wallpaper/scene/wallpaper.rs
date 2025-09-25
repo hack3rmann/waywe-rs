@@ -75,6 +75,7 @@ impl Wallpaper {
             (
                 RenderStage::Update,
                 RenderStage::PrepareRender,
+                RenderStage::ClearPass,
                 RenderStage::Render,
                 RenderStage::Finish,
             )

@@ -43,9 +43,9 @@
 //! ```
 
 use crate::wallpaper::scene::{
-    asset_server::AssetServerPlugin, cursor::CursorPlugin, image::ImagePlugin,
-    material::MaterialPlugin, mesh::MeshPlugin, transform::TransformPlugin, video::VideoPlugin,
-    wallpaper::Wallpaper,
+    asset_server::AssetServerPlugin, clear_screen::ClearScreenPlugin, cursor::CursorPlugin,
+    image::ImagePlugin, material::MaterialPlugin, mesh::MeshPlugin, transform::TransformPlugin,
+    video::VideoPlugin, wallpaper::Wallpaper,
 };
 use bitflags::bitflags;
 use static_assertions::assert_obj_safe;
@@ -143,6 +143,7 @@ define_plugin_group! {
         ImagePlugin,
         VideoPlugin,
         MeshPlugin,
+        ClearScreenPlugin,
     );
 }
 

@@ -32,6 +32,8 @@ pub enum RenderStage {
     Update,
     /// Prepare for rendering.
     PrepareRender,
+    /// Clear the rendering surface.
+    ClearPass,
     /// Perform rendering operations.
     Render,
     /// Present the rendered frame.

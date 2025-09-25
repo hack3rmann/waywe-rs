@@ -111,6 +111,7 @@
 
 pub mod asset_server;
 pub mod assets;
+pub mod clear_screen;
 pub mod cursor;
 pub mod extract;
 pub mod image;
