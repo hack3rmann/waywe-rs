@@ -8,11 +8,10 @@ use crate::{
     wallpaper::{
         self,
         scene::{cursor::CursorMoved, wallpaper::PreparedWallpaper},
-        transition::{AnimationState, WallpaperTransitionPipeline, WallpaperTransitionState},
+        transition::RunningWallpapers,
     },
 };
 use for_sure::prelude::*;
-use glam::Vec2;
 use runtime::{
     WallpaperType,
     config::Config,
@@ -48,12 +47,10 @@ impl WallpaperState {
 
 #[derive(Default)]
 pub struct VideoApp {
-    pub wallpapers: MonitorMap<Vec<PreparedWallpaper>>,
+    pub wallpapers: MonitorMap<RunningWallpapers>,
     pub wallpaper_states: MonitorMap<WallpaperState>,
     pub config: Config,
     pub do_force_frame: bool,
-    pub transition_states: MonitorMap<WallpaperTransitionState>,
-    pub transition_pipelines: MonitorMap<WallpaperTransitionPipeline>,
 }
 
 impl VideoApp {
@@ -66,13 +63,23 @@ impl VideoApp {
 
     pub fn set_wallpaper(
         &mut self,
-        _: &Runtime,
+        runtime: &Runtime,
         wallpaper: PreparedWallpaper,
         monitor_id: MonitorId,
     ) {
         match self.wallpapers.entry(monitor_id) {
-            Entry::Vacant(entry) => _ = entry.insert(vec![wallpaper]),
-            Entry::Occupied(mut occupied_entry) => occupied_entry.get_mut().push(wallpaper),
+            Entry::Vacant(entry) => {
+                let size = {
+                    let monitors = runtime.wayland.client_state.monitors.read().unwrap();
+                    monitors[&monitor_id].size.unwrap()
+                };
+                let mut wallpapers = RunningWallpapers::new(monitor_id, size);
+                wallpapers.enqueue_wallpaper(wallpaper);
+                entry.insert(wallpapers);
+            }
+            Entry::Occupied(mut occupied_entry) => {
+                occupied_entry.get_mut().enqueue_wallpaper(wallpaper)
+            }
         }
 
         self.wallpaper_states
@@ -122,49 +129,17 @@ impl App for VideoApp {
                 continue;
             }
 
-            // FIXME(hack3rmann): move to initialization
-            let transition_pipeline = self
-                .transition_pipelines
-                .entry(monitor_id)
-                .or_insert_with(|| WallpaperTransitionPipeline::new(&runtime.wgpu, monitor_id));
-            let state = self.transition_states.entry(monitor_id).or_insert_with(|| {
-                WallpaperTransitionState::new(&runtime.wgpu, transition_pipeline)
-            });
-
             let surfaces = runtime.wgpu.surfaces.read().unwrap();
-            let texture = surfaces[&monitor_id].surface.get_current_texture().unwrap();
-            let surface_view = texture.texture.create_view(&Default::default());
+            let surface = surfaces[&monitor_id].surface.get_current_texture().unwrap();
             let mut encoder = runtime
                 .wgpu
                 .device
                 .create_command_encoder(&Default::default());
 
-            match wallpapers.as_mut_slice() {
-                [wallpaper] => {
-                    result = wallpaper.frame(surface_view, &mut encoder);
-                }
-                [from, to] => {
-                    _ = from.frame(state.from.clone(), &mut encoder);
-                    result = to.frame(state.to.clone(), &mut encoder);
-
-                    let animation_state = AnimationState {
-                        centre: Vec2::ZERO,
-                        radius: 0.5,
-                        direction: 1.0,
-                    };
-
-                    transition_pipeline.render(
-                        state,
-                        &surface_view,
-                        &mut encoder,
-                        &animation_state,
-                    );
-                }
-                _ => todo!(),
-            }
+            result = wallpapers.render(&runtime.wgpu, &surface.texture, &mut encoder);
 
             runtime.wgpu.queue.submit([encoder.finish()]);
-            texture.present();
+            surface.present();
         }
 
         if let Err(FrameError::NoWorkToDo) = &result {
@@ -255,13 +230,14 @@ impl Handle<WaylandEvent> for VideoApp {
                 runtime.wgpu.unregister_surface(monitor_id);
             }
             WaylandEvent::CursorMoved { position } => {
-                for wallpaper in self.wallpapers.values_mut() {
-                    // FIXME:
-                    wallpaper[0]
-                        .wallpaper
-                        .main
-                        .world
-                        .trigger(CursorMoved { position });
+                let event = CursorMoved { position };
+
+                for wallpaper in self
+                    .wallpapers
+                    .values_mut()
+                    .flat_map(RunningWallpapers::wallpapers_mut)
+                {
+                    wallpaper.wallpaper.main.world.trigger(event);
                 }
             }
         }

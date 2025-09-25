@@ -275,12 +275,18 @@ fn create_surface(
         panic!("no surface format supported");
     };
 
-    // TODO(hack3rmann): configure surface with
-    // `usage |= wgt::TextureUsages::STORAGE_BINDING`
-    // to render to it using compute shaders
     let config = surface
         .get_default_config(adapter, screen_size.x, screen_size.y)
         .unwrap();
+
+    // TODO(hack3rmann): configure surface with
+    // `usage |= wgt::TextureUsages::STORAGE_BINDING`
+    // to render to it using compute shaders
+    let config = wgpu::SurfaceConfiguration {
+        // NOTE(hack3rmann): `COPY_SRC` used to allow transitions between wallpapers
+        usage: config.usage | wgpu::TextureUsages::COPY_SRC,
+        ..config
+    };
 
     surface.configure(device, &config);
 

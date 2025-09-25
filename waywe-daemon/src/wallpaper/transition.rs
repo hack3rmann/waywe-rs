@@ -1,12 +1,16 @@
 use crate::{
+    event_loop::{FrameError, FrameInfo},
     runtime::{gpu::Wgpu, wayland::MonitorId},
     wallpaper::scene::wallpaper::PreparedWallpaper,
 };
 use bytemuck::{Pod, Zeroable};
 use for_sure::prelude::*;
-use glam::Vec2;
+use glam::{UVec2, Vec2};
 use smallvec::SmallVec;
-use std::mem;
+use std::{
+    mem,
+    time::{Duration, Instant},
+};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
 const SCREEN_TRIANGLE: [Vec2; 3] = [
@@ -16,6 +20,7 @@ const SCREEN_TRIANGLE: [Vec2; 3] = [
 ];
 
 pub struct WallpaperTransitionState {
+    pub state: wgpu::Texture,
     pub from: wgpu::TextureView,
     pub to: wgpu::TextureView,
     pub bind_group: wgpu::BindGroup,
@@ -37,7 +42,9 @@ impl WallpaperTransitionState {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: surface_config.format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
 
@@ -77,10 +84,15 @@ impl WallpaperTransitionState {
         });
 
         Self {
+            state,
             from,
             to,
             bind_group,
         }
+    }
+
+    pub fn swap_textures(&mut self) {
+        mem::swap(&mut self.from, &mut self.to);
     }
 }
 
@@ -287,13 +299,146 @@ pub struct AnimationState {
 }
 
 pub struct OngoingTransition {
-    /// Amount of work done in 0..=1
+    /// Amount of work done in 0..=1 (normalized time)
     pub done_fraction: f32,
+    pub scale: f32,
+    pub start_time: Instant,
+    pub animation_duration: Duration,
+}
+
+impl OngoingTransition {
+    pub fn new(scale: f32) -> Self {
+        Self {
+            done_fraction: 0.0,
+            scale,
+            start_time: Instant::now(),
+            // TODO(hack3rmann): use config
+            animation_duration: Duration::new(1, 0),
+        }
+    }
+
+    pub fn update(&mut self) {
+        let total = self.start_time.elapsed().as_secs_f32() / self.animation_duration.as_secs_f32();
+        self.done_fraction = total.min(1.0);
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.done_fraction >= 1.0
+    }
+
+    pub fn amount(&self) -> f32 {
+        self.done_fraction * self.scale
+    }
 }
 
 pub struct RunningWallpapers {
+    pub monitor_id: MonitorId,
+    pub aspect_ratio: f32,
     pub executing: Vec<PreparedWallpaper>,
     pub ongoing_transitions: SmallVec<[OngoingTransition; 8]>,
     pub transition_pipeline: Almost<WallpaperTransitionPipeline>,
-    pub transition_gpu_state: Almost<WallpaperTransitionState>,
+    pub textures: Almost<WallpaperTransitionState>,
+}
+
+impl RunningWallpapers {
+    pub const fn new(monitor_id: MonitorId, monitor_size: UVec2) -> Self {
+        Self {
+            monitor_id,
+            aspect_ratio: monitor_size.y as f32 / monitor_size.x as f32,
+            executing: vec![],
+            ongoing_transitions: SmallVec::new_const(),
+            transition_pipeline: Nil,
+            textures: Nil,
+        }
+    }
+
+    pub fn enqueue_wallpaper(&mut self, wallpaper: PreparedWallpaper) {
+        self.executing.push(wallpaper);
+
+        let scale = Vec2::new(1.0 / self.aspect_ratio, 1.0).length();
+
+        if self.executing.len() >= 2 {
+            self.ongoing_transitions.push(OngoingTransition::new(scale));
+        }
+    }
+
+    pub fn remove_finished(&mut self) {
+        while !self.ongoing_transitions.is_empty() {
+            if !self.ongoing_transitions[0].is_finished() {
+                break;
+            }
+
+            _ = self.ongoing_transitions.remove(0);
+            _ = self.executing.remove(0);
+        }
+    }
+
+    pub fn is_transitioning(&self) -> bool {
+        self.executing.len() >= 2
+    }
+
+    pub fn init_transitions(&mut self, gpu: &Wgpu) {
+        if self.is_transitioning() && Almost::is_nil(&self.transition_pipeline) {
+            self.transition_pipeline =
+                Value(WallpaperTransitionPipeline::new(gpu, self.monitor_id));
+            self.textures = Value(WallpaperTransitionState::new(
+                gpu,
+                &self.transition_pipeline,
+            ));
+        }
+    }
+
+    pub fn render(
+        &mut self,
+        gpu: &Wgpu,
+        surface: &wgpu::Texture,
+        encoder: &mut wgpu::CommandEncoder,
+    ) -> Result<FrameInfo, FrameError> {
+        self.init_transitions(gpu);
+        self.remove_finished();
+
+        let surface_view = surface.create_view(&Default::default());
+
+        match self.executing.as_mut_slice() {
+            [] => return Err(FrameError::NoWorkToDo),
+            [wallpaper] => return wallpaper.frame(surface_view, encoder),
+            _ => {}
+        }
+
+        let ([first], tail) = self.executing.split_at_mut(1) else {
+            unreachable!()
+        };
+
+        let mut result = first.frame(self.textures.from.clone(), encoder);
+
+        for (wallpaper, transition) in tail.iter_mut().zip(&mut self.ongoing_transitions) {
+            transition.update();
+            result = wallpaper.frame(self.textures.to.clone(), encoder);
+
+            self.transition_pipeline.render(
+                &self.textures,
+                &surface_view,
+                encoder,
+                &AnimationState {
+                    centre: Vec2::ZERO,
+                    radius: transition.amount(),
+                    direction: 1.0,
+                },
+            );
+
+            // TODO(hack3rmann): we can avoid copying the texture by swapping bind groups
+            // with third intermediate texture
+            encoder.copy_texture_to_texture(
+                surface.as_image_copy(),
+                self.textures.state.as_image_copy(),
+                surface.size(),
+            );
+        }
+
+        result
+    }
+
+    pub fn wallpapers_mut(&mut self) -> &mut [PreparedWallpaper] {
+        &mut self.executing
+    }
 }

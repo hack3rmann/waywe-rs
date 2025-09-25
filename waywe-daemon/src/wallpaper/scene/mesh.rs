@@ -82,7 +82,13 @@ impl Plugin for MeshPlugin {
                     despawn_removed_entities,
                 ),
             )
-            .add_systems(Render, render_meshes.in_set(RenderStage::Render));
+            .add_systems(
+                Render,
+                (
+                    clear_surface.in_set(RenderStage::PrepareRender),
+                    render_meshes.in_set(RenderStage::Render),
+                ),
+            );
     }
 }
 
@@ -382,6 +388,7 @@ pub fn render_meshes(
         pass.set_bind_group(0, &material.bind_group, &[]);
 
         for (&RenderMeshId(mesh_id), &ModelMatrix(model), _) in mesh_handles {
+            // TODO(hack3rmann): group by mesh index + use instancing
             let mesh = meshes.get(mesh_id).unwrap();
 
             pass.set_vertex_buffer(0, mesh.buffer_slice());
@@ -398,6 +405,10 @@ pub fn render_meshes(
             pass.draw(0..mesh.n_vertices as u32, 0..1);
         }
     }
+}
+
+pub fn clear_surface(mut _encoder: ResMut<CommandEncoder>, _surface_view: Res<SurfaceView>) {
+    // TODO: clear the surface
 }
 
 #[derive(Resource, Deref)]
