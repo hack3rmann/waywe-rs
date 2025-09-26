@@ -185,6 +185,7 @@ impl PreparedWallpaper {
     /// This runs the startup schedule and prepares the wallpaper for the frame loop.
     pub fn prepare(mut wallpaper: Wallpaper) -> Self {
         wallpaper.main.world.run_schedule(Startup);
+        wallpaper.main.world.run_schedule(PostStartup);
 
         Self {
             first_time: true,

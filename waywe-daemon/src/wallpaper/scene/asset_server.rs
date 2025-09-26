@@ -25,6 +25,7 @@ use std::{
         Arc, Mutex, RwLock,
         atomic::{AtomicU64, Ordering::*},
     },
+    thread::{self, JoinHandle},
 };
 
 pub struct AssetServerPlugin;
@@ -32,17 +33,34 @@ pub struct AssetServerPlugin;
 impl Plugin for AssetServerPlugin {
     fn build(&self, wallpaper: &mut Wallpaper) {
         let server = AssetServer::default();
-        wallpaper.main.insert_resource(server.clone());
-        wallpaper.render.insert_resource(server);
-        wallpaper.render.configure_sets(
-            SceneExtract,
-            (
-                AssetsExtract::MainToRender,
-                AssetsExtract::AssetsToRef,
-                AssetsExtract::RefToRef,
-            )
-                .chain(),
+
+        let server_set = (
+            AssetServerSet::ServerPrepareComplete,
+            AssetServerSet::ServerWait,
+            AssetServerSet::PopulateAssets,
         );
+
+        let assets_set = (
+            AssetsExtract::MainToRender,
+            AssetsExtract::AssetsToRef,
+            AssetsExtract::RefToRef,
+        );
+
+        wallpaper
+            .main
+            .insert_resource(server.clone())
+            .configure_sets(PreUpdate, server_set.chain())
+            .configure_sets(PostStartup, server_set.chain())
+            .add_systems(
+                PreUpdate,
+                prepare_complete_assets.in_set(AssetServerSet::ServerPrepareComplete),
+            )
+            .add_systems(PostStartup, wait_assets.in_set(AssetServerSet::ServerWait));
+
+        wallpaper
+            .render
+            .insert_resource(server)
+            .configure_sets(SceneExtract, assets_set.chain());
     }
 }
 
@@ -50,6 +68,8 @@ impl Plugin for AssetServerPlugin {
 pub enum AssetServerSet {
     #[default]
     PopulateAssets,
+    ServerPrepareComplete,
+    ServerWait,
 }
 
 pub struct AssetServerLoadPlugin<A> {
@@ -72,17 +92,28 @@ impl<A: Asset + Load> Plugin for AssetServerLoadPlugin<A> {
     fn build(&self, wallpaper: &mut Wallpaper) {
         let server = wallpaper.main.resource::<AssetServer>();
         let assets = wallpaper.main.resource::<Assets<A>>();
+
         server.register_assets(assets);
 
-        wallpaper.main.add_systems(
-            PreUpdate,
-            populate_assets::<A>.in_set(AssetServerSet::PopulateAssets),
-        );
-        wallpaper.main.add_systems(
-            PostStartup,
-            populate_assets::<A>.in_set(AssetServerSet::PopulateAssets),
-        );
+        wallpaper
+            .main
+            .add_systems(
+                PreUpdate,
+                populate_assets::<A>.in_set(AssetServerSet::PopulateAssets),
+            )
+            .add_systems(
+                PostStartup,
+                populate_assets::<A>.in_set(AssetServerSet::PopulateAssets),
+            );
     }
+}
+
+pub fn prepare_complete_assets(mut buf: Local<Vec<AssetKey>>, server: Res<AssetServer>) {
+    server.prepare_complete_jobs(&mut buf);
+}
+
+pub fn wait_assets(server: Res<AssetServer>) {
+    server.wait_all_jobs();
 }
 
 pub fn populate_assets<A: Asset + Load>(server: Res<AssetServer>, mut assets: ResMut<Assets<A>>) {
@@ -101,7 +132,7 @@ impl AssetIdGenerator {
 
     pub fn next_id(&self) -> AssetId {
         let next = self.current.fetch_add(1, Relaxed);
-        assert_ne!(next, u64::MAX, "runned out of available assets ids");
+        assert_ne!(next, u64::MAX, "ran out of available assets ids");
         AssetId(next)
     }
 }
@@ -120,10 +151,42 @@ impl Deref for AssetServer {
     }
 }
 
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct AssetKey {
+    pub path: PathBuf,
+    pub type_id: TypeId,
+}
+
+pub struct DynamicAsset {
+    pub id: AssetId,
+    pub data: Box<dyn Any + Send>,
+}
+
+impl DynamicAsset {
+    pub fn downcast_into<A: Asset>(self) -> Result<(AssetId, A), Self> {
+        match self.data.downcast::<A>() {
+            Ok(data) => Ok({
+                let asset = data.into_inner();
+                (self.id, asset)
+            }),
+            Err(data) => Err(Self { id: self.id, data }),
+        }
+    }
+}
+
+impl fmt::Debug for DynamicAsset {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DynamicAsset")
+            .field("id", &self.id)
+            .finish_non_exhaustive()
+    }
+}
+
 #[derive(Debug)]
 pub struct AssetServerInner {
     id_generator: AssetIdGenerator,
-    loaded_assets: Mutex<HashMap<(PathBuf, TypeId), (AssetId, Box<dyn Any + Send>)>>,
+    loaded_assets: Mutex<HashMap<AssetKey, DynamicAsset>>,
+    jobs: Mutex<HashMap<AssetKey, JoinHandle<DynamicAsset>>>,
     drop_senders: RwLock<HashMap<TypeId, Sender<AssetDropEvent>>>,
 }
 
@@ -134,7 +197,37 @@ impl AssetServerInner {
         Self {
             id_generator,
             loaded_assets: Mutex::default(),
+            jobs: Mutex::default(),
             drop_senders: RwLock::default(),
+        }
+    }
+
+    pub fn wait_all_jobs(&self) {
+        let mut jobs = self.jobs.lock().unwrap();
+        let mut assets = self.loaded_assets.lock().unwrap();
+
+        for (key, job) in jobs.drain() {
+            let asset = job.join().unwrap();
+            assets.insert(key, asset);
+        }
+    }
+
+    pub fn prepare_complete_jobs(&self, keys_buf: &mut Vec<AssetKey>) {
+        keys_buf.clear();
+
+        let mut jobs = self.jobs.lock().unwrap();
+        let mut assets = self.loaded_assets.lock().unwrap();
+
+        for (key, job) in jobs.iter() {
+            if job.is_finished() {
+                keys_buf.push(key.clone());
+            }
+        }
+
+        for key in keys_buf.drain(..) {
+            let job = jobs.remove(&key).unwrap();
+            let asset = job.join().unwrap();
+            assets.insert(key, asset);
         }
     }
 
@@ -149,12 +242,21 @@ impl AssetServerInner {
 
     pub fn load<A: Asset + Load>(&self, path: impl Into<PathBuf>) -> AssetHandle<A> {
         let path = path.into();
-        let asset = A::load(&path);
         let id = self.id_generator.next_id();
 
         {
-            let mut assets = self.loaded_assets.lock().unwrap();
-            assets.insert((path, TypeId::of::<A>()), (id, Box::new(asset)));
+            let mut jobs = self.jobs.lock().unwrap();
+
+            jobs.insert(
+                AssetKey {
+                    path: path.clone(),
+                    type_id: TypeId::of::<A>(),
+                },
+                thread::spawn(move || DynamicAsset {
+                    id,
+                    data: Box::new(A::load(&path)),
+                }),
+            );
         }
 
         let drop_sender = {
@@ -170,13 +272,13 @@ impl AssetServerInner {
 
         let keys: SmallVec<[_; 16]> = loaded_assets
             .keys()
-            .filter(|(_, id)| id == &TypeId::of::<A>())
+            .filter(|key| key.type_id == TypeId::of::<A>())
             .cloned()
             .collect();
 
         for key in keys {
-            let (id, asset) = loaded_assets.remove(&key).unwrap();
-            let asset = asset.downcast::<A>().unwrap().into_inner();
+            let dyn_asset = loaded_assets.remove(&key).unwrap();
+            let (id, asset) = dyn_asset.downcast_into::<A>().unwrap();
             assets.insert(id, asset);
         }
     }
