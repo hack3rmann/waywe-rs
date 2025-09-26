@@ -25,7 +25,7 @@ use crate::{
         },
         extract::Extract,
         image::SceneImageVertexShader,
-        material::{AsBindGroup, Material, RenderMaterial, VertexFragmentShader},
+        material::{AsBindGroup, Material, MaterialSet, RenderMaterial, VertexFragmentShader},
         plugin::Plugin,
         render::{RenderGpu, SceneExtract},
     },
@@ -71,7 +71,9 @@ impl Plugin for VideoPlugin {
             .init_resource::<VideoPipeline>()
             .add_systems(
                 SceneExtract,
-                extract_video_materials.after(AssetsExtract::MainToRender),
+                extract_video_materials
+                    .in_set(MaterialSet::ExtractRender)
+                    .after(AssetsExtract::MainToRender),
             );
     }
 }

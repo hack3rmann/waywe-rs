@@ -176,6 +176,9 @@ pub fn propagate_transforms(
     }
 }
 
+#[derive(Debug, Default, PartialEq, Clone, Copy, Component)]
+pub struct PreExtractTransform(pub Transform);
+
 /// Model matrix for rendering.
 ///
 /// A 4x4 transformation matrix that can be directly used in shaders.
@@ -189,6 +192,7 @@ pub fn extract_transforms(
     entity_map: Res<EntityMap>,
     mut commands: Commands,
     transforms: Extract<Query<(Entity, &Transform), Changed<Transform>>>,
+    mut models: Query<(&mut ModelMatrix, Option<&PreExtractTransform>)>,
 ) {
     for (main_id, &transform) in &transforms {
         let Some(&id) = entity_map.get(&main_id) else {
@@ -199,6 +203,11 @@ pub fn extract_transforms(
             continue;
         };
 
-        entity.insert(ModelMatrix(transform.to_model()));
+        if let Ok((mut model, pre_transform)) = models.get_mut(id) {
+            let transform = transform.combine(pre_transform.cloned().unwrap_or_default().0);
+            *model = ModelMatrix(transform.to_model());
+        } else {
+            entity.insert(ModelMatrix(transform.to_model()));
+        }
     }
 }

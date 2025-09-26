@@ -26,17 +26,17 @@ use crate::{
         Monitor,
         asset_server::{AssetHandle, AssetId},
         assets::{
-            Asset, AssetsPlugin, RefAssets, RefAssetsPlugin, RefAssetsRefDependencyPlugin,
-            RenderAsset, RenderAssets, RenderAssetsPlugin, extract_new_render_assets,
+            Asset, AssetsExtract, AssetsPlugin, RefAssets, RefAssetsPlugin,
+            RefAssetsRefDependencyPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin,
         },
         extract::Extract,
-        image::{ImageMaterial, extract_image_materials},
-        material::{Material, RenderMaterial, RenderMaterialId},
+        image::ImageMaterial,
+        material::{Material, MaterialSet, RenderMaterial, RenderMaterialId},
         plugin::Plugin,
         render::{EntityMap, MainEntity, Render, RenderGpu, RenderStage, SceneExtract},
         time::Time,
         transform::{GlobalTransform, ModelMatrix, Transform},
-        video::{VideoMaterial, extract_video_materials},
+        video::VideoMaterial,
     },
 };
 use bevy_ecs::{
@@ -73,12 +73,13 @@ impl Plugin for MeshPlugin {
             .add_systems(
                 SceneExtract,
                 (
-                    extact_objects::<ImageMaterial>
-                        .after(extract_image_materials)
-                        .after(extract_new_render_assets::<RenderMesh>),
-                    extact_objects::<VideoMaterial>
-                        .after(extract_video_materials)
-                        .after(extract_new_render_assets::<RenderMesh>),
+                    // TODO(hack3rmann): maybe pack it into a generic plugin
+                    extract_objects::<ImageMaterial>
+                        .after(AssetsExtract::MainToRender)
+                        .after(MaterialSet::ExtractRender),
+                    extract_objects::<VideoMaterial>
+                        .after(AssetsExtract::MainToRender)
+                        .after(MaterialSet::ExtractRender),
                     despawn_removed_entities,
                 ),
             )
@@ -289,7 +290,7 @@ impl RenderMesh {
 pub struct RenderMeshId(pub AssetId);
 
 /// System to extract mesh objects for rendering.
-pub fn extact_objects<M: Material>(
+pub fn extract_objects<M: Material>(
     mut commands: Commands,
     mut entity_map: ResMut<EntityMap>,
     monitor: Res<Monitor>,

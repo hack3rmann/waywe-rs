@@ -28,6 +28,12 @@ use bevy_ecs::{
     system::{SystemParam, SystemParamItem},
 };
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, PartialOrd, Ord, Hash, SystemSet)]
+pub enum MaterialSet {
+    #[default]
+    ExtractRender,
+}
+
 /// Plugin for material functionality.
 ///
 /// Adds systems and resources for managing materials.

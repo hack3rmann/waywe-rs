@@ -289,11 +289,11 @@ pub struct AssetHandleInner {
 }
 
 impl AssetHandleInner {
-    pub fn new(id: AssetId, drop_sender: Sender<AssetDropEvent>) -> Self {
+    pub const fn new(id: AssetId, drop_sender: Sender<AssetDropEvent>) -> Self {
         Self { id, drop_sender }
     }
 
-    pub fn id(&self) -> AssetId {
+    pub const fn id(&self) -> AssetId {
         self.id
     }
 }

@@ -120,6 +120,7 @@ pub mod material;
 pub mod mesh;
 pub mod plugin;
 pub mod render;
+pub mod sprite;
 pub mod subapp;
 pub mod time;
 pub mod transform;

@@ -18,6 +18,8 @@
 //! //! - Animation systems that respond to time and cursor position
 //! ```
 
+use std::time::Duration;
+
 use crate::wallpaper::scene::{
     Monitor, Startup, Update,
     asset_server::{AssetHandle, AssetServer},
@@ -26,6 +28,7 @@ use crate::wallpaper::scene::{
     image::{Image, ImageMaterial},
     mesh::{Mesh, Mesh3d, MeshMaterial, Vertex},
     plugin::DefaultPlugins,
+    sprite::Sprite,
     time::Time,
     transform::Transform,
     video::{Video, VideoMaterial},
@@ -53,7 +56,15 @@ impl WallpaperBuilder for SceneTestWallpaper {
         wallpaper
             .main
             .add_systems(Startup, (spawn_mesh, spawn_with_asset_server, spawn_videos))
-            .add_systems(Update, (rotate_meshes, despawn_entities, update_quad_mesh))
+            .add_systems(
+                Update,
+                (
+                    rotate_meshes,
+                    despawn_entities,
+                    update_quad_mesh,
+                    spawn_rapidly,
+                ),
+            )
             .init_resource::<TestAssets>();
     }
 }
@@ -61,6 +72,9 @@ impl WallpaperBuilder for SceneTestWallpaper {
 /// Component that controls the time scale for animation.
 #[derive(Component)]
 pub struct TimeScale(pub f32);
+
+#[derive(Component)]
+pub struct DespawnTime(pub Duration);
 
 /// Resource that holds pre-loaded test assets.
 #[derive(Resource)]
@@ -173,7 +187,6 @@ pub fn spawn_with_asset_server(
     asset_server: Res<AssetServer>,
     mut image_materials: ResMut<Assets<ImageMaterial>>,
     mut video_materials: ResMut<Assets<VideoMaterial>>,
-    assets: Res<TestAssets>,
 ) {
     let image_material = image_materials.add(ImageMaterial {
         image: asset_server.load("target/test-image2.png"),
@@ -184,18 +197,46 @@ pub fn spawn_with_asset_server(
     });
 
     commands.spawn((
-        Mesh3d(assets.quad_mesh.clone()),
-        MeshMaterial(image_material),
-        Transform::default().scaled_by(Vec3::splat(0.1)),
+        Sprite {
+            texture: image_material.into(),
+        },
         TimeScale(0.4),
+        Transform::default().scaled_by(Vec3::splat(0.1)),
     ));
 
     commands.spawn((
-        Mesh3d(assets.quad_mesh.clone()),
-        MeshMaterial(video_material),
+        Sprite {
+            texture: video_material.into(),
+        },
         Transform::default().scaled_by(Vec3::splat(0.1)),
         TimeScale(-0.4),
     ));
+}
+
+pub fn spawn_rapidly(
+    mut spawn_count: Local<usize>,
+    mut commands: Commands,
+    assets: Res<TestAssets>,
+    time: Res<Time>,
+) {
+    let elapsed = time.elapsed.as_secs_f32();
+
+    if elapsed < *spawn_count as f32 {
+        return;
+    }
+
+    let time_scale = (1.0 + elapsed).ln();
+
+    commands.spawn((
+        Sprite {
+            texture: assets.video1_material.clone().into(),
+        },
+        TimeScale(time_scale),
+        Transform::default().scaled_by(Vec3::splat(0.1 * elapsed.sin())),
+        DespawnTime(time.elapsed + Duration::from_secs(5)),
+    ));
+
+    *spawn_count += 1;
 }
 
 /// System that spawns video entities.
@@ -267,7 +308,7 @@ pub fn spawn_mesh(mut commands: Commands, assets: Res<TestAssets>) {
         Mesh3d(assets.quad_mesh.clone()),
         Transform::default()
             .scaled_by(aspect_scale)
-            .scaled_by(Vec3::splat(0.5)),
+            .scaled_by(Vec3::splat(0.2)),
         MeshMaterial(assets.image_material.clone()),
         TimeScale(1.0),
     ));
@@ -276,7 +317,7 @@ pub fn spawn_mesh(mut commands: Commands, assets: Res<TestAssets>) {
         Mesh3d(assets.quad_mesh.clone()),
         Transform::default()
             .scaled_by(aspect_scale)
-            .scaled_by(Vec3::splat(0.5)),
+            .scaled_by(Vec3::splat(0.2)),
         MeshMaterial(assets.image_material.clone()),
         TimeScale(std::f32::consts::FRAC_PI_2),
     ));
@@ -287,7 +328,7 @@ pub fn spawn_mesh(mut commands: Commands, assets: Res<TestAssets>) {
 /// This system rotates and moves meshes based on elapsed time and cursor position.
 /// Each mesh can have a different time scale for unique animation behavior.
 pub fn rotate_meshes(
-    mut transforms: Query<(&mut Transform, &TimeScale), With<Mesh3d>>,
+    mut transforms: Query<(&mut Transform, &TimeScale)>,
     time: Res<Time>,
     monitor: Res<Monitor>,
     cursor: Res<Cursor>,
@@ -300,15 +341,36 @@ pub fn rotate_meshes(
         transform.translation.x = 0.5 * (time_scale * time).cos() + 0.2 * cursor_pos.x;
         transform.translation.y = 0.5 * (time_scale * time).sin() + 0.2 * cursor_pos.y;
 
-        transform.rotation = Quat::from_axis_angle(Vec3::X + time_scale * Vec3::Y, time);
+        transform.rotation = Quat::from_axis_angle(Vec3::X + 0.1 * time_scale * Vec3::Y, time);
     }
 }
 
-pub fn despawn_entities(mut commands: Commands, mut assets: ResMut<TestAssets>, time: Res<Time>) {
+pub fn despawn_entities(
+    mut commands: Commands,
+    mut assets: ResMut<TestAssets>,
+    time: Res<Time>,
+    sprites: Query<(Entity, Option<&DespawnTime>), With<Sprite>>,
+) {
     if time.elapsed.as_secs_f32() > 4.0 {
         assets.video2_material = None;
 
         for id in assets.despawn_entities.drain(..) {
+            let Ok(mut entity) = commands.get_entity(id) else {
+                continue;
+            };
+
+            entity.despawn();
+        }
+    }
+
+    if time.elapsed.as_secs_f32() > 6.0 {
+        for (id, despawn_time) in &sprites {
+            if let Some(&DespawnTime(despawn_time)) = despawn_time
+                && despawn_time > time.elapsed
+            {
+                continue;
+            }
+
             commands.entity(id).despawn();
         }
     }

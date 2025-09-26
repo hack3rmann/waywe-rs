@@ -25,7 +25,7 @@ use crate::{
             RenderAsset, RenderAssets, RenderAssetsPlugin,
         },
         extract::Extract,
-        material::{AsBindGroup, Material, RenderMaterial, VertexFragmentShader},
+        material::{AsBindGroup, Material, MaterialSet, RenderMaterial, VertexFragmentShader},
         plugin::Plugin,
         render::{RenderGpu, SceneExtract},
     },
@@ -56,7 +56,9 @@ impl Plugin for ImagePlugin {
             .render
             .add_systems(
                 SceneExtract,
-                extract_image_materials.after(AssetsExtract::MainToRender),
+                extract_image_materials
+                    .in_set(MaterialSet::ExtractRender)
+                    .after(AssetsExtract::MainToRender),
             )
             .init_resource::<ImagePipeline>();
     }
