@@ -1,4 +1,4 @@
-use crate::{box_ext::BoxExt, runtime::Runtime};
+use crate::{app_layer::AppLayer, box_ext::BoxExt, runtime::Runtime};
 use bytemuck::{Contiguous, NoUninit};
 use fxhash::FxHashMap;
 use reusable_box::{ReusableBox, ReusedBoxFuture};
@@ -6,7 +6,9 @@ use rustix::fs::OFlags;
 use std::{
     any::{Any, TypeId},
     io::{self, ErrorKind, PipeReader, PipeWriter, Read as _, Write as _},
+    marker::PhantomData,
     os::fd::{AsFd, BorrowedFd},
+    ptr::NonNull,
     sync::mpsc::{self, Receiver, RecvError, Sender, TryRecvError},
 };
 use thiserror::Error;
@@ -15,37 +17,40 @@ pub trait Handle<E: IntoEvent> {
     fn handle(&mut self, runtime: &mut Runtime, event: E) -> impl Future<Output = ()> + Send;
 }
 
-type Handler<A> = for<'a> unsafe fn(
-    &'a mut A,
-    &'a mut Runtime,
-    Event,
-    &'a mut ReusableBox,
-) -> ReusedBoxFuture<'a, ()>;
-
-pub struct EventHandler<A> {
-    pub handlers: FxHashMap<TypeId, Handler<A>>,
-    pub future: ReusableBox,
-}
+type DynHandler = for<'f> unsafe fn(
+    NonNull<()>,
+    &'f mut Runtime,
+    &'f mut Event,
+    &'f mut ReusableBox,
+) -> ReusedBoxFuture<'f, ()>;
 
 /// # Safety
 ///
 /// - event should contain data
 /// - event type should be exactly `E`
-unsafe fn handle_event<'a, A, E>(
-    app: &'a mut A,
-    runtime: &'a mut Runtime,
-    event: Event,
-    future: &'a mut ReusableBox,
-) -> ReusedBoxFuture<'a, ()>
+/// - `layer` should be created from `&mut A`
+unsafe fn handle_event<'f, A, E>(
+    layer: NonNull<()>,
+    runtime: &'f mut Runtime,
+    event: &'f mut Event,
+    future: &'f mut ReusableBox,
+) -> ReusedBoxFuture<'f, ()>
 where
     E: IntoEvent,
-    A: Handle<E>,
+    A: AppLayer + Handle<E>,
 {
-    let event = unsafe { event.downcast_unchecked::<E>() };
-    future.store_future(<A as Handle<E>>::handle(app, runtime, event))
+    let layer = unsafe { layer.cast::<A>().as_mut() };
+    future.store_future(event.handle(async move |event: E| {
+        <A as Handle<E>>::handle(layer, runtime, event).await;
+    }))
 }
 
-impl<A: 'static> EventHandler<A> {
+pub struct EventHandler<A> {
+    pub handler: DynEventHandler,
+    _p: PhantomData<fn() -> A>,
+}
+
+impl<A: AppLayer> EventHandler<A> {
     pub fn add_event<E>(&mut self) -> &mut Self
     where
         E: IntoEvent,
@@ -53,11 +58,58 @@ impl<A: 'static> EventHandler<A> {
     {
         let id = TypeId::of::<E>();
 
-        self.handlers.insert(id, handle_event::<A, E>);
+        self.handler.handlers.insert(id, handle_event::<A, E>);
         self
     }
 
-    pub async fn execute_all(&mut self, app: &mut A, runtime: &mut Runtime, event: Event) {
+    pub async fn execute_all(&mut self, app: &mut A, runtime: &mut Runtime, event: &mut Event) {
+        let Some(id) = event.underlying_type() else {
+            return;
+        };
+
+        let Some(handle) = self.handler.handlers.get(&id) else {
+            return;
+        };
+
+        let layer = NonNull::from_mut(app).cast();
+
+        // Safety:
+        // - event contains data
+        // - type matches exactly
+        unsafe { handle(layer, runtime, event, &mut self.handler.future).await };
+    }
+
+    pub fn to_dyn(self) -> DynEventHandler {
+        self.into()
+    }
+}
+
+impl<A> Default for EventHandler<A> {
+    fn default() -> Self {
+        Self {
+            handler: DynEventHandler::default(),
+            _p: PhantomData,
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct DynEventHandler {
+    pub handlers: FxHashMap<TypeId, DynHandler>,
+    pub future: ReusableBox,
+}
+
+impl DynEventHandler {
+    /// # Safety
+    ///
+    /// - `app` should be created from `&mut A`
+    /// - type `A` matches the one that `EventHandler` was created with.
+    pub async unsafe fn execute_all(
+        &mut self,
+        layer: NonNull<()>,
+        runtime: &mut Runtime,
+        event: &mut Event,
+    ) {
         let Some(id) = event.underlying_type() else {
             return;
         };
@@ -69,16 +121,13 @@ impl<A: 'static> EventHandler<A> {
         // Safety:
         // - event contains data
         // - type matches exactly
-        unsafe { handle(app, runtime, event, &mut self.future).await };
+        unsafe { handle(layer, runtime, event, &mut self.future).await };
     }
 }
 
-impl<A> Default for EventHandler<A> {
-    fn default() -> Self {
-        Self {
-            handlers: FxHashMap::default(),
-            future: ReusableBox::new(),
-        }
+impl<A> From<EventHandler<A>> for DynEventHandler {
+    fn from(value: EventHandler<A>) -> Self {
+        value.handler
     }
 }
 

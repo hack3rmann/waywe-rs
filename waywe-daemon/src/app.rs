@@ -1,6 +1,7 @@
 use crate::{
+    app_layer::AppLayer,
     event::{EventHandler, Handle},
-    event_loop::{App, FrameError, FrameInfo, WallpaperTarget},
+    event_loop::{FrameError, FrameInfo, WallpaperTarget},
     runtime::{
         Runtime, RuntimeFeatures,
         wayland::{MonitorId, MonitorMap, WaylandEvent},
@@ -103,7 +104,7 @@ pub struct WallpaperPauseEvent {
     pub target: WallpaperTarget,
 }
 
-impl App for VideoApp {
+impl AppLayer for VideoApp {
     fn populate_handler(&mut self, handler: &mut EventHandler<Self>)
     where
         Self: Sized,

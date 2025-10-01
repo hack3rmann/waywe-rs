@@ -1,6 +1,7 @@
 use crate::{
     app::{NewWallpaperEvent, WallpaperPauseEvent},
-    event::{AbsorbError, Event, EventHandler, EventReceiver, IntoEvent},
+    app_layer::{AppLayer, DynAppLayer},
+    event::{AbsorbError, Event, EventReceiver, IntoEvent},
     runtime::{
         ControlFlow, Runtime,
         wayland::{MonitorId, Wayland},
@@ -13,7 +14,7 @@ use runtime::{
 };
 use rustix::io::Errno;
 use std::{
-    io::{self},
+    io,
     os::fd::AsFd as _,
     path::PathBuf,
     sync::{Once, atomic::Ordering, mpsc::TryRecvError},
@@ -25,28 +26,20 @@ use tokio::runtime::Builder as AsyncRuntimeBuilder;
 use tracing::{debug, error};
 use video::RatioI32;
 
-pub struct EventLoop<A: App> {
+pub struct EventLoop {
     // NOTE(hack3rmann): app should be dropped first to release all the resources from the runtime
-    app: A,
+    app_layer: DynAppLayer,
     runtime: Runtime,
     event_queue: EventQueue,
-    event_handler: EventHandler<A>,
     epoll: Epoll,
 }
 
-impl<A: App + Default> Default for EventLoop<A> {
-    fn default() -> Self {
-        Self::new(A::default())
-    }
-}
-
-impl<A: App> EventLoop<A> {
-    pub fn new(mut app: A) -> Self {
+impl EventLoop {
+    pub fn new<A: AppLayer>(app_layer: A) -> Self {
         static SIGNALS_ONCE: Once = Once::new();
         SIGNALS_ONCE.call_once(signals::setup);
 
-        let mut event_handler = EventHandler::default();
-        app.populate_handler(&mut event_handler);
+        let app_layer = DynAppLayer::new(app_layer);
 
         let event_queue = match EventQueue::new() {
             Ok(queue) => queue,
@@ -72,9 +65,8 @@ impl<A: App> EventLoop<A> {
 
         Self {
             runtime,
-            app,
+            app_layer,
             event_queue,
-            event_handler,
             epoll,
         }
     }
@@ -134,13 +126,13 @@ impl<A: App> EventLoop<A> {
                 error!(?error, "can not recv from waywe-cli");
             }
 
-            for event in self.event_queue.drain() {
-                self.event_handler
-                    .execute_all(&mut self.app, &mut self.runtime, event)
+            for mut event in self.event_queue.drain() {
+                self.app_layer
+                    .handle_event(&mut self.runtime, &mut event)
                     .await;
             }
 
-            let info = match self.app.frame(&mut self.runtime).await {
+            let info = match self.app_layer.frame(&mut self.runtime).await {
                 Ok(info) => info,
                 Err(FrameError::StopRequested) => break 'event_loop,
                 Err(FrameError::Skip | FrameError::NoWorkToDo) => continue 'event_loop,
@@ -153,7 +145,7 @@ impl<A: App> EventLoop<A> {
             }
         } // loop
 
-        self.app.exit(&mut self.runtime).await;
+        self.app_layer.exit(&mut self.runtime).await;
     }
 
     pub fn run(&mut self) {
@@ -271,21 +263,6 @@ impl EventQueue {
         };
 
         Ok(())
-    }
-}
-
-pub trait App: 'static {
-    fn populate_handler(&mut self, handler: &mut EventHandler<Self>)
-    where
-        Self: Sized;
-
-    fn frame(
-        &mut self,
-        runtime: &mut Runtime,
-    ) -> impl Future<Output = Result<FrameInfo, FrameError>> + Send;
-
-    fn exit(&mut self, _runtime: &mut Runtime) -> impl Future<Output = ()> + Send {
-        async {}
     }
 }
 
