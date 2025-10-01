@@ -91,5 +91,5 @@ fn main() {
         }
     };
 
-    EventLoop::new(VideoApp::from_config(config)).run();
+    EventLoop::new_single_layer(VideoApp::from_config(config)).run();
 }

@@ -28,18 +28,20 @@ use video::RatioI32;
 
 pub struct EventLoop {
     // NOTE(hack3rmann): app should be dropped first to release all the resources from the runtime
-    app_layer: DynAppLayer,
+    layers: Vec<DynAppLayer>,
     runtime: Runtime,
     event_queue: EventQueue,
     epoll: Epoll,
 }
 
 impl EventLoop {
-    pub fn new<A: AppLayer>(app_layer: A) -> Self {
+    pub fn new_single_layer<A: AppLayer>(layer: A) -> Self {
+        Self::from_layers(vec![DynAppLayer::new(layer)])
+    }
+
+    pub fn from_layers(layers: Vec<DynAppLayer>) -> Self {
         static SIGNALS_ONCE: Once = Once::new();
         SIGNALS_ONCE.call_once(signals::setup);
-
-        let app_layer = DynAppLayer::new(app_layer);
 
         let event_queue = match EventQueue::new() {
             Ok(queue) => queue,
@@ -65,7 +67,7 @@ impl EventLoop {
 
         Self {
             runtime,
-            app_layer,
+            layers,
             event_queue,
             epoll,
         }
@@ -127,15 +129,23 @@ impl EventLoop {
             }
 
             for mut event in self.event_queue.drain() {
-                self.app_layer
-                    .handle_event(&mut self.runtime, &mut event)
-                    .await;
+                for layer in &mut self.layers {
+                    layer.handle_event(&mut self.runtime, &mut event).await;
+                }
             }
 
-            let info = match self.app_layer.frame(&mut self.runtime).await {
-                Ok(info) => info,
-                Err(FrameError::StopRequested) => break 'event_loop,
-                Err(FrameError::Skip | FrameError::NoWorkToDo) => continue 'event_loop,
+            let mut info = None;
+
+            for layer in &mut self.layers {
+                info = Some(match layer.frame(&mut self.runtime).await {
+                    Ok(info) => info,
+                    Err(FrameError::StopRequested) => break 'event_loop,
+                    Err(FrameError::Skip | FrameError::NoWorkToDo) => continue,
+                });
+            }
+
+            let Some(info) = info else {
+                continue 'event_loop;
             };
 
             if let Some(target_frame_time) = info.target_frame_time {
@@ -145,7 +155,9 @@ impl EventLoop {
             }
         } // loop
 
-        self.app_layer.exit(&mut self.runtime).await;
+        for layer in &mut self.layers {
+            layer.exit(&mut self.runtime).await;
+        }
     }
 
     pub fn run(&mut self) {
