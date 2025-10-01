@@ -1,6 +1,6 @@
 use crate::{
     app_layer::AppLayer,
-    event::{EventHandler, Handle},
+    event::{EventHandler, Handle, TryReplicate},
     event_loop::{FrameError, FrameInfo, WallpaperTarget},
     runtime::{
         Runtime, RuntimeFeatures,
@@ -47,14 +47,14 @@ impl WallpaperState {
 }
 
 #[derive(Default)]
-pub struct VideoApp {
+pub struct WallpaperLayer {
     pub wallpapers: MonitorMap<RunningWallpapers>,
     pub wallpaper_states: MonitorMap<WallpaperState>,
     pub config: Config,
     pub do_force_frame: bool,
 }
 
-impl VideoApp {
+impl WallpaperLayer {
     pub fn from_config(config: Config) -> Self {
         Self {
             config,
@@ -94,17 +94,21 @@ pub struct WallpaperPreparedEvent {
     pub monitor_id: MonitorId,
 }
 
+impl TryReplicate for WallpaperPreparedEvent {}
+
+#[derive(Clone)]
 pub struct NewWallpaperEvent {
     pub path: PathBuf,
     pub ty: WallpaperType,
     pub target: WallpaperTarget,
 }
 
+#[derive(Clone)]
 pub struct WallpaperPauseEvent {
     pub target: WallpaperTarget,
 }
 
-impl AppLayer for VideoApp {
+impl AppLayer for WallpaperLayer {
     fn populate_handler(&mut self, handler: &mut EventHandler<Self>)
     where
         Self: Sized,
@@ -157,7 +161,7 @@ impl AppLayer for VideoApp {
     }
 }
 
-impl Handle<WallpaperPauseEvent> for VideoApp {
+impl Handle<WallpaperPauseEvent> for WallpaperLayer {
     async fn handle(&mut self, runtime: &mut Runtime, event: WallpaperPauseEvent) {
         let WallpaperPauseEvent { target } = event;
 
@@ -179,7 +183,7 @@ impl Handle<WallpaperPauseEvent> for VideoApp {
     }
 }
 
-impl Handle<WallpaperPreparedEvent> for VideoApp {
+impl Handle<WallpaperPreparedEvent> for WallpaperLayer {
     async fn handle(&mut self, runtime: &mut Runtime, event: WallpaperPreparedEvent) {
         let WallpaperPreparedEvent {
             wallpaper,
@@ -191,7 +195,7 @@ impl Handle<WallpaperPreparedEvent> for VideoApp {
     }
 }
 
-impl Handle<WaylandEvent> for VideoApp {
+impl Handle<WaylandEvent> for WallpaperLayer {
     async fn handle(&mut self, runtime: &mut Runtime, event: WaylandEvent) {
         match event {
             WaylandEvent::ResizeRequested { monitor_id, size } => {
@@ -249,7 +253,7 @@ impl Handle<WaylandEvent> for VideoApp {
     }
 }
 
-impl Handle<NewWallpaperEvent> for VideoApp {
+impl Handle<NewWallpaperEvent> for WallpaperLayer {
     async fn handle(&mut self, runtime: &mut Runtime, event: NewWallpaperEvent) {
         let NewWallpaperEvent { path, ty, target } = event;
 

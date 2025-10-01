@@ -170,8 +170,9 @@ impl EventLoop {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum WallpaperTarget {
+    #[default]
     ForAll,
     ForMonitor(MonitorId),
 }

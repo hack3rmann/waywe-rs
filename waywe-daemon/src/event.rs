@@ -131,14 +131,33 @@ impl<A> From<EventHandler<A>> for DynEventHandler {
     }
 }
 
-pub struct Event(Option<Box<dyn Any + Send + 'static>>);
+pub trait TryReplicate: Any + Send {
+    fn try_replicate(&self) -> Option<Box<dyn TryReplicate>> {
+        None
+    }
+}
+
+impl dyn TryReplicate {
+    pub fn downcast<T: Any>(self: Box<Self>) -> Result<Box<T>, Box<Self>> {
+        if TypeId::of::<T>() == self.as_ref().type_id() {
+            Ok((self as Box<dyn Any>).downcast::<T>().unwrap())
+        } else {
+            Err(self)
+        }
+    }
+}
+
+impl<T: Clone + Any + Send> TryReplicate for T {
+    fn try_replicate(&self) -> Option<Box<dyn TryReplicate>> {
+        Some(Box::new(self.clone()))
+    }
+}
+
+pub struct Event(Option<Box<dyn TryReplicate>>);
 
 impl Event {
     pub fn underlying_type(&self) -> Option<TypeId> {
-        self.0
-            .as_ref()
-            .map(Box::as_ref)
-            .map(<dyn Any + Send>::type_id)
+        self.0.as_ref().map(Box::as_ref).map(|e| e.type_id())
     }
 
     /// # Safety
@@ -152,7 +171,7 @@ impl Event {
     }
 
     pub async fn handle<T: IntoEvent>(&mut self, f: impl AsyncFnOnce(T)) {
-        let Some(any_value) = self.0.take() else {
+        let Some(any_value) = self.0.as_ref().and_then(|r| r.try_replicate()) else {
             return;
         };
 
@@ -169,13 +188,13 @@ impl Event {
     }
 }
 
-pub trait IntoEvent: Any + Send + 'static {
+pub trait IntoEvent: TryReplicate {
     fn into_event(self) -> Event
     where
         Self: Sized;
 }
 
-impl<T: Any + Send + 'static> IntoEvent for T {
+impl<T: TryReplicate> IntoEvent for T {
     fn into_event(self) -> Event {
         Event(Some(Box::new(self)))
     }

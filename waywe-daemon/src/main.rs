@@ -9,7 +9,7 @@ pub mod task_pool;
 pub mod wallpaper;
 
 use ::runtime::config::Config;
-use app::VideoApp;
+use app::WallpaperLayer;
 use clap::Parser;
 use detach::detach;
 use event_loop::EventLoop;
@@ -91,5 +91,5 @@ fn main() {
         }
     };
 
-    EventLoop::new_single_layer(VideoApp::from_config(config)).run();
+    EventLoop::new_single_layer(WallpaperLayer::from_config(config)).run();
 }
