@@ -106,7 +106,7 @@ impl DynEventHandler {
     /// - type `A` matches the one that `EventHandler` was created with.
     pub async unsafe fn execute_all(
         &mut self,
-        layer: NonNull<()>,
+        app: NonNull<()>,
         runtime: &mut Runtime,
         event: &mut Event,
     ) {
@@ -121,7 +121,7 @@ impl DynEventHandler {
         // Safety:
         // - event contains data
         // - type matches exactly
-        unsafe { handle(layer, runtime, event, &mut self.future).await };
+        unsafe { handle(app, runtime, event, &mut self.future).await };
     }
 }
 

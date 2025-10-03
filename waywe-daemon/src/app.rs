@@ -4,7 +4,6 @@ use crate::{
     runtime::Runtime,
 };
 use reusable_box::{ReusableBox, ReusedBoxFuture};
-use static_assertions::assert_impl_all;
 use std::{any::Any, ptr::NonNull};
 
 pub trait App: Any + Send + Sync {
@@ -17,28 +16,57 @@ pub trait App: Any + Send + Sync {
         runtime: &mut Runtime,
     ) -> impl Future<Output = Result<FrameInfo, FrameError>> + Send;
 
-    fn exit(&mut self, _runtime: &mut Runtime) -> impl Future<Output = ()> + Send {
+    #[expect(unused_variables)]
+    fn exit(&mut self, runtime: &mut Runtime) -> impl Future<Output = ()> + Send {
         async {}
     }
 }
 
+pub trait ReusableApp: Any + Send + Sync {
+    fn frame<'f>(
+        &'f mut self,
+        runtime: &'f mut Runtime,
+        futures: &'f mut ReusableBox,
+    ) -> ReusedBoxFuture<'f, Result<FrameInfo, FrameError>>;
+
+    fn exit<'f>(
+        &'f mut self,
+        runtime: &'f mut Runtime,
+        futures: &'f mut ReusableBox,
+    ) -> ReusedBoxFuture<'f, ()>;
+}
+
+impl<A: App> ReusableApp for A {
+    fn frame<'f>(
+        &'f mut self,
+        runtime: &'f mut Runtime,
+        futures: &'f mut ReusableBox,
+    ) -> ReusedBoxFuture<'f, Result<FrameInfo, FrameError>> {
+        futures.store_future(App::frame(self, runtime))
+    }
+
+    fn exit<'f>(
+        &'f mut self,
+        runtime: &'f mut Runtime,
+        futures: &'f mut ReusableBox,
+    ) -> ReusedBoxFuture<'f, ()> {
+        futures.store_future(App::exit(self, runtime))
+    }
+}
+
 pub struct DynApp {
-    frame: FrameFn,
-    exit: ExitFn,
-    app: Box<dyn Any>,
+    app: Box<dyn ReusableApp>,
     futures: ReusableBox,
     handler: DynEventHandler,
 }
 
 impl DynApp {
-    pub fn new<L: App>(mut layer: L) -> Self {
-        let mut handler = EventHandler::<L>::default();
-        layer.populate_handler(&mut handler);
+    pub fn new(mut app: impl App) -> Self {
+        let mut handler = EventHandler::default();
+        app.populate_handler(&mut handler);
 
         Self {
-            frame: frame::<L>,
-            exit: exit::<L>,
-            app: Box::new(layer),
+            app: Box::new(app),
             futures: ReusableBox::new(),
             handler: handler.into(),
         }
@@ -50,46 +78,10 @@ impl DynApp {
     }
 
     pub async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
-        let layer_ptr = unsafe { NonNull::new_unchecked((&raw mut *self.app).cast::<()>()) };
-        let future = unsafe { (self.frame)(layer_ptr, runtime, &mut self.futures) };
-        future.await
+        self.app.frame(runtime, &mut self.futures).await
     }
 
     pub async fn exit(&mut self, runtime: &mut Runtime) {
-        let layer_ptr = unsafe { NonNull::new_unchecked((&raw mut *self.app).cast::<()>()) };
-        let future = unsafe { (self.exit)(layer_ptr, runtime, &mut self.futures) };
-        future.await;
+        self.app.exit(runtime, &mut self.futures).await;
     }
-}
-
-type FrameFn = for<'f> unsafe fn(
-    app: NonNull<()>,
-    runtime: &'f mut Runtime,
-    future: &'f mut ReusableBox,
-) -> ReusedBoxFuture<'f, Result<FrameInfo, FrameError>>;
-assert_impl_all!(FrameFn: Copy);
-
-type ExitFn = for<'f> unsafe fn(
-    app: NonNull<()>,
-    runtime: &'f mut Runtime,
-    future: &'f mut ReusableBox,
-) -> ReusedBoxFuture<'f, ()>;
-assert_impl_all!(ExitFn: Copy);
-
-unsafe fn frame<'f, L: App>(
-    app: NonNull<()>,
-    runtime: &'f mut Runtime,
-    future: &'f mut ReusableBox,
-) -> ReusedBoxFuture<'f, Result<FrameInfo, FrameError>> {
-    let app = unsafe { app.cast::<L>().as_mut() };
-    future.store_future(app.frame(runtime))
-}
-
-unsafe fn exit<'f, L: App>(
-    app: NonNull<()>,
-    runtime: &'f mut Runtime,
-    future: &'f mut ReusableBox,
-) -> ReusedBoxFuture<'f, ()> {
-    let app = unsafe { app.cast::<L>().as_mut() };
-    future.store_future(app.exit(runtime))
 }
