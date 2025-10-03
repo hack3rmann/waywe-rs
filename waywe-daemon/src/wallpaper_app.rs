@@ -109,10 +109,7 @@ pub struct WallpaperPauseEvent {
 }
 
 impl App for WallpaperApp {
-    fn populate_handler(&mut self, handler: &mut EventHandler<Self>)
-    where
-        Self: Sized,
-    {
+    fn populate_handler(&mut self, handler: &mut EventHandler<Self>) {
         handler
             .add_event::<WaylandEvent>()
             .add_event::<NewWallpaperEvent>()

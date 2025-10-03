@@ -45,7 +45,7 @@ where
     }))
 }
 
-pub struct EventHandler<A> {
+pub struct EventHandler<A: ?Sized> {
     pub handler: DynEventHandler,
     _p: PhantomData<fn() -> A>,
 }

@@ -7,9 +7,7 @@ use reusable_box::{ReusableBox, ReusedBoxFuture};
 use std::{any::Any, ptr::NonNull};
 
 pub trait App: Any + Send + Sync {
-    fn populate_handler(&mut self, handler: &mut EventHandler<Self>)
-    where
-        Self: Sized;
+    fn populate_handler(&mut self, handler: &mut EventHandler<Self>);
 
     fn frame(
         &mut self,
