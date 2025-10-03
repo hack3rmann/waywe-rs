@@ -1,4 +1,4 @@
-use crate::{app_layer::AppLayer, box_ext::BoxExt, runtime::Runtime};
+use crate::{app::App, box_ext::BoxExt, runtime::Runtime};
 use bytemuck::{Contiguous, NoUninit};
 use fxhash::FxHashMap;
 use reusable_box::{ReusableBox, ReusedBoxFuture};
@@ -37,7 +37,7 @@ unsafe fn handle_event<'f, A, E>(
 ) -> ReusedBoxFuture<'f, ()>
 where
     E: IntoEvent,
-    A: AppLayer + Handle<E>,
+    A: App + Handle<E>,
 {
     let layer = unsafe { layer.cast::<A>().as_mut() };
     future.store_future(event.handle(async move |event: E| {
@@ -50,7 +50,7 @@ pub struct EventHandler<A> {
     _p: PhantomData<fn() -> A>,
 }
 
-impl<A: AppLayer> EventHandler<A> {
+impl<A: App> EventHandler<A> {
     pub fn add_event<E>(&mut self) -> &mut Self
     where
         E: IntoEvent,
@@ -171,7 +171,10 @@ impl Event {
     }
 
     pub async fn handle<T: IntoEvent>(&mut self, f: impl AsyncFnOnce(T)) {
-        let Some(any_value) = self.0.as_ref().and_then(|r| r.try_replicate()) else {
+        // Try to replicate the event. Take the event if could not replicate
+        let replicated = self.0.as_deref().and_then(TryReplicate::try_replicate);
+
+        let Some(any_value) = replicated.or_else(|| self.0.take()) else {
             return;
         };
 

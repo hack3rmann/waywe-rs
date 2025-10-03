@@ -1,301 +1,95 @@
 use crate::{
-    app_layer::AppLayer,
-    event::{EventHandler, Handle, TryReplicate},
-    event_loop::{FrameError, FrameInfo, WallpaperTarget},
-    runtime::{
-        Runtime, RuntimeFeatures,
-        wayland::{MonitorId, MonitorMap, WaylandEvent},
-    },
-    wallpaper::{
-        self,
-        scene::{cursor::CursorMoved, wallpaper::PreparedWallpaper},
-        transition::RunningWallpapers,
-    },
+    event::{DynEventHandler, Event, EventHandler},
+    event_loop::{FrameError, FrameInfo},
+    runtime::Runtime,
 };
-use for_sure::prelude::*;
-use runtime::{
-    WallpaperType,
-    config::Config,
-    profile::{Monitor, SetupProfile},
-};
-use smallvec::{SmallVec, smallvec};
-use std::{collections::btree_map::Entry, path::PathBuf, sync::Arc};
-use tracing::{debug, error};
+use reusable_box::{ReusableBox, ReusedBoxFuture};
+use static_assertions::assert_impl_all;
+use std::{any::Any, ptr::NonNull};
 
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum WallpaperState {
-    #[default]
-    Running,
-    Paused,
-}
-
-impl WallpaperState {
-    pub const fn inverted(self) -> Self {
-        match self {
-            Self::Running => Self::Paused,
-            Self::Paused => Self::Running,
-        }
-    }
-
-    pub const fn is_paused(self) -> bool {
-        matches!(self, Self::Paused)
-    }
-
-    pub const fn is_running(self) -> bool {
-        matches!(self, Self::Running)
-    }
-}
-
-#[derive(Default)]
-pub struct WallpaperLayer {
-    pub wallpapers: MonitorMap<RunningWallpapers>,
-    pub wallpaper_states: MonitorMap<WallpaperState>,
-    pub config: Config,
-    pub do_force_frame: bool,
-}
-
-impl WallpaperLayer {
-    pub fn from_config(config: Config) -> Self {
-        Self {
-            config,
-            ..Default::default()
-        }
-    }
-
-    pub fn set_wallpaper(
-        &mut self,
-        runtime: &Runtime,
-        wallpaper: PreparedWallpaper,
-        monitor_id: MonitorId,
-    ) {
-        match self.wallpapers.entry(monitor_id) {
-            Entry::Vacant(entry) => {
-                let size = {
-                    let monitors = runtime.wayland.client_state.monitors.read().unwrap();
-                    monitors[&monitor_id].size.unwrap()
-                };
-                let mut wallpapers =
-                    RunningWallpapers::new(monitor_id, size, self.config.animation.clone());
-                wallpapers.enqueue_wallpaper(wallpaper);
-                entry.insert(wallpapers);
-            }
-            Entry::Occupied(mut occupied_entry) => {
-                occupied_entry.get_mut().enqueue_wallpaper(wallpaper)
-            }
-        }
-
-        self.wallpaper_states
-            .insert(monitor_id, WallpaperState::Running);
-    }
-}
-
-pub struct WallpaperPreparedEvent {
-    pub wallpaper: PreparedWallpaper,
-    pub monitor_id: MonitorId,
-}
-
-impl TryReplicate for WallpaperPreparedEvent {}
-
-#[derive(Clone)]
-pub struct NewWallpaperEvent {
-    pub path: PathBuf,
-    pub ty: WallpaperType,
-    pub target: WallpaperTarget,
-}
-
-#[derive(Clone)]
-pub struct WallpaperPauseEvent {
-    pub target: WallpaperTarget,
-}
-
-impl AppLayer for WallpaperLayer {
+pub trait App: Any + Send + Sync {
     fn populate_handler(&mut self, handler: &mut EventHandler<Self>)
     where
-        Self: Sized,
-    {
-        handler
-            .add_event::<WaylandEvent>()
-            .add_event::<NewWallpaperEvent>()
-            .add_event::<WallpaperPreparedEvent>()
-            .add_event::<WallpaperPauseEvent>();
-    }
+        Self: Sized;
 
-    async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
-        if Almost::is_nil(&runtime.wgpu) {
-            return Err(FrameError::NoWorkToDo);
-        }
+    fn frame(
+        &mut self,
+        runtime: &mut Runtime,
+    ) -> impl Future<Output = Result<FrameInfo, FrameError>> + Send;
 
-        // FIXME(hack3rmann): multiple monitors
-        let mut result = Err(FrameError::NoWorkToDo);
-
-        for (&monitor_id, wallpapers) in self.wallpapers.iter_mut() {
-            if let Some(&state) = self.wallpaper_states.get(&monitor_id)
-                && state.is_paused()
-            {
-                continue;
-            }
-
-            let surface = {
-                let surfaces = runtime.wgpu.surfaces.read().unwrap();
-                surfaces[&monitor_id].surface.get_current_texture().unwrap()
-            };
-
-            let mut encoder = runtime
-                .wgpu
-                .device
-                .create_command_encoder(&Default::default());
-
-            result = wallpapers.render(&runtime.wgpu, &surface.texture, &mut encoder);
-
-            runtime.wgpu.queue.submit([encoder.finish()]);
-            surface.present();
-        }
-
-        if let Err(FrameError::NoWorkToDo) = &result {
-            runtime.control_flow.idle();
-        }
-
-        self.do_force_frame = false;
-
-        result
+    fn exit(&mut self, _runtime: &mut Runtime) -> impl Future<Output = ()> + Send {
+        async {}
     }
 }
 
-impl Handle<WallpaperPauseEvent> for WallpaperLayer {
-    async fn handle(&mut self, runtime: &mut Runtime, event: WallpaperPauseEvent) {
-        let WallpaperPauseEvent { target } = event;
+pub struct DynApp {
+    frame: FrameFn,
+    exit: ExitFn,
+    app: Box<dyn Any>,
+    futures: ReusableBox,
+    handler: DynEventHandler,
+}
 
-        let monitor_ids: SmallVec<[MonitorId; 4]> = match target {
-            WallpaperTarget::ForAll => {
-                let monitors = runtime.wayland.client_state.monitors.read().unwrap();
-                monitors.keys().copied().collect()
-            }
-            WallpaperTarget::ForMonitor(id) => smallvec![id],
-        };
+impl DynApp {
+    pub fn new<L: App>(mut layer: L) -> Self {
+        let mut handler = EventHandler::<L>::default();
+        layer.populate_handler(&mut handler);
 
-        for monitor_id in monitor_ids {
-            let Some(state) = self.wallpaper_states.get_mut(&monitor_id) else {
-                continue;
-            };
-
-            *state = state.inverted();
+        Self {
+            frame: frame::<L>,
+            exit: exit::<L>,
+            app: Box::new(layer),
+            futures: ReusableBox::new(),
+            handler: handler.into(),
         }
+    }
+
+    pub async fn handle_event(&mut self, runtime: &mut Runtime, event: &mut Event) {
+        let layer_ptr = unsafe { NonNull::new_unchecked((&raw mut *self.app).cast::<()>()) };
+        unsafe { self.handler.execute_all(layer_ptr, runtime, event) }.await;
+    }
+
+    pub async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
+        let layer_ptr = unsafe { NonNull::new_unchecked((&raw mut *self.app).cast::<()>()) };
+        let future = unsafe { (self.frame)(layer_ptr, runtime, &mut self.futures) };
+        future.await
+    }
+
+    pub async fn exit(&mut self, runtime: &mut Runtime) {
+        let layer_ptr = unsafe { NonNull::new_unchecked((&raw mut *self.app).cast::<()>()) };
+        let future = unsafe { (self.exit)(layer_ptr, runtime, &mut self.futures) };
+        future.await;
     }
 }
 
-impl Handle<WallpaperPreparedEvent> for WallpaperLayer {
-    async fn handle(&mut self, runtime: &mut Runtime, event: WallpaperPreparedEvent) {
-        let WallpaperPreparedEvent {
-            wallpaper,
-            monitor_id,
-        } = event;
+type FrameFn = for<'f> unsafe fn(
+    app: NonNull<()>,
+    runtime: &'f mut Runtime,
+    future: &'f mut ReusableBox,
+) -> ReusedBoxFuture<'f, Result<FrameInfo, FrameError>>;
+assert_impl_all!(FrameFn: Copy);
 
-        runtime.control_flow.busy();
-        self.set_wallpaper(runtime, wallpaper, monitor_id);
-    }
+type ExitFn = for<'f> unsafe fn(
+    app: NonNull<()>,
+    runtime: &'f mut Runtime,
+    future: &'f mut ReusableBox,
+) -> ReusedBoxFuture<'f, ()>;
+assert_impl_all!(ExitFn: Copy);
+
+unsafe fn frame<'f, L: App>(
+    app: NonNull<()>,
+    runtime: &'f mut Runtime,
+    future: &'f mut ReusableBox,
+) -> ReusedBoxFuture<'f, Result<FrameInfo, FrameError>> {
+    let app = unsafe { app.cast::<L>().as_mut() };
+    future.store_future(app.frame(runtime))
 }
 
-impl Handle<WaylandEvent> for WallpaperLayer {
-    async fn handle(&mut self, runtime: &mut Runtime, event: WaylandEvent) {
-        match event {
-            WaylandEvent::ResizeRequested { monitor_id, size } => {
-                if Almost::is_value(&runtime.wgpu) {
-                    runtime.wgpu.resize_surface(monitor_id, size);
-                }
-
-                self.do_force_frame = true;
-            }
-            WaylandEvent::MonitorPlugged { id: monitor_id } => {
-                if Almost::is_value(&runtime.wgpu) {
-                    runtime.wgpu.register_surface(&runtime.wayland, monitor_id);
-                }
-
-                let monitors = runtime.wayland.client_state.monitors.read().unwrap();
-                let monitor = &monitors[&monitor_id];
-                let monitor_name = Arc::clone(monitor.name.as_ref().unwrap());
-
-                debug!(?monitor_id, ?monitor_name, "new monitor detected");
-
-                if let Ok(mut profile) = SetupProfile::read()
-                    && let Some(info) = profile.monitors.remove(&monitor_name)
-                {
-                    let event = NewWallpaperEvent {
-                        path: info.path,
-                        ty: info.wallpaper_type,
-                        target: WallpaperTarget::ForMonitor(monitor_id),
-                    };
-
-                    runtime.task_pool.emitter.emit(event).unwrap();
-                }
-
-                runtime.control_flow.busy();
-            }
-            WaylandEvent::MonitorUnplugged { id: monitor_id } => {
-                debug!(?monitor_id, "unplugged a monitor");
-
-                _ = self.wallpapers.remove(&monitor_id);
-                _ = self.wallpaper_states.remove(&monitor_id);
-
-                runtime.wgpu.unregister_surface(monitor_id);
-            }
-            WaylandEvent::CursorMoved { position } => {
-                let event = CursorMoved { position };
-
-                for wallpaper in self
-                    .wallpapers
-                    .values_mut()
-                    .flat_map(RunningWallpapers::wallpapers_mut)
-                {
-                    wallpaper.wallpaper.main.world.trigger(event);
-                }
-            }
-        }
-    }
-}
-
-impl Handle<NewWallpaperEvent> for WallpaperLayer {
-    async fn handle(&mut self, runtime: &mut Runtime, event: NewWallpaperEvent) {
-        let NewWallpaperEvent { path, ty, target } = event;
-
-        // FIXME(hack3rmann): remove runtime features
-        runtime.enable(RuntimeFeatures::GPU).await;
-
-        let monitor_ids: SmallVec<[MonitorId; 4]> = match target {
-            WallpaperTarget::ForAll => {
-                let monitors = runtime.wayland.client_state.monitors.read().unwrap();
-                monitors.keys().copied().collect()
-            }
-            WallpaperTarget::ForMonitor(id) => smallvec![id],
-        };
-
-        for monitor_id in monitor_ids {
-            let path = path.clone();
-            let gpu = Arc::clone(&runtime.wgpu);
-            let wayland = Arc::clone(&runtime.wayland);
-
-            let monitors = runtime.wayland.client_state.monitors.read().unwrap();
-            let monitor = &monitors[&monitor_id];
-            let monitor_name = Arc::clone(monitor.name.as_ref().unwrap());
-            let monitor_profile = Monitor {
-                wallpaper_type: ty,
-                path: path.clone(),
-            };
-
-            if let Err(error) = SetupProfile::default()
-                .with(monitor_name, monitor_profile)
-                .store()
-            {
-                error!(?error, "failed to save setup profile");
-            }
-
-            runtime.task_pool.spawn(move |mut emitter| {
-                let event = WallpaperPreparedEvent {
-                    wallpaper: wallpaper::create(gpu, wayland, &path, ty, monitor_id),
-                    monitor_id,
-                };
-
-                emitter.emit(event).unwrap();
-            });
-        }
-    }
+unsafe fn exit<'f, L: App>(
+    app: NonNull<()>,
+    runtime: &'f mut Runtime,
+    future: &'f mut ReusableBox,
+) -> ReusedBoxFuture<'f, ()> {
+    let app = unsafe { app.cast::<L>().as_mut() };
+    future.store_future(app.exit(runtime))
 }

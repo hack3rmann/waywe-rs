@@ -1,5 +1,4 @@
 pub mod app;
-pub mod app_layer;
 pub mod box_ext;
 pub mod detach;
 pub mod event;
@@ -7,9 +6,9 @@ pub mod event_loop;
 pub mod runtime;
 pub mod task_pool;
 pub mod wallpaper;
+pub mod wallpaper_app;
 
 use ::runtime::config::Config;
-use app::WallpaperLayer;
 use clap::Parser;
 use detach::detach;
 use event_loop::EventLoop;
@@ -19,6 +18,7 @@ use std::{
 };
 use tracing::error;
 use tracing_subscriber::EnvFilter;
+use wallpaper_app::WallpaperApp;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -91,5 +91,6 @@ fn main() {
         }
     };
 
-    EventLoop::new_single_layer(WallpaperLayer::from_config(config)).run();
+    let app = WallpaperApp::from_config(config);
+    EventLoop::new(app).run();
 }
