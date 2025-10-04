@@ -52,6 +52,6 @@ pub struct Cursor {
 ///
 /// This system is triggered by [`CursorMoved`] events and updates
 /// the [`Cursor`] resource.
-pub fn update_cursor_position(moved: Trigger<CursorMoved>, mut cursor: ResMut<Cursor>) {
+pub fn update_cursor_position(moved: On<CursorMoved>, mut cursor: ResMut<Cursor>) {
     cursor.position = moved.position;
 }

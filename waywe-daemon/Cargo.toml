@@ -39,7 +39,7 @@ ash = "0.38.0"
 daemonize = "0.5.0"
 for-sure = "0.1.1"
 reusable-box = "0.1.0"
-bevy_ecs = "0.16.1"
+bevy_ecs = "0.17.2"
 derive_more = { version = "2.0.1", features = ["full"] }
 itertools = "0.14.0"
 variadics_please = "1.1.0"

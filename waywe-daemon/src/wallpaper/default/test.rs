@@ -18,8 +18,6 @@
 //! //! - Animation systems that respond to time and cursor position
 //! ```
 
-use std::time::Duration;
-
 use crate::wallpaper::scene::{
     Monitor, Startup, Update,
     asset_server::{AssetHandle, AssetServer},
@@ -37,6 +35,7 @@ use crate::wallpaper::scene::{
 use bevy_ecs::prelude::*;
 use glam::{Quat, Vec2, Vec3};
 use smallvec::{SmallVec, smallvec};
+use std::time::Duration;
 
 /// A test wallpaper with multiple meshes and animations.
 ///

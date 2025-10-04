@@ -1,39 +1,51 @@
-//! Extraction system for transferring data between worlds.
-//!
-//! This module provides the [`Extract`] system parameter, which allows
-//! systems in the render world to access data from the main world.
-//!
-//! # Usage
-//!
-//! ```rust
-//! use bevy_ecs::prelude::*;
-//! use crate::wallpaper::scene::extract::Extract;
-//!
-//! fn extract_system(
-//!     // Access data from the main world
-//!     main_query: Extract<Query<&MyComponent>>,
-//!     // Access resources from the render world
-//!     render_resource: Res<MyRenderResource>,
-//! ) {
-//!     // Process data from both worlds
-//! }
-//! ```
-
+use crate::wallpaper::scene::MainWorld;
 use bevy_ecs::{
     component::Tick,
+    query::FilteredAccessSet,
     system::{
         ReadOnlySystemParam, Res, SystemMeta, SystemParam, SystemParamItem,
         SystemParamValidationError, SystemState,
     },
     world::{World, unsafe_world_cell::UnsafeWorldCell},
 };
+use std::ops::{Deref, DerefMut};
 
-use crate::wallpaper::scene::MainWorld;
-
-/// System parameter for extracting data from the main world.
+/// A helper for accessing [`MainWorld`] content using a system parameter.
 ///
-/// This allows systems in the render world to access data from the main world
-/// during the extraction phase.
+/// A [`SystemParam`] adapter which applies the contained `SystemParam` to the [`World`]
+/// contained in [`MainWorld`]. This parameter only works for systems run
+/// during the [`ExtractSchedule`](crate::ExtractSchedule).
+///
+/// This requires that the contained [`SystemParam`] does not mutate the world, as it
+/// uses a read-only reference to [`MainWorld`] internally.
+///
+/// ## Context
+///
+/// [`ExtractSchedule`] is used to extract (move) data from the simulation world ([`MainWorld`]) to the
+/// render world. The render world drives rendering each frame (generally to a `Window`).
+/// This design is used to allow performing calculations related to rendering a prior frame at the same
+/// time as the next frame is simulated, which increases throughput (FPS).
+///
+/// [`Extract`] is used to get data from the main world during [`ExtractSchedule`].
+///
+/// ## Examples
+///
+/// ```
+/// use bevy_ecs::prelude::*;
+/// use bevy_render::Extract;
+/// use bevy_render::sync_world::RenderEntity;
+/// # #[derive(Component)]
+/// // Do make sure to sync the cloud entities before extracting them.
+/// # struct Cloud;
+/// fn extract_clouds(mut commands: Commands, clouds: Extract<Query<RenderEntity, With<Cloud>>>) {
+///     for cloud in &clouds {
+///         commands.entity(cloud).insert(Cloud);
+///     }
+/// }
+/// ```
+///
+/// [`ExtractSchedule`]: crate::ExtractSchedule
+/// [Window]: bevy_window::Window
 pub struct Extract<'w, 's, P>
 where
     P: ReadOnlySystemParam + 'static,
@@ -41,7 +53,7 @@ where
     item: SystemParamItem<'w, 's, P>,
 }
 
-/// State for the extract system parameter.
+#[doc(hidden)]
 pub struct ExtractState<P: SystemParam + 'static> {
     state: SystemState<P>,
     main_world_state: <Res<'static, MainWorld> as SystemParam>::State,
@@ -59,37 +71,47 @@ where
     type State = ExtractState<P>;
     type Item<'w, 's> = Extract<'w, 's, P>;
 
-    fn init_state(world: &mut World, system_meta: &mut SystemMeta) -> Self::State {
+    fn init_state(world: &mut World) -> Self::State {
         let mut main_world = world.resource_mut::<MainWorld>();
-
         ExtractState {
             state: SystemState::new(&mut main_world),
-            main_world_state: Res::<MainWorld>::init_state(world, system_meta),
+            main_world_state: Res::<MainWorld>::init_state(world),
         }
+    }
+
+    fn init_access(
+        state: &Self::State,
+        system_meta: &mut SystemMeta,
+        component_access_set: &mut FilteredAccessSet,
+        world: &mut World,
+    ) {
+        Res::<MainWorld>::init_access(
+            &state.main_world_state,
+            system_meta,
+            component_access_set,
+            world,
+        );
     }
 
     #[inline]
     unsafe fn validate_param(
-        state: &Self::State,
+        state: &mut Self::State,
         _system_meta: &SystemMeta,
         world: UnsafeWorldCell,
     ) -> Result<(), SystemParamValidationError> {
         // SAFETY: Read-only access to world data registered in `init_state`.
         let result = unsafe { world.get_resource_by_id(state.main_world_state) };
-
         let Some(main_world) = result else {
             return Err(SystemParamValidationError::invalid::<Self>(
                 "`MainWorld` resource does not exist",
             ));
         };
-
         // SAFETY: Type is guaranteed by `SystemState`.
         let main_world: &World = unsafe { main_world.deref() };
-
         // SAFETY: We provide the main world on which this system state was initialized on.
         unsafe {
             SystemState::<P>::validate_param(
-                &state.state,
+                &mut state.state,
                 main_world.as_unsafe_world_cell_readonly(),
             )
         }
@@ -113,14 +135,12 @@ where
                 change_tick,
             )
         };
-
         let item = state.state.get(main_world.into_inner());
-
         Extract { item }
     }
 }
 
-impl<'w, 's, P> std::ops::Deref for Extract<'w, 's, P>
+impl<'w, 's, P> Deref for Extract<'w, 's, P>
 where
     P: ReadOnlySystemParam,
 {
@@ -132,7 +152,7 @@ where
     }
 }
 
-impl<'w, 's, P> std::ops::DerefMut for Extract<'w, 's, P>
+impl<'w, 's, P> DerefMut for Extract<'w, 's, P>
 where
     P: ReadOnlySystemParam,
 {
