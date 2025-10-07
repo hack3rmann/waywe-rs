@@ -1,4 +1,4 @@
-use crate::runtime::{Runtime, app::App};
+use crate::{Runtime, app::App};
 use box_into_inner::IntoInner;
 use bytemuck::{Contiguous, NoUninit};
 use fxhash::FxHashMap;

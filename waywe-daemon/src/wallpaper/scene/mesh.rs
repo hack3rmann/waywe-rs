@@ -50,7 +50,7 @@ use std::{
     ops::{Deref, DerefMut},
     ptr::NonNull,
 };
-use waywe_runtime::runtime::{gpu::Wgpu, wayland::MonitorId};
+use waywe_runtime::{gpu::Wgpu, wayland::MonitorId};
 
 /// Plugin for mesh rendering functionality.
 ///

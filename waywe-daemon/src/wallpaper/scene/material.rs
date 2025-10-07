@@ -24,7 +24,7 @@ use bevy_ecs::{
     prelude::*,
     system::{SystemParam, SystemParamItem},
 };
-use waywe_runtime::runtime::{gpu::Wgpu, shaders::ShaderDescriptor};
+use waywe_runtime::{gpu::Wgpu, shaders::ShaderDescriptor};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, PartialOrd, Ord, Hash, SystemSet)]
 pub enum MaterialSet {

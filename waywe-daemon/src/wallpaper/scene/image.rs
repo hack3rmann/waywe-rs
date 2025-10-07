@@ -32,7 +32,7 @@ use bevy_ecs::{
     system::{StaticSystemParam, SystemParamItem, lifetimeless::SRes},
 };
 use derive_more::{Deref, DerefMut};
-use waywe_runtime::runtime::{gpu::Wgpu, shaders::ShaderDescriptor};
+use waywe_runtime::{gpu::Wgpu, shaders::ShaderDescriptor};
 use wgpu::util::DeviceExt;
 
 /// Plugin for image functionality.

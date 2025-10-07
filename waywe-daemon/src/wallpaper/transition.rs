@@ -9,7 +9,7 @@ use std::{
     time::{Duration, Instant},
 };
 use waywe_ipc::config::{AnimationConfig, AnimationDirection};
-use waywe_runtime::runtime::{
+use waywe_runtime::{
     frame::{FrameError, FrameInfo},
     gpu::Wgpu,
     shaders::ShaderDescriptor,

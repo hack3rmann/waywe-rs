@@ -133,8 +133,7 @@ use bitflags::bitflags;
 use derive_more::{Deref, DerefMut};
 use glam::UVec2;
 use std::time::Duration;
-use waywe_runtime::runtime::frame::FrameInfo;
-use waywe_runtime::runtime::wayland::MonitorId;
+use waywe_runtime::{frame::FrameInfo, wayland::MonitorId};
 
 /// Frame rate configuration for the wallpaper.
 ///

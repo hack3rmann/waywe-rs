@@ -8,7 +8,7 @@ use crate::wallpaper::scene::{
 use bevy_ecs::prelude::*;
 use derive_more::Deref;
 use glam::Vec3;
-use waywe_runtime::runtime::{gpu::Wgpu, shaders::ShaderDescriptor, wayland::MonitorId};
+use waywe_runtime::{gpu::Wgpu, shaders::ShaderDescriptor, wayland::MonitorId};
 
 pub struct ClearScreenPlugin;
 

@@ -15,14 +15,12 @@ use waywe_ipc::{
     config::Config,
     profile::{Monitor, SetupProfile},
 };
-use waywe_runtime::runtime::{
+use waywe_runtime::{
     Runtime, RuntimeFeatures,
-    frame::{FrameError, FrameInfo},
-    wayland::{MonitorId, MonitorMap, WaylandEvent},
-};
-use waywe_runtime::runtime::{
     app::App,
     event::{EventHandler, Handle, TryReplicate},
+    frame::{FrameError, FrameInfo},
+    wayland::{MonitorId, MonitorMap, WaylandEvent},
 };
 
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

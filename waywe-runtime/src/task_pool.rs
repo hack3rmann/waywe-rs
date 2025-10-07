@@ -1,4 +1,4 @@
-use crate::runtime::event::EventEmitter;
+use crate::event::EventEmitter;
 use smallvec::{SmallVec, smallvec};
 use std::thread::JoinHandle;
 use tracing::error;

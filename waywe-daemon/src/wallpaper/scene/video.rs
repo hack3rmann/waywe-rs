@@ -45,7 +45,7 @@ use video::{
     BackendError, Codec, CodecContext, FormatContext, Frame, MediaType, Packet, RatioI32,
     VideoPixelFormat, acceleration::VaSurfaceHandle,
 };
-use waywe_runtime::runtime::{gpu::Wgpu, shaders::ShaderDescriptor};
+use waywe_runtime::{gpu::Wgpu, shaders::ShaderDescriptor};
 use wgpu::wgc::api;
 
 /// Plugin for video functionality.

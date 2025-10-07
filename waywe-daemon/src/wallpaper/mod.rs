@@ -8,7 +8,7 @@ use crate::wallpaper::{
 };
 use std::{path::Path, sync::Arc};
 use waywe_ipc::WallpaperType;
-use waywe_runtime::runtime::{
+use waywe_runtime::{
     gpu::Wgpu,
     wayland::{MonitorId, Wayland},
 };

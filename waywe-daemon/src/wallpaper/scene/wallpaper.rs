@@ -24,8 +24,8 @@ use crate::wallpaper::scene::{
 };
 use bevy_ecs::prelude::*;
 use std::{mem, sync::Arc, thread};
-use waywe_runtime::runtime::frame::FrameInfo;
-use waywe_runtime::runtime::{
+use waywe_runtime::{
+    frame::FrameInfo,
     gpu::Wgpu,
     wayland::{MonitorId, Wayland},
 };
