@@ -13,8 +13,7 @@
 //!
 //! - [`VideoPlugin`]: Adds video functionality to a wallpaper
 
-use super::wallpaper::Wallpaper;
-use crate::wallpaper::scene::{
+use crate::{
     Time, Update,
     asset_server::{AssetHandle, AssetServerLoadPlugin, Load},
     assets::{
@@ -26,6 +25,7 @@ use crate::wallpaper::scene::{
     material::{AsBindGroup, Material, MaterialSet, RenderMaterial, VertexFragmentShader},
     plugin::Plugin,
     render::{RenderGpu, SceneExtract},
+    wallpaper::Wallpaper,
 };
 use ash::vk::{self, PhysicalDeviceMemoryProperties};
 use bevy_ecs::{
@@ -567,7 +567,7 @@ impl ShaderDescriptor for SceneVideoFramgentShader {
         wgpu::ShaderModuleDescriptor {
             label: Some("scene-video"),
             source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("../../shaders/scene-video-fragment.glsl").into(),
+                shader: include_str!("shaders/scene-video-fragment.glsl").into(),
                 stage: wgpu::naga::ShaderStage::Fragment,
                 defines: Default::default(),
             },

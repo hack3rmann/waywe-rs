@@ -1,10 +1,6 @@
 use crate::{
     event_loop::WallpaperTarget,
-    wallpaper::{
-        self,
-        scene::{cursor::CursorMoved, wallpaper::PreparedWallpaper},
-        transition::RunningWallpapers,
-    },
+    wallpaper::{self, transition::RunningWallpapers},
 };
 use for_sure::prelude::*;
 use smallvec::{SmallVec, smallvec};
@@ -22,6 +18,7 @@ use waywe_runtime::{
     frame::{FrameError, FrameInfo},
     wayland::{MonitorId, MonitorMap, WaylandEvent},
 };
+use waywe_scene::{cursor::CursorMoved, wallpaper::PreparedWallpaper};
 
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum WallpaperState {

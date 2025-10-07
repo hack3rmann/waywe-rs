@@ -1,5 +1,4 @@
-use super::wallpaper::Wallpaper;
-use crate::wallpaper::scene::{
+use crate::{
     Monitor,
     asset_server::{AssetHandle, AssetId},
     assets::{Assets, AssetsExtract, RefAssets},
@@ -11,6 +10,7 @@ use crate::wallpaper::scene::{
     render::{EntityMap, MainEntity, RenderGpu, SceneExtract},
     transform::{GlobalTransform, ModelMatrix, PreExtractTransform, Transform},
     video::{Video, VideoMaterial},
+    wallpaper::Wallpaper,
 };
 use bevy_ecs::{prelude::*, system::SystemParam};
 use derive_more::Deref;

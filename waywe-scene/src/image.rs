@@ -13,10 +13,8 @@
 //!
 //! - [`ImagePlugin`]: Adds image functionality to a wallpaper
 
-use std::path::Path;
-
 use super::wallpaper::Wallpaper;
-use crate::wallpaper::scene::{
+use crate::{
     asset_server::{AssetHandle, AssetServerLoadPlugin, Load},
     assets::{
         Asset, Assets, AssetsExtract, AssetsPlugin, RefAssets, RefAssetsDependencyPlugin,
@@ -32,6 +30,7 @@ use bevy_ecs::{
     system::{StaticSystemParam, SystemParamItem, lifetimeless::SRes},
 };
 use derive_more::{Deref, DerefMut};
+use std::path::Path;
 use waywe_runtime::{gpu::Wgpu, shaders::ShaderDescriptor};
 use wgpu::util::DeviceExt;
 
@@ -169,7 +168,7 @@ impl ShaderDescriptor for SceneImageVertexShader {
         wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("../../shaders/scene-image-vertex.glsl").into(),
+                shader: include_str!("shaders/scene-image-vertex.glsl").into(),
                 stage: wgpu::naga::ShaderStage::Vertex,
                 defines: Default::default(),
             },
@@ -184,7 +183,7 @@ impl ShaderDescriptor for SceneImageFragmentShader {
         wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("../../shaders/scene-image-fragment.glsl").into(),
+                shader: include_str!("shaders/scene-image-fragment.glsl").into(),
                 stage: wgpu::naga::ShaderStage::Fragment,
                 defines: Default::default(),
             },

@@ -42,7 +42,7 @@
 //! wallpaper.add_plugins(MyPlugin);
 //! ```
 
-use crate::wallpaper::scene::{
+use crate::{
     asset_server::AssetServerPlugin, clear_screen::ClearScreenPlugin, cursor::CursorPlugin,
     image::ImagePlugin, material::MaterialPlugin, mesh::MeshPlugin, sprite::SpritePlugin,
     transform::TransformPlugin, video::VideoPlugin, wallpaper::Wallpaper,

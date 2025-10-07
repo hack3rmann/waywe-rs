@@ -1,5 +1,5 @@
 use super::wallpaper::Wallpaper;
-use crate::wallpaper::scene::{
+use crate::{
     Monitor,
     mesh::{CommandEncoder, SurfaceView},
     plugin::Plugin,
@@ -43,7 +43,7 @@ impl ShaderDescriptor for NoOpVertexShader {
         wgpu::ShaderModuleDescriptor {
             label: Some("noop-vertex"),
             source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("../../shaders/noop-vertex.glsl").into(),
+                shader: include_str!("shaders/noop-vertex.glsl").into(),
                 stage: wgpu::naga::ShaderStage::Vertex,
                 defines: Default::default(),
             },
@@ -58,7 +58,7 @@ impl ShaderDescriptor for NoOpFragmentShader {
         wgpu::ShaderModuleDescriptor {
             label: Some("noop-fragment"),
             source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("../../shaders/noop-fragment.glsl").into(),
+                shader: include_str!("shaders/noop-fragment.glsl").into(),
                 stage: wgpu::naga::ShaderStage::Fragment,
                 defines: Default::default(),
             },

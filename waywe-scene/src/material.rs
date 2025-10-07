@@ -14,11 +14,11 @@
 //!
 //! - [`MaterialPlugin`]: Adds material functionality to a wallpaper
 
-use super::wallpaper::Wallpaper;
-use crate::wallpaper::scene::{
+use crate::{
     asset_server::AssetId,
     assets::{Asset, RefAssetsPlugin},
     plugin::Plugin,
+    wallpaper::Wallpaper,
 };
 use bevy_ecs::{
     prelude::*,

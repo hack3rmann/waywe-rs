@@ -1,10 +1,8 @@
 pub mod default;
-pub mod scene;
 pub mod transition;
 
-use crate::wallpaper::{
-    default::{image::ImageWallpaper, test::SceneTestWallpaper, video::VideoWallpaper},
-    scene::wallpaper::{PreparedWallpaper, Wallpaper, WallpaperBuilder as _},
+use crate::wallpaper::default::{
+    image::ImageWallpaper, test::SceneTestWallpaper, video::VideoWallpaper,
 };
 use std::{path::Path, sync::Arc};
 use waywe_ipc::WallpaperType;
@@ -12,6 +10,7 @@ use waywe_runtime::{
     gpu::Wgpu,
     wayland::{MonitorId, Wayland},
 };
+use waywe_scene::wallpaper::{PreparedWallpaper, Wallpaper, WallpaperBuilder as _};
 
 #[derive(Clone, Copy, Default, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
 pub enum RenderState {

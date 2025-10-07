@@ -20,7 +20,11 @@
 //! //! - A quad mesh with the video as a texture
 //! ```
 
-use crate::wallpaper::scene::{
+use bevy_ecs::prelude::*;
+use derive_more::Deref;
+use glam::{Vec2, Vec3};
+use std::path::PathBuf;
+use waywe_scene::{
     FrameRateSetting, Monitor, Startup,
     assets::Assets,
     mesh::{Mesh, Mesh3d, MeshMaterial},
@@ -29,10 +33,6 @@ use crate::wallpaper::scene::{
     video::{Video, VideoMaterial},
     wallpaper::{Wallpaper, WallpaperBuilder},
 };
-use bevy_ecs::prelude::*;
-use derive_more::Deref;
-use glam::{Vec2, Vec3};
-use std::path::PathBuf;
 
 /// A wallpaper that plays a video.
 ///

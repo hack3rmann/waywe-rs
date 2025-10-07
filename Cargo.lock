@@ -3429,6 +3429,7 @@ dependencies = [
  "wayland-sys",
  "waywe-ipc",
  "waywe-runtime",
+ "waywe-scene",
  "wgpu",
 ]
 
@@ -3471,6 +3472,30 @@ dependencies = [
  "video",
  "wayland-client",
  "waywe-ipc",
+ "wgpu",
+]
+
+[[package]]
+name = "waywe-scene"
+version = "0.0.7"
+dependencies = [
+ "ash",
+ "bevy_ecs",
+ "bitflags 2.9.4",
+ "box_into_inner",
+ "bytemuck",
+ "crossbeam",
+ "derive_more",
+ "glam",
+ "image",
+ "itertools 0.14.0",
+ "smallvec",
+ "static_assertions",
+ "tracing",
+ "transmute-extra",
+ "variadics_please",
+ "video",
+ "waywe-runtime",
  "wgpu",
 ]
 

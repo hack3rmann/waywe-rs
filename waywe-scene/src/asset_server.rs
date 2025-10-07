@@ -1,5 +1,5 @@
 use super::wallpaper::Wallpaper;
-use crate::wallpaper::scene::{
+use crate::{
     PostStartup, PreUpdate,
     assets::{Asset, Assets, AssetsExtract},
     plugin::Plugin,

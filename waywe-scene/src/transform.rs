@@ -15,12 +15,12 @@
 //! - [`propagate_simple_transforms`]: Update simple transforms without hierarchy
 //! - [`extract_transforms`]: Extract transforms for rendering
 
-use super::wallpaper::Wallpaper;
-use crate::wallpaper::scene::{
+use crate::{
     Update,
     extract::Extract,
     plugin::Plugin,
     render::{EntityMap, SceneExtract},
+    wallpaper::Wallpaper,
 };
 use bevy_ecs::prelude::*;
 use glam::{Mat4, Quat, Vec3};

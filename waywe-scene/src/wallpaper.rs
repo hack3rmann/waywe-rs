@@ -13,7 +13,7 @@
 //! Each frame, the main world updates logic, then data is extracted to
 //! the render world, which then performs rendering.
 
-use crate::wallpaper::scene::{
+use crate::{
     DummyWorld, FrameRateSetting, MainWorld, Monitor, PostExtract, PostStartup, PostUpdate,
     PreUpdate, Startup, Time, Update, WallpaperConfig, WallpaperFlags, guess_framerate,
     mesh::{CommandEncoder, SurfaceView},

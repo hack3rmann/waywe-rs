@@ -20,7 +20,11 @@
 //! // - A quad mesh with the image as a texture
 //! ```
 
-use crate::wallpaper::scene::{
+use bevy_ecs::prelude::*;
+use derive_more::Deref;
+use glam::{Vec2, Vec3};
+use std::path::PathBuf;
+use waywe_scene::{
     FrameRateSetting, Monitor, Startup,
     assets::Assets,
     image::{Image, ImageMaterial},
@@ -29,10 +33,6 @@ use crate::wallpaper::scene::{
     transform::Transform,
     wallpaper::{Wallpaper, WallpaperBuilder},
 };
-use bevy_ecs::prelude::*;
-use derive_more::Deref;
-use glam::{Vec2, Vec3};
-use std::path::PathBuf;
 
 /// A wallpaper that displays a static image.
 ///

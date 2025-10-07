@@ -16,7 +16,7 @@
 //! - [`RenderAssetsPlugin`]: Manage GPU-ready assets of type T in the render world
 
 use super::wallpaper::Wallpaper;
-use crate::wallpaper::scene::{
+use crate::{
     PostExtract,
     asset_server::{
         AssetDropEvent, AssetHandle, AssetId, AssetIdGenerator, AssetIdHashMap, AssetServer,

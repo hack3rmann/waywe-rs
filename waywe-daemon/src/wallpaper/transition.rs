@@ -1,4 +1,3 @@
-use crate::wallpaper::scene::wallpaper::PreparedWallpaper;
 use bytemuck::{Pod, Zeroable};
 use for_sure::prelude::*;
 use glam::{UVec2, Vec2};
@@ -15,6 +14,7 @@ use waywe_runtime::{
     shaders::ShaderDescriptor,
     wayland::MonitorId,
 };
+use waywe_scene::wallpaper::PreparedWallpaper;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
 const SCREEN_TRIANGLE: [Vec2; 3] = [

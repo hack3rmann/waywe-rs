@@ -17,6 +17,7 @@ members = [
     "waywe-daemon",
     "waywe-ipc",
     "waywe-runtime",
+    "waywe-scene",
 ]
 
 [workspace.package]
@@ -36,6 +37,7 @@ wayland-server = { path = "wayland-server" }
 wayland-sys = { path = "wayland-sys" }
 waywe-ipc = { path = "waywe-ipc" }
 waywe-runtime = { path = "waywe-runtime" }
+waywe-scene = { path = "waywe-scene" }
 transmute-extra = { path = "transmute-extra" }
 thiserror = "2.0.11"
 safe-transmute = "0.11.3"

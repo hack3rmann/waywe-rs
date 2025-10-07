@@ -22,6 +22,7 @@ glam.workspace = true
 video.workspace = true
 waywe-ipc.workspace = true
 waywe-runtime.workspace = true
+waywe-scene.workspace = true
 bitflags.workspace = true
 image.workspace = true
 static_assertions.workspace = true

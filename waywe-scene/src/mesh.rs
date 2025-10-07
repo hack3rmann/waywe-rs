@@ -19,8 +19,7 @@
 //!
 //! - [`MeshPlugin`]: Adds mesh rendering functionality to a wallpaper
 
-use super::wallpaper::Wallpaper;
-use crate::wallpaper::scene::{
+use crate::{
     Monitor,
     asset_server::{AssetHandle, AssetId},
     assets::{
@@ -35,6 +34,7 @@ use crate::wallpaper::scene::{
     time::Time,
     transform::{GlobalTransform, ModelMatrix, Transform},
     video::VideoMaterial,
+    wallpaper::Wallpaper,
 };
 use bevy_ecs::{
     prelude::*,

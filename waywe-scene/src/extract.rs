@@ -1,4 +1,4 @@
-use crate::wallpaper::scene::MainWorld;
+use crate::MainWorld;
 use bevy_ecs::{
     component::Tick,
     query::FilteredAccessSet,
