@@ -70,8 +70,8 @@ impl Plugin for VideoPlugin {
             .add_systems(
                 SceneExtract,
                 extract_video_materials
-                    .in_set(MaterialSet::ExtractRender)
-                    .after(AssetsExtract::MainToRender),
+                    .after(AssetsExtract::MainToRender)
+                    .in_set(MaterialSet::ExtractRender),
             );
     }
 }

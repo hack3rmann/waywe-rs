@@ -271,7 +271,12 @@ impl RenderMesh {
         gpu.queue
             .write_buffer(&self.vertices, 0, bytemuck::cast_slice(&mesh.vertices));
         let index = gpu.queue.submit([]);
-        gpu.device.poll(wgpu::PollType::wait_for(index)).unwrap();
+        gpu.device
+            .poll(wgpu::PollType::Wait {
+                submission_index: Some(index),
+                timeout: None,
+            })
+            .unwrap();
 
         self.n_vertices = mesh.vertices.len() as u64;
     }

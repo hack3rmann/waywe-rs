@@ -10,7 +10,7 @@ repository.workspace = true
 [dependencies]
 bevy_ecs = "0.17.2"
 derive_more = { version = "2.0.1", features = ["full"] }
-wgpu = { version = "26.0.1", features = ["glsl"] }
+wgpu = { version = "27.0.1", features = ["glsl"] }
 box_into_inner = "0.1.0"
 crossbeam = "0.8.4"
 ash = "0.38.0"

@@ -8,7 +8,7 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
-wgpu = { version = "26.0.1", features = ["glsl"] }
+wgpu = { version = "27.0.1", features = ["glsl"] }
 ash = "0.38.0"
 glam.workspace = true
 waywe-ipc.workspace = true

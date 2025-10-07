@@ -119,6 +119,7 @@ impl Wgpu {
                     required_limits: adapter.limits(),
                     memory_hints,
                     trace: wgpu::Trace::Off,
+                    experimental_features: wgpu::ExperimentalFeatures::disabled(),
                 },
             )
         } {
