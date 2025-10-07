@@ -15,18 +15,18 @@
 //! };
 //!
 //! // The wallpaper will be built with:
-//! //! - Frame rate guessed from the video content
-//! //! - DefaultPlugins for basic functionality
-//! //! - A quad mesh with the video as a texture
+//! // - Frame rate guessed from the video content
+//! // - DefaultPlugins for basic functionality
+//! // - A quad mesh with the video as a texture
 //! ```
 
-use bevy_ecs::prelude::*;
 use derive_more::Deref;
-use glam::{Vec2, Vec3};
 use std::path::PathBuf;
 use waywe_scene::{
     FrameRateSetting, Monitor, Startup,
     assets::Assets,
+    ecs::prelude::*,
+    glam::{Vec2, Vec3},
     mesh::{Mesh, Mesh3d, MeshMaterial},
     plugin::DefaultPlugins,
     transform::Transform,

@@ -3427,10 +3427,21 @@ dependencies = [
  "wayland-client",
  "wayland-server",
  "wayland-sys",
+ "waywe-default-wallpapers",
  "waywe-ipc",
  "waywe-runtime",
  "waywe-scene",
  "wgpu",
+]
+
+[[package]]
+name = "waywe-default-wallpapers"
+version = "0.0.7"
+dependencies = [
+ "bevy_ecs",
+ "derive_more",
+ "image",
+ "waywe-scene",
 ]
 
 [[package]]

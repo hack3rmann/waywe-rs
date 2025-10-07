@@ -20,19 +20,9 @@
 //! // - A quad mesh with the image as a texture
 //! ```
 
-use bevy_ecs::prelude::*;
 use derive_more::Deref;
-use glam::{Vec2, Vec3};
 use std::path::PathBuf;
-use waywe_scene::{
-    FrameRateSetting, Monitor, Startup,
-    assets::Assets,
-    image::{Image, ImageMaterial},
-    mesh::{Mesh, Mesh3d, MeshMaterial},
-    plugin::DefaultPlugins,
-    transform::Transform,
-    wallpaper::{Wallpaper, WallpaperBuilder},
-};
+use waywe_scene::prelude::*;
 
 /// A wallpaper that displays a static image.
 ///

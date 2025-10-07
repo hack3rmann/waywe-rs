@@ -23,6 +23,7 @@ video.workspace = true
 waywe-ipc.workspace = true
 waywe-runtime.workspace = true
 waywe-scene.workspace = true
+waywe-default-wallpapers.workspace = true
 bitflags.workspace = true
 image.workspace = true
 static_assertions.workspace = true
@@ -35,18 +36,18 @@ wayland-server.workspace = true
 fxhash.workspace = true
 rayon.workspace = true
 thiserror.workspace = true
+derive_more.workspace = true
 raw-window-handle = "0.6.2"
 wgpu = { version = "26.0.1", features = ["glsl"] }
 ash = "0.38.0"
 daemonize = "0.5.0"
 for-sure = "0.1.1"
 reusable-box = "0.1.0"
-bevy_ecs = "0.17.2"
-derive_more = { version = "2.0.1", features = ["full"] }
 itertools = "0.14.0"
 variadics_please = "1.1.0"
 crossbeam = "0.8.4"
 box_into_inner = "0.1.0"
+bevy_ecs = "0.17.2"
 
 [dev-dependencies]
 libc = "0.2.171"

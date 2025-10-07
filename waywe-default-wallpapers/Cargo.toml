@@ -1,0 +1,14 @@
+[package]
+name = "waywe-default-wallpapers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+bevy_ecs = "0.17.2"
+waywe-scene.workspace = true
+derive_more.workspace = true
+image.workspace = true

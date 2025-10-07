@@ -19,23 +19,9 @@
 //! ```
 
 use bevy_ecs::prelude::*;
-use glam::{Quat, Vec2, Vec3};
 use smallvec::{SmallVec, smallvec};
 use std::time::Duration;
-use waywe_scene::{
-    Monitor, Startup, Update,
-    asset_server::{AssetHandle, AssetServer},
-    assets::Assets,
-    cursor::Cursor,
-    image::{Image, ImageMaterial},
-    mesh::{Mesh, Mesh3d, MeshMaterial, Vertex},
-    plugin::DefaultPlugins,
-    sprite::Sprite,
-    time::Time,
-    transform::Transform,
-    video::{Video, VideoMaterial},
-    wallpaper::{Wallpaper, WallpaperBuilder},
-};
+use waywe_scene::prelude::*;
 
 /// A test wallpaper with multiple meshes and animations.
 ///

@@ -15,6 +15,7 @@ members = [
     "wayland-sys",
     "waywe",
     "waywe-daemon",
+    "waywe-default-wallpapers",
     "waywe-ipc",
     "waywe-runtime",
     "waywe-scene",
@@ -38,6 +39,7 @@ wayland-sys = { path = "wayland-sys" }
 waywe-ipc = { path = "waywe-ipc" }
 waywe-runtime = { path = "waywe-runtime" }
 waywe-scene = { path = "waywe-scene" }
+waywe-default-wallpapers = { path = "waywe-default-wallpapers" }
 transmute-extra = { path = "transmute-extra" }
 thiserror = "2.0.11"
 safe-transmute = "0.11.3"
@@ -64,3 +66,4 @@ toml = "0.8.23"
 fxhash = "0.2.1"
 box_into_inner = "0.1.0"
 futures-util = { version = "0.3.31", features = ["alloc"] }
+derive_more = { version = "2.0.1", features = ["full"] }

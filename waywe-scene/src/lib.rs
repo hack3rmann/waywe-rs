@@ -136,6 +136,26 @@ use std::time::Duration;
 use waywe_runtime::{frame::FrameInfo, wayland::MonitorId};
 
 pub use bevy_ecs as ecs;
+pub use glam;
+
+pub mod prelude {
+    pub use crate::{
+        FrameRateSetting, Monitor, Startup, Update,
+        asset_server::{AssetHandle, AssetServer},
+        assets::Assets,
+        cursor::Cursor,
+        image::{Image, ImageMaterial},
+        mesh::{Mesh, Mesh3d, MeshMaterial, Vertex},
+        plugin::DefaultPlugins,
+        sprite::Sprite,
+        time::Time,
+        transform::Transform,
+        video::{Video, VideoMaterial},
+        wallpaper::{Wallpaper, WallpaperBuilder},
+    };
+    pub use bevy_ecs::prelude::*;
+    pub use glam::*;
+}
 
 /// Frame rate configuration for the wallpaper.
 ///
