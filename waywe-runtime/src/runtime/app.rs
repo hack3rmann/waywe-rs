@@ -3,6 +3,7 @@ use crate::runtime::{
     event::{DynEventHandler, Event, EventHandler},
     frame::{FrameError, FrameInfo},
 };
+use futures_util::Future;
 use reusable_box::{ReusableBox, ReusedBoxFuture};
 use std::{any::Any, ptr::NonNull};
 

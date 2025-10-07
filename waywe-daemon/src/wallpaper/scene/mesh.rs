@@ -20,24 +20,21 @@
 //! - [`MeshPlugin`]: Adds mesh rendering functionality to a wallpaper
 
 use super::wallpaper::Wallpaper;
-use crate::{
-    runtime::{gpu::Wgpu, wayland::MonitorId},
-    wallpaper::scene::{
-        Monitor,
-        asset_server::{AssetHandle, AssetId},
-        assets::{
-            Asset, AssetsExtract, AssetsPlugin, RefAssets, RefAssetsPlugin,
-            RefAssetsRefDependencyPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin,
-        },
-        extract::Extract,
-        image::ImageMaterial,
-        material::{Material, MaterialSet, RenderMaterial, RenderMaterialId},
-        plugin::Plugin,
-        render::{EntityMap, MainEntity, Render, RenderGpu, RenderStage, SceneExtract},
-        time::Time,
-        transform::{GlobalTransform, ModelMatrix, Transform},
-        video::VideoMaterial,
+use crate::wallpaper::scene::{
+    Monitor,
+    asset_server::{AssetHandle, AssetId},
+    assets::{
+        Asset, AssetsExtract, AssetsPlugin, RefAssets, RefAssetsPlugin,
+        RefAssetsRefDependencyPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin,
     },
+    extract::Extract,
+    image::ImageMaterial,
+    material::{Material, MaterialSet, RenderMaterial, RenderMaterialId},
+    plugin::Plugin,
+    render::{EntityMap, MainEntity, Render, RenderGpu, RenderStage, SceneExtract},
+    time::Time,
+    transform::{GlobalTransform, ModelMatrix, Transform},
+    video::VideoMaterial,
 };
 use bevy_ecs::{
     prelude::*,
@@ -53,6 +50,7 @@ use std::{
     ops::{Deref, DerefMut},
     ptr::NonNull,
 };
+use waywe_runtime::runtime::{gpu::Wgpu, wayland::MonitorId};
 
 /// Plugin for mesh rendering functionality.
 ///

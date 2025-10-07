@@ -26,3 +26,4 @@ thiserror.workspace = true
 box_into_inner.workspace = true
 video.workspace = true
 wayland-client.workspace = true
+futures-util.workspace = true

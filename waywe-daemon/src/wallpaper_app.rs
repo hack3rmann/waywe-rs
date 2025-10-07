@@ -1,11 +1,5 @@
 use crate::{
-    app::App,
-    event::{EventHandler, Handle, TryReplicate},
-    event_loop::{FrameError, FrameInfo, WallpaperTarget},
-    runtime::{
-        Runtime, RuntimeFeatures,
-        wayland::{MonitorId, MonitorMap, WaylandEvent},
-    },
+    event_loop::WallpaperTarget,
     wallpaper::{
         self,
         scene::{cursor::CursorMoved, wallpaper::PreparedWallpaper},
@@ -13,14 +7,23 @@ use crate::{
     },
 };
 use for_sure::prelude::*;
-use runtime::{
+use smallvec::{SmallVec, smallvec};
+use std::{collections::btree_map::Entry, path::PathBuf, sync::Arc};
+use tracing::{debug, error};
+use waywe_ipc::{
     WallpaperType,
     config::Config,
     profile::{Monitor, SetupProfile},
 };
-use smallvec::{SmallVec, smallvec};
-use std::{collections::btree_map::Entry, path::PathBuf, sync::Arc};
-use tracing::{debug, error};
+use waywe_runtime::runtime::{
+    Runtime, RuntimeFeatures,
+    frame::{FrameError, FrameInfo},
+    wayland::{MonitorId, MonitorMap, WaylandEvent},
+};
+use waywe_runtime::runtime::{
+    app::App,
+    event::{EventHandler, Handle, TryReplicate},
+};
 
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum WallpaperState {

@@ -13,24 +13,22 @@
 //! Each frame, the main world updates logic, then data is extracted to
 //! the render world, which then performs rendering.
 
-use crate::{
-    event_loop::FrameInfo,
-    runtime::{
-        gpu::Wgpu,
-        wayland::{MonitorId, Wayland},
-    },
-    wallpaper::scene::{
-        DummyWorld, FrameRateSetting, MainWorld, Monitor, PostExtract, PostStartup, PostUpdate,
-        PreUpdate, Startup, Time, Update, WallpaperConfig, WallpaperFlags, guess_framerate,
-        mesh::{CommandEncoder, SurfaceView},
-        plugin::PluginGroup,
-        render::{EntityMap, Render, RenderGpu, RenderStage, SceneExtract},
-        subapp::EcsApp,
-        time::update_time,
-    },
+use crate::wallpaper::scene::{
+    DummyWorld, FrameRateSetting, MainWorld, Monitor, PostExtract, PostStartup, PostUpdate,
+    PreUpdate, Startup, Time, Update, WallpaperConfig, WallpaperFlags, guess_framerate,
+    mesh::{CommandEncoder, SurfaceView},
+    plugin::PluginGroup,
+    render::{EntityMap, Render, RenderGpu, RenderStage, SceneExtract},
+    subapp::EcsApp,
+    time::update_time,
 };
 use bevy_ecs::prelude::*;
 use std::{mem, sync::Arc, thread};
+use waywe_runtime::runtime::frame::FrameInfo;
+use waywe_runtime::runtime::{
+    gpu::Wgpu,
+    wayland::{MonitorId, Wayland},
+};
 
 /// Main wallpaper controller.
 ///

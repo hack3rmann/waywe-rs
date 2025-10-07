@@ -127,16 +127,14 @@ pub mod transform;
 pub mod video;
 pub mod wallpaper;
 
-use crate::{
-    event_loop::FrameInfo,
-    runtime::wayland::MonitorId,
-    wallpaper::scene::{assets::Assets, time::Time, video::Video},
-};
+use crate::wallpaper::scene::{assets::Assets, time::Time, video::Video};
 use bevy_ecs::{prelude::*, schedule::ScheduleLabel};
 use bitflags::bitflags;
 use derive_more::{Deref, DerefMut};
 use glam::UVec2;
 use std::time::Duration;
+use waywe_runtime::runtime::frame::FrameInfo;
+use waywe_runtime::runtime::wayland::MonitorId;
 
 /// Frame rate configuration for the wallpaper.
 ///

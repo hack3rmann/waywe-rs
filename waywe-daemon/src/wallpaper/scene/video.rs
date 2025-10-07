@@ -14,21 +14,18 @@
 //! - [`VideoPlugin`]: Adds video functionality to a wallpaper
 
 use super::wallpaper::Wallpaper;
-use crate::{
-    runtime::{gpu::Wgpu, shaders::ShaderDescriptor},
-    wallpaper::scene::{
-        Time, Update,
-        asset_server::{AssetHandle, AssetServerLoadPlugin, Load},
-        assets::{
-            Asset, Assets, AssetsExtract, AssetsPlugin, RefAssets, RefAssetsDependencyPlugin,
-            RenderAsset, RenderAssets, RenderAssetsPlugin,
-        },
-        extract::Extract,
-        image::SceneImageVertexShader,
-        material::{AsBindGroup, Material, MaterialSet, RenderMaterial, VertexFragmentShader},
-        plugin::Plugin,
-        render::{RenderGpu, SceneExtract},
+use crate::wallpaper::scene::{
+    Time, Update,
+    asset_server::{AssetHandle, AssetServerLoadPlugin, Load},
+    assets::{
+        Asset, Assets, AssetsExtract, AssetsPlugin, RefAssets, RefAssetsDependencyPlugin,
+        RenderAsset, RenderAssets, RenderAssetsPlugin,
     },
+    extract::Extract,
+    image::SceneImageVertexShader,
+    material::{AsBindGroup, Material, MaterialSet, RenderMaterial, VertexFragmentShader},
+    plugin::Plugin,
+    render::{RenderGpu, SceneExtract},
 };
 use ash::vk::{self, PhysicalDeviceMemoryProperties};
 use bevy_ecs::{
@@ -48,6 +45,7 @@ use video::{
     BackendError, Codec, CodecContext, FormatContext, Frame, MediaType, Packet, RatioI32,
     VideoPixelFormat, acceleration::VaSurfaceHandle,
 };
+use waywe_runtime::runtime::{gpu::Wgpu, shaders::ShaderDescriptor};
 use wgpu::wgc::api;
 
 /// Plugin for video functionality.

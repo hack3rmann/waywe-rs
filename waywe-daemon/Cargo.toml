@@ -45,6 +45,7 @@ derive_more = { version = "2.0.1", features = ["full"] }
 itertools = "0.14.0"
 variadics_please = "1.1.0"
 crossbeam = "0.8.4"
+box_into_inner = "0.1.0"
 
 [dev-dependencies]
 libc = "0.2.171"

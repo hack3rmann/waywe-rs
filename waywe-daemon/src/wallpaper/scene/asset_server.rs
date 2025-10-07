@@ -1,17 +1,15 @@
 use super::wallpaper::Wallpaper;
-use crate::{
-    box_ext::BoxExt,
-    wallpaper::scene::{
-        PostStartup, PreUpdate,
-        assets::{Asset, Assets, AssetsExtract},
-        plugin::Plugin,
-        render::SceneExtract,
-    },
+use crate::wallpaper::scene::{
+    PostStartup, PreUpdate,
+    assets::{Asset, Assets, AssetsExtract},
+    plugin::Plugin,
+    render::SceneExtract,
 };
 use bevy_ecs::{
     entity::{EntityHash, EntityHasher},
     prelude::*,
 };
+use box_into_inner::IntoInner;
 use crossbeam::channel::Sender;
 use smallvec::SmallVec;
 use std::{
@@ -165,10 +163,7 @@ pub struct DynamicAsset {
 impl DynamicAsset {
     pub fn downcast_into<A: Asset>(self) -> Result<(AssetId, A), Self> {
         match self.data.downcast::<A>() {
-            Ok(data) => Ok({
-                let asset = data.into_inner();
-                (self.id, asset)
-            }),
+            Ok(data) => Ok((self.id, data.into_inner())),
             Err(data) => Err(Self { id: self.id, data }),
         }
     }

@@ -61,3 +61,4 @@ serde = { version = "1.0.219", features = ["derive"] }
 toml = "0.8.23"
 fxhash = "0.2.1"
 box_into_inner = "0.1.0"
+futures-util = { version = "0.3.31", features = ["alloc"] }

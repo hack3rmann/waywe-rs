@@ -1,17 +1,19 @@
-use crate::{
-    event_loop::{FrameError, FrameInfo},
-    runtime::{gpu::Wgpu, shaders::ShaderDescriptor, wayland::MonitorId},
-    wallpaper::scene::wallpaper::PreparedWallpaper,
-};
+use crate::wallpaper::scene::wallpaper::PreparedWallpaper;
 use bytemuck::{Pod, Zeroable};
 use for_sure::prelude::*;
 use glam::{UVec2, Vec2};
-use runtime::config::{AnimationConfig, AnimationDirection};
 use smallvec::SmallVec;
 use std::{
     collections::VecDeque,
     mem,
     time::{Duration, Instant},
+};
+use waywe_ipc::config::{AnimationConfig, AnimationDirection};
+use waywe_runtime::runtime::{
+    frame::{FrameError, FrameInfo},
+    gpu::Wgpu,
+    shaders::ShaderDescriptor,
+    wayland::MonitorId,
 };
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 

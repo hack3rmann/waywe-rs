@@ -6,7 +6,6 @@ pub mod task_pool;
 pub mod wallpaper;
 pub mod wallpaper_app;
 
-use ::runtime::config::Config;
 use clap::Parser;
 use detach::detach;
 use event_loop::EventLoop;
@@ -17,6 +16,7 @@ use std::{
 use tracing::error;
 use tracing_subscriber::EnvFilter;
 use wallpaper_app::WallpaperApp;
+use waywe_ipc::config::Config;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]

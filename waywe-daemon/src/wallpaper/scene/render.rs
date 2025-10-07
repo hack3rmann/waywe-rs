@@ -3,10 +3,10 @@
 //! This module provides the core components and schedules for the render world.
 //! It handles GPU operations, entity mapping between worlds, and monitor events.
 
-use crate::runtime::gpu::Wgpu;
 use bevy_ecs::{entity::EntityHashMap, prelude::*, schedule::ScheduleLabel};
 use derive_more::{Deref, DerefMut};
 use std::sync::Arc;
+use waywe_runtime::runtime::gpu::Wgpu;
 
 /// Links an entity in the render world to its corresponding entity in the main world.
 #[derive(Component, Clone, Copy)]
