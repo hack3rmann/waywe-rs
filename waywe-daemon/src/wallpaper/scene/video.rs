@@ -458,9 +458,8 @@ impl RenderVideo {
             vk_free_memory(vk_device_raw, device_memory, ptr::null());
         });
 
-        let texture_hal = unsafe {
-            wgpu::hal::vulkan::Device::texture_from_raw(vk_image, &texture_desc, Some(destructor))
-        };
+        let texture_hal =
+            unsafe { device.texture_from_raw(vk_image, &texture_desc, Some(destructor)) };
 
         unsafe {
             gpu.device.create_texture_from_hal::<api::Vulkan>(
