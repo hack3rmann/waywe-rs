@@ -3115,7 +3115,6 @@ name = "unite-json"
 version = "0.0.7"
 dependencies = [
  "clap",
- "serde",
  "serde_json",
  "tracing",
 ]
@@ -3314,10 +3313,7 @@ name = "wayland-client"
 version = "0.0.7"
 dependencies = [
  "bitflags 2.9.4",
- "bytemuck",
  "fxhash",
- "glam",
- "paste",
  "phf",
  "raw-window-handle",
  "rustix",
@@ -3357,7 +3353,6 @@ dependencies = [
  "rustix",
  "thiserror 2.0.17",
  "tracing",
- "wayland-client",
  "wayland-sys",
 ]
 
@@ -3377,7 +3372,6 @@ version = "0.0.7"
 dependencies = [
  "anyhow",
  "clap",
- "glam",
  "image",
  "rustix",
  "thiserror 2.0.17",
@@ -3392,37 +3386,24 @@ dependencies = [
 name = "waywe-daemon"
 version = "0.0.7"
 dependencies = [
- "ash",
  "bevy_ecs",
- "bincode",
- "bitflags 2.9.4",
- "box_into_inner",
  "bytemuck",
  "clap",
- "crossbeam",
  "daemonize",
- "derive_more",
  "for-sure",
- "fxhash",
  "glam",
  "image",
- "itertools 0.14.0",
  "libc",
  "raw-window-handle",
- "rayon",
- "reusable-box",
  "rustix",
  "scopeguard",
  "smallvec",
- "static_assertions",
  "thiserror 2.0.17",
  "tokio",
  "toml",
  "tracing",
  "tracing-subscriber",
  "tracing-test",
- "transmute-extra",
- "variadics_please",
  "video",
  "wayland-client",
  "wayland-server",
@@ -3479,7 +3460,6 @@ dependencies = [
  "smallvec",
  "thiserror 2.0.17",
  "tracing",
- "tracing-subscriber",
  "video",
  "wayland-client",
  "waywe-ipc",

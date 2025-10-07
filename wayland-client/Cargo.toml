@@ -8,19 +8,16 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
-bytemuck = { version = "1.21.0", features = ["extern_crate_alloc", "derive"] }
 raw-window-handle = "0.6.2"
 rustix.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 bitflags = "2.8.0"
 static_assertions.workspace = true
-glam = "0.30.0"
 wayland-scanner = { path = "../wayland-scanner" }
 wayland-sys.workspace = true
 phf = { version = "0.11.3", features = ["macros", "phf_macros"] }
 fxhash.workspace = true
-paste.workspace = true
 va_list = "0.2.0"
 smallvec = { version = "1.14.0", features = ["union", "serde", "const_generics", "const_new"], optional = true }
 

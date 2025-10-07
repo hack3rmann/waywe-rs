@@ -8,7 +8,6 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
-wayland-client.workspace = true
 wayland-sys.workspace = true
 tracing.workspace = true
 rustix.workspace = true

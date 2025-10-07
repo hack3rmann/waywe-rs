@@ -20,6 +20,7 @@
 //! // - A quad mesh with the image as a texture
 //! ```
 
+use bevy_ecs::prelude::*;
 use derive_more::Deref;
 use std::path::PathBuf;
 use waywe_scene::prelude::*;
