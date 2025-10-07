@@ -15,18 +15,16 @@
 //! - [`MaterialPlugin`]: Adds material functionality to a wallpaper
 
 use super::wallpaper::Wallpaper;
-use crate::{
-    runtime::{gpu::Wgpu, shaders::ShaderDescriptor},
-    wallpaper::scene::{
-        asset_server::AssetId,
-        assets::{Asset, RefAssetsPlugin},
-        plugin::Plugin,
-    },
+use crate::wallpaper::scene::{
+    asset_server::AssetId,
+    assets::{Asset, RefAssetsPlugin},
+    plugin::Plugin,
 };
 use bevy_ecs::{
     prelude::*,
     system::{SystemParam, SystemParamItem},
 };
+use waywe_runtime::runtime::{gpu::Wgpu, shaders::ShaderDescriptor};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, PartialOrd, Ord, Hash, SystemSet)]
 pub enum MaterialSet {

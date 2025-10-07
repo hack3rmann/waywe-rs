@@ -5,7 +5,7 @@ members = [
     "dxt",
     "extractor",
     "project-parser",
-    "runtime",
+    "waywe-ipc",
     "transmute-extra",
     "unite-json",
     "video",
@@ -15,6 +15,8 @@ members = [
     "wayland-sys",
     "waywe",
     "waywe-daemon",
+    "waywe-ipc",
+    "waywe-runtime",
 ]
 
 [workspace.package]
@@ -32,7 +34,8 @@ repository = "https://www.github.com/hack3rmann/waywe-rs"
 wayland-client = { path = "wayland-client", features = ["smallvec"] }
 wayland-server = { path = "wayland-server" }
 wayland-sys = { path = "wayland-sys" }
-runtime = { path = "runtime" }
+waywe-ipc = { path = "waywe-ipc" }
+waywe-runtime = { path = "waywe-runtime" }
 transmute-extra = { path = "transmute-extra" }
 thiserror = "2.0.11"
 safe-transmute = "0.11.3"
@@ -57,3 +60,4 @@ tokio = { version = "1.43.0", features = ["full"] }
 serde = { version = "1.0.219", features = ["derive"] }
 toml = "0.8.23"
 fxhash = "0.2.1"
+box_into_inner = "0.1.0"

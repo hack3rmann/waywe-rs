@@ -1,4 +1,4 @@
-use crate::event::EventEmitter;
+use crate::runtime::event::EventEmitter;
 use glam::UVec2;
 use raw_window_handle::{
     HasDisplayHandle as _, RawDisplayHandle, RawWindowHandle, WaylandWindowHandle,

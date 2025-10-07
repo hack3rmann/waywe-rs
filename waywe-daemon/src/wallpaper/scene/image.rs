@@ -16,25 +16,23 @@
 use std::path::Path;
 
 use super::wallpaper::Wallpaper;
-use crate::{
-    runtime::{gpu::Wgpu, shaders::ShaderDescriptor},
-    wallpaper::scene::{
-        asset_server::{AssetHandle, AssetServerLoadPlugin, Load},
-        assets::{
-            Asset, Assets, AssetsExtract, AssetsPlugin, RefAssets, RefAssetsDependencyPlugin,
-            RenderAsset, RenderAssets, RenderAssetsPlugin,
-        },
-        extract::Extract,
-        material::{AsBindGroup, Material, MaterialSet, RenderMaterial, VertexFragmentShader},
-        plugin::Plugin,
-        render::{RenderGpu, SceneExtract},
+use crate::wallpaper::scene::{
+    asset_server::{AssetHandle, AssetServerLoadPlugin, Load},
+    assets::{
+        Asset, Assets, AssetsExtract, AssetsPlugin, RefAssets, RefAssetsDependencyPlugin,
+        RenderAsset, RenderAssets, RenderAssetsPlugin,
     },
+    extract::Extract,
+    material::{AsBindGroup, Material, MaterialSet, RenderMaterial, VertexFragmentShader},
+    plugin::Plugin,
+    render::{RenderGpu, SceneExtract},
 };
 use bevy_ecs::{
     prelude::*,
     system::{StaticSystemParam, SystemParamItem, lifetimeless::SRes},
 };
 use derive_more::{Deref, DerefMut};
+use waywe_runtime::runtime::{gpu::Wgpu, shaders::ShaderDescriptor};
 use wgpu::util::DeviceExt;
 
 /// Plugin for image functionality.

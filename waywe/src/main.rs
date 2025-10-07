@@ -10,8 +10,8 @@ use crate::{
 };
 use anyhow::{Context as _, bail};
 use clap::Parser as _;
-use runtime::{DaemonCommand, IpcSocket, ipc::Client};
 use rustix::io::Errno;
+use waywe_ipc::{DaemonCommand, IpcSocket, ipc::Client};
 
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();

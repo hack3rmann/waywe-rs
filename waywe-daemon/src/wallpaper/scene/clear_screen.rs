@@ -1,16 +1,14 @@
 use super::wallpaper::Wallpaper;
-use crate::{
-    runtime::{gpu::Wgpu, shaders::ShaderDescriptor, wayland::MonitorId},
-    wallpaper::scene::{
-        Monitor,
-        mesh::{CommandEncoder, SurfaceView},
-        plugin::Plugin,
-        render::{Render, RenderGpu, RenderStage},
-    },
+use crate::wallpaper::scene::{
+    Monitor,
+    mesh::{CommandEncoder, SurfaceView},
+    plugin::Plugin,
+    render::{Render, RenderGpu, RenderStage},
 };
 use bevy_ecs::prelude::*;
 use derive_more::Deref;
 use glam::Vec3;
+use waywe_runtime::runtime::{gpu::Wgpu, shaders::ShaderDescriptor, wayland::MonitorId};
 
 pub struct ClearScreenPlugin;
 

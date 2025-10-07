@@ -1,8 +1,4 @@
 use image::{DynamicImage, ImageError, ImageReader, RgbImage};
-use runtime::{
-    DaemonCommand, WallpaperType,
-    profile::{SetupProfile, SetupProfileError},
-};
 use std::{
     ffi::CStr,
     io,
@@ -15,6 +11,10 @@ use transmute_extra::pathbuf_into_cstring;
 use video::{
     BackendError, Codec, CodecContext, FormatContext, Frame, MediaType, ScalerFlags, ScalerFormat,
     SoftwareScaler, VideoPixelFormat,
+};
+use waywe_ipc::{
+    DaemonCommand, WallpaperType,
+    profile::{SetupProfile, SetupProfileError},
 };
 
 #[derive(Debug, Error)]
