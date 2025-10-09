@@ -1,8 +1,5 @@
-pub mod app;
 pub mod detach;
-pub mod event;
 pub mod event_loop;
-pub mod task_pool;
 pub mod wallpaper;
 pub mod wallpaper_app;
 
