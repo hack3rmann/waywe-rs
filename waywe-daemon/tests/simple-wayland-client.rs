@@ -363,6 +363,7 @@ fn simple_wayland_client() {
     let (device, wgpu_queue) = runtime.block_on(async {
         adapter
             .request_device(&wgpu::DeviceDescriptor {
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
                 required_features: wgpu::Features::empty(),
                 label: None,
                 required_limits: adapter.limits(),

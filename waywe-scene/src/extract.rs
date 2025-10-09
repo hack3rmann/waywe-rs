@@ -21,31 +21,12 @@ use std::ops::{Deref, DerefMut};
 ///
 /// ## Context
 ///
-/// [`ExtractSchedule`] is used to extract (move) data from the simulation world ([`MainWorld`]) to the
+/// `SceneExtract` is used to extract (move) data from the simulation world ([`MainWorld`]) to the
 /// render world. The render world drives rendering each frame (generally to a `Window`).
 /// This design is used to allow performing calculations related to rendering a prior frame at the same
 /// time as the next frame is simulated, which increases throughput (FPS).
 ///
-/// [`Extract`] is used to get data from the main world during [`ExtractSchedule`].
-///
-/// ## Examples
-///
-/// ```
-/// use bevy_ecs::prelude::*;
-/// use bevy_render::Extract;
-/// use bevy_render::sync_world::RenderEntity;
-/// # #[derive(Component)]
-/// // Do make sure to sync the cloud entities before extracting them.
-/// # struct Cloud;
-/// fn extract_clouds(mut commands: Commands, clouds: Extract<Query<RenderEntity, With<Cloud>>>) {
-///     for cloud in &clouds {
-///         commands.entity(cloud).insert(Cloud);
-///     }
-/// }
-/// ```
-///
-/// [`ExtractSchedule`]: crate::ExtractSchedule
-/// [Window]: bevy_window::Window
+/// [`Extract`] is used to get data from the main world during `SceneExtract`.
 pub struct Extract<'w, 's, P>
 where
     P: ReadOnlySystemParam + 'static,

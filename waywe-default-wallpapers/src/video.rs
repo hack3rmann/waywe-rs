@@ -2,23 +2,6 @@
 //!
 //! This module provides an implementation for playing a video as a wallpaper.
 //! The video is automatically scaled to fit the screen while maintaining its aspect ratio.
-//!
-//! # Usage
-//!
-//! ```rust
-//! use waywe_daemon::wallpaper::default::video::VideoWallpaper;
-//! use waywe_daemon::wallpaper::scene::wallpaper::Wallpaper;
-//! use std::path::PathBuf;
-//!
-//! let video_wallpaper = VideoWallpaper {
-//!     path: PathBuf::from("path/to/video.mp4"),
-//! };
-//!
-//! // The wallpaper will be built with:
-//! // - Frame rate guessed from the video content
-//! // - DefaultPlugins for basic functionality
-//! // - A quad mesh with the video as a texture
-//! ```
 
 use bevy_ecs::prelude::*;
 use derive_more::Deref;

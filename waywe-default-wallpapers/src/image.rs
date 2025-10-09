@@ -2,23 +2,6 @@
 //!
 //! This module provides an implementation for displaying a static image as a wallpaper.
 //! The image is automatically scaled to fit the screen while maintaining its aspect ratio.
-//!
-//! # Usage
-//!
-//! ```rust
-//! use waywe_daemon::wallpaper::default::image::ImageWallpaper;
-//! use waywe_daemon::wallpaper::scene::wallpaper::Wallpaper;
-//! use std::path::PathBuf;
-//!
-//! let image_wallpaper = ImageWallpaper {
-//!     path: PathBuf::from("path/to/image.png"),
-//! };
-//!
-//! // The wallpaper will be built with:
-//! // - No update schedule (static wallpaper)
-//! // - DefaultPlugins for basic functionality
-//! // - A quad mesh with the image as a texture
-//! ```
 
 use bevy_ecs::prelude::*;
 use derive_more::Deref;

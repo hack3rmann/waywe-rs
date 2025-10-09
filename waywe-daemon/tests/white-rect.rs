@@ -106,6 +106,7 @@ async fn use_wgpu_to_draw_anything() {
 
     let (device, wgpu_queue) = adapter
         .request_device(&wgpu::DeviceDescriptor {
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
             required_features: wgpu::Features::empty(),
             label: None,
             required_limits: adapter.limits(),

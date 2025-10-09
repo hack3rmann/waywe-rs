@@ -33,46 +33,17 @@
 //! 3. Spawn entities with components in the main world
 //! 4. Run the frame loop with [`PreparedWallpaper::frame`](wallpaper::PreparedWallpaper::frame)
 //!
-//! ## Example
-//!
-//! ```rust
-//! use waywe_daemon::wallpaper::scene::{
-//!     wallpaper::Wallpaper,
-//!     plugin::DefaultPlugins,
-//!     image::Image,
-//!     assets::Assets,
-//! };
-//! use glam::Vec3;
-//!
-//! // Create a new wallpaper
-//! // let mut wallpaper = Wallpaper::new(gpu, wayland, monitor_id);
-//!
-//! // Add the default plugins
-//! // wallpaper.add_plugins(DefaultPlugins);
-//!
-//! // Spawn an entity with an image
-//! // let image_handle = wallpaper.main.resource_mut::<Assets<Image>>()
-//! //    .add(Image::new_white_1x1());
-//!
-//! // wallpaper.main.world.spawn(image_handle);
-//!
-//! // Prepare for rendering
-//! // let mut prepared = PreparedWallpaper::prepare(wallpaper);
-//!
-//! // Run the frame loop
-//! // loop {
-//! //    prepared.frame()?;
-//! // }
-//! ```
-//!
 //! # Custom Plugins
 //!
 //! You can create custom functionality by implementing the [`Plugin`](plugin::Plugin) trait:
 //!
 //! ```rust
-//! use waywe_daemon::wallpaper::scene::{
+//! use waywe_scene::{
+//!     Update,
 //!     plugin::Plugin,
 //!     wallpaper::Wallpaper,
+//!     ecs::prelude::Res,
+//!     time::Time,
 //! };
 //!
 //! struct MyCustomPlugin;
@@ -80,8 +51,12 @@
 //! impl Plugin for MyCustomPlugin {
 //!     fn build(&self, wallpaper: &mut Wallpaper) {
 //!         // Add your systems and resources here
-//!         // wallpaper.main.add_systems(Update, my_system);
+//!         wallpaper.main.add_systems(Update, my_system);
 //!     }
+//! }
+//!
+//! fn my_system(time: Res<Time>) {
+//!     println!("Time: {}", time.elapsed.as_secs_f32());
 //! }
 //! ```
 //!

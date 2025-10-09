@@ -22,10 +22,7 @@
 //! To create a custom plugin, implement the [`Plugin`] trait:
 //!
 //! ```rust
-//! use waywe_daemon::wallpaper::scene::{
-//!     plugin::Plugin,
-//!     wallpaper::Wallpaper,
-//! };
+//! use waywe_scene::{plugin::Plugin, wallpaper::Wallpaper};
 //!
 //! pub struct MyPlugin;
 //!
@@ -38,7 +35,7 @@
 //!
 //! Plugins can then be added to a wallpaper:
 //!
-//! ```rust
+//! ```rust,ignore
 //! wallpaper.add_plugins(MyPlugin);
 //! ```
 
