@@ -136,9 +136,6 @@ pub struct WallpaperTransitionPipeline {
 
 impl WallpaperTransitionPipeline {
     pub fn new(gpu: &Wgpu, monitor_id: MonitorId) -> Self {
-        gpu.require_shader::<FullScreenVertexShader>();
-        gpu.require_shader::<FullScreenFragmentShader>();
-
         let vertices = gpu.device.create_buffer_init(&BufferInitDescriptor {
             label: Some("fullscreen-triangle"),
             contents: bytemuck::cast_slice(&SCREEN_TRIANGLE),
@@ -201,7 +198,7 @@ impl WallpaperTransitionPipeline {
                 label: Some("image-pipeline"),
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
-                    module: &gpu.shader_cache.get::<FullScreenVertexShader>().unwrap(),
+                    module: &gpu.require_shader::<FullScreenVertexShader>(),
                     entry_point: Some("main"),
                     compilation_options: wgpu::PipelineCompilationOptions {
                         constants: &[],
@@ -218,7 +215,7 @@ impl WallpaperTransitionPipeline {
                     }],
                 },
                 fragment: Some(wgpu::FragmentState {
-                    module: &gpu.shader_cache.get::<FullScreenFragmentShader>().unwrap(),
+                    module: &gpu.require_shader::<FullScreenFragmentShader>(),
                     entry_point: Some("main"),
                     compilation_options: wgpu::PipelineCompilationOptions {
                         constants: &[],

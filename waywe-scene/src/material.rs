@@ -63,20 +63,9 @@ pub trait Material: Asset + AsBindGroup {
     type FragmentShader: ShaderDescriptor;
 
     fn create_shader(gpu: &Wgpu) -> VertexFragmentShader {
-        gpu.require_shader::<Self::VertexShader>();
-        gpu.require_shader::<Self::FragmentShader>();
-
         VertexFragmentShader {
-            vertex: gpu
-                .shader_cache
-                .get::<Self::VertexShader>()
-                .unwrap()
-                .clone(),
-            fragment: gpu
-                .shader_cache
-                .get::<Self::FragmentShader>()
-                .unwrap()
-                .clone(),
+            vertex: gpu.require_shader::<Self::VertexShader>().clone(),
+            fragment: gpu.require_shader::<Self::FragmentShader>().clone(),
         }
     }
 }

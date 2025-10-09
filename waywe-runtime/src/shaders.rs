@@ -24,7 +24,6 @@ impl ShaderCache {
         shaders.contains_key(&TypeId::of::<S>())
     }
 
-    // TODO(hack3rmann): use .get_or_init() instead
     pub fn initialize<S: ShaderDescriptor>(&self, device: &wgpu::Device) {
         if self.contains::<S>() {
             return;
@@ -33,6 +32,24 @@ impl ShaderCache {
         let shader = device.create_shader_module(S::shader_descriptor());
         let mut map = self.shaders.write().unwrap();
         _ = map.insert(TypeId::of::<S>(), shader);
+    }
+
+    pub fn get_or_init<S: ShaderDescriptor>(
+        &self,
+        device: &wgpu::Device,
+    ) -> RwLockShaderReadGuard<'_, S> {
+        if self.contains::<S>() {
+            return self.get::<S>().unwrap();
+        }
+
+        let shader = device.create_shader_module(S::shader_descriptor());
+
+        {
+            let mut shaders = self.shaders.write().unwrap();
+            _ = shaders.insert(TypeId::of::<S>(), shader);
+        }
+
+        self.get::<S>().unwrap()
     }
 
     pub fn get<S: ShaderDescriptor>(&self) -> Option<RwLockShaderReadGuard<'_, S>> {
