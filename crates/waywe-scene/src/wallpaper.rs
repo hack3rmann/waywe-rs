@@ -146,14 +146,13 @@ fn run_render(
     surface_view: wgpu::TextureView,
     encoder: &mut wgpu::CommandEncoder,
 ) {
-    render.get_resource_or_init::<SurfaceView>().surface = Some(surface_view);
-
+    render.insert_resource(SurfaceView(surface_view));
     // Safety: we never access the encoder between insert and remove
     render.insert_resource(unsafe { CommandEncoder::new(encoder) });
 
     render.world.run_schedule(Render);
 
-    _ = render.world.resource_mut::<SurfaceView>().surface.take();
+    _ = render.world.remove_resource::<SurfaceView>();
     render
         .world
         .remove_resource::<CommandEncoder>()

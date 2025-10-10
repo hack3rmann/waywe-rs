@@ -45,7 +45,9 @@ impl Wgpu {
             Err(error) => panic!("failed to request adapter: {error:?}"),
         };
 
-        let features = wgpu::Features::TEXTURE_FORMAT_NV12 | wgpu::Features::PUSH_CONSTANTS;
+        let features = wgpu::Features::TEXTURE_FORMAT_NV12
+            | wgpu::Features::PUSH_CONSTANTS
+            | wgpu::Features::BGRA8UNORM_STORAGE;
         let memory_hints = wgpu::MemoryHints::Performance;
 
         let open_device = unsafe {
@@ -234,7 +236,7 @@ fn create_surface(
     // to render to it using compute shaders
     let config = wgpu::SurfaceConfiguration {
         // NOTE(hack3rmann): `COPY_SRC` used to allow transitions between wallpapers
-        usage: config.usage | wgpu::TextureUsages::COPY_SRC,
+        usage: config.usage | wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::COPY_DST,
         ..config
     };
 
