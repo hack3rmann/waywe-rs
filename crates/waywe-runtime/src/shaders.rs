@@ -24,7 +24,6 @@ impl ShaderCache {
         shaders.contains_key(&TypeId::of::<S>())
     }
 
-    // TODO(hack3rmann): use .get_or_init() instead
     pub fn initialize<S: ShaderDescriptor>(&self, device: &wgpu::Device) {
         if self.contains::<S>() {
             return;
