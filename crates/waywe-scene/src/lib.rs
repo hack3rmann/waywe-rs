@@ -89,6 +89,7 @@ pub mod assets;
 pub mod camera;
 pub mod clear_screen;
 pub mod cursor;
+pub mod effects;
 pub mod extract;
 pub mod image;
 pub mod material;

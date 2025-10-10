@@ -3,7 +3,7 @@ use crate::{
     Monitor,
     mesh::{CommandEncoder, SurfaceView},
     plugin::Plugin,
-    render::{Render, RenderGpu, RenderStage},
+    render::{Render, RenderGpu, RenderSet},
 };
 use bevy_ecs::prelude::*;
 use derive_more::Deref;
@@ -18,7 +18,7 @@ impl Plugin for ClearScreenPlugin {
             .render
             .init_resource::<ClearColor>()
             .init_resource::<ClearPipeline>()
-            .add_systems(Render, run_clear_pass.in_set(RenderStage::ClearPass));
+            .add_systems(Render, run_clear_pass.in_set(RenderSet::ClearPass));
     }
 }
 

@@ -41,8 +41,8 @@
 
 use crate::{
     asset_server::AssetServerPlugin, clear_screen::ClearScreenPlugin, cursor::CursorPlugin,
-    image::ImagePlugin, material::MaterialPlugin, mesh::MeshPlugin, sprite::SpritePlugin,
-    transform::TransformPlugin, video::VideoPlugin, wallpaper::Wallpaper,
+    effects::EffectsPlugin, image::ImagePlugin, material::MaterialPlugin, mesh::MeshPlugin,
+    sprite::SpritePlugin, transform::TransformPlugin, video::VideoPlugin, wallpaper::Wallpaper,
 };
 use bitflags::bitflags;
 use static_assertions::assert_obj_safe;
@@ -142,6 +142,7 @@ define_plugin_group! {
         MeshPlugin,
         ClearScreenPlugin,
         SpritePlugin,
+        EffectsPlugin,
     );
 }
 

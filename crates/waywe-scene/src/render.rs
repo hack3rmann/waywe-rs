@@ -26,7 +26,7 @@ pub struct Render;
 
 /// System sets for organizing the render schedule.
 #[derive(SystemSet, Debug, PartialEq, Eq, Default, Clone, Copy, Hash)]
-pub enum RenderStage {
+pub enum RenderSet {
     /// Update render systems.
     #[default]
     Update,
@@ -36,8 +36,8 @@ pub enum RenderStage {
     ClearPass,
     /// Perform rendering operations.
     Render,
-    /// Present the rendered frame.
-    Finish,
+    /// Apply post-proccess effects
+    ApplyEffects,
 }
 
 /// GPU resources available to the render world.

@@ -18,7 +18,7 @@ use crate::{
     PreUpdate, Startup, Time, Update, WallpaperConfig, WallpaperFlags, guess_framerate,
     mesh::{CommandEncoder, SurfaceView},
     plugin::PluginGroup,
-    render::{EntityMap, Render, RenderGpu, RenderStage, SceneExtract},
+    render::{EntityMap, Render, RenderGpu, RenderSet, SceneExtract},
     subapp::EcsApp,
     time::update_time,
 };
@@ -48,15 +48,15 @@ impl Wallpaper {
         let mut render_schedule = Schedule::new(Render);
         render_schedule.configure_sets(
             (
-                RenderStage::Update,
-                RenderStage::PrepareRender,
-                RenderStage::ClearPass,
-                RenderStage::Render,
-                RenderStage::Finish,
+                RenderSet::Update,
+                RenderSet::PrepareRender,
+                RenderSet::ClearPass,
+                RenderSet::Render,
+                RenderSet::ApplyEffects,
             )
                 .chain(),
         );
-        render_schedule.add_systems(update_time.in_set(RenderStage::Update));
+        render_schedule.add_systems(update_time.in_set(RenderSet::Update));
 
         render
             .init_resource::<Time>()
@@ -146,13 +146,14 @@ fn run_render(
     surface_view: wgpu::TextureView,
     encoder: &mut wgpu::CommandEncoder,
 ) {
-    render.insert_resource(SurfaceView(surface_view));
+    render.get_resource_or_init::<SurfaceView>().surface = Some(surface_view);
+
     // Safety: we never access the encoder between insert and remove
     render.insert_resource(unsafe { CommandEncoder::new(encoder) });
 
     render.world.run_schedule(Render);
 
-    _ = render.world.remove_resource::<SurfaceView>();
+    _ = render.world.resource_mut::<SurfaceView>().surface.take();
     render
         .world
         .remove_resource::<CommandEncoder>()

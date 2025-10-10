@@ -24,7 +24,7 @@ use crate::{
     },
     extract::Extract,
     plugin::{AddPlugins, Plugin},
-    render::{Render, RenderStage, SceneExtract},
+    render::{Render, RenderSet, SceneExtract},
 };
 use bevy_ecs::{
     prelude::*,
@@ -561,7 +561,7 @@ impl<A: RenderAsset> Plugin for RenderAssetsPlugin<A> {
                 SceneExtract,
                 remove_render_assets::<A>.in_set(AssetsExtract::MainToRender),
             )
-            .add_systems(Render, flush_render_assets::<A>.in_set(RenderStage::Update));
+            .add_systems(Render, flush_render_assets::<A>.in_set(RenderSet::Update));
 
         if self.do_extact_all {
             wallpaper.render.add_systems(

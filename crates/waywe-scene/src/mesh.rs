@@ -26,11 +26,12 @@ use crate::{
         Asset, AssetsExtract, AssetsPlugin, RefAssets, RefAssetsPlugin,
         RefAssetsRefDependencyPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin,
     },
+    effects::EFFECTS_TEXTURE_USAGES,
     extract::Extract,
     image::ImageMaterial,
     material::{Material, MaterialSet, RenderMaterial, RenderMaterialId},
     plugin::Plugin,
-    render::{EntityMap, MainEntity, Render, RenderGpu, RenderStage, SceneExtract},
+    render::{EntityMap, MainEntity, Render, RenderGpu, RenderSet, SceneExtract},
     time::Time,
     transform::{GlobalTransform, ModelMatrix, Transform},
     video::VideoMaterial,
@@ -41,7 +42,6 @@ use bevy_ecs::{
     system::{SystemParamItem, lifetimeless::SRes},
 };
 use bytemuck::{Pod, Zeroable};
-use derive_more::Deref;
 use glam::{Mat4, Vec2, Vec3};
 use itertools::Itertools;
 use smallvec::{SmallVec, smallvec};
@@ -81,7 +81,7 @@ impl Plugin for MeshPlugin {
                     despawn_removed_entities,
                 ),
             )
-            .add_systems(Render, render_meshes.in_set(RenderStage::Render));
+            .add_systems(Render, render_meshes.in_set(RenderSet::Render));
     }
 }
 
@@ -415,8 +415,54 @@ pub fn render_meshes(
     }
 }
 
-#[derive(Resource, Deref)]
-pub struct SurfaceView(pub wgpu::TextureView);
+#[derive(Resource, Default)]
+pub struct SurfaceView {
+    pub surface: Option<wgpu::TextureView>,
+    pub effect: Option<wgpu::TextureView>,
+}
+
+impl SurfaceView {
+    pub fn init_effect(&mut self, gpu: &Wgpu, monitor_id: MonitorId) {
+        let (size, format) = {
+            let surfaces = gpu.surfaces.read().unwrap();
+            let surface = &surfaces[&monitor_id];
+
+            (
+                wgpu::Extent3d {
+                    width: surface.config.width,
+                    height: surface.config.height,
+                    depth_or_array_layers: 1,
+                },
+                surface.format,
+            )
+        };
+
+        let texture = gpu.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("effect"),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: EFFECTS_TEXTURE_USAGES,
+            view_formats: &[],
+        });
+
+        let view = texture.create_view(&Default::default());
+
+        self.effect = Some(view);
+    }
+}
+
+impl Deref for SurfaceView {
+    type Target = wgpu::TextureView;
+
+    fn deref(&self) -> &Self::Target {
+        self.effect
+            .as_ref()
+            .unwrap_or_else(|| self.surface.as_ref().unwrap())
+    }
+}
 
 #[derive(Resource)]
 pub struct CommandEncoder(NonNull<wgpu::CommandEncoder>);
