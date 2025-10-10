@@ -1,5 +1,5 @@
 use super::wayland::{MonitorId, MonitorInfo, MonitorMap, SurfaceExtension, Wayland};
-use crate::shaders::{RwLockShaderReadGuard, ShaderCache, ShaderDescriptor};
+use crate::shaders::{ShaderCache, ShaderDescriptor};
 use ash::vk;
 use glam::UVec2;
 use std::sync::RwLock;
@@ -188,8 +188,8 @@ impl Wgpu {
         surfaces.insert(monitor_id, surface);
     }
 
-    pub fn require_shader<S: ShaderDescriptor>(&self) -> RwLockShaderReadGuard<'_, S> {
-        self.shader_cache.get_or_init::<S>(&self.device)
+    pub fn require_shader<S: ShaderDescriptor>(&self) {
+        self.shader_cache.initialize::<S>(&self.device);
     }
 }
 

@@ -71,6 +71,9 @@ pub struct ClearPipeline(pub wgpu::RenderPipeline);
 
 impl ClearPipeline {
     pub fn new(gpu: &Wgpu, monitor_id: MonitorId) -> Self {
+        gpu.require_shader::<NoOpVertexShader>();
+        gpu.require_shader::<NoOpFragmentShader>();
+
         let layout = gpu
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -85,7 +88,7 @@ impl ClearPipeline {
                 label: Some("image-pipeline"),
                 layout: Some(&layout),
                 vertex: wgpu::VertexState {
-                    module: &gpu.require_shader::<NoOpVertexShader>(),
+                    module: &gpu.shader_cache.get::<NoOpVertexShader>().unwrap(),
                     entry_point: Some("main"),
                     compilation_options: wgpu::PipelineCompilationOptions {
                         constants: &[],
@@ -94,7 +97,7 @@ impl ClearPipeline {
                     buffers: &[],
                 },
                 fragment: Some(wgpu::FragmentState {
-                    module: &gpu.require_shader::<NoOpFragmentShader>(),
+                    module: &gpu.shader_cache.get::<NoOpFragmentShader>().unwrap(),
                     entry_point: Some("main"),
                     compilation_options: wgpu::PipelineCompilationOptions {
                         constants: &[],
