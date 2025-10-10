@@ -1,0 +1,13 @@
+[package]
+name = "dxt"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+safe-transmute.workspace = true
+rayon.workspace = true
+transmute-extra = { path = "../transmute-extra" }

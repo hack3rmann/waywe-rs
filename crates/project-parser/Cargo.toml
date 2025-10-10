@@ -1,0 +1,11 @@
+[package]
+name = "project-parser"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+chumsky = "0.10.1"
+thiserror.workspace = true

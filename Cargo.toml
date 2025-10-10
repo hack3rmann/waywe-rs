@@ -1,24 +1,24 @@
 [workspace]
 resolver = "3"
 members = [
-    "deploy-tool",
-    "dxt",
-    "extractor",
-    "project-parser",
-    "waywe-ipc",
-    "transmute-extra",
-    "unite-json",
-    "video",
-    "wayland-client",
-    "wayland-scanner",
-    "wayland-server",
-    "wayland-sys",
-    "waywe",
-    "waywe-daemon",
-    "waywe-default-wallpapers",
-    "waywe-ipc",
-    "waywe-runtime",
-    "waywe-scene",
+    "crates/deploy-tool",
+    "crates/dxt",
+    "crates/extractor",
+    "crates/project-parser",
+    "crates/waywe-ipc",
+    "crates/transmute-extra",
+    "crates/unite-json",
+    "crates/video",
+    "crates/wayland-client",
+    "crates/wayland-scanner",
+    "crates/wayland-server",
+    "crates/wayland-sys",
+    "crates/waywe",
+    "crates/waywe-daemon",
+    "crates/waywe-default-wallpapers",
+    "crates/waywe-ipc",
+    "crates/waywe-runtime",
+    "crates/waywe-scene",
 ]
 
 [workspace.package]
@@ -33,14 +33,15 @@ authors = [
 repository = "https://www.github.com/hack3rmann/waywe-rs"
 
 [workspace.dependencies]
-wayland-client = { path = "wayland-client", features = ["smallvec"] }
-wayland-server = { path = "wayland-server" }
-wayland-sys = { path = "wayland-sys" }
-waywe-ipc = { path = "waywe-ipc" }
-waywe-runtime = { path = "waywe-runtime" }
-waywe-scene = { path = "waywe-scene" }
-waywe-default-wallpapers = { path = "waywe-default-wallpapers" }
-transmute-extra = { path = "transmute-extra" }
+wayland-client = { path = "crates/wayland-client", features = ["smallvec"] }
+wayland-server = { path = "crates/wayland-server" }
+wayland-sys = { path = "crates/wayland-sys" }
+waywe-ipc = { path = "crates/waywe-ipc" }
+waywe-runtime = { path = "crates/waywe-runtime" }
+waywe-scene = { path = "crates/waywe-scene" }
+waywe-default-wallpapers = { path = "crates/waywe-default-wallpapers" }
+transmute-extra = { path = "crates/transmute-extra" }
+video = { path = "crates/video" }
 thiserror = "2.0.11"
 safe-transmute = "0.11.3"
 rayon = "1.10.0"
@@ -53,7 +54,6 @@ paste = "1.0.15"
 smallvec = { version = "1.14.0", features = ["union", "serde", "const_generics", "const_new", "write"] }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 glam = { version = "0.30.3", features = ["bytemuck", "serde"] }
-video = { path = "video" }
 rustix = { version = "0.38.44", features = ["fs", "net", "process", "mm", "shm", "event"] }
 bytemuck = { version = "1.21.0", features = ["extern_crate_alloc", "derive"] }
 libc = "0.2.170"

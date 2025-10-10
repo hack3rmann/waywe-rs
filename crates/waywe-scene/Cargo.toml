@@ -1,0 +1,28 @@
+[package]
+name = "waywe-scene"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+bevy_ecs = "0.17.2"
+derive_more = { version = "2.0.1", features = ["full"] }
+wgpu = { version = "27.0.1", features = ["glsl"] }
+box_into_inner = "0.1.0"
+crossbeam = "0.8.4"
+ash = "0.38.0"
+itertools = "0.14.0"
+variadics_please = "1.1.0"
+static_assertions.workspace = true
+bitflags.workspace = true
+bytemuck.workspace = true
+transmute-extra.workspace = true
+video.workspace = true
+tracing.workspace = true
+smallvec.workspace = true
+waywe-runtime.workspace = true
+glam.workspace = true
+image.workspace = true

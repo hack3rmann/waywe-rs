@@ -1,0 +1,27 @@
+[package]
+name = "wayland-scanner"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+proc-macro2 = "1.0.94"
+quote = "1.0.39"
+serde.workspace = true
+smallvec.workspace = true
+syn = "2.0.99"
+xml_serde = "1.4.1"
+thiserror.workspace = true
+wayland-sys.workspace = true
+convert_case = "0.8.0"
+
+[dev-dependencies]
+paste.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[lib]
+proc-macro = true
