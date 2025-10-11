@@ -14,7 +14,7 @@ use waywe_ipc::{
 use waywe_runtime::{
     Runtime, RuntimeFeatures,
     app::App,
-    effects::convolve::ConvolveConfig,
+    effects::blur::BlurConfig,
     event::{EventHandler, Handle, TryReplicate},
     frame::{FrameError, FrameInfo},
     wayland::{MonitorId, MonitorMap, WaylandEvent},
@@ -76,9 +76,7 @@ impl WallpaperApp {
                 let mut wallpapers =
                     RunningWallpapers::new(monitor_id, size, self.config.animation.clone());
 
-                wallpapers.add_effect(ConvolveConfig {
-                    kernel: Arc::new([0.0, -1.0, 0.0, -1.0, 5.0, -1.0, 0.0, -1.0, 0.0]),
-                });
+                wallpapers.add_effect(BlurConfig);
 
                 wallpapers.enqueue_wallpaper(&runtime.wgpu, wallpaper);
                 entry.insert(wallpapers);

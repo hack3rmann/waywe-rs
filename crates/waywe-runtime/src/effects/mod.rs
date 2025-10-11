@@ -1,3 +1,4 @@
+pub mod blur;
 pub mod config;
 pub mod convolve;
 
