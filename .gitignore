@@ -1,5 +1,5 @@
 target
-extractor/scene.pkg
-extractor/assets
-deploy-tool/releases
+crates/extractor/scene.pkg
+crates/extractor/assets
+crates/deploy-tool/releases
 logs
