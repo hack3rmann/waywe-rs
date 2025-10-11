@@ -27,12 +27,12 @@ async fn main() -> Result<(), Error> {
         regex_find!(r"\d*\.\d*\.\d*", &version).context("package version does not match")?;
     let v_version = format!("v{version}");
 
-    let package_tool_name = run_fun!(cat "deploy-tool/Cargo.toml" | rg "name = ")?;
+    let package_tool_name = run_fun!(cat "crates/deploy-tool/Cargo.toml" | rg "name = ")?;
     assert_eq!(package_tool_name, "name = \"deploy-tool\"");
 
     let build_name = format!("waywe-{v_version}-linux-wayland-x86_64");
 
-    let releases_path = Path::new("deploy-tool/releases/").join(&build_name);
+    let releases_path = Path::new("crates/deploy-tool/releases/").join(&build_name);
     fs::create_dir_all(&releases_path).await?;
 
     let package = Path::new("/tmp/waywe/releases/").join(&build_name);
@@ -46,9 +46,12 @@ async fn main() -> Result<(), Error> {
         fs::copy(&args.daemon, bin.join(args.daemon.file_name().unwrap())),
         fs::copy("README.md", package.join("README.md")),
         fs::copy("LICENSE", package.join("LICENSE")),
-        fs::copy("deploy-tool/INSTALL.md", package.join("INSTALL.md")),
-        fs::copy("deploy-tool/install.sh", package.join("install.sh")),
-        fs::copy("deploy-tool/uninstall.sh", package.join("uninstall.sh")),
+        fs::copy("crates/deploy-tool/INSTALL.md", package.join("INSTALL.md")),
+        fs::copy("crates/deploy-tool/install.sh", package.join("install.sh")),
+        fs::copy(
+            "crates/deploy-tool/uninstall.sh",
+            package.join("uninstall.sh")
+        ),
     )?;
 
     run_cmd!(ouch compress $package $package.tar.gz)?;
