@@ -76,7 +76,10 @@ impl WallpaperApp {
                 let mut wallpapers =
                     RunningWallpapers::new(monitor_id, size, self.config.animation.clone());
 
-                wallpapers.add_effect(BlurConfig);
+                wallpapers.add_effect(BlurConfig {
+                    n_levels: 3,
+                    blur_level_multiplier: 1,
+                });
 
                 wallpapers.enqueue_wallpaper(&runtime.wgpu, wallpaper);
                 entry.insert(wallpapers);

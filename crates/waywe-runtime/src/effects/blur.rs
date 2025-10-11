@@ -8,11 +8,19 @@ use std::mem;
 
 const LABEL: &str = "blur";
 
-pub struct BlurConfig;
+pub struct BlurConfig {
+    pub n_levels: u32,
+    pub blur_level_multiplier: u32,
+}
 
 impl EffectConfig for BlurConfig {
     fn build_effect(&self, gpu: &Wgpu, monitor_id: MonitorId) -> Box<dyn Effect> {
-        Box::new(Blur::new(gpu, monitor_id))
+        Box::new(Blur::new(
+            gpu,
+            monitor_id,
+            self.n_levels,
+            self.blur_level_multiplier,
+        ))
     }
 }
 
@@ -23,7 +31,7 @@ pub struct DownsamplePipeline {
 }
 
 impl DownsamplePipeline {
-    pub fn new(gpu: &Wgpu, monitor_id: MonitorId) -> Self {
+    pub fn new(gpu: &Wgpu, monitor_id: MonitorId, n_levels: u32) -> Self {
         let (size, format) = {
             let surfaces = gpu.surfaces.read().unwrap();
             let surface = &surfaces[&monitor_id];
@@ -45,7 +53,7 @@ impl DownsamplePipeline {
                 height: size.height / 2,
                 depth_or_array_layers: 1,
             },
-            mip_level_count: 1,
+            mip_level_count: n_levels + 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format,
@@ -55,7 +63,11 @@ impl DownsamplePipeline {
                 | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        let downsampled = downsampled_texture.create_view(&Default::default());
+        let downsampled = downsampled_texture.create_view(&wgpu::TextureViewDescriptor {
+            base_mip_level: 0,
+            mip_level_count: Some(1),
+            ..Default::default()
+        });
 
         let bind_group_layout =
             gpu.device
@@ -116,10 +128,37 @@ impl DownsamplePipeline {
         }
     }
 
-    pub fn run(&self, gpu: &Wgpu, encoder: &mut wgpu::CommandEncoder, input: &wgpu::TextureView) {
+    pub fn run(
+        &self,
+        gpu: &Wgpu,
+        encoder: &mut wgpu::CommandEncoder,
+        input: Option<&wgpu::TextureView>,
+        level: u32,
+    ) {
         const WORKGROUP_SIZE: u32 = 8;
-        let width = self.downsampled.texture().size().width / WORKGROUP_SIZE;
-        let height = self.downsampled.texture().size().height / WORKGROUP_SIZE;
+        let width = (self.downsampled.texture().size().width / WORKGROUP_SIZE) >> level;
+        let height = (self.downsampled.texture().size().height / WORKGROUP_SIZE) >> level;
+
+        let source = if level == 0 {
+            input.unwrap().clone()
+        } else {
+            self.downsampled
+                .texture()
+                .create_view(&wgpu::TextureViewDescriptor {
+                    base_mip_level: level - 1,
+                    mip_level_count: Some(1),
+                    ..Default::default()
+                })
+        };
+
+        let destination = self
+            .downsampled
+            .texture()
+            .create_view(&wgpu::TextureViewDescriptor {
+                base_mip_level: level,
+                mip_level_count: Some(1),
+                ..Default::default()
+            });
 
         let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some(LABEL),
@@ -127,11 +166,11 @@ impl DownsamplePipeline {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(input),
+                    resource: wgpu::BindingResource::TextureView(&source),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&self.downsampled),
+                    resource: wgpu::BindingResource::TextureView(&destination),
                 },
             ],
         });
@@ -453,14 +492,23 @@ pub struct Blur {
     pub downsample: DownsamplePipeline,
     pub blur: BlurPipeline,
     pub upsample: UpsamplePipeline,
+    pub blur_level_multiplier: u32,
+    pub n_levels: u32,
 }
 
 impl Blur {
-    pub fn new(gpu: &Wgpu, monitor_id: MonitorId) -> Self {
+    pub fn new(
+        gpu: &Wgpu,
+        monitor_id: MonitorId,
+        n_levels: u32,
+        blur_level_multiplier: u32,
+    ) -> Self {
         Self {
-            downsample: DownsamplePipeline::new(gpu, monitor_id),
+            downsample: DownsamplePipeline::new(gpu, monitor_id, n_levels),
             blur: BlurPipeline::new(gpu, monitor_id),
             upsample: UpsamplePipeline::new(gpu, monitor_id),
+            n_levels,
+            blur_level_multiplier,
         }
     }
 }
@@ -472,14 +520,38 @@ impl Effect for Blur {
         encoder: &mut wgpu::CommandEncoder,
         input: &wgpu::TextureView,
     ) -> AppliedEffect {
-        self.downsample.run(gpu, encoder, input);
+        self.downsample.run(gpu, encoder, Some(input), 0);
+        self.blur.run(gpu, encoder, &self.downsample.downsampled);
 
-        for _ in 0..10 {
-            self.blur.run(gpu, encoder, &self.downsample.downsampled);
+        for i in 0..self.n_levels {
+            let downsampled =
+                self.downsample
+                    .downsampled
+                    .texture()
+                    .create_view(&wgpu::TextureViewDescriptor {
+                        base_mip_level: i + 1,
+                        mip_level_count: Some(1),
+                        ..Default::default()
+                    });
+
+            self.downsample.run(gpu, encoder, None, i + 1);
+
+            for _ in 0..self.blur_level_multiplier * i + 1 {
+                self.blur.run(gpu, encoder, &downsampled);
+            }
         }
 
-        self.upsample
-            .run(gpu, encoder, &self.downsample.downsampled);
+        let downsampled =
+            self.downsample
+                .downsampled
+                .texture()
+                .create_view(&wgpu::TextureViewDescriptor {
+                    base_mip_level: self.n_levels,
+                    mip_level_count: Some(1),
+                    ..Default::default()
+                });
+
+        self.upsample.run(gpu, encoder, &downsampled);
 
         AppliedEffect::WithOutput(self.upsample.result.clone())
     }
