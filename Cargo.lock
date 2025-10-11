@@ -3483,6 +3483,7 @@ dependencies = [
  "itertools 0.14.0",
  "smallvec",
  "static_assertions",
+ "thiserror 2.0.17",
  "tracing",
  "transmute-extra",
  "variadics_please",

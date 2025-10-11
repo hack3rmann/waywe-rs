@@ -18,7 +18,7 @@ use crate::{
     asset_server::{AssetHandle, AssetServerLoadPlugin, Load},
     assets::{
         Asset, Assets, AssetsExtract, AssetsPlugin, RefAssets, RefAssetsDependencyPlugin,
-        RenderAsset, RenderAssets, RenderAssetsPlugin,
+        RenderAsset, RenderAssetExtractError, RenderAssets, RenderAssetsPlugin,
     },
     extract::Extract,
     material::{AsBindGroup, Material, MaterialSet, RenderMaterial, VertexFragmentShader},
@@ -245,8 +245,14 @@ impl RenderAsset for RenderImage {
     type Asset = Image;
     type Param = SRes<RenderGpu>;
 
-    fn extract(image: &Self::Asset, gpu: &mut SystemParamItem<'_, '_, Self::Param>) -> Self {
-        Self::new(image, gpu)
+    fn extract(
+        image: &Self::Asset,
+        gpu: &mut SystemParamItem<'_, '_, Self::Param>,
+    ) -> Result<Self, RenderAssetExtractError>
+    where
+        Self: Sized,
+    {
+        Ok(Self::new(image, gpu))
     }
 }
 

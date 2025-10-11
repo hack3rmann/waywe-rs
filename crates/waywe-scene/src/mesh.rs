@@ -24,7 +24,8 @@ use crate::{
     asset_server::{AssetHandle, AssetId},
     assets::{
         Asset, AssetsExtract, AssetsPlugin, RefAssets, RefAssetsPlugin,
-        RefAssetsRefDependencyPlugin, RenderAsset, RenderAssets, RenderAssetsPlugin,
+        RefAssetsRefDependencyPlugin, RenderAsset, RenderAssetExtractError, RenderAssets,
+        RenderAssetsPlugin,
     },
     extract::Extract,
     image::ImageMaterial,
@@ -49,6 +50,7 @@ use std::{
     mem,
     ops::{Deref, DerefMut},
     ptr::NonNull,
+    result::Result,
 };
 use waywe_runtime::{gpu::Wgpu, wayland::MonitorId};
 
@@ -233,8 +235,14 @@ impl RenderAsset for RenderMesh {
 
     const REPLACE_ON_UPDATE: bool = false;
 
-    fn extract(mesh: &Self::Asset, gpu: &mut SystemParamItem<'_, '_, Self::Param>) -> Self {
-        Self::new(mesh, gpu)
+    fn extract(
+        mesh: &Self::Asset,
+        gpu: &mut SystemParamItem<'_, '_, Self::Param>,
+    ) -> Result<Self, RenderAssetExtractError>
+    where
+        Self: Sized,
+    {
+        Ok(Self::new(mesh, gpu))
     }
 
     fn update(&mut self, source: &Self::Asset, gpu: &mut SystemParamItem<'_, '_, Self::Param>) {

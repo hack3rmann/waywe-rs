@@ -18,7 +18,7 @@ use crate::{
     asset_server::{AssetHandle, AssetServerLoadPlugin, Load},
     assets::{
         Asset, Assets, AssetsExtract, AssetsPlugin, RefAssets, RefAssetsDependencyPlugin,
-        RenderAsset, RenderAssets, RenderAssetsPlugin,
+        RenderAsset, RenderAssetExtractError, RenderAssets, RenderAssetsPlugin,
     },
     extract::Extract,
     image::SceneImageVertexShader,
@@ -88,8 +88,10 @@ pub fn advance_videos(mut videos: ResMut<Assets<Video>>, time: Res<Time>) {
         if video.update_delay + time.delta >= duration {
             video.next_frame();
             video.update_delay = video.update_delay + time.delta - duration;
+            video.n_frames_since_update = 0;
         } else {
             video.update_delay += time.delta;
+            video.n_frames_since_update += 1;
         }
     }
 }
@@ -117,6 +119,7 @@ pub struct Video {
     pub do_loop_video: bool,
     /// Delay accumulated between frame updates.
     pub update_delay: Duration,
+    pub n_frames_since_update: usize,
 }
 
 impl Asset for Video {}
@@ -177,6 +180,7 @@ impl Video {
             path,
             do_loop_video: true,
             update_delay: Duration::ZERO,
+            n_frames_since_update: 0,
         })
     }
 
@@ -523,8 +527,18 @@ impl RenderAsset for RenderVideo {
     type Asset = Video;
     type Param = SRes<RenderGpu>;
 
-    fn extract(video: &Self::Asset, gpu: &mut SystemParamItem<'_, '_, Self::Param>) -> Self {
-        Self::export_from(video, gpu)
+    fn extract(
+        video: &Self::Asset,
+        gpu: &mut SystemParamItem<'_, '_, Self::Param>,
+    ) -> Result<Self, RenderAssetExtractError>
+    where
+        Self: Sized,
+    {
+        if video.n_frames_since_update == 0 {
+            Ok(Self::export_from(video, gpu))
+        } else {
+            Err(RenderAssetExtractError::Skip)
+        }
     }
 }
 

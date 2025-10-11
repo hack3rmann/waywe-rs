@@ -33,6 +33,7 @@ use bevy_ecs::{
 use crossbeam::channel::{self, Receiver, Sender};
 use smallvec::SmallVec;
 use std::marker::PhantomData;
+use thiserror::Error;
 use tracing::error;
 
 pub type IdSmallVec = SmallVec<[AssetId; 4]>;
@@ -381,7 +382,12 @@ pub trait RenderAsset: Send + Sync + 'static {
     const REPLACE_ON_UPDATE: bool = true;
 
     /// Extract a render asset from a source asset.
-    fn extract(source: &Self::Asset, item: &mut SystemParamItem<'_, '_, Self::Param>) -> Self;
+    fn extract(
+        source: &Self::Asset,
+        item: &mut SystemParamItem<'_, '_, Self::Param>,
+    ) -> Result<Self, RenderAssetExtractError>
+    where
+        Self: Sized;
 
     #[expect(unused_variables)]
     fn update(&mut self, source: &Self::Asset, item: &mut SystemParamItem<'_, '_, Self::Param>) {
@@ -390,6 +396,12 @@ pub trait RenderAsset: Send + Sync + 'static {
             "unexpected unimplemented RenderAsset::update"
         );
     }
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum RenderAssetExtractError {
+    #[error("this asset should be skipped during extract schedule")]
+    Skip,
 }
 
 #[derive(SystemSet, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -410,7 +422,7 @@ pub fn extract_new_render_assets<A: RenderAsset>(
     mut param: StaticSystemParam<A::Param>,
 ) {
     let mut new_assets = assets.new_assets();
-    let mut all_assets = assets.new_assets().chain(assets.changed_assets());
+    let mut all_assets = Iterator::chain(assets.new_assets(), assets.changed_assets());
 
     let assets: &mut dyn Iterator<Item = (AssetId, &A::Asset)> = if A::REPLACE_ON_UPDATE {
         &mut all_assets
@@ -419,7 +431,14 @@ pub fn extract_new_render_assets<A: RenderAsset>(
     };
 
     for (id, asset) in assets {
-        let render_asset = A::extract(asset, &mut param);
+        let render_asset = match A::extract(asset, &mut param) {
+            Ok(asset) => asset,
+            Err(err @ RenderAssetExtractError::Skip) => panic!(
+                "{} - cannot skip asset which can only be updated on insert",
+                err
+            ),
+        };
+
         render_assets.add(id, render_asset);
     }
 }
@@ -433,7 +452,11 @@ pub fn extract_all_render_assets<A: RenderAsset>(
     mut param: StaticSystemParam<A::Param>,
 ) {
     for (id, asset) in assets.iter() {
-        let render_asset = A::extract(asset, &mut param);
+        let render_asset = match A::extract(asset, &mut param) {
+            Ok(asset) => asset,
+            Err(RenderAssetExtractError::Skip) => continue,
+        };
+
         render_assets.add(id, render_asset);
     }
 }
@@ -446,7 +469,10 @@ pub fn update_render_assets<A: RenderAsset>(
     for (id, asset) in assets.changed_assets() {
         let Some(render_asset) = render_assets.get_mut(id) else {
             // just insert new asset
-            let render_asset = A::extract(asset, &mut param);
+            let render_asset = match A::extract(asset, &mut param) {
+                Ok(asset) => asset,
+                Err(RenderAssetExtractError::Skip) => continue,
+            };
             render_assets.add(id, render_asset);
             continue;
         };

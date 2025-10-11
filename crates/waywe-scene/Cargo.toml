@@ -26,3 +26,4 @@ smallvec.workspace = true
 waywe-runtime.workspace = true
 glam.workspace = true
 image.workspace = true
+thiserror.workspace = true
