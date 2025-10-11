@@ -48,7 +48,7 @@ impl Plugin for EffectsPlugin {
         {
             let gpu = wallpaper.render.resource::<RenderGpu>();
             let monitor_id = wallpaper.render.resource::<Monitor>().id;
-            let data = [[1.0 / 9.0; 3]; 3];
+            let data = [[0.0, -1.0, 0.0], [-1.0, 5.0, -1.0], [0.0, -1.0, 0.0]];
 
             effects.add(Convolve::new(gpu, monitor_id, data.as_flattened()));
         }
@@ -72,18 +72,22 @@ pub fn render_effects(
     });
 
     let mut prev_output = surface_view;
+    let mut do_copy = false;
 
     for effect in effects.iter_mut().map(Box::as_mut) {
         if let AppliedEffect::WithOutput(next) = effect.apply(&gpu, &mut encoder, &prev_output) {
             prev_output = next;
+            do_copy = true;
         }
     }
 
-    encoder.copy_texture_to_texture(
-        prev_output.texture().as_image_copy(),
-        surface.texture().as_image_copy(),
-        prev_output.texture().size(),
-    );
+    if do_copy {
+        encoder.copy_texture_to_texture(
+            prev_output.texture().as_image_copy(),
+            surface.texture().as_image_copy(),
+            prev_output.texture().size(),
+        );
+    }
 }
 
 #[derive(Resource, Default, DerefMut, Deref)]

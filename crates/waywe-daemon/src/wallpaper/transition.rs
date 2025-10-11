@@ -24,7 +24,6 @@ const SCREEN_TRIANGLE: [Vec2; 3] = [
 ];
 
 pub struct WallpaperTransitionState {
-    pub state: wgpu::Texture,
     pub from: wgpu::TextureView,
     pub to: wgpu::TextureView,
     pub bind_group: wgpu::BindGroup,
@@ -35,12 +34,12 @@ impl WallpaperTransitionState {
         let surfaces = gpu.surfaces.read().unwrap();
         let surface_config = &surfaces[&pipeline.monitor_id].config;
 
-        let state = gpu.device.create_texture(&wgpu::TextureDescriptor {
+        let texture_desc = wgpu::TextureDescriptor {
             label: Some("transition"),
             size: wgpu::Extent3d {
                 width: surface_config.width,
                 height: surface_config.height,
-                depth_or_array_layers: 2,
+                depth_or_array_layers: 1,
             },
             mip_level_count: 1,
             sample_count: 1,
@@ -49,24 +48,14 @@ impl WallpaperTransitionState {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
+            view_formats: &[surface_config.format.remove_srgb_suffix()],
+        };
 
-        let from = state.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("transition-from"),
-            base_array_layer: 0,
-            array_layer_count: Some(1),
-            dimension: Some(wgpu::TextureViewDimension::D2),
-            ..Default::default()
-        });
+        let from_texture = gpu.device.create_texture(&texture_desc);
+        let to_texture = gpu.device.create_texture(&texture_desc);
 
-        let to = state.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("transition-from"),
-            base_array_layer: 1,
-            array_layer_count: Some(1),
-            dimension: Some(wgpu::TextureViewDimension::D2),
-            ..Default::default()
-        });
+        let from = from_texture.create_view(&Default::default());
+        let to = to_texture.create_view(&Default::default());
 
         let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("transition-binds"),
@@ -88,7 +77,6 @@ impl WallpaperTransitionState {
         });
 
         Self {
-            state,
             from,
             to,
             bind_group,
@@ -481,7 +469,7 @@ impl RunningWallpapers {
             // with third intermediate texture
             encoder.copy_texture_to_texture(
                 surface.as_image_copy(),
-                self.textures.state.as_image_copy(),
+                self.textures.from.texture().as_image_copy(),
                 surface.size(),
             );
         }
