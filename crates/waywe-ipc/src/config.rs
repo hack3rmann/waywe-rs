@@ -7,6 +7,50 @@ use std::time::Duration;
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
     pub animation: AnimationConfig,
+    #[serde(default)]
+    pub effects: Vec<Effects>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case", tag = "type")]
+pub enum Effects {
+    Convolve(ConvolveConfig),
+    Blur(BlurConfig),
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ConvolveConfig {
+    pub kernel: Vec<f32>,
+}
+
+impl Default for ConvolveConfig {
+    fn default() -> Self {
+        #[rustfmt::skip]
+        const SHARPEN: [f32; 9] = [
+             0.0, -1.0,  0.0,
+            -1.0,  5.0, -1.0,
+             0.0, -1.0,  0.0,
+        ];
+
+        Self {
+            kernel: SHARPEN.to_vec(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct BlurConfig {
+    pub n_levels: u32,
+    pub level_multiplier: u32,
+}
+
+impl Default for BlurConfig {
+    fn default() -> Self {
+        Self {
+            n_levels: 2,
+            level_multiplier: 1,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -120,6 +164,7 @@ mod tests {
                 },
                 ..AnimationConfig::default()
             },
+            effects: vec![],
         };
         let string = toml::to_string(&config).unwrap();
         println!("{string}");

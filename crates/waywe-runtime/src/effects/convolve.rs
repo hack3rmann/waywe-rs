@@ -5,15 +5,11 @@ use crate::{
     wayland::MonitorId,
 };
 use bytemuck::{Pod, Zeroable};
-use std::{mem, num::NonZeroU64, sync::Arc};
+use std::{mem, num::NonZeroU64};
+use waywe_ipc::config::ConvolveConfig;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
 const LABEL: &str = "convolve";
-
-#[derive(Clone, Debug, PartialEq, Default)]
-pub struct ConvolveConfig {
-    pub kernel: Arc<[f32]>,
-}
 
 impl EffectConfig for ConvolveConfig {
     fn build_effect(&self, gpu: &Wgpu, monitor_id: MonitorId) -> Box<dyn Effect> {

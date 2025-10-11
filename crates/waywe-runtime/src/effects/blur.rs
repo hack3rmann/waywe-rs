@@ -1,3 +1,5 @@
+use waywe_ipc::config::BlurConfig;
+
 use crate::{
     effects::{AppliedEffect, Effect, config::EffectConfig},
     gpu::Wgpu,
@@ -8,18 +10,13 @@ use std::mem;
 
 const LABEL: &str = "blur";
 
-pub struct BlurConfig {
-    pub n_levels: u32,
-    pub blur_level_multiplier: u32,
-}
-
 impl EffectConfig for BlurConfig {
     fn build_effect(&self, gpu: &Wgpu, monitor_id: MonitorId) -> Box<dyn Effect> {
         Box::new(Blur::new(
             gpu,
             monitor_id,
             self.n_levels,
-            self.blur_level_multiplier,
+            self.level_multiplier,
         ))
     }
 }

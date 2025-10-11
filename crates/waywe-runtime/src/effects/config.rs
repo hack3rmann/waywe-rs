@@ -6,6 +6,7 @@ use crate::{
 use smallvec::SmallVec;
 use static_assertions::assert_obj_safe;
 use std::ops::Deref;
+use waywe_ipc::config::Effects as BuiltinEffects;
 
 #[derive(Default)]
 pub struct EffectsBuilder {
@@ -23,6 +24,20 @@ impl EffectsBuilder {
 
     pub fn add(&mut self, config: impl Into<DynEffectConfig>) -> &mut Self {
         self.configs.push(config.into());
+        self
+    }
+
+    pub fn add_builtins<'a>(
+        &mut self,
+        configs: impl IntoIterator<Item = &'a BuiltinEffects>,
+    ) -> &mut Self {
+        for config in configs {
+            match config {
+                BuiltinEffects::Convolve(config) => _ = self.add(config.clone()),
+                BuiltinEffects::Blur(config) => _ = self.add(*config),
+            }
+        }
+
         self
     }
 

@@ -14,7 +14,6 @@ use waywe_ipc::{
 use waywe_runtime::{
     Runtime, RuntimeFeatures,
     app::App,
-    effects::blur::BlurConfig,
     event::{EventHandler, Handle, TryReplicate},
     frame::{FrameError, FrameInfo},
     wayland::{MonitorId, MonitorMap, WaylandEvent},
@@ -76,12 +75,11 @@ impl WallpaperApp {
                 let mut wallpapers =
                     RunningWallpapers::new(monitor_id, size, self.config.animation.clone());
 
-                wallpapers.add_effect(BlurConfig {
-                    n_levels: 3,
-                    blur_level_multiplier: 1,
-                });
-
+                wallpapers
+                    .effects_builder
+                    .add_builtins(&self.config.effects);
                 wallpapers.enqueue_wallpaper(&runtime.wgpu, wallpaper);
+
                 entry.insert(wallpapers);
             }
             Entry::Occupied(mut occupied_entry) => occupied_entry

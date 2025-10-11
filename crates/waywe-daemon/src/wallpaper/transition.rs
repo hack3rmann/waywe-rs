@@ -9,10 +9,7 @@ use std::{
 };
 use waywe_ipc::config::{AnimationConfig, AnimationDirection};
 use waywe_runtime::{
-    effects::{
-        Effects,
-        config::{DynEffectConfig, EffectsBuilder},
-    },
+    effects::{Effects, config::EffectsBuilder},
     frame::{FrameError, FrameInfo},
     gpu::Wgpu,
     shaders::ShaderDescriptor,
@@ -428,12 +425,6 @@ impl RunningWallpapers {
             self.ongoing_transitions
                 .push(OngoingTransition::new(self.aspect_ratio, &self.config));
         }
-    }
-
-    pub fn add_effect(&mut self, config: impl Into<DynEffectConfig>) -> &mut Self {
-        // NOTE(hack3rmann): we do not update already running wallpapers with newly added config
-        self.effects_builder.add(config);
-        self
     }
 
     pub fn remove_finished(&mut self) {
