@@ -199,7 +199,10 @@ impl PreparedWallpaper {
         surface_view: wgpu::TextureView,
         encoder: &mut wgpu::CommandEncoder,
     ) -> FrameInfo {
-        if self.first_time {
+        // FIXME(hack3rmann): data race during video extract
+        const FORCE_SINGLE_THREAD: bool = true;
+
+        if self.first_time || FORCE_SINGLE_THREAD {
             run_update(&mut self.wallpaper.main);
             self.wallpaper.run_extract();
             run_render(&mut self.wallpaper.render, surface_view, encoder);

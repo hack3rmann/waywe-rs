@@ -81,17 +81,18 @@ pub fn advance_videos(mut videos: ResMut<Assets<Video>>, time: Res<Time>) {
     for (_id, video) in videos.iter_mut() {
         let Some(duration) = video.frame.duration_in(video.time_base) else {
             video.next_frame();
+            video.n_frames_since_update = 0;
             continue;
         };
         let duration = duration.to_duration();
 
         if video.update_delay + time.delta >= duration {
             video.next_frame();
-            video.update_delay = video.update_delay + time.delta - duration;
             video.n_frames_since_update = 0;
+            video.update_delay = video.update_delay + time.delta - duration;
         } else {
-            video.update_delay += time.delta;
             video.n_frames_since_update += 1;
+            video.update_delay += time.delta;
         }
     }
 }
