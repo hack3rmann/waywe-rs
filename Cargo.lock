@@ -837,7 +837,7 @@ dependencies = [
 
 [[package]]
 name = "deploy-tool"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "anyhow",
  "clap",
@@ -891,7 +891,7 @@ checksum = "117240f60069e65410b3ae1bb213295bd828f707b5bec6596a1afc8793ce0cbc"
 
 [[package]]
 name = "dxt"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "rayon",
  "safe-transmute",
@@ -1014,7 +1014,7 @@ dependencies = [
 
 [[package]]
 name = "extractor"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "anyhow",
  "bitflags 2.9.4",
@@ -2276,7 +2276,7 @@ dependencies = [
 
 [[package]]
 name = "project-parser"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "chumsky",
  "thiserror 2.0.17",
@@ -3076,7 +3076,7 @@ dependencies = [
 
 [[package]]
 name = "transmute-extra"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "thiserror 2.0.17",
 ]
@@ -3113,7 +3113,7 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
 name = "unite-json"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "clap",
  "serde_json",
@@ -3198,7 +3198,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "video"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "bitflags 2.9.4",
  "ffmpeg-sys-next",
@@ -3311,7 +3311,7 @@ dependencies = [
 
 [[package]]
 name = "wayland-client"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "bitflags 2.9.4",
  "fxhash",
@@ -3331,7 +3331,7 @@ dependencies = [
 
 [[package]]
 name = "wayland-scanner"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "convert_case 0.8.0",
  "paste",
@@ -3349,7 +3349,7 @@ dependencies = [
 
 [[package]]
 name = "wayland-server"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "rustix",
  "thiserror 2.0.17",
@@ -3359,7 +3359,7 @@ dependencies = [
 
 [[package]]
 name = "wayland-sys"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "libc",
  "static_assertions",
@@ -3369,7 +3369,7 @@ dependencies = [
 
 [[package]]
 name = "waywe"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "anyhow",
  "clap",
@@ -3385,7 +3385,7 @@ dependencies = [
 
 [[package]]
 name = "waywe-daemon"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "bevy_ecs",
  "bytemuck",
@@ -3418,7 +3418,7 @@ dependencies = [
 
 [[package]]
 name = "waywe-default-wallpapers"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "bevy_ecs",
  "derive_more",
@@ -3428,7 +3428,7 @@ dependencies = [
 
 [[package]]
 name = "waywe-ipc"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "bincode",
  "bytemuck",
@@ -3445,7 +3445,7 @@ dependencies = [
 
 [[package]]
 name = "waywe-runtime"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "ash",
  "bitflags 2.9.4",
@@ -3471,7 +3471,7 @@ dependencies = [
 
 [[package]]
 name = "waywe-scene"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "ash",
  "bevy_ecs",
