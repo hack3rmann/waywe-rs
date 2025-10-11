@@ -14,7 +14,7 @@ fn invert_gamma(sample: vec3f) -> vec3f {
 }
 
 fn correct_gamma(sample: vec3f) -> vec3f {
-    return pow(sample, vec3f(1.0 / 2.0));
+    return pow(sample, vec3f(1.0 / 2.2));
 }
 
 fn sample_kernel(id: vec2u) -> f32 {
