@@ -14,6 +14,7 @@ use waywe_ipc::{
 use waywe_runtime::{
     Runtime, RuntimeFeatures,
     app::App,
+    effects::convolve::ConvolveConfig,
     event::{EventHandler, Handle, TryReplicate},
     frame::{FrameError, FrameInfo},
     wayland::{MonitorId, MonitorMap, WaylandEvent},
@@ -74,12 +75,17 @@ impl WallpaperApp {
                 };
                 let mut wallpapers =
                     RunningWallpapers::new(monitor_id, size, self.config.animation.clone());
-                wallpapers.enqueue_wallpaper(wallpaper);
+
+                wallpapers.add_effect(ConvolveConfig {
+                    kernel: Arc::new([0.0, -1.0, 0.0, -1.0, 5.0, -1.0, 0.0, -1.0, 0.0]),
+                });
+
+                wallpapers.enqueue_wallpaper(&runtime.wgpu, wallpaper);
                 entry.insert(wallpapers);
             }
-            Entry::Occupied(mut occupied_entry) => {
-                occupied_entry.get_mut().enqueue_wallpaper(wallpaper)
-            }
+            Entry::Occupied(mut occupied_entry) => occupied_entry
+                .get_mut()
+                .enqueue_wallpaper(&runtime.wgpu, wallpaper),
         }
 
         self.wallpaper_states
@@ -241,7 +247,7 @@ impl Handle<WaylandEvent> for WallpaperApp {
                     .values_mut()
                     .flat_map(RunningWallpapers::wallpapers_mut)
                 {
-                    wallpaper.wallpaper.main.world.trigger(event);
+                    wallpaper.wallpaper.wallpaper.main.world.trigger(event);
                 }
             }
         }

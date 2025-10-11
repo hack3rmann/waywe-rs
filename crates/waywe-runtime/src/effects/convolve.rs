@@ -1,10 +1,25 @@
-use crate::effects::{AppliedEffect, EFFECTS_TEXTURE_DESC, Effect};
+use crate::{
+    effects::{AppliedEffect, EFFECTS_TEXTURE_DESC, Effect, config::EffectConfig},
+    gpu::Wgpu,
+    shaders::ShaderDescriptor,
+    wayland::MonitorId,
+};
 use bytemuck::{Pod, Zeroable};
-use std::{mem, num::NonZeroU64};
-use waywe_runtime::{gpu::Wgpu, shaders::ShaderDescriptor, wayland::MonitorId};
+use std::{mem, num::NonZeroU64, sync::Arc};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
 const LABEL: &str = "convolve";
+
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct ConvolveConfig {
+    pub kernel: Arc<[f32]>,
+}
+
+impl EffectConfig for ConvolveConfig {
+    fn build_effect(&self, gpu: &Wgpu, monitor_id: MonitorId) -> Box<dyn Effect> {
+        Box::new(Convolve::new(gpu, monitor_id, &self.kernel))
+    }
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Pod, Zeroable)]

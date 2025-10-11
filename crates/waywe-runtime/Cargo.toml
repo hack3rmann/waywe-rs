@@ -26,3 +26,5 @@ box_into_inner.workspace = true
 video.workspace = true
 wayland-client.workspace = true
 futures-util.workspace = true
+derive_more = { version = "2.0.1", features = ["full"] }
+static_assertions.workspace = true

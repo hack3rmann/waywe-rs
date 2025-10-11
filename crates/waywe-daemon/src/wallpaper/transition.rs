@@ -9,6 +9,10 @@ use std::{
 };
 use waywe_ipc::config::{AnimationConfig, AnimationDirection};
 use waywe_runtime::{
+    effects::{
+        Effects,
+        config::{DynEffectConfig, EffectsBuilder},
+    },
     frame::{FrameError, FrameInfo},
     gpu::Wgpu,
     shaders::ShaderDescriptor,
@@ -364,14 +368,40 @@ impl OngoingTransition {
     }
 }
 
+pub struct EffectWallpaper {
+    pub wallpaper: PreparedWallpaper,
+    pub effects: Effects,
+}
+
+impl EffectWallpaper {
+    pub const fn new(wallpaper: PreparedWallpaper) -> Self {
+        Self {
+            wallpaper,
+            effects: Effects::new(),
+        }
+    }
+
+    pub fn frame(
+        &mut self,
+        gpu: &Wgpu,
+        surface: &wgpu::TextureView,
+        encoder: &mut wgpu::CommandEncoder,
+    ) -> FrameInfo {
+        let info = self.wallpaper.frame(surface.clone(), encoder);
+        self.effects.render(gpu, surface, encoder);
+        info
+    }
+}
+
 pub struct RunningWallpapers {
     pub monitor_id: MonitorId,
     pub aspect_ratio: f32,
-    pub executing: VecDeque<PreparedWallpaper>,
+    pub executing: VecDeque<EffectWallpaper>,
     pub ongoing_transitions: SmallVec<[OngoingTransition; 8]>,
     pub transition_pipeline: Almost<WallpaperTransitionPipeline>,
     pub textures: Almost<WallpaperTransitionState>,
     pub config: AnimationConfig,
+    pub effects_builder: EffectsBuilder,
 }
 
 impl RunningWallpapers {
@@ -384,16 +414,26 @@ impl RunningWallpapers {
             transition_pipeline: Nil,
             textures: Nil,
             config,
+            effects_builder: EffectsBuilder::new(monitor_id),
         }
     }
 
-    pub fn enqueue_wallpaper(&mut self, wallpaper: PreparedWallpaper) {
-        self.executing.push_back(wallpaper);
+    pub fn enqueue_wallpaper(&mut self, gpu: &Wgpu, wallpaper: PreparedWallpaper) {
+        self.executing.push_back(EffectWallpaper {
+            wallpaper,
+            effects: self.effects_builder.build(gpu),
+        });
 
         if self.executing.len() >= 2 {
             self.ongoing_transitions
                 .push(OngoingTransition::new(self.aspect_ratio, &self.config));
         }
+    }
+
+    pub fn add_effect(&mut self, config: impl Into<DynEffectConfig>) -> &mut Self {
+        // NOTE(hack3rmann): we do not update already running wallpapers with newly added config
+        self.effects_builder.add(config);
+        self
     }
 
     pub fn remove_finished(&mut self) {
@@ -439,7 +479,7 @@ impl RunningWallpapers {
             let Some(wallpaper) = self.executing.front_mut() else {
                 unreachable!()
             };
-            return Ok(wallpaper.frame(surface_view, encoder));
+            return Ok(wallpaper.frame(gpu, &surface_view, encoder));
         }
 
         let mut wallpapers = self.executing.iter_mut();
@@ -448,12 +488,12 @@ impl RunningWallpapers {
             unreachable!()
         };
 
-        let mut frame_result = first.frame(self.textures.from.clone(), encoder);
+        let mut frame_result = first.frame(gpu, &self.textures.from, encoder);
 
         for (wallpaper, transition) in wallpapers.zip(&mut self.ongoing_transitions) {
             transition.update();
 
-            let frame_info = wallpaper.frame(self.textures.to.clone(), encoder);
+            let frame_info = wallpaper.frame(gpu, &self.textures.to, encoder);
             frame_result = frame_result.min_or_60_fps(frame_info);
 
             let state = AnimationState {
@@ -477,7 +517,7 @@ impl RunningWallpapers {
         Ok(frame_result)
     }
 
-    pub fn wallpapers_mut(&mut self) -> &mut [PreparedWallpaper] {
+    pub fn wallpapers_mut(&mut self) -> &mut [EffectWallpaper] {
         self.executing.make_contiguous()
     }
 }

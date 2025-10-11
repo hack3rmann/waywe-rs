@@ -9,6 +9,7 @@ use wayland::Wayland;
 use waywe_ipc::{DaemonCommand, IpcSocket, ipc::Server};
 
 pub mod app;
+pub mod effects;
 pub mod event;
 pub mod frame;
 pub mod gpu;
