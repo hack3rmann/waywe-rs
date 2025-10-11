@@ -104,6 +104,21 @@ type = "random"
 # Exact center position of animation circle, used with `type = "point"`.
 # Describes position coordinares in range `-1.0..=1.0`
 position = [0.0, 0.0]
+
+# Optional post-proccess effects
+[[effects]]
+# Convolution filter
+type = "convolve"
+# Convolution kernel (for example, sharpen filter)
+kernel = [0.0, -1.0, 0.0, -1.0, 5.0, -1.0, 0.0, -1.0, 0.0]
+
+[[effects]]
+# Fast blur filter
+type = "blur"
+# Number of downsample passes
+n_levels = 4
+# Growth rate of blur passes on each downsample step (0 for no growth)
+level_multiplier = 2
 ```
 
 ## Troubleshooting
