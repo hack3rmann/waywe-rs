@@ -115,6 +115,34 @@ impl DownsamplePipeline {
             downsampled,
         }
     }
+
+    pub fn run(&self, gpu: &Wgpu, encoder: &mut wgpu::CommandEncoder, input: &wgpu::TextureView) {
+        const WORKGROUP_SIZE: u32 = 8;
+        let width = self.downsampled.texture().size().width / WORKGROUP_SIZE;
+        let height = self.downsampled.texture().size().height / WORKGROUP_SIZE;
+
+        let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some(LABEL),
+            layout: &self.bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(input),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&self.downsampled),
+                },
+            ],
+        });
+
+        let mut pass = encoder.begin_compute_pass(&Default::default());
+
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.set_pipeline(&self.pipeline);
+
+        pass.dispatch_workgroups(width, height, 1);
+    }
 }
 
 pub struct BlurPipeline {
@@ -217,6 +245,63 @@ impl BlurPipeline {
             bind_group_layout,
             pipeline,
             blurred,
+        }
+    }
+
+    pub fn run(&self, gpu: &Wgpu, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+        const WORKGROUP_SIZE: u32 = 8;
+        let width = view.texture().size().width / WORKGROUP_SIZE;
+        let height = view.texture().size().height / WORKGROUP_SIZE;
+
+        {
+            let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some(LABEL),
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&self.blurred),
+                    },
+                ],
+            });
+
+            let mut pass = encoder.begin_compute_pass(&Default::default());
+
+            pass.set_bind_group(0, &bind_group, &[]);
+            pass.set_pipeline(&self.pipeline);
+            pass.set_push_constants(0, bytemuck::bytes_of(&0_u32));
+
+            pass.dispatch_workgroups(width, height, 1);
+        }
+
+        // Blur for Y axis
+        {
+            let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some(LABEL),
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&self.blurred),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(view),
+                    },
+                ],
+            });
+
+            let mut pass = encoder.begin_compute_pass(&Default::default());
+
+            pass.set_bind_group(0, &bind_group, &[]);
+            pass.set_pipeline(&self.pipeline);
+            pass.set_push_constants(0, bytemuck::bytes_of(&1_u32));
+
+            pass.dispatch_workgroups(width, height, 1);
         }
     }
 }
@@ -331,6 +416,37 @@ impl UpsamplePipeline {
             result,
         }
     }
+
+    pub fn run(&self, gpu: &Wgpu, encoder: &mut wgpu::CommandEncoder, source: &wgpu::TextureView) {
+        const WORKGROUP_SIZE: u32 = 8;
+        let width = self.result.texture().size().width / WORKGROUP_SIZE;
+        let height = self.result.texture().size().height / WORKGROUP_SIZE;
+
+        let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some(LABEL),
+            layout: &self.bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(source),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&self.result),
+                },
+            ],
+        });
+
+        let mut pass = encoder.begin_compute_pass(&Default::default());
+
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.set_pipeline(&self.pipeline);
+        pass.dispatch_workgroups(width, height, 1);
+    }
 }
 
 pub struct Blur {
@@ -356,121 +472,14 @@ impl Effect for Blur {
         encoder: &mut wgpu::CommandEncoder,
         input: &wgpu::TextureView,
     ) -> AppliedEffect {
-        const WORKGROUP_SIZE: u32 = 8;
-        let width = self.downsample.downsampled.texture().size().width / WORKGROUP_SIZE;
-        let height = self.downsample.downsampled.texture().size().height / WORKGROUP_SIZE;
-
-        {
-            let downsample_bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some(LABEL),
-                layout: &self.downsample.bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(input),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::TextureView(&self.downsample.downsampled),
-                    },
-                ],
-            });
-
-            let mut pass = encoder.begin_compute_pass(&Default::default());
-
-            pass.set_bind_group(0, &downsample_bind_group, &[]);
-            pass.set_pipeline(&self.downsample.pipeline);
-
-            pass.dispatch_workgroups(width, height, 1);
-        }
+        self.downsample.run(gpu, encoder, input);
 
         for _ in 0..10 {
-            // Blur for X axis
-            {
-                let blur_bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some(LABEL),
-                    layout: &self.downsample.bind_group_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::TextureView(
-                                &self.downsample.downsampled,
-                            ),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::TextureView(&self.blur.blurred),
-                        },
-                    ],
-                });
-
-                let mut pass = encoder.begin_compute_pass(&Default::default());
-
-                pass.set_bind_group(0, &blur_bind_group, &[]);
-                pass.set_pipeline(&self.blur.pipeline);
-                pass.set_push_constants(0, bytemuck::bytes_of(&0_u32));
-
-                pass.dispatch_workgroups(width, height, 1);
-            }
-
-            // Blur for Y axis
-            {
-                let blur_bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some(LABEL),
-                    layout: &self.downsample.bind_group_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::TextureView(&self.blur.blurred),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::TextureView(
-                                &self.downsample.downsampled,
-                            ),
-                        },
-                    ],
-                });
-
-                let mut pass = encoder.begin_compute_pass(&Default::default());
-
-                pass.set_bind_group(0, &blur_bind_group, &[]);
-                pass.set_pipeline(&self.blur.pipeline);
-                pass.set_push_constants(0, bytemuck::bytes_of(&1_u32));
-
-                pass.dispatch_workgroups(width, height, 1);
-            }
+            self.blur.run(gpu, encoder, &self.downsample.downsampled);
         }
 
-        {
-            let upsample_bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some(LABEL),
-                layout: &self.upsample.bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&self.downsample.downsampled),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&self.upsample.sampler),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: wgpu::BindingResource::TextureView(&self.upsample.result),
-                    },
-                ],
-            });
-
-            let mut pass = encoder.begin_compute_pass(&Default::default());
-
-            pass.set_bind_group(0, &upsample_bind_group, &[]);
-            pass.set_pipeline(&self.upsample.pipeline);
-
-            let width = input.texture().size().width / WORKGROUP_SIZE;
-            let height = input.texture().size().height / WORKGROUP_SIZE;
-            pass.dispatch_workgroups(width, height, 1);
-        }
+        self.upsample
+            .run(gpu, encoder, &self.downsample.downsampled);
 
         AppliedEffect::WithOutput(self.upsample.result.clone())
     }
