@@ -47,7 +47,8 @@ impl Wgpu {
 
         let features = wgpu::Features::TEXTURE_FORMAT_NV12
             | wgpu::Features::PUSH_CONSTANTS
-            | wgpu::Features::BGRA8UNORM_STORAGE;
+            | wgpu::Features::BGRA8UNORM_STORAGE
+            | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
         let memory_hints = wgpu::MemoryHints::Performance;
 
         let open_device = unsafe {
@@ -236,7 +237,11 @@ fn create_surface(
     // to render to it using compute shaders
     let config = wgpu::SurfaceConfiguration {
         // NOTE(hack3rmann): `COPY_SRC` used to allow transitions between wallpapers
-        usage: config.usage | wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::COPY_DST,
+        usage: config.usage
+            | wgpu::TextureUsages::COPY_SRC
+            | wgpu::TextureUsages::COPY_DST
+            | wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: vec![format.remove_srgb_suffix()],
         ..config
     };
 

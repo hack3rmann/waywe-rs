@@ -1,4 +1,4 @@
-use crate::effects::{AppliedEffect, EFFECTS_TEXTURE_USAGES, Effect};
+use crate::effects::{AppliedEffect, EFFECTS_TEXTURE_DESC, Effect};
 use bytemuck::{Pod, Zeroable};
 use std::{mem, num::NonZeroU64};
 use waywe_runtime::{gpu::Wgpu, shaders::ShaderDescriptor, wayland::MonitorId};
@@ -14,12 +14,20 @@ pub struct PushConst {
 
 pub struct Convolve {
     pub output: wgpu::TextureView,
+    pub bind_group_layout: wgpu::BindGroupLayout,
     pub pipeline: wgpu::ComputePipeline,
     pub kernel: wgpu::Buffer,
+    pub kernel_size: u32,
 }
 
 impl Convolve {
     pub fn new(gpu: &Wgpu, monitor_id: MonitorId, kernel_data: &[f32]) -> Self {
+        let kernel_size = kernel_data.len().isqrt() as u32;
+        assert_eq!(
+            kernel_size as u64 * kernel_size as u64,
+            kernel_data.len() as u64
+        );
+
         let (size, format) = {
             let surfaces = gpu.surfaces.read().unwrap();
             let surface = &surfaces[&monitor_id];
@@ -34,18 +42,12 @@ impl Convolve {
             )
         };
 
-        let texture_descriptor = wgpu::TextureDescriptor {
+        let output_texture = gpu.device.create_texture(&wgpu::TextureDescriptor {
             label: Some(LABEL),
             size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
             format,
-            usage: EFFECTS_TEXTURE_USAGES,
-            view_formats: &[],
-        };
-
-        let output_texture = gpu.device.create_texture(&texture_descriptor);
+            ..EFFECTS_TEXTURE_DESC
+        });
         let output = output_texture.create_view(&Default::default());
 
         let kernel = gpu.device.create_buffer_init(&BufferInitDescriptor {
@@ -74,10 +76,10 @@ impl Convolve {
                         wgpu::BindGroupLayoutEntry {
                             binding: 1,
                             visibility: wgpu::ShaderStages::COMPUTE,
-                            ty: wgpu::BindingType::StorageTexture {
-                                access: wgpu::StorageTextureAccess::ReadOnly,
-                                format,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: false },
                                 view_dimension: wgpu::TextureViewDimension::D2,
+                                multisampled: false,
                             },
                             count: None,
                         },
@@ -125,6 +127,8 @@ impl Convolve {
             output,
             pipeline,
             kernel,
+            bind_group_layout,
+            kernel_size,
         }
     }
 }
@@ -132,10 +136,48 @@ impl Convolve {
 impl Effect for Convolve {
     fn apply(
         &mut self,
-        _gpu: &Wgpu,
-        _encoder: &mut wgpu::CommandEncoder,
-        _surface: &wgpu::TextureView,
+        gpu: &Wgpu,
+        encoder: &mut wgpu::CommandEncoder,
+        input: &wgpu::TextureView,
     ) -> AppliedEffect {
+        let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some(LABEL),
+            layout: &self.bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: self.kernel.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(input),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&self.output),
+                },
+            ],
+        });
+
+        {
+            let mut pass = encoder.begin_compute_pass(&Default::default());
+
+            pass.set_bind_group(0, &bind_group, &[]);
+            pass.set_pipeline(&self.pipeline);
+            pass.set_push_constants(
+                0,
+                bytemuck::bytes_of(&PushConst {
+                    kernel_size: self.kernel_size,
+                }),
+            );
+
+            const WORKGROUP_SIZE: u32 = 8;
+            let width = input.texture().size().width / WORKGROUP_SIZE;
+            let height = input.texture().size().width / WORKGROUP_SIZE;
+
+            pass.dispatch_workgroups(width, height, 1);
+        }
+
         AppliedEffect::WithOutput(self.output.clone())
     }
 }

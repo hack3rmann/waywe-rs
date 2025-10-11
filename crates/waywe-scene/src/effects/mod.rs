@@ -1,8 +1,8 @@
-pub mod blur;
+pub mod convolve;
 
 use crate::{
     Monitor,
-    effects::blur::Convolve,
+    effects::convolve::Convolve,
     mesh::{CommandEncoder, SurfaceView},
     plugin::Plugin,
     prelude::Wallpaper,
@@ -12,16 +12,32 @@ use bevy_ecs::prelude::*;
 use derive_more::{Deref, DerefMut};
 use smallvec::SmallVec;
 use static_assertions::assert_obj_safe;
-use std::ops::Deref;
-use waywe_runtime::{gpu::Wgpu, wayland::MonitorId};
+use waywe_runtime::gpu::Wgpu;
 
 pub const EFFECTS_TEXTURE_USAGES: wgpu::TextureUsages = wgpu::TextureUsages::from_bits(
     wgpu::TextureUsages::COPY_SRC.bits()
         | wgpu::TextureUsages::COPY_DST.bits()
         | wgpu::TextureUsages::STORAGE_BINDING.bits()
-        | wgpu::TextureUsages::RENDER_ATTACHMENT.bits(),
+        | wgpu::TextureUsages::RENDER_ATTACHMENT.bits()
+        | wgpu::TextureUsages::TEXTURE_BINDING.bits(),
 )
 .unwrap();
+pub const EFFECTS_TEXTURE_DESC: wgpu::TextureDescriptor<'static> = wgpu::TextureDescriptor {
+    label: Some("effects"),
+    // should be replaced
+    size: wgpu::Extent3d {
+        width: 0,
+        height: 0,
+        depth_or_array_layers: 0,
+    },
+    mip_level_count: 1,
+    sample_count: 1,
+    dimension: wgpu::TextureDimension::D2,
+    // should be replaced
+    format: wgpu::TextureFormat::Bgra8Unorm,
+    usage: EFFECTS_TEXTURE_USAGES,
+    view_formats: &[],
+};
 
 pub struct EffectsPlugin;
 
@@ -32,7 +48,7 @@ impl Plugin for EffectsPlugin {
         {
             let gpu = wallpaper.render.resource::<RenderGpu>();
             let monitor_id = wallpaper.render.resource::<Monitor>().id;
-            let data = [[1.0; 3]; 3];
+            let data = [[1.0 / 9.0; 3]; 3];
 
             effects.add(Convolve::new(gpu, monitor_id, data.as_flattened()));
         }
@@ -40,105 +56,33 @@ impl Plugin for EffectsPlugin {
         wallpaper
             .render
             .insert_resource(effects)
-            .init_resource::<EffectView>()
-            .add_systems(
-                Render,
-                (
-                    update_effect_view.in_set(RenderSet::Update),
-                    render_effects.in_set(RenderSet::ApplyEffects),
-                ),
-            );
-    }
-}
-
-#[derive(Resource)]
-pub struct EffectView(pub Option<wgpu::TextureView>);
-
-impl EffectView {
-    pub fn new(gpu: &Wgpu, monitor_id: MonitorId) -> Self {
-        let (size, format) = {
-            let surfaces = gpu.surfaces.read().unwrap();
-            let surface = &surfaces[&monitor_id];
-
-            (
-                wgpu::Extent3d {
-                    width: surface.config.width,
-                    height: surface.config.height,
-                    depth_or_array_layers: 1,
-                },
-                surface.format.remove_srgb_suffix(),
-            )
-        };
-
-        let texture = gpu.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("effect"),
-            size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format,
-            usage: EFFECTS_TEXTURE_USAGES,
-            view_formats: &[],
-        });
-
-        let view = texture.create_view(&Default::default());
-
-        Self(Some(view))
-    }
-}
-
-impl Deref for EffectView {
-    type Target = wgpu::TextureView;
-
-    fn deref(&self) -> &Self::Target {
-        self.0.as_ref().unwrap()
-    }
-}
-
-impl FromWorld for EffectView {
-    fn from_world(world: &mut World) -> Self {
-        let gpu = world.resource::<RenderGpu>();
-        let monitor_id = world.resource::<Monitor>().id;
-        Self::new(gpu, monitor_id)
-    }
-}
-
-pub fn update_effect_view(
-    effects: Res<Effects>,
-    mut effects_view: ResMut<EffectView>,
-    gpu: Res<RenderGpu>,
-    monitor: Res<Monitor>,
-) {
-    if effects.is_empty() && effects_view.0.is_some() {
-        effects_view.0 = None;
-    } else if !effects.is_empty() && effects_view.0.is_none() {
-        *effects_view = EffectView::new(&gpu, monitor.id);
+            .add_systems(Render, render_effects.in_set(RenderSet::ApplyEffects));
     }
 }
 
 pub fn render_effects(
     mut effects: ResMut<Effects>,
-    views: ResMut<SurfaceView>,
-    effect_view: Res<EffectView>,
+    surface: ResMut<SurfaceView>,
     gpu: Res<RenderGpu>,
     mut encoder: ResMut<CommandEncoder>,
 ) {
-    let mut prev_output = None;
+    let surface_view = surface.texture().create_view(&wgpu::TextureViewDescriptor {
+        format: Some(surface.texture().format().remove_srgb_suffix()),
+        ..Default::default()
+    });
+
+    let mut prev_output = surface_view;
 
     for effect in effects.iter_mut().map(Box::as_mut) {
-        let view = prev_output.as_ref().unwrap_or(&**effect_view);
-
-        if let AppliedEffect::WithOutput(texture_view) = effect.apply(&gpu, &mut encoder, view) {
-            prev_output = Some(texture_view);
+        if let AppliedEffect::WithOutput(next) = effect.apply(&gpu, &mut encoder, &prev_output) {
+            prev_output = next;
         }
     }
 
-    let result_view = prev_output.as_ref().unwrap_or(&**effect_view);
-
     encoder.copy_texture_to_texture(
-        result_view.texture().as_image_copy(),
-        views.texture().as_image_copy(),
-        result_view.texture().size(),
+        prev_output.texture().as_image_copy(),
+        surface.texture().as_image_copy(),
+        prev_output.texture().size(),
     );
 }
 
@@ -156,7 +100,7 @@ pub trait Effect: Send + Sync + 'static {
         &mut self,
         gpu: &Wgpu,
         encoder: &mut wgpu::CommandEncoder,
-        surface: &wgpu::TextureView,
+        input: &wgpu::TextureView,
     ) -> AppliedEffect;
 }
 assert_obj_safe!(Effect);
