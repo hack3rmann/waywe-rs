@@ -1,6 +1,6 @@
 use crate::{
     event_loop::WallpaperTarget,
-    wallpaper::{self, transition::RunningWallpapers},
+    wallpaper::{self, optimized::OptimizedWallpaper, transition::RunningWallpapers},
 };
 use for_sure::prelude::*;
 use smallvec::{SmallVec, smallvec};
@@ -18,7 +18,7 @@ use waywe_runtime::{
     frame::{FrameError, FrameInfo},
     wayland::{MonitorId, MonitorMap, WaylandEvent},
 };
-use waywe_scene::{cursor::CursorMoved, wallpaper::PreparedWallpaper};
+use waywe_scene::cursor::CursorMoved;
 
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum WallpaperState {
@@ -63,7 +63,7 @@ impl WallpaperApp {
     pub fn set_wallpaper(
         &mut self,
         runtime: &Runtime,
-        wallpaper: PreparedWallpaper,
+        wallpaper: OptimizedWallpaper,
         monitor_id: MonitorId,
     ) {
         match self.wallpapers.entry(monitor_id) {
@@ -93,7 +93,7 @@ impl WallpaperApp {
 }
 
 pub struct WallpaperPreparedEvent {
-    pub wallpaper: PreparedWallpaper,
+    pub wallpaper: OptimizedWallpaper,
     pub monitor_id: MonitorId,
 }
 
@@ -246,7 +246,9 @@ impl Handle<WaylandEvent> for WallpaperApp {
                     .values_mut()
                     .flat_map(RunningWallpapers::wallpapers_mut)
                 {
-                    wallpaper.wallpaper.wallpaper.main.world.trigger(event);
+                    if let OptimizedWallpaper::Scene(scene) = &mut wallpaper.wallpaper {
+                        scene.wallpaper.main.world.trigger(event);
+                    }
                 }
             }
         }

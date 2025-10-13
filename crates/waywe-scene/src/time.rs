@@ -28,6 +28,17 @@ pub struct Time {
     pub delta: Duration,
 }
 
+impl Time {
+    pub fn update(&mut self) {
+        let now = Instant::now();
+        let delta = now.duration_since(self.prev);
+
+        self.delta = delta;
+        self.elapsed += delta;
+        self.prev = now;
+    }
+}
+
 impl Default for Time {
     fn default() -> Self {
         Self {
@@ -43,10 +54,5 @@ impl Default for Time {
 /// This system should be added to the update schedule to keep
 /// the time resource current.
 pub fn update_time(mut time: ResMut<Time>) {
-    let now = Instant::now();
-    let delta = now.duration_since(time.prev);
-
-    time.delta = delta;
-    time.elapsed += delta;
-    time.prev = now;
+    time.update();
 }

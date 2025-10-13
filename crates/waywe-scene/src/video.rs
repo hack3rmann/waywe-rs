@@ -79,21 +79,7 @@ impl Plugin for VideoPlugin {
 /// System to advance video frames over time.
 pub fn advance_videos(mut videos: ResMut<Assets<Video>>, time: Res<Time>) {
     for (_id, video) in videos.iter_mut() {
-        let Some(duration) = video.frame.duration_in(video.time_base) else {
-            video.next_frame();
-            video.n_frames_since_update = 0;
-            continue;
-        };
-        let duration = duration.to_duration();
-
-        if video.update_delay + time.delta >= duration {
-            video.next_frame();
-            video.n_frames_since_update = 0;
-            video.update_delay = video.update_delay + time.delta - duration;
-        } else {
-            video.n_frames_since_update += 1;
-            video.update_delay += time.delta;
-        }
+        video.advance_by(time.delta);
     }
 }
 
@@ -183,6 +169,25 @@ impl Video {
             update_delay: Duration::ZERO,
             n_frames_since_update: 0,
         })
+    }
+
+    /// Advance this video by `delta` time
+    pub fn advance_by(&mut self, delta: Duration) {
+        let Some(duration) = self.frame.duration_in(self.time_base) else {
+            self.next_frame();
+            self.n_frames_since_update = 0;
+            return;
+        };
+        let duration = duration.to_duration();
+
+        if self.update_delay + delta >= duration {
+            self.next_frame();
+            self.n_frames_since_update = 0;
+            self.update_delay = self.update_delay + delta - duration;
+        } else {
+            self.n_frames_since_update += 1;
+            self.update_delay += delta;
+        }
     }
 
     /// Get the size of video frames in pixels.

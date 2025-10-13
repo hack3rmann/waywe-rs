@@ -15,8 +15,9 @@ use waywe_runtime::{
     shaders::ShaderDescriptor,
     wayland::MonitorId,
 };
-use waywe_scene::wallpaper::PreparedWallpaper;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
+
+use crate::wallpaper::optimized::OptimizedWallpaper;
 
 const SCREEN_TRIANGLE: [Vec2; 3] = [
     Vec2::new(-1.0, -1.0),
@@ -366,12 +367,12 @@ impl OngoingTransition {
 }
 
 pub struct EffectWallpaper {
-    pub wallpaper: PreparedWallpaper,
+    pub wallpaper: OptimizedWallpaper,
     pub effects: Effects,
 }
 
 impl EffectWallpaper {
-    pub const fn new(wallpaper: PreparedWallpaper) -> Self {
+    pub const fn new(wallpaper: OptimizedWallpaper) -> Self {
         Self {
             wallpaper,
             effects: Effects::new(),
@@ -384,7 +385,7 @@ impl EffectWallpaper {
         surface: &wgpu::TextureView,
         encoder: &mut wgpu::CommandEncoder,
     ) -> FrameInfo {
-        let info = self.wallpaper.frame(surface.clone(), encoder);
+        let info = self.wallpaper.frame(gpu, surface, encoder);
         self.effects.render(gpu, surface, encoder);
         info
     }
@@ -415,7 +416,7 @@ impl RunningWallpapers {
         }
     }
 
-    pub fn enqueue_wallpaper(&mut self, gpu: &Wgpu, wallpaper: PreparedWallpaper) {
+    pub fn enqueue_wallpaper(&mut self, gpu: &Wgpu, wallpaper: OptimizedWallpaper) {
         self.executing.push_back(EffectWallpaper {
             wallpaper,
             effects: self.effects_builder.build(gpu),
