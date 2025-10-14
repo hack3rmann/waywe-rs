@@ -256,7 +256,7 @@ impl ShaderDescriptor for ImageFragment {
             label: Some(LABEL),
             source: wgpu::ShaderSource::Glsl {
                 shader: Cow::Borrowed(include_str!("../../shaders/image.glsl")),
-                stage: wgpu::naga::ShaderStage::Vertex,
+                stage: wgpu::naga::ShaderStage::Fragment,
                 defines: &[],
             },
         }
