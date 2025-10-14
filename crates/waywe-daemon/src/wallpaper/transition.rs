@@ -506,7 +506,9 @@ impl RunningWallpapers {
             );
         }
 
-        Ok(frame_result)
+        Ok(FrameInfo {
+            target_frame_time: Some(frame_result.target_frame_time.unwrap_or(FrameInfo::MAX_FPS)),
+        })
     }
 
     pub fn wallpapers_mut(&mut self) -> &mut [EffectWallpaper] {
