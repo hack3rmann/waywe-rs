@@ -16,6 +16,7 @@ pub(crate) use spawner::BundleSpawner;
 
 use bevy_ptr::MovingPtr;
 use core::mem::MaybeUninit;
+
 pub use info::*;
 
 /// Derive the [`Bundle`] trait

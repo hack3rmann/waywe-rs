@@ -9,8 +9,6 @@
 //! When we watch entities, we add the [`ObservedBy`] component to those entities,
 //! which links back to the observer entity.
 
-use core::any::Any;
-
 use crate::{
     component::{
         ComponentCloneBehavior, ComponentId, Mutable, RequiredComponentsRegistrator, StorageType,
@@ -28,6 +26,8 @@ use crate::{
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use bevy_utils::prelude::DebugName;
+use core::any::Any;
+use waywe_uuid::TypeUuid;
 
 #[cfg(feature = "bevy_reflect")]
 use crate::prelude::ReflectComponent;
@@ -203,6 +203,8 @@ use crate::prelude::ReflectComponent;
 ///
 /// [`SystemParam`]: crate::system::SystemParam
 /// [`Trigger`]: crate::event::Trigger
+#[derive(TypeUuid)]
+#[uuid = "de564713-457a-429b-9d2f-7cd697d3f720"]
 pub struct Observer {
     hook_on_add: ComponentHook,
     pub(crate) error_handler: Option<ErrorHandler>,
@@ -456,7 +458,8 @@ fn hook_on_add<E: Event, B: Bundle, S: ObserverSystem<E, B>>(
 }
 
 /// Tracks a list of entity observers for the [`Entity`] [`ObservedBy`] is added to.
-#[derive(Default, Debug)]
+#[derive(Default, Debug, TypeUuid)]
+#[uuid = "db8a8f96-d534-4e23-bf3d-52a0db36e66c"]
 #[cfg_attr(feature = "bevy_reflect", derive(bevy_reflect::Reflect))]
 #[cfg_attr(feature = "bevy_reflect", reflect(Component, Debug))]
 pub struct ObservedBy(pub(crate) Vec<Entity>);

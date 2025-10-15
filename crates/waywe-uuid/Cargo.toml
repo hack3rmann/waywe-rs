@@ -1,0 +1,18 @@
+[package]
+name = "waywe-uuid"
+version = "0.1.2"
+authors = ["David LeGare <dlegare.1001@gmail.com>", "Jacob Kiesel <kieseljake@gmail.com>"]
+edition = "2018"
+
+description = "Safe, stable IDs for Rust types"
+readme = "./README.md"
+documentation = "https://docs.rs/type-uuid"
+repository = "https://github.com/randomPoison/type-uuid"
+license = "Apache-2.0 OR MIT"
+categories = ["rust-patterns"]
+
+[dependencies]
+waywe-uuid-derive = { version = "0.1.2", path = "./waywe-uuid-derive" }
+
+[dev-dependencies]
+uuid = { version = "0.8", default-features = false }

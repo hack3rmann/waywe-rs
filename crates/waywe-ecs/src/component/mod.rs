@@ -6,20 +6,48 @@ mod register;
 mod required;
 mod tick;
 
-pub use clone::*;
-pub use info::*;
-pub use register::*;
-pub use required::*;
-pub use tick::*;
-
 use crate::{
     entity::EntityMapper,
     lifecycle::ComponentHook,
     system::{Local, SystemParam},
     world::{FromWorld, World},
 };
-pub use bevy_ecs_macros::Component;
 use core::{fmt::Debug, marker::PhantomData, ops::Deref};
+
+pub use clone::*;
+pub use info::*;
+pub use register::*;
+pub use required::*;
+pub use tick::*;
+use waywe_uuid::TypeUuid;
+
+// Re-export types needed for the dynamic library safety refactoring
+pub use crate::uuid::{UuidBytes, UuidMap};
+pub use bevy_ecs_macros::Component;
+
+// Generate a UUID based on type information to ensure dynamic library safety
+#[doc(hidden)]
+pub mod const_random_uuid {
+    use core::sync::atomic::{AtomicU64, Ordering};
+
+    static UUID_COUNTER: AtomicU64 = AtomicU64::new(0x1234567890ABCDEF);
+
+    pub fn generate() -> [u8; 16] {
+        let counter = UUID_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let mut uuid = [0u8; 16];
+        uuid[0..8].copy_from_slice(&counter.to_le_bytes());
+        // Use some more predictable values for the rest to avoid collisions
+        uuid[8] = 0x80;
+        uuid[9] = 0x00;
+        uuid[10] = 0x8C;
+        uuid[11] = 0x00;
+        uuid[12] = 0x00;
+        uuid[13] = 0x00;
+        uuid[14] = 0x00;
+        uuid[15] = 0x01;
+        uuid
+    }
+}
 
 /// A data type that can be used to store data for an [entity].
 ///
@@ -484,7 +512,7 @@ use core::{fmt::Debug, marker::PhantomData, ops::Deref};
     label = "invalid `Component`",
     note = "consider annotating `{Self}` with `#[derive(Component)]`"
 )]
-pub trait Component: Send + Sync + 'static {
+pub trait Component: TypeUuid + Send + Sync + 'static {
     /// A constant indicating the storage type used for this component.
     const STORAGE_TYPE: StorageType;
 

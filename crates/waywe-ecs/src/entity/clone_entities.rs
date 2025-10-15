@@ -940,6 +940,11 @@ impl<'w> EntityClonerBuilder<'w, OptOut> {
                     }
                 }
             }
+            FilterableId::Uuid(uuid) => {
+                if let Some(id) = self.world.components().get_valid_id_by_uuid(uuid) {
+                    self.filter.filter_deny(id, self.world);
+                }
+            }
         });
         self
     }
@@ -1027,6 +1032,11 @@ impl<'w> EntityClonerBuilder<'w, OptIn> {
                     for &id in ids {
                         self.filter.filter_allow(id, self.world, insert_mode);
                     }
+                }
+            }
+            FilterableId::Uuid(uuid) => {
+                if let Some(id) = self.world.components().get_valid_id_by_uuid(uuid) {
+                    self.filter.filter_allow(id, self.world, insert_mode);
                 }
             }
         });
@@ -1395,6 +1405,7 @@ mod private {
         Type(TypeId),
         Component(ComponentId),
         Bundle(BundleId),
+        Uuid([u8; 16]), // For dynamic library safety
     }
 
     impl<'a, T> From<&'a T> for FilterableId

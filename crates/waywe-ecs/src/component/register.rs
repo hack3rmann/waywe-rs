@@ -1,16 +1,19 @@
-use alloc::{boxed::Box, vec::Vec};
-use bevy_platform::sync::PoisonError;
-use bevy_utils::TypeIdMap;
-use core::any::Any;
-use core::{any::TypeId, fmt::Debug, ops::Deref};
-
-use crate::component::{RequiredComponentsRegistrator, enforce_no_required_components_recursion};
 use crate::{
     component::{
-        Component, ComponentDescriptor, ComponentId, Components, RequiredComponents, StorageType,
+        Component, ComponentDescriptor, ComponentId, Components, RequiredComponents,
+        RequiredComponentsRegistrator, StorageType, enforce_no_required_components_recursion,
     },
     query::DebugCheckedUnwrap as _,
     resource::Resource,
+    uuid::UuidBytes,
+};
+use alloc::{boxed::Box, vec::Vec};
+use bevy_platform::sync::PoisonError;
+use bevy_utils::TypeIdMap;
+use core::{
+    any::{Any, TypeId},
+    fmt::Debug,
+    ops::Deref,
 };
 
 /// Generates [`ComponentId`]s.
@@ -220,8 +223,14 @@ impl<'w> ComponentsRegistrator<'w> {
                 .register_component_inner(id, ComponentDescriptor::new::<T>());
         }
         let type_id = TypeId::of::<T>();
-        let prev = self.components.indices.insert(type_id, id);
+        // Insert into both maps for compatibility during migration
+        let prev = self.components.type_id_indices.insert(type_id, id);
         debug_assert!(prev.is_none());
+
+        // Also insert into UUID map for dynamic library safety
+        let uuid_bytes = UuidBytes(T::UUID);
+        let prev_uuid = self.components.indices.insert(uuid_bytes, id);
+        debug_assert!(prev_uuid.is_none());
 
         self.recursion_check_stack.push(id);
         let mut required_components = RequiredComponents::default();
@@ -321,7 +330,7 @@ impl<'w> ComponentsRegistrator<'w> {
         type_id: TypeId,
         descriptor: impl FnOnce() -> ComponentDescriptor,
     ) -> ComponentId {
-        if let Some(id) = self.resource_indices.get(&type_id) {
+        if let Some(id) = self.components.resource_type_id_indices.get(&type_id) {
             return *id;
         }
 

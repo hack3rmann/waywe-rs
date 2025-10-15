@@ -1,0 +1,18 @@
+[package]
+name = "waywe-uuid-derive"
+version = "0.1.2"
+authors = ["David LeGare <dlegare.1001@gmail.com>"]
+edition = "2018"
+
+description = "Custom derive for the type-uuid crate"
+documentation = "https://docs.rs/type-uuid"
+repository = "https://github.com/randomPoison/type-uuid"
+license = "Apache-2.0 OR MIT"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "1.0"
+quote = "1.0"
+uuid = { version = "0.8", default-features = false }

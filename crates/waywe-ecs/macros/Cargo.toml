@@ -9,6 +9,8 @@ license = "MIT OR Apache-2.0"
 proc-macro = true
 
 [dependencies]
+uuid = "1.18.1"
+rand = "0.9.2"
 bevy_macro_utils = "0.17.2"
 
 syn = { version = "2.0.99", features = ["full", "extra-traits"] }

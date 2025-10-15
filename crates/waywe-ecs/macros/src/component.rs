@@ -1,3 +1,4 @@
+use crate::uuid::{generate_uuid, quote_uuid};
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{ToTokens, format_ident, quote};
@@ -202,10 +203,17 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
         )
     };
 
-    // This puts `register_required` before `register_recursive_requires` to ensure that the constructors of _all_ top
-    // level components are initialized first, giving them precedence over recursively defined constructors for the same component type
+    let uuid = generate_uuid();
+    let uuid_bytes = quote_uuid(&uuid);
+
     TokenStream::from(quote! {
         #required_component_docs
+
+        // Implement TypeUuid trait with a generated UUID
+        impl #impl_generics #waywe_ecs_path::uuid::TypeUuid for #struct_name #type_generics #where_clause {
+            const UUID: [u8; 16] = #uuid_bytes;
+        }
+
         impl #impl_generics #waywe_ecs_path::component::Component for #struct_name #type_generics #where_clause {
             const STORAGE_TYPE: #waywe_ecs_path::component::StorageType = #storage;
             type Mutability = #mutable_type;

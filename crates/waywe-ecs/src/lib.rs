@@ -56,6 +56,7 @@ pub mod spawn;
 pub mod storage;
 pub mod system;
 pub mod traversal;
+pub mod uuid;
 pub mod world;
 
 pub use bevy_ptr as ptr;

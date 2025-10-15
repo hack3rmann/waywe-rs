@@ -85,6 +85,8 @@ critical-section = [
 hotpatching = ["dep:subsecond"]
 
 [dependencies]
+waywe-uuid.workspace = true
+uuid = "1.18.1"
 bevy_ptr = "0.17.2"
 bevy_reflect = { version = "0.17.2", features = ["smallvec"], default-features = false, optional = true }
 bevy_tasks = { version = "0.17.2", default-features = false }

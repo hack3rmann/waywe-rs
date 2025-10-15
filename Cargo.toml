@@ -20,6 +20,7 @@ members = [
     "crates/waywe-ipc",
     "crates/waywe-runtime",
     "crates/waywe-scene",
+    "crates/waywe-uuid",
 ]
 
 [workspace.package]
@@ -44,6 +45,7 @@ waywe-default-wallpapers = { path = "crates/waywe-default-wallpapers" }
 transmute-extra = { path = "crates/transmute-extra" }
 waywe-ecs = { path = "crates/waywe-ecs" }
 video = { path = "crates/video" }
+waywe-uuid = { path = "crates/waywe-uuid" }
 thiserror = "2.0.11"
 safe-transmute = "0.11.3"
 rayon = "1.10.0"

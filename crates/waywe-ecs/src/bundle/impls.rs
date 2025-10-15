@@ -1,6 +1,5 @@
-use core::any::TypeId;
-
 use bevy_ptr::{MovingPtr, OwningPtr};
+use core::any::TypeId;
 use core::mem::MaybeUninit;
 use variadics_please::all_tuples_enumerated;
 
@@ -19,7 +18,13 @@ unsafe impl<C: Component> Bundle for C {
     }
 
     fn get_component_ids(components: &Components, ids: &mut impl FnMut(Option<ComponentId>)) {
-        ids(components.get_id(TypeId::of::<C>()));
+        // First try UUID-based lookup for dynamic library safety
+        if let Ok(uuid) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| C::UUID)) {
+            ids(components.get_id_by_uuid(uuid))
+        } else {
+            // Fallback to TypeId for backward compatibility
+            ids(components.get_id(TypeId::of::<C>()));
+        }
     }
 }
 

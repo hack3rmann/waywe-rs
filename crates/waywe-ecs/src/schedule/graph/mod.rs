@@ -1,19 +1,16 @@
+mod graph_map;
+mod tarjan_scc;
+
+use crate::schedule::set::*;
 use alloc::{boxed::Box, vec, vec::Vec};
+use bevy_platform::collections::{HashMap, HashSet};
+use bevy_utils::TypeIdMap;
 use core::{
     any::{Any, TypeId},
     fmt::Debug,
 };
-use smallvec::SmallVec;
-
-use bevy_platform::collections::{HashMap, HashSet};
-use bevy_utils::TypeIdMap;
-
 use fixedbitset::FixedBitSet;
-
-use crate::schedule::set::*;
-
-mod graph_map;
-mod tarjan_scc;
+use smallvec::SmallVec;
 
 pub use graph_map::{DiGraph, Direction, GraphNodeId, UnGraph};
 

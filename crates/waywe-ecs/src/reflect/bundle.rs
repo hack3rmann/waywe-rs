@@ -4,9 +4,15 @@
 //! This module exports two types: [`ReflectBundleFns`] and [`ReflectBundle`].
 //!
 //! Same as [`component`](`super::component`), but for bundles.
+use crate::component::UuidBytes;
 use alloc::boxed::Box;
+use bevy_platform::collections::HashMap;
+use bevy_platform::hash::FixedHasher;
 use bevy_utils::prelude::DebugName;
 use core::any::{Any, TypeId};
+
+// Type alias for UUID-based maps for dynamic library safety
+type UuidMap<V> = HashMap<UuidBytes, V, FixedHasher>;
 
 use crate::{
     bundle::BundleFromComponents,

@@ -1,13 +1,3 @@
-use alloc::{boxed::Box, vec, vec::Vec};
-use bevy_platform::{
-    collections::{HashMap, HashSet},
-    hash::FixedHasher,
-};
-use bevy_ptr::{MovingPtr, OwningPtr};
-use bevy_utils::TypeIdMap;
-use core::{any::TypeId, ptr::NonNull};
-use indexmap::{IndexMap, IndexSet};
-
 use crate::{
     archetype::{Archetype, BundleComponentStatus, ComponentStatus},
     bundle::{Bundle, DynamicBundle},
@@ -19,7 +9,20 @@ use crate::{
     entity::Entity,
     query::DebugCheckedUnwrap as _,
     storage::{SparseSetIndex, SparseSets, Storages, Table, TableRow},
+    uuid::UuidBytes,
 };
+use alloc::{boxed::Box, vec, vec::Vec};
+use bevy_platform::{
+    collections::{HashMap, HashSet},
+    hash::FixedHasher,
+};
+use bevy_ptr::{MovingPtr, OwningPtr};
+use bevy_utils::TypeIdMap;
+use core::{any::TypeId, ptr::NonNull};
+use indexmap::{IndexMap, IndexSet};
+
+// Type alias for UUID-based maps for dynamic library safety
+type UuidMap<V> = HashMap<UuidBytes, V, FixedHasher>;
 
 /// For a specific [`World`], this stores a unique value identifying a type of a registered [`Bundle`].
 ///
@@ -376,10 +379,14 @@ pub(crate) enum ArchetypeMoveType {
 #[derive(Default)]
 pub struct Bundles {
     bundle_infos: Vec<BundleInfo>,
-    /// Cache static [`BundleId`]
+    /// Cache static [`BundleId`] - for backward compatibility
     bundle_ids: TypeIdMap<BundleId>,
-    /// Cache bundles, which contains both explicit and required components of [`Bundle`]
+    /// Cache static [`BundleId`] with UUID - for dynamic library safety
+    bundle_uuids: UuidMap<BundleId>,
+    /// Cache bundles, which contains both explicit and required components of [`Bundle`] - for backward compatibility
     contributed_bundle_ids: TypeIdMap<BundleId>,
+    /// Cache bundles, which contains both explicit and required components of [`Bundle`] - for dynamic library safety
+    contributed_bundle_uuids: UuidMap<BundleId>,
     /// Cache dynamic [`BundleId`] with multiple components
     dynamic_bundle_ids: HashMap<Box<[ComponentId]>, BundleId>,
     dynamic_bundle_storages: HashMap<BundleId, Vec<StorageType>>,
@@ -417,6 +424,13 @@ impl Bundles {
     #[inline]
     pub fn get_id(&self, type_id: TypeId) -> Option<BundleId> {
         self.bundle_ids.get(&type_id).cloned()
+    }
+
+    /// Gets the value identifying a specific type of bundle using UUID.
+    /// This is preferred for dynamic library safety.
+    #[inline]
+    pub fn get_id_by_uuid(&self, uuid: [u8; 16]) -> Option<BundleId> {
+        self.bundle_uuids.get(&UuidBytes(uuid)).cloned()
     }
 
     /// Registers a new [`BundleInfo`] for a statically known type.
