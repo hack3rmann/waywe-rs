@@ -1,0 +1,185 @@
+[package]
+name = "waywe-ecs"
+version = "0.17.2"
+edition = "2024"
+description = "Bevy Engine's entity component system"
+homepage = "https://bevy.org"
+repository = "https://github.com/bevyengine/bevy"
+license = "MIT OR Apache-2.0"
+keywords = ["ecs", "game", "bevy"]
+categories = ["game-engines", "data-structures"]
+rust-version = "1.86.0"
+
+[features]
+default = ["std", "bevy_reflect", "async_executor", "backtrace"]
+
+# Functionality
+
+## Enables multithreading support. Schedules will attempt to run systems on
+## multiple threads whenever possible.
+multi_threaded = ["bevy_tasks/multi_threaded", "dep:arrayvec"]
+
+## Adds serialization support through `serde`.
+serialize = ["dep:serde", "bevy_platform/serialize", "indexmap/serde"]
+
+## Adds runtime reflection support using `bevy_reflect`.
+bevy_reflect = ["dep:bevy_reflect"]
+
+## Extends reflection support to functions.
+reflect_functions = ["bevy_reflect", "bevy_reflect/functions"]
+reflect_auto_register = ["bevy_reflect", "bevy_reflect/auto_register"]
+
+## Enables automatic backtrace capturing in BevyError
+backtrace = ["std"]
+
+# Debugging Features
+
+## Enables `tracing` integration, allowing spans and other metrics to be reported
+## through that framework.
+trace = ["std", "dep:tracing", "bevy_utils/debug"]
+
+## Enables a more detailed set of traces which may be noisy if left on by default.
+detailed_trace = ["trace"]
+
+## Provides system stepping support, allowing them to be paused, stepped, and
+## other debug operations which can help with diagnosing certain behaviors.
+bevy_debug_stepping = []
+
+## Provides more detailed tracking of the cause of various effects within the ECS.
+## This will often provide more detailed error messages.
+track_location = []
+
+# Executor Backend
+
+## Uses `async-executor` as a task execution backend.
+## This backend is incompatible with `no_std` targets.
+async_executor = ["std", "bevy_tasks/async_executor"]
+
+# Platform Compatibility
+
+## Allows access to the `std` crate. Enabling this feature will prevent compilation
+## on `no_std` targets, but provides access to certain additional features on
+## supported platforms.
+std = [
+  "bevy_reflect?/std",
+  "bevy_utils/parallel",
+  "bevy_utils/std",
+  "bitflags/std",
+  "concurrent-queue/std",
+  "fixedbitset/std",
+  "indexmap/std",
+  "serde?/std",
+  "nonmax/std",
+  "arrayvec?/std",
+  "log/std",
+  "bevy_platform/std",
+]
+
+## `critical-section` provides the building blocks for synchronization primitives
+## on all platforms, including `no_std`.
+critical-section = [
+  "bevy_platform/critical-section",
+  "bevy_reflect?/critical-section",
+]
+
+hotpatching = ["dep:subsecond"]
+
+[dependencies]
+bevy_ptr = "0.17.2"
+bevy_reflect = { version = "0.17.2", features = ["smallvec"], default-features = false, optional = true }
+bevy_tasks = { version = "0.17.2", default-features = false }
+bevy_utils = { version = "0.17.2", default-features = false }
+bevy_ecs_macros = { path = "macros", version = "0.17.2" }
+bevy_platform = { version = "0.17.2", default-features = false, features = ["alloc"] }
+
+bitflags = { version = "2.3", default-features = false }
+fixedbitset = { version = "0.5", default-features = false }
+serde = { version = "1", default-features = false, features = [
+  "alloc",
+  "serde_derive",
+], optional = true }
+thiserror = { version = "2", default-features = false }
+derive_more = { version = "2", default-features = false, features = [
+  "from",
+  "display",
+  "into",
+  "as_ref",
+] }
+nonmax = { version = "0.5", default-features = false }
+arrayvec = { version = "0.7.4", default-features = false, optional = true }
+smallvec = { version = "1", default-features = false, features = [
+  "union",
+  "const_generics",
+] }
+indexmap = { version = "2.5.0", default-features = false }
+variadics_please = { version = "1.1", default-features = false }
+tracing = { version = "0.1", default-features = false, optional = true }
+log = { version = "0.4", default-features = false }
+bumpalo = "3"
+subsecond = { version = "0.7.0-rc.0", optional = true }
+slotmap = { version = "1.0.7", default-features = false }
+
+concurrent-queue = { version = "2.5.0", default-features = false }
+[target.'cfg(not(all(target_has_atomic = "8", target_has_atomic = "16", target_has_atomic = "32", target_has_atomic = "64", target_has_atomic = "ptr")))'.dependencies]
+concurrent-queue = { version = "2.5.0", default-features = false, features = [
+  "portable-atomic",
+] }
+
+[dev-dependencies]
+rand = "0.9"
+static_assertions = "1.1.0"
+serde_test = "1.0"
+
+[[example]]
+name = "events"
+path = "examples/events.rs"
+
+[[example]]
+name = "resources"
+path = "examples/resources.rs"
+
+[[example]]
+name = "change_detection"
+path = "examples/change_detection.rs"
+
+[lints.clippy]
+doc_markdown = "warn"
+manual_let_else = "warn"
+match_same_arms = "warn"
+redundant_closure_for_method_calls = "warn"
+redundant_else = "warn"
+semicolon_if_nothing_returned = "warn"
+type_complexity = "allow"
+undocumented_unsafe_blocks = "warn"
+unwrap_or_default = "warn"
+needless_lifetimes = "allow"
+too_many_arguments = "allow"
+nonstandard_macro_braces = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+
+ptr_as_ptr = "warn"
+ptr_cast_constness = "warn"
+ref_as_ptr = "warn"
+
+# see: https://github.com/bevyengine/bevy/pull/15375#issuecomment-2366966219
+too_long_first_doc_paragraph = "allow"
+
+std_instead_of_core = "warn"
+std_instead_of_alloc = "warn"
+alloc_instead_of_core = "warn"
+
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
+
+[lints.rust]
+missing_docs = "warn"
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs_dep)'] }
+unsafe_code = "deny"
+unsafe_op_in_unsafe_fn = "warn"
+unused_qualifications = "warn"
+
+[package.metadata.docs.rs]
+rustdoc-args = ["-Zunstable-options", "--generate-link-to-definition"]
+all-features = true
+features = ["bevy_reflect/auto_register_static"]

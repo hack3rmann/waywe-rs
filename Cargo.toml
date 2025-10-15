@@ -16,6 +16,7 @@ members = [
     "crates/waywe",
     "crates/waywe-daemon",
     "crates/waywe-default-wallpapers",
+    "crates/waywe-ecs",
     "crates/waywe-ipc",
     "crates/waywe-runtime",
     "crates/waywe-scene",
