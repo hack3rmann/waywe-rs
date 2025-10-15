@@ -11,8 +11,8 @@
 //!
 //! - [`update_time`]: System that updates the time resource each frame
 
-use bevy_ecs::prelude::*;
 use std::time::{Duration, Instant};
+use waywe_ecs::prelude::*;
 
 /// Time tracking resource.
 ///

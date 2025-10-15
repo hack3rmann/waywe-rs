@@ -37,10 +37,6 @@ use crate::{
     video::VideoMaterial,
     wallpaper::Wallpaper,
 };
-use bevy_ecs::{
-    prelude::*,
-    system::{SystemParamItem, lifetimeless::SRes},
-};
 use bytemuck::{Pod, Zeroable};
 use derive_more::Deref;
 use glam::{Mat4, Vec2, Vec3};
@@ -51,6 +47,10 @@ use std::{
     ops::{Deref, DerefMut},
     ptr::NonNull,
     result::Result,
+};
+use waywe_ecs::{
+    prelude::*,
+    system::{SystemParamItem, lifetimeless::SRes},
 };
 use waywe_runtime::{gpu::Wgpu, wayland::MonitorId};
 

@@ -42,6 +42,7 @@ waywe-runtime = { path = "crates/waywe-runtime" }
 waywe-scene = { path = "crates/waywe-scene" }
 waywe-default-wallpapers = { path = "crates/waywe-default-wallpapers" }
 transmute-extra = { path = "crates/transmute-extra" }
+waywe-ecs = { path = "crates/waywe-ecs" }
 video = { path = "crates/video" }
 thiserror = "2.0.11"
 safe-transmute = "0.11.3"

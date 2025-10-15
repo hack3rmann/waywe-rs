@@ -22,9 +22,9 @@ use crate::{
     render::{EntityMap, SceneExtract},
     wallpaper::Wallpaper,
 };
-use bevy_ecs::prelude::*;
 use glam::{Mat4, Quat, Vec3};
 use smallvec::SmallVec;
+use waywe_ecs::prelude::*;
 
 /// Plugin for transform functionality.
 ///

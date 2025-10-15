@@ -5,10 +5,6 @@ use crate::{
     plugin::Plugin,
     render::SceneExtract,
 };
-use bevy_ecs::{
-    entity::{EntityHash, EntityHasher},
-    prelude::*,
-};
 use box_into_inner::IntoInner;
 use crossbeam::channel::Sender;
 use smallvec::SmallVec;
@@ -24,6 +20,10 @@ use std::{
         atomic::{AtomicU64, Ordering::*},
     },
     thread::{self, JoinHandle},
+};
+use waywe_ecs::{
+    entity::{EntityHash, EntityHasher},
+    prelude::*,
 };
 
 pub struct AssetServerPlugin;

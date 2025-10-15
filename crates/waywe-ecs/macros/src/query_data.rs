@@ -8,7 +8,7 @@ use syn::{
 };
 
 use crate::{
-    bevy_ecs_path,
+    waywe_ecs_path,
     world_query::{item_struct, world_query_impl},
 };
 
@@ -69,7 +69,7 @@ pub fn derive_query_data_impl(input: TokenStream) -> TokenStream {
         }
     }
 
-    let path = bevy_ecs_path();
+    let path = waywe_ecs_path();
 
     let user_generics = ast.generics.clone();
     let (user_impl_generics, user_ty_generics, user_where_clauses) = user_generics.split_for_impl();

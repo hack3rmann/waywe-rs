@@ -4,7 +4,7 @@ use syn::{DeriveInput, Path, parse_macro_input, parse_quote};
 
 pub fn derive_message(input: TokenStream) -> TokenStream {
     let mut ast = parse_macro_input!(input as DeriveInput);
-    let bevy_ecs_path: Path = crate::bevy_ecs_path();
+    let waywe_ecs_path: Path = crate::waywe_ecs_path();
 
     ast.generics
         .make_where_clause()
@@ -15,6 +15,6 @@ pub fn derive_message(input: TokenStream) -> TokenStream {
     let (impl_generics, type_generics, where_clause) = &ast.generics.split_for_impl();
 
     TokenStream::from(quote! {
-        impl #impl_generics #bevy_ecs_path::message::Message for #struct_name #type_generics #where_clause {}
+        impl #impl_generics #waywe_ecs_path::message::Message for #struct_name #type_generics #where_clause {}
     })
 }

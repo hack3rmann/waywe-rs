@@ -4,7 +4,7 @@ use proc_macro2::{Ident, Span};
 use quote::{format_ident, quote};
 use syn::{Data, DataStruct, DeriveInput, Index, parse_macro_input, parse_quote};
 
-use crate::{bevy_ecs_path, world_query::world_query_impl};
+use crate::{waywe_ecs_path, world_query::world_query_impl};
 
 mod field_attr_keywords {
     syn::custom_keyword!(ignore);
@@ -16,7 +16,7 @@ pub fn derive_query_filter_impl(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     let visibility = ast.vis;
 
-    let path = bevy_ecs_path();
+    let path = waywe_ecs_path();
 
     let user_generics = ast.generics.clone();
     let (user_impl_generics, user_ty_generics, user_where_clauses) = user_generics.split_for_impl();

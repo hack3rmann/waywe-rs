@@ -11,11 +11,13 @@ mod query_data;
 mod query_filter;
 mod world_query;
 
+use std::env;
+
 use crate::{
     component::map_entities, query_data::derive_query_data_impl,
     query_filter::derive_query_filter_impl,
 };
-use bevy_macro_utils::{BevyManifest, derive_label, ensure_no_collision, get_struct_fields};
+use bevy_macro_utils::{derive_label, ensure_no_collision, get_struct_fields};
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span};
 use quote::{ToTokens, format_ident, quote};
@@ -50,7 +52,7 @@ impl Default for BundleAttributes {
 #[proc_macro_derive(Bundle, attributes(bundle))]
 pub fn derive_bundle(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
-    let ecs_path = bevy_ecs_path();
+    let ecs_path = waywe_ecs_path();
 
     let mut errors = vec![];
 
@@ -231,7 +233,7 @@ pub fn derive_bundle(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(MapEntities, attributes(entities))]
 pub fn derive_map_entities(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
-    let ecs_path = bevy_ecs_path();
+    let ecs_path = waywe_ecs_path();
 
     let map_entities_impl = map_entities(
         &ast.data,
@@ -270,7 +272,7 @@ pub fn derive_system_param(input: TokenStream) -> TokenStream {
         .into_compile_error()
         .into();
     };
-    let path = bevy_ecs_path();
+    let path = waywe_ecs_path();
 
     let mut field_locals = Vec::new();
     let mut field_names = Vec::new();
@@ -545,7 +547,7 @@ pub fn derive_query_filter(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(ScheduleLabel)]
 pub fn derive_schedule_label(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let mut trait_path = bevy_ecs_path();
+    let mut trait_path = waywe_ecs_path();
     trait_path.segments.push(format_ident!("schedule").into());
     trait_path
         .segments
@@ -559,14 +561,22 @@ pub fn derive_schedule_label(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(SystemSet)]
 pub fn derive_system_set(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let mut trait_path = bevy_ecs_path();
+    let mut trait_path = waywe_ecs_path();
     trait_path.segments.push(format_ident!("schedule").into());
     trait_path.segments.push(format_ident!("SystemSet").into());
     derive_label(input, "SystemSet", &trait_path)
 }
 
-pub(crate) fn bevy_ecs_path() -> syn::Path {
-    BevyManifest::shared().get_path("bevy_ecs")
+pub(crate) fn waywe_ecs_path() -> syn::Path {
+    let crate_name = env::var("CARGO_PKG_NAME").unwrap();
+
+    let path = if crate_name != "waywe-ecs" {
+        quote! { ::waywe_ecs }
+    } else {
+        quote! { crate }
+    };
+
+    syn::parse(path.into()).unwrap()
 }
 
 /// Implement the `Event` trait.
@@ -699,7 +709,7 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
 /// Implement the `FromWorld` trait.
 #[proc_macro_derive(FromWorld, attributes(from_world))]
 pub fn derive_from_world(input: TokenStream) -> TokenStream {
-    let bevy_ecs_path = bevy_ecs_path();
+    let waywe_ecs_path = waywe_ecs_path();
     let ast = parse_macro_input!(input as DeriveInput);
     let name = ast.ident;
     let (impl_generics, ty_generics, where_clauses) = ast.generics.split_for_impl();
@@ -734,7 +744,7 @@ pub fn derive_from_world(input: TokenStream) -> TokenStream {
         }
     };
 
-    let field_init_expr = quote!(#bevy_ecs_path::world::FromWorld::from_world(world));
+    let field_init_expr = quote!(#waywe_ecs_path::world::FromWorld::from_world(world));
     let members = fields.members();
 
     let field_initializers = match variant_ident {
@@ -747,8 +757,8 @@ pub fn derive_from_world(input: TokenStream) -> TokenStream {
     };
 
     TokenStream::from(quote! {
-            impl #impl_generics #bevy_ecs_path::world::FromWorld for #name #ty_generics #where_clauses {
-                fn from_world(world: &mut #bevy_ecs_path::world::World) -> Self {
+            impl #impl_generics #waywe_ecs_path::world::FromWorld for #name #ty_generics #where_clauses {
+                fn from_world(world: &mut #waywe_ecs_path::world::World) -> Self {
                     #field_initializers
                 }
             }

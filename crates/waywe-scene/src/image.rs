@@ -25,12 +25,12 @@ use crate::{
     plugin::Plugin,
     render::{RenderGpu, SceneExtract},
 };
-use bevy_ecs::{
+use derive_more::{Deref, DerefMut};
+use std::path::Path;
+use waywe_ecs::{
     prelude::*,
     system::{StaticSystemParam, SystemParamItem, lifetimeless::SRes},
 };
-use derive_more::{Deref, DerefMut};
-use std::path::Path;
 use waywe_runtime::{gpu::Wgpu, shaders::ShaderDescriptor};
 use wgpu::util::DeviceExt;
 

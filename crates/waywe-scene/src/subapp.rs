@@ -3,7 +3,7 @@
 //! This module provides the [`EcsApp`] struct, which wraps a Bevy [`World`]
 //! with convenience methods for adding systems, resources, and schedules.
 
-use bevy_ecs::{
+use waywe_ecs::{
     bundle::Bundle,
     event::Event,
     observer::Observer,

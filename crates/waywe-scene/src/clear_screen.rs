@@ -5,9 +5,9 @@ use crate::{
     plugin::Plugin,
     render::{Render, RenderGpu, RenderSet},
 };
-use bevy_ecs::prelude::*;
 use derive_more::Deref;
 use glam::Vec3;
+use waywe_ecs::prelude::*;
 use waywe_runtime::{gpu::Wgpu, shaders::ShaderDescriptor, wayland::MonitorId};
 
 pub struct ClearScreenPlugin;

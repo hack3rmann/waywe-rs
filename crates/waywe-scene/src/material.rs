@@ -20,7 +20,7 @@ use crate::{
     plugin::Plugin,
     wallpaper::Wallpaper,
 };
-use bevy_ecs::{
+use waywe_ecs::{
     prelude::*,
     system::{SystemParam, SystemParamItem},
 };

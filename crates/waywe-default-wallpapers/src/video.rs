@@ -3,9 +3,9 @@
 //! This module provides an implementation for playing a video as a wallpaper.
 //! The video is automatically scaled to fit the screen while maintaining its aspect ratio.
 
-use bevy_ecs::prelude::*;
 use derive_more::Deref;
 use std::path::PathBuf;
+use waywe_ecs::prelude::*;
 use waywe_scene::{
     FrameRateSetting, Monitor, Startup,
     assets::Assets,

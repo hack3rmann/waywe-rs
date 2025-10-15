@@ -8,7 +8,7 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
-bevy_ecs = "0.17.2"
+waywe-ecs.workspace = true
 waywe-scene.workspace = true
 derive_more.workspace = true
 image.workspace = true

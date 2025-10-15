@@ -86,7 +86,6 @@
 
 pub mod asset_server;
 pub mod assets;
-pub mod camera;
 pub mod clear_screen;
 pub mod cursor;
 pub mod extract;
@@ -103,15 +102,15 @@ pub mod video;
 pub mod wallpaper;
 
 use crate::{assets::Assets, time::Time, video::Video};
-use bevy_ecs::{prelude::*, schedule::ScheduleLabel};
 use bitflags::bitflags;
 use derive_more::{Deref, DerefMut};
 use glam::UVec2;
 use std::time::Duration;
+use waywe_ecs::{prelude::*, schedule::ScheduleLabel};
 use waywe_runtime::{frame::FrameInfo, wayland::MonitorId};
 
-pub use bevy_ecs as ecs;
 pub use glam;
+pub use waywe_ecs as ecs;
 
 pub mod prelude {
     pub use crate::{
@@ -128,8 +127,8 @@ pub mod prelude {
         video::{Video, VideoMaterial},
         wallpaper::{Wallpaper, WallpaperBuilder},
     };
-    pub use bevy_ecs::prelude::*;
     pub use glam::*;
+    pub use waywe_ecs::prelude::*;
 }
 
 /// Frame rate configuration for the wallpaper.

@@ -1,5 +1,6 @@
 use crate::MainWorld;
-use bevy_ecs::{
+use std::ops::{Deref, DerefMut};
+use waywe_ecs::{
     component::Tick,
     query::FilteredAccessSet,
     system::{
@@ -8,7 +9,6 @@ use bevy_ecs::{
     },
     world::{World, unsafe_world_cell::UnsafeWorldCell},
 };
-use std::ops::{Deref, DerefMut};
 
 /// A helper for accessing [`MainWorld`] content using a system parameter.
 ///

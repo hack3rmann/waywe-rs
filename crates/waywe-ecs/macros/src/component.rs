@@ -14,7 +14,7 @@ use syn::{
 
 pub fn derive_resource(input: TokenStream) -> TokenStream {
     let mut ast = parse_macro_input!(input as DeriveInput);
-    let bevy_ecs_path: Path = crate::bevy_ecs_path();
+    let waywe_ecs_path: Path = crate::waywe_ecs_path();
 
     ast.generics
         .make_where_clause()
@@ -25,7 +25,7 @@ pub fn derive_resource(input: TokenStream) -> TokenStream {
     let (impl_generics, type_generics, where_clause) = &ast.generics.split_for_impl();
 
     TokenStream::from(quote! {
-        impl #impl_generics #bevy_ecs_path::resource::Resource for #struct_name #type_generics #where_clause {
+        impl #impl_generics #waywe_ecs_path::resource::Resource for #struct_name #type_generics #where_clause {
         }
     })
 }
@@ -33,44 +33,44 @@ pub fn derive_resource(input: TokenStream) -> TokenStream {
 /// Component derive syntax is documented on both the macro and the trait.
 pub fn derive_component(input: TokenStream) -> TokenStream {
     let mut ast = parse_macro_input!(input as DeriveInput);
-    let bevy_ecs_path: Path = crate::bevy_ecs_path();
+    let waywe_ecs_path: Path = crate::waywe_ecs_path();
 
     let attrs = match parse_component_attr(&ast) {
         Ok(attrs) => attrs,
         Err(e) => return e.into_compile_error().into(),
     };
 
-    let relationship = match derive_relationship(&ast, &attrs, &bevy_ecs_path) {
+    let relationship = match derive_relationship(&ast, &attrs, &waywe_ecs_path) {
         Ok(value) => value,
         Err(err) => err.into_compile_error().into(),
     };
-    let relationship_target = match derive_relationship_target(&ast, &attrs, &bevy_ecs_path) {
+    let relationship_target = match derive_relationship_target(&ast, &attrs, &waywe_ecs_path) {
         Ok(value) => value,
         Err(err) => err.into_compile_error().into(),
     };
 
     let map_entities = map_entities(
         &ast.data,
-        &bevy_ecs_path,
+        &waywe_ecs_path,
         Ident::new("this", Span::call_site()),
         relationship.is_some(),
         relationship_target.is_some(),
         attrs.map_entities
     ).map(|map_entities_impl| quote! {
-        fn map_entities<M: #bevy_ecs_path::entity::EntityMapper>(this: &mut Self, mapper: &mut M) {
-            use #bevy_ecs_path::entity::MapEntities;
+        fn map_entities<M: #waywe_ecs_path::entity::EntityMapper>(this: &mut Self, mapper: &mut M) {
+            use #waywe_ecs_path::entity::MapEntities;
             #map_entities_impl
         }
     });
 
-    let storage = storage_path(&bevy_ecs_path, attrs.storage);
+    let storage = storage_path(&waywe_ecs_path, attrs.storage);
 
     let on_add_path = attrs
         .on_add
-        .map(|path| path.to_token_stream(&bevy_ecs_path));
+        .map(|path| path.to_token_stream(&waywe_ecs_path));
     let on_remove_path = attrs
         .on_remove
-        .map(|path| path.to_token_stream(&bevy_ecs_path));
+        .map(|path| path.to_token_stream(&waywe_ecs_path));
 
     let on_insert_path = if relationship.is_some() {
         if attrs.on_insert.is_some() {
@@ -82,11 +82,11 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
             .into();
         }
 
-        Some(quote!(<Self as #bevy_ecs_path::relationship::Relationship>::on_insert))
+        Some(quote!(<Self as #waywe_ecs_path::relationship::Relationship>::on_insert))
     } else {
         attrs
             .on_insert
-            .map(|path| path.to_token_stream(&bevy_ecs_path))
+            .map(|path| path.to_token_stream(&waywe_ecs_path))
     };
 
     let on_replace_path = if relationship.is_some() {
@@ -99,7 +99,7 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
             .into();
         }
 
-        Some(quote!(<Self as #bevy_ecs_path::relationship::Relationship>::on_replace))
+        Some(quote!(<Self as #waywe_ecs_path::relationship::Relationship>::on_replace))
     } else if attrs.relationship_target.is_some() {
         if attrs.on_replace.is_some() {
             return syn::Error::new(
@@ -110,11 +110,11 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
             .into();
         }
 
-        Some(quote!(<Self as #bevy_ecs_path::relationship::RelationshipTarget>::on_replace))
+        Some(quote!(<Self as #waywe_ecs_path::relationship::RelationshipTarget>::on_replace))
     } else {
         attrs
             .on_replace
-            .map(|path| path.to_token_stream(&bevy_ecs_path))
+            .map(|path| path.to_token_stream(&waywe_ecs_path))
     };
 
     let on_despawn_path = if attrs
@@ -130,20 +130,22 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
             .into();
         }
 
-        Some(quote!(<Self as #bevy_ecs_path::relationship::RelationshipTarget>::on_despawn))
+        Some(quote!(<Self as #waywe_ecs_path::relationship::RelationshipTarget>::on_despawn))
     } else {
         attrs
             .on_despawn
-            .map(|path| path.to_token_stream(&bevy_ecs_path))
+            .map(|path| path.to_token_stream(&waywe_ecs_path))
     };
 
-    let on_add = hook_register_function_call(&bevy_ecs_path, quote! {on_add}, on_add_path);
-    let on_insert = hook_register_function_call(&bevy_ecs_path, quote! {on_insert}, on_insert_path);
+    let on_add = hook_register_function_call(&waywe_ecs_path, quote! {on_add}, on_add_path);
+    let on_insert =
+        hook_register_function_call(&waywe_ecs_path, quote! {on_insert}, on_insert_path);
     let on_replace =
-        hook_register_function_call(&bevy_ecs_path, quote! {on_replace}, on_replace_path);
-    let on_remove = hook_register_function_call(&bevy_ecs_path, quote! {on_remove}, on_remove_path);
+        hook_register_function_call(&waywe_ecs_path, quote! {on_replace}, on_replace_path);
+    let on_remove =
+        hook_register_function_call(&waywe_ecs_path, quote! {on_remove}, on_remove_path);
     let on_despawn =
-        hook_register_function_call(&bevy_ecs_path, quote! {on_despawn}, on_despawn_path);
+        hook_register_function_call(&waywe_ecs_path, quote! {on_despawn}, on_despawn_path);
 
     ast.generics
         .make_where_clause()
@@ -180,23 +182,23 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
     });
 
     let mutable_type = (attrs.immutable || relationship.is_some())
-        .then_some(quote! { #bevy_ecs_path::component::Immutable })
-        .unwrap_or(quote! { #bevy_ecs_path::component::Mutable });
+        .then_some(quote! { #waywe_ecs_path::component::Immutable })
+        .unwrap_or(quote! { #waywe_ecs_path::component::Mutable });
 
     let clone_behavior = if relationship_target.is_some() || relationship.is_some() {
         quote!(
-            use #bevy_ecs_path::relationship::{
+            use #waywe_ecs_path::relationship::{
                 RelationshipCloneBehaviorBase, RelationshipCloneBehaviorViaClone, RelationshipCloneBehaviorViaReflect,
                 RelationshipTargetCloneBehaviorViaClone, RelationshipTargetCloneBehaviorViaReflect, RelationshipTargetCloneBehaviorHierarchy
                 };
-            (&&&&&&&#bevy_ecs_path::relationship::RelationshipCloneBehaviorSpecialization::<Self>::default()).default_clone_behavior()
+            (&&&&&&&#waywe_ecs_path::relationship::RelationshipCloneBehaviorSpecialization::<Self>::default()).default_clone_behavior()
         )
     } else if let Some(behavior) = attrs.clone_behavior {
-        quote!(#bevy_ecs_path::component::ComponentCloneBehavior::#behavior)
+        quote!(#waywe_ecs_path::component::ComponentCloneBehavior::#behavior)
     } else {
         quote!(
-            use #bevy_ecs_path::component::{DefaultCloneBehaviorBase, DefaultCloneBehaviorViaClone};
-            (&&&#bevy_ecs_path::component::DefaultCloneBehaviorSpecialization::<Self>::default()).default_clone_behavior()
+            use #waywe_ecs_path::component::{DefaultCloneBehaviorBase, DefaultCloneBehaviorViaClone};
+            (&&&#waywe_ecs_path::component::DefaultCloneBehaviorSpecialization::<Self>::default()).default_clone_behavior()
         )
     };
 
@@ -204,12 +206,12 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
     // level components are initialized first, giving them precedence over recursively defined constructors for the same component type
     TokenStream::from(quote! {
         #required_component_docs
-        impl #impl_generics #bevy_ecs_path::component::Component for #struct_name #type_generics #where_clause {
-            const STORAGE_TYPE: #bevy_ecs_path::component::StorageType = #storage;
+        impl #impl_generics #waywe_ecs_path::component::Component for #struct_name #type_generics #where_clause {
+            const STORAGE_TYPE: #waywe_ecs_path::component::StorageType = #storage;
             type Mutability = #mutable_type;
             fn register_required_components(
-                _requiree: #bevy_ecs_path::component::ComponentId,
-                required_components: &mut #bevy_ecs_path::component::RequiredComponentsRegistrator,
+                _requiree: #waywe_ecs_path::component::ComponentId,
+                required_components: &mut #waywe_ecs_path::component::RequiredComponentsRegistrator,
             ) {
                 #(#register_required)*
             }
@@ -220,7 +222,7 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
             #on_remove
             #on_despawn
 
-            fn clone_behavior() -> #bevy_ecs_path::component::ComponentCloneBehavior {
+            fn clone_behavior() -> #waywe_ecs_path::component::ComponentCloneBehavior {
                 #clone_behavior
             }
 
@@ -237,14 +239,14 @@ const ENTITIES: &str = "entities";
 
 pub(crate) fn map_entities(
     data: &Data,
-    bevy_ecs_path: &Path,
+    waywe_ecs_path: &Path,
     self_ident: Ident,
     is_relationship: bool,
     is_relationship_target: bool,
     map_entities_attr: Option<MapEntitiesAttributeKind>,
 ) -> Option<TokenStream2> {
     if let Some(map_entities_override) = map_entities_attr {
-        let map_entities_tokens = map_entities_override.to_token_stream(bevy_ecs_path);
+        let map_entities_tokens = map_entities_override.to_token_stream(waywe_ecs_path);
         return Some(quote!(
             #map_entities_tokens(#self_ident, mapper)
         ));
@@ -375,12 +377,12 @@ impl HookAttributeKind {
         }
     }
 
-    fn to_token_stream(&self, bevy_ecs_path: &Path) -> TokenStream2 {
+    fn to_token_stream(&self, waywe_ecs_path: &Path) -> TokenStream2 {
         match self {
             HookAttributeKind::Path(path) => path.to_token_stream(),
             HookAttributeKind::Call(call) => {
                 quote!({
-                    fn _internal_hook(world: #bevy_ecs_path::world::DeferredWorld, ctx: #bevy_ecs_path::lifecycle::HookContext) {
+                    fn _internal_hook(world: #waywe_ecs_path::world::DeferredWorld, ctx: #waywe_ecs_path::lifecycle::HookContext) {
                         (#call)(world, ctx)
                     }
                     _internal_hook
@@ -423,12 +425,12 @@ impl MapEntitiesAttributeKind {
         }
     }
 
-    fn to_token_stream(&self, bevy_ecs_path: &Path) -> TokenStream2 {
+    fn to_token_stream(&self, waywe_ecs_path: &Path) -> TokenStream2 {
         match self {
             MapEntitiesAttributeKind::Path(path) => path.to_token_stream(),
             MapEntitiesAttributeKind::Default => {
                 quote!(
-                   <Self as #bevy_ecs_path::entity::MapEntities>::map_entities
+                   <Self as #waywe_ecs_path::entity::MapEntities>::map_entities
                 )
             }
         }
@@ -643,23 +645,23 @@ impl Parse for Require {
     }
 }
 
-fn storage_path(bevy_ecs_path: &Path, ty: StorageTy) -> TokenStream2 {
+fn storage_path(waywe_ecs_path: &Path, ty: StorageTy) -> TokenStream2 {
     let storage_type = match ty {
         StorageTy::Table => Ident::new("Table", Span::call_site()),
         StorageTy::SparseSet => Ident::new("SparseSet", Span::call_site()),
     };
 
-    quote! { #bevy_ecs_path::component::StorageType::#storage_type }
+    quote! { #waywe_ecs_path::component::StorageType::#storage_type }
 }
 
 fn hook_register_function_call(
-    bevy_ecs_path: &Path,
+    waywe_ecs_path: &Path,
     hook: TokenStream2,
     function: Option<TokenStream2>,
 ) -> Option<TokenStream2> {
     function.map(|meta| {
         quote! {
-            fn #hook() -> ::core::option::Option<#bevy_ecs_path::lifecycle::ComponentHook> {
+            fn #hook() -> ::core::option::Option<#waywe_ecs_path::lifecycle::ComponentHook> {
                 ::core::option::Option::Some(#meta)
             }
         }
@@ -715,7 +717,7 @@ impl Parse for RelationshipTarget {
 fn derive_relationship(
     ast: &DeriveInput,
     attrs: &Attrs,
-    bevy_ecs_path: &Path,
+    waywe_ecs_path: &Path,
 ) -> Result<Option<TokenStream2>> {
     let Some(relationship) = &attrs.relationship else {
         return Ok(None);
@@ -744,16 +746,16 @@ fn derive_relationship(
     let relationship_target = &relationship.relationship_target;
 
     Ok(Some(quote! {
-        impl #impl_generics #bevy_ecs_path::relationship::Relationship for #struct_name #type_generics #where_clause {
+        impl #impl_generics #waywe_ecs_path::relationship::Relationship for #struct_name #type_generics #where_clause {
             type RelationshipTarget = #relationship_target;
 
             #[inline(always)]
-            fn get(&self) -> #bevy_ecs_path::entity::Entity {
+            fn get(&self) -> #waywe_ecs_path::entity::Entity {
                 self.#relationship_member
             }
 
             #[inline]
-            fn from(entity: #bevy_ecs_path::entity::Entity) -> Self {
+            fn from(entity: #waywe_ecs_path::entity::Entity) -> Self {
                 Self {
                     #(#members: core::default::Default::default(),)*
                     #relationship_member: entity
@@ -771,7 +773,7 @@ fn derive_relationship(
 fn derive_relationship_target(
     ast: &DeriveInput,
     attrs: &Attrs,
-    bevy_ecs_path: &Path,
+    waywe_ecs_path: &Path,
 ) -> Result<Option<TokenStream2>> {
     let Some(relationship_target) = &attrs.relationship_target else {
         return Ok(None);
@@ -808,7 +810,7 @@ fn derive_relationship_target(
     let (impl_generics, type_generics, where_clause) = &ast.generics.split_for_impl();
     let linked_spawn = relationship_target.linked_spawn;
     Ok(Some(quote! {
-        impl #impl_generics #bevy_ecs_path::relationship::RelationshipTarget for #struct_name #type_generics #where_clause {
+        impl #impl_generics #waywe_ecs_path::relationship::RelationshipTarget for #struct_name #type_generics #where_clause {
             const LINKED_SPAWN: bool = #linked_spawn;
             type Relationship = #relationship;
             type Collection = #collection;

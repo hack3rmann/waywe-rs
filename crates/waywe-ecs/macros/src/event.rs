@@ -16,7 +16,7 @@ pub const EVENT_TARGET: &str = "event_target";
 
 pub fn derive_event(input: TokenStream) -> TokenStream {
     let mut ast = parse_macro_input!(input as DeriveInput);
-    let bevy_ecs_path: Path = crate::bevy_ecs_path();
+    let waywe_ecs_path: Path = crate::waywe_ecs_path();
 
     ast.generics
         .make_where_clause()
@@ -46,14 +46,14 @@ pub fn derive_event(input: TokenStream) -> TokenStream {
     let trigger = if let Some(trigger) = trigger {
         quote! {#trigger}
     } else {
-        quote! {#bevy_ecs_path::event::GlobalTrigger}
+        quote! {#waywe_ecs_path::event::GlobalTrigger}
     };
 
     let struct_name = &ast.ident;
     let (impl_generics, type_generics, where_clause) = &ast.generics.split_for_impl();
 
     TokenStream::from(quote! {
-        impl #impl_generics #bevy_ecs_path::event::Event for #struct_name #type_generics #where_clause {
+        impl #impl_generics #waywe_ecs_path::event::Event for #struct_name #type_generics #where_clause {
             type Trigger<'a> = #trigger;
         }
     })
@@ -71,7 +71,7 @@ pub fn derive_entity_event(input: TokenStream) -> TokenStream {
     let mut propagate = false;
     let mut traversal: Option<Type> = None;
     let mut trigger: Option<Type> = None;
-    let bevy_ecs_path: Path = crate::bevy_ecs_path();
+    let waywe_ecs_path: Path = crate::waywe_ecs_path();
 
     let mut processed_attrs = Vec::new();
 
@@ -137,22 +137,22 @@ pub fn derive_entity_event(input: TokenStream) -> TokenStream {
         quote! {#trigger}
     } else if propagate {
         let traversal = traversal
-            .unwrap_or_else(|| parse_quote! { &'static #bevy_ecs_path::hierarchy::ChildOf});
-        quote! {#bevy_ecs_path::event::PropagateEntityTrigger<#auto_propagate, Self, #traversal>}
+            .unwrap_or_else(|| parse_quote! { &'static #waywe_ecs_path::hierarchy::ChildOf});
+        quote! {#waywe_ecs_path::event::PropagateEntityTrigger<#auto_propagate, Self, #traversal>}
     } else {
-        quote! {#bevy_ecs_path::event::EntityTrigger}
+        quote! {#waywe_ecs_path::event::EntityTrigger}
     };
     TokenStream::from(quote! {
-        impl #impl_generics #bevy_ecs_path::event::Event for #struct_name #type_generics #where_clause {
+        impl #impl_generics #waywe_ecs_path::event::Event for #struct_name #type_generics #where_clause {
             type Trigger<'a> = #trigger;
         }
 
-        impl #impl_generics #bevy_ecs_path::event::EntityEvent for #struct_name #type_generics #where_clause {
-            fn event_target(&self) -> #bevy_ecs_path::entity::Entity {
+        impl #impl_generics #waywe_ecs_path::event::EntityEvent for #struct_name #type_generics #where_clause {
+            fn event_target(&self) -> #waywe_ecs_path::entity::Entity {
                 self.#entity_field
             }
 
-            fn event_target_mut(&mut self) -> &mut #bevy_ecs_path::entity::Entity {
+            fn event_target_mut(&mut self) -> &mut #waywe_ecs_path::entity::Entity {
                 &mut self.#entity_field
             }
         }

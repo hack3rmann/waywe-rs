@@ -22,8 +22,8 @@ use crate::{
     subapp::EcsApp,
     time::update_time,
 };
-use bevy_ecs::prelude::*;
 use std::{mem, sync::Arc, thread};
+use waywe_ecs::prelude::*;
 use waywe_runtime::{
     frame::FrameInfo,
     gpu::Wgpu,

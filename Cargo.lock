@@ -249,48 +249,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "bevy_ecs"
-version = "0.17.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69d929d32190cfcde6efd2df493601c4dbc18a691fd9775a544c951c3c112e1a"
-dependencies = [
- "arrayvec",
- "bevy_ecs_macros 0.17.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "bevy_platform",
- "bevy_ptr",
- "bevy_reflect",
- "bevy_tasks",
- "bevy_utils",
- "bitflags 2.9.4",
- "bumpalo",
- "concurrent-queue",
- "derive_more",
- "fixedbitset",
- "indexmap",
- "log",
- "nonmax",
- "serde",
- "slotmap",
- "smallvec",
- "thiserror 2.0.17",
- "variadics_please",
-]
-
-[[package]]
 name = "bevy_ecs_macros"
 version = "0.17.2"
-dependencies = [
- "bevy_macro_utils",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "bevy_ecs_macros"
-version = "0.17.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6eeddfb80a2e000663e87be9229c26b4da92bddbc06c8776bc0d1f4a7f679079"
 dependencies = [
  "bevy_macro_utils",
  "proc-macro2",
@@ -3478,7 +3438,6 @@ dependencies = [
 name = "waywe-daemon"
 version = "0.0.10"
 dependencies = [
- "bevy_ecs",
  "bytemuck",
  "clap",
  "daemonize",
@@ -3501,6 +3460,7 @@ dependencies = [
  "wayland-server",
  "wayland-sys",
  "waywe-default-wallpapers",
+ "waywe-ecs",
  "waywe-ipc",
  "waywe-runtime",
  "waywe-scene",
@@ -3511,9 +3471,9 @@ dependencies = [
 name = "waywe-default-wallpapers"
 version = "0.0.10"
 dependencies = [
- "bevy_ecs",
  "derive_more",
  "image",
+ "waywe-ecs",
  "waywe-scene",
 ]
 
@@ -3522,7 +3482,7 @@ name = "waywe-ecs"
 version = "0.17.2"
 dependencies = [
  "arrayvec",
- "bevy_ecs_macros 0.17.2",
+ "bevy_ecs_macros",
  "bevy_platform",
  "bevy_ptr",
  "bevy_reflect",
@@ -3596,7 +3556,6 @@ name = "waywe-scene"
 version = "0.0.10"
 dependencies = [
  "ash",
- "bevy_ecs",
  "bitflags 2.9.4",
  "box_into_inner",
  "bytemuck",
@@ -3612,6 +3571,7 @@ dependencies = [
  "transmute-extra",
  "variadics_please",
  "video",
+ "waywe-ecs",
  "waywe-runtime",
  "wgpu",
 ]

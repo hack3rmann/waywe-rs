@@ -18,9 +18,9 @@
 //! //! - Animation systems that respond to time and cursor position
 //! ```
 
-use bevy_ecs::prelude::*;
 use smallvec::{SmallVec, smallvec};
 use std::time::Duration;
+use waywe_ecs::prelude::*;
 use waywe_scene::prelude::*;
 
 /// A test wallpaper with multiple meshes and animations.

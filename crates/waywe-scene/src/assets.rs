@@ -26,15 +26,15 @@ use crate::{
     plugin::{AddPlugins, Plugin},
     render::{Render, RenderSet, SceneExtract},
 };
-use bevy_ecs::{
-    prelude::*,
-    system::{StaticSystemParam, SystemParam, SystemParamItem},
-};
 use crossbeam::channel::{self, Receiver, Sender};
 use smallvec::SmallVec;
 use std::marker::PhantomData;
 use thiserror::Error;
 use tracing::error;
+use waywe_ecs::{
+    prelude::*,
+    system::{StaticSystemParam, SystemParam, SystemParamItem},
+};
 
 pub type IdSmallVec = SmallVec<[AssetId; 4]>;
 

@@ -28,10 +28,6 @@ use crate::{
     wallpaper::Wallpaper,
 };
 use ash::vk::{self, PhysicalDeviceMemoryProperties};
-use bevy_ecs::{
-    prelude::*,
-    system::{StaticSystemParam, SystemParamItem, lifetimeless::SRes},
-};
 use glam::UVec2;
 use std::{
     ffi::CString,
@@ -44,6 +40,10 @@ use transmute_extra::pathbuf_into_cstring;
 use video::{
     BackendError, Codec, CodecContext, FormatContext, Frame, MediaType, Packet, RatioI32,
     VideoPixelFormat, acceleration::VaSurfaceHandle,
+};
+use waywe_ecs::{
+    prelude::*,
+    system::{StaticSystemParam, SystemParamItem, lifetimeless::SRes},
 };
 use waywe_runtime::{gpu::Wgpu, shaders::ShaderDescriptor};
 use wgpu::wgc::api;

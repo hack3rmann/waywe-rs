@@ -17,8 +17,8 @@
 //! - [`update_cursor_position`]: System that updates the cursor position
 
 use crate::{plugin::Plugin, wallpaper::Wallpaper};
-use bevy_ecs::prelude::*;
 use glam::UVec2;
+use waywe_ecs::prelude::*;
 
 /// Plugin for cursor functionality.
 ///

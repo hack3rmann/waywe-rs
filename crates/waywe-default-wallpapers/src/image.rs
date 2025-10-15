@@ -3,9 +3,9 @@
 //! This module provides an implementation for displaying a static image as a wallpaper.
 //! The image is automatically scaled to fit the screen while maintaining its aspect ratio.
 
-use bevy_ecs::prelude::*;
 use derive_more::Deref;
 use std::path::PathBuf;
+use waywe_ecs::prelude::*;
 use waywe_scene::prelude::*;
 
 /// A wallpaper that displays a static image.

@@ -12,9 +12,9 @@ use crate::{
     video::{Video, VideoMaterial},
     wallpaper::Wallpaper,
 };
-use bevy_ecs::{prelude::*, system::SystemParam};
 use derive_more::Deref;
 use glam::{UVec2, Vec2, Vec3};
+use waywe_ecs::{prelude::*, system::SystemParam};
 
 pub struct SpritePlugin;
 
