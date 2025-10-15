@@ -1,3 +1,4 @@
+use crate::wallpaper::optimized::OptimizedWallpaper;
 use bytemuck::{Pod, Zeroable};
 use for_sure::prelude::*;
 use glam::{UVec2, Vec2};
@@ -16,8 +17,6 @@ use waywe_runtime::{
     wayland::MonitorId,
 };
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
-
-use crate::wallpaper::optimized::OptimizedWallpaper;
 
 const SCREEN_TRIANGLE: [Vec2; 3] = [
     Vec2::new(-1.0, -1.0),

@@ -153,6 +153,8 @@ impl App for WallpaperApp {
 
         if let Err(FrameError::NoWorkToDo) = &result {
             runtime.control_flow.idle();
+        } else {
+            runtime.control_flow.busy();
         }
 
         self.do_force_frame = false;
