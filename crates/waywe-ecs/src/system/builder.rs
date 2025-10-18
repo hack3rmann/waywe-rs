@@ -1,7 +1,4 @@
-use alloc::{boxed::Box, vec::Vec};
-use bevy_platform::cell::SyncCell;
-use variadics_please::all_tuples;
-
+use super::{Res, ResMut, SystemState};
 use crate::{
     prelude::QueryBuilder,
     query::{QueryData, QueryFilter, QueryState},
@@ -15,9 +12,10 @@ use crate::{
         FilteredResourcesMutBuilder, FromWorld, World,
     },
 };
+use alloc::{boxed::Box, vec::Vec};
+use bevy_platform::cell::SyncCell;
 use core::fmt::Debug;
-
-use super::{Res, ResMut, SystemState};
+use variadics_please::all_tuples;
 
 /// A builder that can create a [`SystemParam`].
 ///
@@ -622,11 +620,9 @@ mod tests {
         entity::Entities,
         error::Result,
         prelude::{Component, Query},
-        reflect::ReflectResource,
         system::{Local, RunSystemOnce},
     };
     use alloc::vec;
-    use bevy_reflect::{FromType, Reflect, ReflectRef};
 
     use super::*;
 
@@ -639,8 +635,7 @@ mod tests {
     #[derive(Component)]
     struct C;
 
-    #[derive(Resource, Default, Reflect)]
-    #[reflect(Resource)]
+    #[derive(Resource, Default)]
     struct R {
         foo: usize,
     }
@@ -1024,32 +1019,5 @@ mod tests {
         )
             .build_state(&mut world)
             .build_system(|_r: ResMut<R>, _fr: FilteredResourcesMut| {});
-    }
-
-    #[test]
-    fn filtered_resource_reflect() {
-        let mut world = World::new();
-        world.insert_resource(R { foo: 7 });
-
-        let system = (FilteredResourcesParamBuilder::new(|builder| {
-            builder.add_read::<R>();
-        }),)
-            .build_state(&mut world)
-            .build_system(|res: FilteredResources| {
-                let reflect_resource = <ReflectResource as FromType<R>>::from_type();
-                let ReflectRef::Struct(reflect_struct) =
-                    reflect_resource.reflect(res).unwrap().reflect_ref()
-                else {
-                    panic!()
-                };
-                *reflect_struct
-                    .field("foo")
-                    .unwrap()
-                    .try_downcast_ref::<usize>()
-                    .unwrap()
-            });
-
-        let output = world.run_system_once(system).unwrap();
-        assert_eq!(output, 7);
     }
 }

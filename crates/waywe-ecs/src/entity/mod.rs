@@ -39,10 +39,6 @@
 mod clone_entities;
 mod entity_set;
 mod map_entities;
-#[cfg(feature = "bevy_reflect")]
-use bevy_reflect::Reflect;
-#[cfg(all(feature = "bevy_reflect", feature = "serialize"))]
-use bevy_reflect::{ReflectDeserialize, ReflectSerialize};
 
 pub use clone_entities::*;
 use derive_more::derive::Display;
@@ -111,9 +107,6 @@ type IdCursor = isize;
 /// but improper use can cause this to identify a different entity than intended.
 /// Use with caution.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Display)]
-#[cfg_attr(feature = "bevy_reflect", derive(Reflect))]
-#[cfg_attr(feature = "bevy_reflect", reflect(opaque))]
-#[cfg_attr(feature = "bevy_reflect", reflect(Hash, PartialEq, Debug, Clone))]
 #[repr(transparent)]
 pub struct EntityRow(NonMaxU32);
 
@@ -212,9 +205,6 @@ impl SparseSetIndex for EntityRow {
 /// This can cause some unintended side effects.
 /// See [`Entity`] docs for practical concerns and how to minimize any risks.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Display)]
-#[cfg_attr(feature = "bevy_reflect", derive(Reflect))]
-#[cfg_attr(feature = "bevy_reflect", reflect(opaque))]
-#[cfg_attr(feature = "bevy_reflect", reflect(Hash, PartialEq, Debug, Clone))]
 #[repr(transparent)]
 pub struct EntityGeneration(u32);
 
@@ -383,13 +373,6 @@ impl EntityGeneration {
 /// [`World`]: crate::world::World
 /// [SemVer]: https://semver.org/
 #[derive(Clone, Copy)]
-#[cfg_attr(feature = "bevy_reflect", derive(Reflect))]
-#[cfg_attr(feature = "bevy_reflect", reflect(opaque))]
-#[cfg_attr(feature = "bevy_reflect", reflect(Hash, PartialEq, Debug, Clone))]
-#[cfg_attr(
-    all(feature = "bevy_reflect", feature = "serialize"),
-    reflect(Serialize, Deserialize)
-)]
 // Alignment repr necessary to allow LLVM to better output
 // optimized codegen for `to_bits`, `PartialEq` and `Ord`.
 #[repr(C, align(8))]
@@ -474,26 +457,6 @@ impl Entity {
     /// let mut entities: [Entity; 10] = [Entity::PLACEHOLDER; 10];
     ///
     /// // ... replace the entities with valid ones.
-    /// ```
-    ///
-    /// Deriving [`Reflect`] for a component that has an `Entity` field:
-    ///
-    /// ```no_run
-    /// # use bevy_ecs::{prelude::*, component::*};
-    /// # use bevy_reflect::Reflect;
-    /// #[derive(Reflect, Component)]
-    /// #[reflect(Component)]
-    /// pub struct MyStruct {
-    ///     pub entity: Entity,
-    /// }
-    ///
-    /// impl FromWorld for MyStruct {
-    ///     fn from_world(_world: &mut World) -> Self {
-    ///         Self {
-    ///             entity: Entity::PLACEHOLDER,
-    ///         }
-    ///     }
-    /// }
     /// ```
     pub const PLACEHOLDER: Self = Self::from_row(EntityRow::PLACEHOLDER);
 

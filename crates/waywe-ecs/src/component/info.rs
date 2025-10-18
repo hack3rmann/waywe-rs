@@ -13,16 +13,8 @@ use crate::{
 use alloc::{borrow::Cow, vec::Vec};
 use bevy_platform::{hash::FixedHasher, sync::PoisonError};
 use bevy_ptr::OwningPtr;
-#[cfg(feature = "bevy_reflect")]
-use bevy_reflect::Reflect;
 use bevy_utils::prelude::DebugName;
-use core::{
-    alloc::Layout,
-    any::Any,
-    fmt::Debug,
-    hash::{Hash, Hasher},
-    mem::needs_drop,
-};
+use core::{alloc::Layout, any::Any, fmt::Debug, hash::Hash, mem::needs_drop};
 use indexmap::IndexSet;
 use uuid::Uuid;
 use waywe_uuid::TypeUuid;
@@ -168,11 +160,6 @@ impl ComponentInfo {
 /// from a `World` using [`World::component_id()`](crate::world::World::component_id) or via [`Components::component_id()`].
 /// Access to the `ComponentId` for a [`Resource`] is available via [`Components::resource_id()`].
 #[derive(Debug, Copy, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
-#[cfg_attr(
-    feature = "bevy_reflect",
-    derive(Reflect),
-    reflect(Debug, Hash, PartialEq, Clone)
-)]
 pub struct ComponentId(pub(super) usize);
 
 impl ComponentId {
@@ -623,7 +610,7 @@ impl Components {
         self.get_valid_resource_id(UuidBytes::of::<T>().to_uuid())
     }
 
-    /// Type-erased equivalent of [`Components::component_id()`] using TypeId (deprecated).
+    /// Type-erased equivalent of [`Components::component_id()`] using [`Uuid`]
     #[inline]
     pub fn get_id(&self, uuid: Uuid) -> Option<ComponentId> {
         let uuid = UuidBytes::from_uuid(uuid);

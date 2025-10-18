@@ -385,8 +385,6 @@ pub struct Bundles {
     bundle_uuids: UuidMap<BundleId>,
     /// Cache bundles, which contains both explicit and required components of [`Bundle`] - for backward compatibility
     contributed_bundle_ids: TypeIdMap<BundleId>,
-    /// Cache bundles, which contains both explicit and required components of [`Bundle`] - for dynamic library safety
-    contributed_bundle_uuids: UuidMap<BundleId>,
     /// Cache dynamic [`BundleId`] with multiple components
     dynamic_bundle_ids: HashMap<Box<[ComponentId]>, BundleId>,
     dynamic_bundle_storages: HashMap<BundleId, Vec<StorageType>>,

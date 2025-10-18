@@ -29,9 +29,6 @@ use bevy_utils::prelude::DebugName;
 use core::any::Any;
 use waywe_uuid::TypeUuid;
 
-#[cfg(feature = "bevy_reflect")]
-use crate::prelude::ReflectComponent;
-
 /// An [`Observer`] system. Add this [`Component`] to an [`Entity`] to turn it into an "observer".
 ///
 /// Observers watch for a "trigger" of a specific [`Event`]. An event can be triggered on the [`World`]
@@ -460,8 +457,6 @@ fn hook_on_add<E: Event, B: Bundle, S: ObserverSystem<E, B>>(
 /// Tracks a list of entity observers for the [`Entity`] [`ObservedBy`] is added to.
 #[derive(Default, Debug, TypeUuid)]
 #[uuid = "db8a8f96-d534-4e23-bf3d-52a0db36e66c"]
-#[cfg_attr(feature = "bevy_reflect", derive(bevy_reflect::Reflect))]
-#[cfg_attr(feature = "bevy_reflect", reflect(Component, Debug))]
 pub struct ObservedBy(pub(crate) Vec<Entity>);
 
 impl ObservedBy {

@@ -2,6 +2,8 @@
 //!
 //! This module is a lightweight wrapper around Bevy's [`HashMap`] that is more performant for [`Entity`] keys.
 
+use super::{Entity, EntityEquivalent, EntityHash, EntitySetIterator};
+use bevy_platform::collections::hash_map::{self, HashMap};
 use core::{
     fmt::{self, Debug, Formatter},
     iter::FusedIterator,
@@ -9,14 +11,7 @@ use core::{
     ops::{Deref, DerefMut, Index},
 };
 
-use bevy_platform::collections::hash_map::{self, HashMap};
-#[cfg(feature = "bevy_reflect")]
-use bevy_reflect::Reflect;
-
-use super::{Entity, EntityEquivalent, EntityHash, EntitySetIterator};
-
 /// A [`HashMap`] pre-configured to use [`EntityHash`] hashing.
-#[cfg_attr(feature = "bevy_reflect", derive(Reflect))]
 #[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntityHashMap<V>(pub(crate) HashMap<Entity, V, EntityHash>);
@@ -261,12 +256,8 @@ unsafe impl<V> EntitySetIterator for IntoKeys<V> {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bevy_reflect::Reflect;
     use static_assertions::assert_impl_all;
 
     // Check that the HashMaps are Clone if the key/values are Clone
     assert_impl_all!(EntityHashMap::<usize>: Clone);
-    // EntityHashMap should implement Reflect
-    #[cfg(feature = "bevy_reflect")]
-    assert_impl_all!(EntityHashMap::<i32>: Reflect);
 }

@@ -7,8 +7,6 @@ use crate::{
 };
 use alloc::borrow::ToOwned;
 use bevy_ptr::{Ptr, UnsafeCellDeref};
-#[cfg(feature = "bevy_reflect")]
-use bevy_reflect::Reflect;
 use core::{
     marker::PhantomData,
     mem,
@@ -1098,15 +1096,6 @@ impl<'w> MutUntyped<'w> {
     /// // SAFETY: ptr is of type `u8`
     /// mut_untyped.map_unchanged(|ptr| unsafe { ptr.deref_mut::<u8>() });
     /// ```
-    /// If you have a [`ReflectFromPtr`](bevy_reflect::ReflectFromPtr) that you know belongs to this [`MutUntyped`],
-    /// you can do
-    /// ```no_run
-    /// # use bevy_ecs::change_detection::{Mut, MutUntyped};
-    /// # let mut_untyped: MutUntyped = unimplemented!();
-    /// # let reflect_from_ptr: bevy_reflect::ReflectFromPtr = unimplemented!();
-    /// // SAFETY: from the context it is known that `ReflectFromPtr` was made for the type of the `MutUntyped`
-    /// mut_untyped.map_unchanged(|ptr| unsafe { reflect_from_ptr.as_reflect_mut(ptr) });
-    /// ```
     pub fn map_unchanged<T: ?Sized>(self, f: impl FnOnce(PtrMut<'w>) -> &'w mut T) -> Mut<'w, T> {
         Mut {
             value: f(self.value),
@@ -1230,10 +1219,8 @@ impl<'w, T> From<Mut<'w, T>> for MutUntyped<'w> {
 ///
 /// This allows code to be written that will be checked by the compiler even when the feature is disabled,
 /// but that will be entirely removed during compilation.
-#[cfg_attr(feature = "bevy_reflect", derive(Reflect))]
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct MaybeLocation<T: ?Sized = &'static Location<'static>> {
-    #[cfg_attr(feature = "bevy_reflect", reflect(ignore, clone))]
     marker: PhantomData<T>,
     #[cfg(feature = "track_location")]
     value: T,
@@ -1507,7 +1494,6 @@ impl MaybeLocation {
 mod tests {
     use bevy_ecs_macros::Resource;
     use bevy_ptr::PtrMut;
-    use bevy_reflect::{FromType, ReflectFromPtr};
     use core::ops::{Deref, DerefMut};
 
     use crate::{
@@ -1793,44 +1779,6 @@ mod tests {
             r.is_changed(),
             "Resource must be changed after setting to a different value."
         );
-    }
-
-    #[test]
-    fn mut_untyped_to_reflect() {
-        let last_run = Tick::new(2);
-        let this_run = Tick::new(3);
-        let mut component_ticks = ComponentTicks {
-            added: Tick::new(1),
-            changed: Tick::new(2),
-        };
-        let ticks = TicksMut {
-            added: &mut component_ticks.added,
-            changed: &mut component_ticks.changed,
-            last_run,
-            this_run,
-        };
-
-        let mut value: i32 = 5;
-        let mut caller = MaybeLocation::caller();
-
-        let value = MutUntyped {
-            value: PtrMut::from(&mut value),
-            ticks,
-            changed_by: caller.as_mut(),
-        };
-
-        let reflect_from_ptr = <ReflectFromPtr as FromType<i32>>::from_type();
-
-        let mut new = value.map_unchanged(|ptr| {
-            // SAFETY: The underlying type of `ptr` matches `reflect_from_ptr`.
-            unsafe { reflect_from_ptr.as_reflect_mut(ptr) }
-        });
-
-        assert!(!new.is_changed());
-
-        new.reflect_mut();
-
-        assert!(new.is_changed());
     }
 
     #[test]

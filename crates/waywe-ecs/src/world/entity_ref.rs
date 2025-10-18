@@ -2876,7 +2876,7 @@ impl<'w> EntityWorldMut<'w> {
     /// configured through [`EntityClonerBuilder`].
     ///
     /// The other entity will receive all the components of the original that implement
-    /// [`Clone`] or [`Reflect`](bevy_reflect::Reflect) except those that are
+    /// [`Clone`] except those that are
     /// [denied](EntityClonerBuilder::deny) in the `config`.
     ///
     /// # Example
@@ -2924,7 +2924,7 @@ impl<'w> EntityWorldMut<'w> {
     /// configured through [`EntityClonerBuilder`].
     ///
     /// The other entity will receive only the components of the original that implement
-    /// [`Clone`] or [`Reflect`](bevy_reflect::Reflect) and are
+    /// [`Clone`] and are
     /// [allowed](EntityClonerBuilder::allow) in the `config`.
     ///
     /// # Example
@@ -2971,7 +2971,7 @@ impl<'w> EntityWorldMut<'w> {
     /// Spawns a clone of this entity and returns the [`Entity`] of the clone.
     ///
     /// The clone will receive all the components of the original that implement
-    /// [`Clone`] or [`Reflect`](bevy_reflect::Reflect).
+    /// [`Clone`]
     ///
     /// To configure cloning behavior (such as only cloning certain components),
     /// use [`EntityWorldMut::clone_and_spawn_with_opt_out`]/
@@ -2988,7 +2988,7 @@ impl<'w> EntityWorldMut<'w> {
     /// using [`EntityClonerBuilder`], returning the [`Entity`] of the clone.
     ///
     /// The clone will receive all the components of the original that implement
-    /// [`Clone`] or [`Reflect`](bevy_reflect::Reflect) except those that are
+    /// [`Clone`] except those that are
     /// [denied](EntityClonerBuilder::deny) in the `config`.
     ///
     /// # Example
@@ -3036,7 +3036,7 @@ impl<'w> EntityWorldMut<'w> {
     /// using [`EntityClonerBuilder`], returning the [`Entity`] of the clone.
     ///
     /// The clone will receive only the components of the original that implement
-    /// [`Clone`] or [`Reflect`](bevy_reflect::Reflect) and are
+    /// [`Clone`] and are
     /// [allowed](EntityClonerBuilder::allow) in the `config`.
     ///
     /// # Example
@@ -3083,7 +3083,7 @@ impl<'w> EntityWorldMut<'w> {
     /// Clones the specified components of this entity and inserts them into another entity.
     ///
     /// Components can only be cloned if they implement
-    /// [`Clone`] or [`Reflect`](bevy_reflect::Reflect).
+    /// [`Clone`]
     ///
     /// # Panics
     ///
@@ -3105,7 +3105,7 @@ impl<'w> EntityWorldMut<'w> {
     /// then removes the components from this entity.
     ///
     /// Components can only be cloned if they implement
-    /// [`Clone`] or [`Reflect`](bevy_reflect::Reflect).
+    /// [`Clone`]
     ///
     /// # Panics
     ///

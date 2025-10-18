@@ -9,10 +9,7 @@ mod identifier;
 mod spawn_batch;
 
 pub mod error;
-#[cfg(feature = "bevy_reflect")]
-pub mod reflect;
 pub mod unsafe_world_cell;
-
 pub use crate::{
     change_detection::{CHECK_TICK_THRESHOLD, Mut, Ref},
     world::command_queue::CommandQueue,
@@ -28,8 +25,6 @@ pub use entity_ref::{
 pub use filtered_resource::*;
 pub use identifier::WorldId;
 pub use spawn_batch::*;
-use uuid::Uuid;
-use waywe_uuid::TypeUuid;
 
 use crate::{
     archetype::{ArchetypeId, Archetypes},
@@ -71,6 +66,8 @@ use bevy_utils::prelude::DebugName;
 use core::{any::Any, fmt};
 use log::warn;
 use unsafe_world_cell::{UnsafeEntityCell, UnsafeWorldCell};
+use uuid::Uuid;
+use waywe_uuid::TypeUuid;
 
 /// Stores and exposes operations on [entities](Entity), [components](Component), resources,
 /// and their associated metadata.
@@ -3255,9 +3252,7 @@ impl World {
     /// # world.insert_resource(A(1));
     /// # world.insert_resource(B(2));
     /// #
-    /// // In this example, `A` and `B` are resources. We deliberately do not use the
-    /// // `bevy_reflect` crate here to showcase the low-level [`Ptr`] usage. You should
-    /// // probably use something like `ReflectFromPtr` in a real-world scenario.
+    /// // In this example, `A` and `B` are resources.
     ///
     /// // Create the hash map that will store the closures for each resource type
     /// let mut closures: HashMap<TypeId, Box<dyn Fn(&Ptr<'_>)>> = HashMap::default();
@@ -3332,9 +3327,7 @@ impl World {
     /// # world.insert_resource(A(1));
     /// # world.insert_resource(B(2));
     /// #
-    /// // In this example, `A` and `B` are resources. We deliberately do not use the
-    /// // `bevy_reflect` crate here to showcase the low-level `MutUntyped` usage. You should
-    /// // probably use something like `ReflectFromPtr` in a real-world scenario.
+    /// // In this example, `A` and `B` are resources.
     ///
     /// // Create the hash map that will store the mutator closures for each resource type
     /// let mut mutators: HashMap<TypeId, Box<dyn Fn(&mut MutUntyped<'_>)>> = HashMap::default();

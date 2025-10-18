@@ -2,6 +2,8 @@
 //!
 //! This module is a lightweight wrapper around `indexmap`'s [`IndexMap`] that is more performant for [`Entity`] keys.
 
+use super::{Entity, EntityEquivalent, EntityHash, EntitySetIterator};
+use bevy_platform::prelude::Box;
 use core::{
     cmp::Ordering,
     fmt::{self, Debug, Formatter},
@@ -14,17 +16,9 @@ use core::{
     },
     ptr,
 };
-
-#[cfg(feature = "bevy_reflect")]
-use bevy_reflect::Reflect;
 use indexmap::map::{self, IndexMap, IntoValues, ValuesMut};
 
-use super::{Entity, EntityEquivalent, EntityHash, EntitySetIterator};
-
-use bevy_platform::prelude::Box;
-
 /// A [`IndexMap`] pre-configured to use [`EntityHash`] hashing.
-#[cfg_attr(feature = "bevy_reflect", derive(Reflect))]
 #[cfg_attr(feature = "serialize", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Debug, Clone)]
 pub struct EntityIndexMap<V>(pub(crate) IndexMap<Entity, V, EntityHash>);

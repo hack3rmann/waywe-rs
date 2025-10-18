@@ -4,16 +4,6 @@ pub mod entity_command;
 #[cfg(feature = "std")]
 mod parallel_scope;
 
-use bevy_ptr::move_as_ptr;
-pub use command::Command;
-pub use entity_command::EntityCommand;
-
-#[cfg(feature = "std")]
-pub use parallel_scope::*;
-
-use alloc::boxed::Box;
-use core::marker::PhantomData;
-
 use crate::{
     self as bevy_ecs,
     bundle::{Bundle, InsertMode, NoBundleEffect},
@@ -35,6 +25,14 @@ use crate::{
         unsafe_world_cell::UnsafeWorldCell,
     },
 };
+use alloc::boxed::Box;
+use bevy_ptr::move_as_ptr;
+use core::marker::PhantomData;
+
+pub use command::Command;
+pub use entity_command::EntityCommand;
+#[cfg(feature = "std")]
+pub use parallel_scope::*;
 
 /// A [`Command`] queue to perform structural changes to the [`World`].
 ///
@@ -2018,7 +2016,7 @@ impl<'a> EntityCommands<'a> {
     /// configured through [`EntityClonerBuilder`].
     ///
     /// The other entity will receive all the components of the original that implement
-    /// [`Clone`] or [`Reflect`](bevy_reflect::Reflect) except those that are
+    /// [`Clone`] except those that are
     /// [denied](EntityClonerBuilder::deny) in the `config`.
     ///
     /// # Panics
@@ -2063,7 +2061,7 @@ impl<'a> EntityCommands<'a> {
     /// configured through [`EntityClonerBuilder`].
     ///
     /// The other entity will receive only the components of the original that implement
-    /// [`Clone`] or [`Reflect`](bevy_reflect::Reflect) and are
+    /// [`Clone`] and are
     /// [allowed](EntityClonerBuilder::allow) in the `config`.
     ///
     /// # Panics
@@ -2107,7 +2105,7 @@ impl<'a> EntityCommands<'a> {
     /// Spawns a clone of this entity and returns the [`EntityCommands`] of the clone.
     ///
     /// The clone will receive all the components of the original that implement
-    /// [`Clone`] or [`Reflect`](bevy_reflect::Reflect).
+    /// [`Clone`].
     ///
     /// To configure cloning behavior (such as only cloning certain components),
     /// use [`EntityCommands::clone_and_spawn_with_opt_out`]/
@@ -2143,7 +2141,7 @@ impl<'a> EntityCommands<'a> {
     /// using [`EntityClonerBuilder`], returning the [`EntityCommands`] of the clone.
     ///
     /// The clone will receive all the components of the original that implement
-    /// [`Clone`] or [`Reflect`](bevy_reflect::Reflect) except those that are
+    /// [`Clone`] except those that are
     /// [denied](EntityClonerBuilder::deny) in the `config`.
     ///
     /// See the methods on [`EntityClonerBuilder<OptOut>`] for more options.
@@ -2188,7 +2186,7 @@ impl<'a> EntityCommands<'a> {
     /// using [`EntityClonerBuilder`], returning the [`EntityCommands`] of the clone.
     ///
     /// The clone will receive only the components of the original that implement
-    /// [`Clone`] or [`Reflect`](bevy_reflect::Reflect) and are
+    /// [`Clone`] and are
     /// [allowed](EntityClonerBuilder::allow) in the `config`.
     ///
     /// See the methods on [`EntityClonerBuilder<OptIn>`] for more options.
@@ -2232,7 +2230,7 @@ impl<'a> EntityCommands<'a> {
     /// Clones the specified components of this entity and inserts them into another entity.
     ///
     /// Components can only be cloned if they implement
-    /// [`Clone`] or [`Reflect`](bevy_reflect::Reflect).
+    /// [`Clone`].
     ///
     /// # Panics
     ///
@@ -2446,13 +2444,11 @@ mod tests {
         component::Component,
         resource::Resource,
         system::Commands,
+        uuid::UuidBytes,
         world::{CommandQueue, FromWorld, World},
     };
     use alloc::{string::String, sync::Arc, vec, vec::Vec};
-    use core::{
-        any::TypeId,
-        sync::atomic::{AtomicUsize, Ordering},
-    };
+    use core::sync::atomic::{AtomicUsize, Ordering};
 
     #[expect(
         dead_code,
@@ -2708,13 +2704,28 @@ mod tests {
         // test component removal
         Commands::new(&mut command_queue, &world)
             .entity(entity)
-            .remove_by_id(world.components().get_id(TypeId::of::<W<u32>>()).unwrap())
-            .remove_by_id(world.components().get_id(TypeId::of::<W<u64>>()).unwrap())
-            .remove_by_id(world.components().get_id(TypeId::of::<DropCk>()).unwrap())
             .remove_by_id(
                 world
                     .components()
-                    .get_id(TypeId::of::<SparseDropCk>())
+                    .get_id(UuidBytes::of::<W<u32>>().to_uuid())
+                    .unwrap(),
+            )
+            .remove_by_id(
+                world
+                    .components()
+                    .get_id(UuidBytes::of::<W<u64>>().to_uuid())
+                    .unwrap(),
+            )
+            .remove_by_id(
+                world
+                    .components()
+                    .get_id(UuidBytes::of::<DropCk>().to_uuid())
+                    .unwrap(),
+            )
+            .remove_by_id(
+                world
+                    .components()
+                    .get_id(UuidBytes::of::<SparseDropCk>().to_uuid())
                     .unwrap(),
             );
 

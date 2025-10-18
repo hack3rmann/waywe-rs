@@ -6,8 +6,6 @@ use crate::{
     world::World,
 };
 use bevy_ecs_macros::SystemSet;
-#[cfg(feature = "bevy_reflect")]
-use core::hash::Hash;
 
 #[doc(hidden)]
 #[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]

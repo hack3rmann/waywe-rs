@@ -6,8 +6,6 @@
 //! [`Relationship`]: crate::relationship::Relationship
 //! [`RelationshipTarget`]: crate::relationship::RelationshipTarget
 
-#[cfg(feature = "bevy_reflect")]
-use crate::reflect::{ReflectComponent, ReflectFromWorld};
 use crate::{
     bundle::Bundle,
     component::Component,
@@ -18,10 +16,6 @@ use crate::{
     world::{DeferredWorld, EntityWorldMut, FromWorld, World},
 };
 use alloc::{format, string::String, vec::Vec};
-#[cfg(feature = "bevy_reflect")]
-use bevy_reflect::std_traits::ReflectDefault;
-#[cfg(all(feature = "serialize", feature = "bevy_reflect"))]
-use bevy_reflect::{ReflectDeserialize, ReflectSerialize};
 use bevy_utils::prelude::DebugName;
 use core::ops::Deref;
 use core::slice;
@@ -94,16 +88,7 @@ use log::warn;
 ///
 /// [`Relationship`]: crate::relationship::Relationship
 #[derive(Component, Clone, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "bevy_reflect", derive(bevy_reflect::Reflect))]
-#[cfg_attr(
-    feature = "bevy_reflect",
-    reflect(Component, PartialEq, Debug, FromWorld, Clone)
-)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(
-    all(feature = "serialize", feature = "bevy_reflect"),
-    reflect(Serialize, Deserialize)
-)]
 #[relationship(relationship_target = Children)]
 #[doc(alias = "IsChild", alias = "Parent")]
 pub struct ChildOf(#[entities] pub Entity);
@@ -116,10 +101,6 @@ impl ChildOf {
     }
 }
 
-// TODO: We need to impl either FromWorld or Default so ChildOf can be registered as Reflect.
-// This is because Reflect deserialize by creating an instance and apply a patch on top.
-// However ChildOf should only ever be set with a real user-defined entity.  Its worth looking into
-// better ways to handle cases like this.
 impl FromWorld for ChildOf {
     #[inline(always)]
     fn from_world(_world: &mut World) -> Self {
@@ -148,8 +129,6 @@ impl FromWorld for ChildOf {
 /// [`RelationshipTarget`]: crate::relationship::RelationshipTarget
 #[derive(Component, Default, Debug, PartialEq, Eq)]
 #[relationship_target(relationship = ChildOf, linked_spawn)]
-#[cfg_attr(feature = "bevy_reflect", derive(bevy_reflect::Reflect))]
-#[cfg_attr(feature = "bevy_reflect", reflect(Component, FromWorld, Default))]
 #[doc(alias = "IsParent")]
 pub struct Children(Vec<Entity>);
 

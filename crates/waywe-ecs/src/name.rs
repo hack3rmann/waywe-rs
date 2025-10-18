@@ -1,7 +1,6 @@
 //! Provides the [`Name`] [`Component`], used for identifying an [`Entity`].
 
 use crate::{component::Component, entity::Entity, query::QueryData};
-
 use alloc::{
     borrow::{Cow, ToOwned},
     string::String,
@@ -11,7 +10,6 @@ use core::{
     hash::{BuildHasher, Hash, Hasher},
     ops::Deref,
 };
-
 #[cfg(feature = "serialize")]
 use {
     alloc::string::ToString,
@@ -21,15 +19,6 @@ use {
     },
 };
 
-#[cfg(feature = "bevy_reflect")]
-use {
-    crate::reflect::ReflectComponent,
-    bevy_reflect::{Reflect, std_traits::ReflectDefault},
-};
-
-#[cfg(all(feature = "serialize", feature = "bevy_reflect"))]
-use bevy_reflect::{ReflectDeserialize, ReflectSerialize};
-
 /// Component used to identify an entity. Stores a hash for faster comparisons.
 ///
 /// The hash is eagerly re-computed upon each update to the name.
@@ -38,15 +27,6 @@ use bevy_reflect::{ReflectDeserialize, ReflectSerialize};
 /// as multiple entities can have the same name.  [`Entity`] should be
 /// used instead as the default unique identifier.
 #[derive(Component, Clone)]
-#[cfg_attr(
-    feature = "bevy_reflect",
-    derive(Reflect),
-    reflect(Component, Default, Debug, Clone, Hash, PartialEq)
-)]
-#[cfg_attr(
-    all(feature = "serialize", feature = "bevy_reflect"),
-    reflect(Deserialize, Serialize)
-)]
 pub struct Name {
     hash: u64, // Won't be serialized
     name: Cow<'static, str>,

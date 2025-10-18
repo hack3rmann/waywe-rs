@@ -11,19 +11,17 @@ mod schedule;
 mod set;
 mod stepping;
 
+use self::graph::*;
+
 pub use self::graph::GraphInfo;
 pub use self::{condition::*, config::*, error::*, executor::*, node::*, schedule::*, set::*};
 pub use pass::ScheduleBuildPass;
-
 /// An implementation of a graph data structure.
 pub mod graph;
-
 /// Included optional schedule build passes.
 pub mod passes {
     pub use crate::schedule::auto_insert_apply_deferred::*;
 }
-
-use self::graph::*;
 
 #[cfg(test)]
 mod tests {
@@ -256,13 +254,11 @@ mod tests {
     }
 
     mod conditions {
-
+        use super::*;
         use crate::{
             change_detection::DetectChanges,
             error::{DefaultErrorHandler, Result, ignore},
         };
-
-        use super::*;
 
         #[test]
         fn system_with_condition_bool() {

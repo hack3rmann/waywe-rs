@@ -395,15 +395,6 @@ pub trait RelationshipCloneBehaviorViaReflect {
     fn default_clone_behavior(&self) -> ComponentCloneBehavior;
 }
 
-#[cfg(feature = "bevy_reflect")]
-impl<C: Relationship + bevy_reflect::Reflect> RelationshipCloneBehaviorViaReflect
-    for &RelationshipCloneBehaviorSpecialization<C>
-{
-    fn default_clone_behavior(&self) -> ComponentCloneBehavior {
-        ComponentCloneBehavior::reflect()
-    }
-}
-
 /// Specialized trait for relationship clone specialization using autoderef.
 #[doc(hidden)]
 pub trait RelationshipCloneBehaviorViaClone {
@@ -422,23 +413,6 @@ impl<C: Relationship + Clone> RelationshipCloneBehaviorViaClone
 #[doc(hidden)]
 pub trait RelationshipTargetCloneBehaviorViaReflect {
     fn default_clone_behavior(&self) -> ComponentCloneBehavior;
-}
-
-#[cfg(feature = "bevy_reflect")]
-impl<C: RelationshipTarget + bevy_reflect::Reflect + bevy_reflect::TypePath>
-    RelationshipTargetCloneBehaviorViaReflect for &&&RelationshipCloneBehaviorSpecialization<C>
-{
-    fn default_clone_behavior(&self) -> ComponentCloneBehavior {
-        ComponentCloneBehavior::Custom(|source, context| {
-            if let Some(component) = source.read::<C>()
-                && let Ok(mut cloned) = component.reflect_clone_and_take::<C>()
-            {
-                cloned.collection_mut_risky().clear();
-                clone_relationship_target(component, &mut cloned, context);
-                context.write_target_component(cloned);
-            }
-        })
-    }
 }
 
 /// Specialized trait for relationship target clone specialization using autoderef.

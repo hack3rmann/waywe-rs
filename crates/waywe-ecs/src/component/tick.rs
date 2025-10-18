@@ -1,21 +1,13 @@
+use crate::change_detection::MAX_CHANGE_AGE;
 use bevy_ecs_macros::Event;
 use bevy_ptr::UnsafeCellDeref;
-#[cfg(feature = "bevy_reflect")]
-use bevy_reflect::Reflect;
 use core::cell::UnsafeCell;
-
-use crate::change_detection::MAX_CHANGE_AGE;
 
 /// A value that tracks when a system ran relative to other systems.
 /// This is used to power change detection.
 ///
 /// *Note* that a system that hasn't been run yet has a `Tick` of 0.
 #[derive(Copy, Clone, Default, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(
-    feature = "bevy_reflect",
-    derive(Reflect),
-    reflect(Debug, Hash, PartialEq, Clone)
-)]
 pub struct Tick {
     tick: u32,
 }
@@ -146,7 +138,6 @@ impl<'a> TickCells<'a> {
 
 /// Records when a component or resource was added and when it was last mutably dereferenced (or added).
 #[derive(Copy, Clone, Debug)]
-#[cfg_attr(feature = "bevy_reflect", derive(Reflect), reflect(Debug, Clone))]
 pub struct ComponentTicks {
     /// Tick recording the time this component or resource was added.
     pub added: Tick,

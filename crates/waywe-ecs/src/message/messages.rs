@@ -8,11 +8,6 @@ use core::{
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
-#[cfg(feature = "bevy_reflect")]
-use {
-    crate::reflect::ReflectResource,
-    bevy_reflect::{Reflect, std_traits::ReflectDefault},
-};
 
 /// A message collection that represents the messages that occurred within the last two
 /// [`Messages::update`] calls.
@@ -91,7 +86,6 @@ use {
 /// [`MessageWriter`]: super::MessageWriter
 /// [`message_update_system`]: super::message_update_system
 #[derive(Debug, Resource)]
-#[cfg_attr(feature = "bevy_reflect", derive(Reflect), reflect(Resource, Default))]
 pub struct Messages<E: Message> {
     /// Holds the oldest still active messages.
     /// Note that `a.start_message_count + a.len()` should always be equal to `messages_b.start_message_count`.
@@ -356,7 +350,6 @@ impl<E: Message> Extend<E> for Messages<E> {
 }
 
 #[derive(Debug)]
-#[cfg_attr(feature = "bevy_reflect", derive(Reflect), reflect(Default))]
 pub(crate) struct MessageSequence<E: Message> {
     pub(crate) messages: Vec<MessageInstance<E>>,
     pub(crate) start_message_count: usize,

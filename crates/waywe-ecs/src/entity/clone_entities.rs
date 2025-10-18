@@ -1,11 +1,3 @@
-use alloc::{boxed::Box, collections::VecDeque, vec::Vec};
-use bevy_platform::collections::{HashMap, HashSet, hash_map::Entry};
-use bevy_ptr::{Ptr, PtrMut};
-use bevy_utils::prelude::DebugName;
-use bumpalo::Bump;
-use core::{any::TypeId, cell::LazyCell, ops::Range};
-use derive_more::derive::From;
-
 use crate::{
     archetype::Archetype,
     bundle::{Bundle, BundleRemover, InsertMode},
@@ -17,6 +9,13 @@ use crate::{
     uuid::UuidBytes,
     world::World,
 };
+use alloc::{boxed::Box, collections::VecDeque, vec::Vec};
+use bevy_platform::collections::{HashMap, HashSet, hash_map::Entry};
+use bevy_ptr::{Ptr, PtrMut};
+use bevy_utils::prelude::DebugName;
+use bumpalo::Bump;
+use core::{cell::LazyCell, ops::Range};
+use derive_more::derive::From;
 
 /// Provides read access to the source component (the component being cloned) in a [`ComponentCloneFn`].
 pub struct SourceComponent<'a> {
@@ -47,28 +46,6 @@ impl<'a> SourceComponent<'a> {
     pub fn ptr(&self) -> Ptr<'a> {
         self.ptr
     }
-
-    /// Returns a reference to the component on the source entity as [`&dyn Reflect`](bevy_reflect::Reflect).
-    ///
-    /// Will return `None` if:
-    /// - World does not have [`AppTypeRegistry`](`crate::reflect::AppTypeRegistry`).
-    /// - Component does not implement [`ReflectFromPtr`](bevy_reflect::ReflectFromPtr).
-    /// - Component is not registered.
-    /// - Component does not have [`TypeId`]
-    /// - Registered [`ReflectFromPtr`](bevy_reflect::ReflectFromPtr)'s [`TypeId`] does not match component's [`TypeId`]
-    #[cfg(feature = "bevy_reflect")]
-    pub fn read_reflect(
-        &self,
-        registry: &bevy_reflect::TypeRegistry,
-    ) -> Option<&dyn bevy_reflect::Reflect> {
-        let type_id = self.info.uuid()?;
-        let reflect_from_ptr = registry.get_type_data::<bevy_reflect::ReflectFromPtr>(todo!())?;
-        if reflect_from_ptr.type_id() != todo!() {
-            return None;
-        }
-        // SAFETY: `source_component_ptr` stores data represented by `component_id`, which we used to get `ReflectFromPtr`.
-        unsafe { Some(reflect_from_ptr.as_reflect(self.ptr)) }
-    }
 }
 
 /// Context for component clone handlers.
@@ -87,11 +64,6 @@ pub struct ComponentCloneCtx<'a, 'b> {
     component_info: &'a ComponentInfo,
     state: &'a mut EntityClonerState,
     mapper: &'a mut dyn EntityMapper,
-    #[cfg(feature = "bevy_reflect")]
-    type_registry: Option<&'a crate::reflect::AppTypeRegistry>,
-    #[cfg(not(feature = "bevy_reflect"))]
-    #[expect(dead_code, reason = "type_registry is only used with bevy_reflect")]
-    type_registry: Option<&'a ()>,
 }
 
 impl<'a, 'b> ComponentCloneCtx<'a, 'b> {
@@ -111,8 +83,6 @@ impl<'a, 'b> ComponentCloneCtx<'a, 'b> {
         component_info: &'a ComponentInfo,
         entity_cloner: &'a mut EntityClonerState,
         mapper: &'a mut dyn EntityMapper,
-        #[cfg(feature = "bevy_reflect")] type_registry: Option<&'a crate::reflect::AppTypeRegistry>,
-        #[cfg(not(feature = "bevy_reflect"))] type_registry: Option<&'a ()>,
     ) -> Self {
         Self {
             component_id,
@@ -126,7 +96,6 @@ impl<'a, 'b> ComponentCloneCtx<'a, 'b> {
             mapper,
             component_info,
             state: entity_cloner,
-            type_registry,
         }
     }
 
@@ -222,62 +191,6 @@ impl<'a, 'b> ComponentCloneCtx<'a, 'b> {
         self.target_component_written = true;
     }
 
-    /// Writes component data to target entity.
-    ///
-    /// # Panics
-    /// This will panic if:
-    /// - World does not have [`AppTypeRegistry`](`crate::reflect::AppTypeRegistry`).
-    /// - Component does not implement [`ReflectFromPtr`](bevy_reflect::ReflectFromPtr).
-    /// - Source component does not have [`TypeId`].
-    /// - Passed component's [`TypeId`] does not match source component [`TypeId`].
-    /// - Component has already been written once.
-    #[cfg(feature = "bevy_reflect")]
-    pub fn write_target_component_reflect(&mut self, component: Box<dyn bevy_reflect::Reflect>) {
-        if self.target_component_written {
-            panic!("Trying to write component multiple times")
-        }
-        let source_type_id = self
-            .component_info
-            .uuid()
-            .expect("Source component must have TypeId");
-        let component_type_id = component.type_id();
-        // if source_type_id != todo!() {
-        //     panic!("Passed component TypeId does not match source component TypeId")
-        // }
-        let component_layout = self.component_info.layout();
-
-        let component_data_ptr = Box::into_raw(component).cast::<u8>();
-        let target_component_data_ptr =
-            self.bundle_scratch_allocator.alloc_layout(component_layout);
-        // SAFETY:
-        // - target_component_data_ptr and component_data have the same data type.
-        // - component_data_ptr has layout of component_layout
-        unsafe {
-            core::ptr::copy_nonoverlapping(
-                component_data_ptr,
-                target_component_data_ptr.as_ptr(),
-                component_layout.size(),
-            );
-            self.bundle_scratch
-                .push_ptr(self.component_id, PtrMut::new(target_component_data_ptr));
-
-            if component_layout.size() > 0 {
-                // Ensure we don't attempt to deallocate zero-sized components
-                alloc::alloc::dealloc(component_data_ptr, component_layout);
-            }
-        }
-
-        self.target_component_written = true;
-    }
-
-    /// Returns [`AppTypeRegistry`](`crate::reflect::AppTypeRegistry`) if it exists in the world.
-    ///
-    /// NOTE: Prefer this method instead of manually reading the resource from the world.
-    #[cfg(feature = "bevy_reflect")]
-    pub fn type_registry(&self) -> Option<&crate::reflect::AppTypeRegistry> {
-        self.type_registry
-    }
-
     /// Queues the `entity` to be cloned by the current [`EntityCloner`]
     pub fn queue_entity_clone(&mut self, entity: Entity) {
         let target = self.entities.reserve_entity();
@@ -354,7 +267,6 @@ impl<'a, 'b> ComponentCloneCtx<'a, 'b> {
 /// 1. local overrides using [`EntityClonerBuilder::override_clone_behavior`]
 /// 2. component-defined handler using [`Component::clone_behavior`]
 /// 3. default handler override using [`EntityClonerBuilder::with_default_clone_fn`].
-/// 4. reflect-based or noop default clone handler depending on if `bevy_reflect` feature is enabled or not.
 ///
 /// # Moving components
 /// [`EntityCloner`] can be configured to move components instead of cloning them by using [`EntityClonerBuilder::move_components`].
@@ -575,17 +487,6 @@ impl EntityCloner {
             let world = world.as_unsafe_world_cell();
             let source_entity = world.get_entity(source).expect("Source entity must exist");
 
-            #[cfg(feature = "bevy_reflect")]
-            // SAFETY: we have unique access to `world`, nothing else accesses the registry at this moment, and we clone
-            // the registry, which prevents future conflicts.
-            let app_registry = unsafe {
-                world
-                    .get_resource::<crate::reflect::AppTypeRegistry>()
-                    .cloned()
-            };
-            #[cfg(not(feature = "bevy_reflect"))]
-            let app_registry = Option::<()>::None;
-
             let source_archetype = source_entity.archetype();
             bundle_scratch = BundleScratch::with_capacity(source_archetype.component_count());
 
@@ -646,7 +547,6 @@ impl EntityCloner {
                         info,
                         state,
                         mapper,
-                        app_registry.as_ref(),
                     )
                 };
 
@@ -1456,279 +1356,11 @@ mod tests {
     use crate::{
         component::{ComponentDescriptor, StorageType},
         lifecycle::HookContext,
-        prelude::{ChildOf, Children, Resource},
-        world::{DeferredWorld, FromWorld, World},
+        prelude::{ChildOf, Children},
+        world::{DeferredWorld, World},
     };
     use bevy_ptr::OwningPtr;
-    use core::marker::PhantomData;
     use core::{alloc::Layout, ops::Deref};
-
-    #[cfg(feature = "bevy_reflect")]
-    mod reflect {
-        use super::*;
-        use crate::reflect::{AppTypeRegistry, ReflectComponent, ReflectFromWorld};
-        use alloc::vec;
-        use bevy_reflect::{FromType, Reflect, ReflectFromPtr, std_traits::ReflectDefault};
-
-        #[test]
-        fn clone_entity_using_reflect() {
-            #[derive(Component, Reflect, Clone, PartialEq, Eq)]
-            #[reflect(Component)]
-            struct A {
-                field: usize,
-            }
-
-            let mut world = World::default();
-            world.init_resource::<AppTypeRegistry>();
-            let registry = world.get_resource::<AppTypeRegistry>().unwrap();
-            registry.write().register::<A>();
-
-            world.register_component::<A>();
-            let component = A { field: 5 };
-
-            let e = world.spawn(component.clone()).id();
-            let e_clone = world.spawn_empty().id();
-
-            EntityCloner::build_opt_out(&mut world)
-                .override_clone_behavior::<A>(ComponentCloneBehavior::reflect())
-                .clone_entity(e, e_clone);
-
-            assert!(world.get::<A>(e_clone).is_some_and(|c| *c == component));
-        }
-
-        #[test]
-        fn clone_entity_using_reflect_all_paths() {
-            #[derive(PartialEq, Eq, Default, Debug)]
-            struct NotClone;
-
-            // `reflect_clone`-based fast path
-            #[derive(Component, Reflect, PartialEq, Eq, Default, Debug)]
-            #[reflect(from_reflect = false)]
-            struct A {
-                field: usize,
-                field2: Vec<usize>,
-            }
-
-            // `ReflectDefault`-based fast path
-            #[derive(Component, Reflect, PartialEq, Eq, Default, Debug)]
-            #[reflect(Default)]
-            #[reflect(from_reflect = false)]
-            struct B {
-                field: usize,
-                field2: Vec<usize>,
-                #[reflect(ignore)]
-                ignored: NotClone,
-            }
-
-            // `ReflectFromReflect`-based fast path
-            #[derive(Component, Reflect, PartialEq, Eq, Default, Debug)]
-            struct C {
-                field: usize,
-                field2: Vec<usize>,
-                #[reflect(ignore)]
-                ignored: NotClone,
-            }
-
-            // `ReflectFromWorld`-based fast path
-            #[derive(Component, Reflect, PartialEq, Eq, Default, Debug)]
-            #[reflect(FromWorld)]
-            #[reflect(from_reflect = false)]
-            struct D {
-                field: usize,
-                field2: Vec<usize>,
-                #[reflect(ignore)]
-                ignored: NotClone,
-            }
-
-            let mut world = World::default();
-            world.init_resource::<AppTypeRegistry>();
-            let registry = world.get_resource::<AppTypeRegistry>().unwrap();
-            registry.write().register::<(A, B, C, D)>();
-
-            let a_id = world.register_component::<A>();
-            let b_id = world.register_component::<B>();
-            let c_id = world.register_component::<C>();
-            let d_id = world.register_component::<D>();
-            let component_a = A {
-                field: 5,
-                field2: vec![1, 2, 3, 4, 5],
-            };
-            let component_b = B {
-                field: 5,
-                field2: vec![1, 2, 3, 4, 5],
-                ignored: NotClone,
-            };
-            let component_c = C {
-                field: 6,
-                field2: vec![1, 2, 3, 4, 5],
-                ignored: NotClone,
-            };
-            let component_d = D {
-                field: 7,
-                field2: vec![1, 2, 3, 4, 5],
-                ignored: NotClone,
-            };
-
-            let e = world
-                .spawn((component_a, component_b, component_c, component_d))
-                .id();
-            let e_clone = world.spawn_empty().id();
-
-            EntityCloner::build_opt_out(&mut world)
-                .override_clone_behavior_with_id(a_id, ComponentCloneBehavior::reflect())
-                .override_clone_behavior_with_id(b_id, ComponentCloneBehavior::reflect())
-                .override_clone_behavior_with_id(c_id, ComponentCloneBehavior::reflect())
-                .override_clone_behavior_with_id(d_id, ComponentCloneBehavior::reflect())
-                .clone_entity(e, e_clone);
-
-            assert_eq!(world.get::<A>(e_clone), Some(world.get::<A>(e).unwrap()));
-            assert_eq!(world.get::<B>(e_clone), Some(world.get::<B>(e).unwrap()));
-            assert_eq!(world.get::<C>(e_clone), Some(world.get::<C>(e).unwrap()));
-            assert_eq!(world.get::<D>(e_clone), Some(world.get::<D>(e).unwrap()));
-        }
-
-        #[test]
-        fn read_source_component_reflect_should_return_none_on_invalid_reflect_from_ptr() {
-            #[derive(Component, Reflect)]
-            struct A;
-
-            #[derive(Component, Reflect)]
-            struct B;
-
-            fn test_handler(source: &SourceComponent, ctx: &mut ComponentCloneCtx) {
-                let registry = ctx.type_registry().unwrap();
-                assert!(source.read_reflect(&registry.read()).is_none());
-            }
-
-            let mut world = World::default();
-            world.init_resource::<AppTypeRegistry>();
-            let registry = world.get_resource::<AppTypeRegistry>().unwrap();
-            {
-                let mut registry = registry.write();
-                registry.register::<A>();
-                registry
-                    .get_mut(TypeId::of::<A>())
-                    .unwrap()
-                    .insert(<ReflectFromPtr as FromType<B>>::from_type());
-            }
-
-            let e = world.spawn(A).id();
-            let e_clone = world.spawn_empty().id();
-
-            EntityCloner::build_opt_out(&mut world)
-                .override_clone_behavior::<A>(ComponentCloneBehavior::Custom(test_handler))
-                .clone_entity(e, e_clone);
-        }
-
-        #[test]
-        fn clone_entity_specialization() {
-            #[derive(Component, Reflect, PartialEq, Eq)]
-            #[reflect(Component)]
-            struct A {
-                field: usize,
-            }
-
-            impl Clone for A {
-                fn clone(&self) -> Self {
-                    Self { field: 10 }
-                }
-            }
-
-            let mut world = World::default();
-            world.init_resource::<AppTypeRegistry>();
-            let registry = world.get_resource::<AppTypeRegistry>().unwrap();
-            registry.write().register::<A>();
-
-            let component = A { field: 5 };
-
-            let e = world.spawn(component.clone()).id();
-            let e_clone = world.spawn_empty().id();
-
-            EntityCloner::build_opt_out(&mut world).clone_entity(e, e_clone);
-
-            assert!(
-                world
-                    .get::<A>(e_clone)
-                    .is_some_and(|comp| *comp == A { field: 10 })
-            );
-        }
-
-        #[test]
-        fn clone_entity_using_reflect_should_skip_without_panic() {
-            // Not reflected
-            #[derive(Component, PartialEq, Eq, Default, Debug)]
-            struct A;
-
-            // No valid type data and not `reflect_clone`-able
-            #[derive(Component, Reflect, PartialEq, Eq, Default, Debug)]
-            #[reflect(Component)]
-            #[reflect(from_reflect = false)]
-            struct B(#[reflect(ignore)] PhantomData<()>);
-
-            let mut world = World::default();
-
-            // No AppTypeRegistry
-            let e = world.spawn((A, B(Default::default()))).id();
-            let e_clone = world.spawn_empty().id();
-            EntityCloner::build_opt_out(&mut world)
-                .override_clone_behavior::<A>(ComponentCloneBehavior::reflect())
-                .override_clone_behavior::<B>(ComponentCloneBehavior::reflect())
-                .clone_entity(e, e_clone);
-            assert_eq!(world.get::<A>(e_clone), None);
-            assert_eq!(world.get::<B>(e_clone), None);
-
-            // With AppTypeRegistry
-            world.init_resource::<AppTypeRegistry>();
-            let registry = world.get_resource::<AppTypeRegistry>().unwrap();
-            registry.write().register::<B>();
-
-            let e = world.spawn((A, B(Default::default()))).id();
-            let e_clone = world.spawn_empty().id();
-            EntityCloner::build_opt_out(&mut world).clone_entity(e, e_clone);
-            assert_eq!(world.get::<A>(e_clone), None);
-            assert_eq!(world.get::<B>(e_clone), None);
-        }
-
-        #[test]
-        fn clone_with_reflect_from_world() {
-            #[derive(Component, Reflect, PartialEq, Eq, Debug)]
-            #[reflect(Component, FromWorld, from_reflect = false)]
-            struct SomeRef(
-                #[entities] Entity,
-                // We add an ignored field here to ensure `reflect_clone` fails and `FromWorld` is used
-                #[reflect(ignore)] PhantomData<()>,
-            );
-
-            #[derive(Resource)]
-            struct FromWorldCalled(bool);
-
-            impl FromWorld for SomeRef {
-                fn from_world(world: &mut World) -> Self {
-                    world.insert_resource(FromWorldCalled(true));
-                    SomeRef(Entity::PLACEHOLDER, Default::default())
-                }
-            }
-            let mut world = World::new();
-            let registry = AppTypeRegistry::default();
-            registry.write().register::<SomeRef>();
-            world.insert_resource(registry);
-
-            let a = world.spawn_empty().id();
-            let b = world.spawn_empty().id();
-            let c = world.spawn(SomeRef(a, Default::default())).id();
-            let d = world.spawn_empty().id();
-            let mut map = EntityHashMap::<Entity>::new();
-            map.insert(a, b);
-            map.insert(c, d);
-
-            let cloned = EntityCloner::default().clone_entity_mapped(&mut world, c, &mut map);
-            assert_eq!(
-                *world.entity(cloned).get::<SomeRef>().unwrap(),
-                SomeRef(b, Default::default())
-            );
-            assert!(world.resource::<FromWorldCalled>().0);
-        }
-    }
 
     #[test]
     fn clone_entity_using_clone() {

@@ -23,8 +23,6 @@ pub use update::*;
 pub use bevy_ecs_macros::Message;
 
 use crate::change_detection::MaybeLocation;
-#[cfg(feature = "bevy_reflect")]
-use bevy_reflect::Reflect;
 use core::{
     cmp::Ordering,
     fmt,
@@ -96,7 +94,6 @@ use core::{
 pub trait Message: Send + Sync + 'static {}
 
 #[derive(Debug)]
-#[cfg_attr(feature = "bevy_reflect", derive(Reflect))]
 pub(crate) struct MessageInstance<M: Message> {
     pub message_id: MessageId<M>,
     pub message: M,
@@ -108,18 +105,12 @@ pub(crate) struct MessageInstance<M: Message> {
 /// sent to the point it was processed. [`MessageId`]s increase monotonically by write order.
 ///
 /// [`World`]: crate::world::World
-#[cfg_attr(
-    feature = "bevy_reflect",
-    derive(Reflect),
-    reflect(Clone, Debug, PartialEq, Hash)
-)]
 pub struct MessageId<M: Message> {
     /// Uniquely identifies the message associated with this ID.
     // This value corresponds to the order in which each message was written to the world.
     pub id: usize,
     /// The source code location that triggered this message.
     pub caller: MaybeLocation,
-    #[cfg_attr(feature = "bevy_reflect", reflect(ignore, clone))]
     pub(super) _marker: PhantomData<M>,
 }
 

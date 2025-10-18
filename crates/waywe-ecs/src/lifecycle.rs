@@ -63,11 +63,6 @@ use crate::{
     system::{Local, ReadOnlySystemParam, SystemMeta, SystemParam},
     world::{DeferredWorld, World, unsafe_world_cell::UnsafeWorldCell},
 };
-
-use derive_more::derive::Into;
-
-#[cfg(feature = "bevy_reflect")]
-use bevy_reflect::Reflect;
 use core::{
     fmt::Debug,
     iter,
@@ -75,6 +70,7 @@ use core::{
     ops::{Deref, DerefMut},
     option,
 };
+use derive_more::derive::Into;
 
 /// The type used for [`Component`] lifecycle hooks such as `on_add`, `on_insert` or `on_remove`.
 pub type ComponentHook = for<'w> fn(DeferredWorld<'w>, HookContext);
@@ -330,8 +326,6 @@ pub const DESPAWN: EventKey = EventKey(ComponentId::new(4));
 /// See [`ComponentHooks::on_add`](`crate::lifecycle::ComponentHooks::on_add`) for more information.
 #[derive(Debug, Clone, EntityEvent)]
 #[entity_event(trigger = EntityComponentsTrigger<'a>)]
-#[cfg_attr(feature = "bevy_reflect", derive(Reflect))]
-#[cfg_attr(feature = "bevy_reflect", reflect(Debug))]
 #[doc(alias = "OnAdd")]
 pub struct Add {
     /// The entity this component was added to.
@@ -343,8 +337,6 @@ pub struct Add {
 /// See [`ComponentHooks::on_insert`](`crate::lifecycle::ComponentHooks::on_insert`) for more information.
 #[derive(Debug, Clone, EntityEvent)]
 #[entity_event(trigger = EntityComponentsTrigger<'a>)]
-#[cfg_attr(feature = "bevy_reflect", derive(Reflect))]
-#[cfg_attr(feature = "bevy_reflect", reflect(Debug))]
 #[doc(alias = "OnInsert")]
 pub struct Insert {
     /// The entity this component was inserted into.
@@ -358,8 +350,6 @@ pub struct Insert {
 /// See [`ComponentHooks::on_replace`](`crate::lifecycle::ComponentHooks::on_replace`) for more information.
 #[derive(Debug, Clone, EntityEvent)]
 #[entity_event(trigger = EntityComponentsTrigger<'a>)]
-#[cfg_attr(feature = "bevy_reflect", derive(Reflect))]
-#[cfg_attr(feature = "bevy_reflect", reflect(Debug))]
 #[doc(alias = "OnReplace")]
 pub struct Replace {
     /// The entity that held this component before it was replaced.
@@ -371,8 +361,6 @@ pub struct Replace {
 /// See [`ComponentHooks::on_remove`](`crate::lifecycle::ComponentHooks::on_remove`) for more information.
 #[derive(Debug, Clone, EntityEvent)]
 #[entity_event(trigger = EntityComponentsTrigger<'a>)]
-#[cfg_attr(feature = "bevy_reflect", derive(Reflect))]
-#[cfg_attr(feature = "bevy_reflect", reflect(Debug))]
 #[doc(alias = "OnRemove")]
 pub struct Remove {
     /// The entity this component was removed from.
@@ -383,8 +371,6 @@ pub struct Remove {
 /// See [`ComponentHooks::on_despawn`](`crate::lifecycle::ComponentHooks::on_despawn`) for more information.
 #[derive(Debug, Clone, EntityEvent)]
 #[entity_event(trigger = EntityComponentsTrigger<'a>)]
-#[cfg_attr(feature = "bevy_reflect", derive(Reflect))]
-#[cfg_attr(feature = "bevy_reflect", reflect(Debug))]
 #[doc(alias = "OnDespawn")]
 pub struct Despawn {
     /// The entity that held this component before it was despawned.
@@ -414,8 +400,6 @@ pub type OnDespawn = Despawn;
 /// Wrapper around [`Entity`] for [`RemovedComponents`].
 /// Internally, `RemovedComponents` uses these as an [`Messages<RemovedComponentEntity>`].
 #[derive(Message, Debug, Clone, Into)]
-#[cfg_attr(feature = "bevy_reflect", derive(Reflect))]
-#[cfg_attr(feature = "bevy_reflect", reflect(Debug, Clone))]
 pub struct RemovedComponentEntity(Entity);
 
 /// Wrapper around a [`MessageCursor<RemovedComponentEntity>`] so that we

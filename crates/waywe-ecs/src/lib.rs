@@ -47,8 +47,6 @@ pub mod name;
 pub mod never;
 pub mod observer;
 pub mod query;
-#[cfg(feature = "bevy_reflect")]
-pub mod reflect;
 pub mod relationship;
 pub mod resource;
 pub mod schedule;
@@ -113,16 +111,6 @@ pub mod prelude {
     #[doc(hidden)]
     #[cfg(feature = "std")]
     pub use crate::system::ParallelCommands;
-
-    #[doc(hidden)]
-    #[cfg(feature = "bevy_reflect")]
-    pub use crate::reflect::{
-        AppTypeRegistry, ReflectComponent, ReflectFromWorld, ReflectResource,
-    };
-
-    #[doc(hidden)]
-    #[cfg(feature = "reflect_functions")]
-    pub use crate::reflect::AppFunctionRegistry;
 }
 
 /// Exports used by macros.

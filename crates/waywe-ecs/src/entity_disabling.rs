@@ -104,12 +104,6 @@ use crate::{
 use bevy_ecs_macros::{Component, Resource};
 use smallvec::SmallVec;
 
-#[cfg(feature = "bevy_reflect")]
-use {
-    crate::reflect::ReflectComponent, bevy_reflect::Reflect,
-    bevy_reflect::std_traits::ReflectDefault,
-};
-
 /// A marker component for disabled entities.
 ///
 /// Semantically, this component is used to mark entities that are temporarily disabled (typically for gameplay reasons),
@@ -125,12 +119,6 @@ use {
 ///
 /// [the module docs]: crate::entity_disabling
 #[derive(Component, Clone, Debug, Default)]
-#[cfg_attr(
-    feature = "bevy_reflect",
-    derive(Reflect),
-    reflect(Component),
-    reflect(Debug, Clone, Default)
-)]
 // This component is registered as a disabling component during World::bootstrap
 pub struct Disabled;
 
@@ -146,12 +134,6 @@ pub struct Disabled;
 ///
 /// [the module docs]: crate::entity_disabling
 #[derive(Component, Clone, Debug, Default)]
-#[cfg_attr(
-    feature = "bevy_reflect",
-    derive(Reflect),
-    reflect(Component),
-    reflect(Debug, Clone, Default)
-)]
 // This component is registered as a disabling component during World::bootstrap
 pub struct Internal;
 
@@ -187,7 +169,6 @@ pub struct Internal;
 /// Think carefully about whether you need to use a new disabling component,
 /// and clearly communicate their presence in any libraries you publish.
 #[derive(Resource, Debug)]
-#[cfg_attr(feature = "bevy_reflect", derive(bevy_reflect::Reflect))]
 pub struct DefaultQueryFilters {
     // We only expect a few components per application to act as disabling components, so we use a SmallVec here
     // to avoid heap allocation in most cases.
