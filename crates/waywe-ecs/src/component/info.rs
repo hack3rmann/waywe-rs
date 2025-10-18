@@ -15,15 +15,17 @@ use bevy_platform::{hash::FixedHasher, sync::PoisonError};
 use bevy_ptr::OwningPtr;
 #[cfg(feature = "bevy_reflect")]
 use bevy_reflect::Reflect;
-use bevy_utils::{TypeIdMap, prelude::DebugName};
+use bevy_utils::prelude::DebugName;
 use core::{
     alloc::Layout,
-    any::{Any, TypeId},
+    any::Any,
     fmt::Debug,
     hash::{Hash, Hasher},
     mem::needs_drop,
 };
 use indexmap::IndexSet;
+use uuid::Uuid;
+use waywe_uuid::TypeUuid;
 
 /// Stores metadata for a type of component or resource stored in a specific [`World`](crate::world::World).
 #[derive(Debug, Clone)]
@@ -65,8 +67,8 @@ impl ComponentInfo {
     /// Returns the [`TypeId`] of the underlying component type.
     /// Returns `None` if the component does not correspond to a Rust type.
     #[inline]
-    pub fn type_id(&self) -> Option<TypeId> {
-        self.descriptor.type_id
+    pub fn uuid(&self) -> Option<Uuid> {
+        self.descriptor.uuid
     }
 
     /// Returns the layout used to store values of this component in memory.
@@ -212,7 +214,7 @@ pub struct ComponentDescriptor {
     // SAFETY: This must remain private. It must only be set to "true" if this component is
     // actually Send + Sync
     is_send_and_sync: bool,
-    type_id: Option<TypeId>,
+    uuid: Option<Uuid>,
     layout: Layout,
     // SAFETY: this function must be safe to call with pointers pointing to items of the type
     // this descriptor describes.
@@ -229,7 +231,7 @@ impl Debug for ComponentDescriptor {
             .field("name", &self.name)
             .field("storage_type", &self.storage_type)
             .field("is_send_and_sync", &self.is_send_and_sync)
-            .field("type_id", &self.type_id)
+            .field("uuid", &self.uuid)
             .field("layout", &self.layout)
             .field("mutable", &self.mutable)
             .field("clone_behavior", &self.clone_behavior)
@@ -254,7 +256,7 @@ impl ComponentDescriptor {
             name: DebugName::type_name::<T>(),
             storage_type: T::STORAGE_TYPE,
             is_send_and_sync: true,
-            type_id: Some(TypeId::of::<T>()),
+            uuid: Some(UuidBytes::of::<T>().to_uuid()),
             layout: Layout::new::<T>(),
             drop: needs_drop::<T>().then_some(Self::drop_ptr::<T> as _),
             mutable: T::Mutability::MUTABLE,
@@ -279,7 +281,7 @@ impl ComponentDescriptor {
             name: name.into().into(),
             storage_type,
             is_send_and_sync: true,
-            type_id: None,
+            uuid: None,
             layout,
             drop,
             mutable,
@@ -297,7 +299,7 @@ impl ComponentDescriptor {
             // reasonable choice as `storage_type` for resources.
             storage_type: StorageType::Table,
             is_send_and_sync: true,
-            type_id: Some(TypeId::of::<T>()),
+            uuid: Some(UuidBytes::of::<T>().to_uuid()),
             layout: Layout::new::<T>(),
             drop: needs_drop::<T>().then_some(Self::drop_ptr::<T> as _),
             mutable: true,
@@ -305,12 +307,12 @@ impl ComponentDescriptor {
         }
     }
 
-    pub(super) fn new_non_send<T: Any>(storage_type: StorageType) -> Self {
+    pub(super) fn new_non_send<T: TypeUuid + Any>(storage_type: StorageType) -> Self {
         Self {
             name: DebugName::type_name::<T>(),
             storage_type,
             is_send_and_sync: false,
-            type_id: Some(TypeId::of::<T>()),
+            uuid: Some(Uuid::from_bytes(T::UUID)),
             layout: Layout::new::<T>(),
             drop: needs_drop::<T>().then_some(Self::drop_ptr::<T> as _),
             mutable: true,
@@ -324,11 +326,11 @@ impl ComponentDescriptor {
         self.storage_type
     }
 
-    /// Returns the [`TypeId`] of the underlying component type.
+    /// Returns the [`Uuid`] of the underlying component type.
     /// Returns `None` if the component does not correspond to a Rust type.
     #[inline]
-    pub fn type_id(&self) -> Option<TypeId> {
-        self.type_id
+    pub fn uuid(&self) -> Option<Uuid> {
+        self.uuid
     }
 
     /// Returns the name of the current component.
@@ -349,9 +351,9 @@ impl ComponentDescriptor {
 pub struct Components {
     pub(super) components: Vec<Option<ComponentInfo>>,
     pub(super) indices: UuidMap<ComponentId>,
-    pub(super) type_id_indices: TypeIdMap<ComponentId>, // For backward compatibility during migration
+    pub(super) type_id_indices: UuidMap<ComponentId>, // For backward compatibility during migration
     pub(super) resource_indices: UuidMap<ComponentId>,
-    pub(super) resource_type_id_indices: TypeIdMap<ComponentId>, // For backward compatibility during migration
+    pub(super) resource_type_id_indices: UuidMap<ComponentId>, // For backward compatibility during migration
     // This is kept internal and local to verify that no deadlocks can occor.
     pub(super) queued: bevy_platform::sync::RwLock<QueuedComponents>,
 }
@@ -556,37 +558,10 @@ impl Components {
         self.components.get(id.0).is_some_and(Option::is_some)
     }
 
-    /// Type-erased equivalent of [`Components::valid_component_id()`].
+    /// Type-erased equivalent of [`Components::valid_component_id()`]
     #[inline]
-    pub fn get_valid_id_by_uuid(&self, uuid: [u8; 16]) -> Option<ComponentId> {
-        self.indices.get(&UuidBytes(uuid)).copied()
-    }
-
-    /// Type-erased equivalent of [`Components::valid_component_id()`] using TypeId (deprecated).
-    #[inline]
-    // FIXME:
-    // #[deprecated(note = "Use get_valid_id_by_uuid instead for dynamic library safety")]
-    pub fn get_valid_id(&self, type_id: TypeId) -> Option<ComponentId> {
-        // This is kept for compatibility but should be avoided in new code
-        // In a full migration, this would be removed
-        self.indices.get(&self.typeid_to_uuid(type_id)).copied()
-    }
-
-    // Temporary helper method to convert TypeId to a UUID-like key (for compatibility during migration)
-    // In the final implementation, we would only use UUIDs and not TypeId at all
-    fn typeid_to_uuid(&self, type_id: TypeId) -> UuidBytes {
-        // This is a temporary implementation during migration.
-        // In the final version, we should derive the UUID from the component's TypeUuid trait
-        // For now, we'll use a hash-based approach to generate a consistent mapping
-        use core::hash::{BuildHasher, Hash};
-        let mut hasher = FixedHasher::default().build_hasher();
-        type_id.hash(&mut hasher);
-        let hash = hasher.finish();
-        // Convert the hash to a 16-byte array (this is a simplified approach)
-        let mut bytes = [0u8; 16];
-        bytes[0..8].copy_from_slice(&hash.to_le_bytes());
-        bytes[8..16].copy_from_slice(&hash.to_le_bytes());
-        UuidBytes(bytes)
+    pub fn get_valid_id(&self, uuid: Uuid) -> Option<ComponentId> {
+        self.indices.get(&UuidBytes::from_uuid(uuid)).copied()
     }
 
     /// Returns the [`ComponentId`] of the given [`Component`] type `T` if it is fully registered.
@@ -612,30 +587,14 @@ impl Components {
     /// * [`World::component_id()`](crate::world::World::component_id)
     #[inline]
     pub fn valid_component_id<T: Component>(&self) -> Option<ComponentId> {
-        // First try UUID-based lookup for dynamic library safety
-        let uuid_bytes = UuidBytes(T::UUID);
-        if let Some(&id) = self.indices.get(&uuid_bytes) {
-            Some(id)
-        } else {
-            // Fallback to TypeId for backward compatibility
-            self.get_valid_id(TypeId::of::<T>())
-        }
+        self.indices.get(&UuidBytes(T::UUID)).copied()
     }
 
-    /// Type-erased equivalent of [`Components::valid_resource_id()`].
+    /// Type-erased equivalent of [`Components::valid_resource_id()`] using [`Uuid`]
     #[inline]
-    pub fn get_valid_resource_id_by_uuid(&self, uuid: [u8; 16]) -> Option<ComponentId> {
-        self.resource_indices.get(&UuidBytes(uuid)).copied()
-    }
-
-    /// Type-erased equivalent of [`Components::valid_resource_id()`] using TypeId (deprecated).
-    #[inline]
-    // FIXME:
-    // #[deprecated(note = "Use get_valid_resource_id_by_uuid instead for dynamic library safety")]
-    pub fn get_valid_resource_id(&self, type_id: TypeId) -> Option<ComponentId> {
-        // This is kept for compatibility but should be avoided in new code
+    pub fn get_valid_resource_id(&self, uuid: Uuid) -> Option<ComponentId> {
         self.resource_indices
-            .get(&self.typeid_to_uuid(type_id))
+            .get(&UuidBytes::from_uuid(uuid))
             .copied()
     }
 
@@ -661,35 +620,22 @@ impl Components {
     /// * [`Components::get_resource_id()`]
     #[inline]
     pub fn valid_resource_id<T: Resource>(&self) -> Option<ComponentId> {
-        // First try UUID-based lookup for dynamic library safety
-        // Note: Resources don't implement Component, so they don't have UUIDs by default
-        // We need to handle this differently - for now, use TypeId for resources
-        // A full implementation would make resources also implement TypeUuid
-        self.get_valid_resource_id(TypeId::of::<T>())
+        self.get_valid_resource_id(UuidBytes::of::<T>().to_uuid())
     }
 
     /// Type-erased equivalent of [`Components::component_id()`] using TypeId (deprecated).
     #[inline]
-    // #[deprecated(note = "Use get_id_by_uuid instead for dynamic library safety")]
-    pub fn get_id(&self, type_id: TypeId) -> Option<ComponentId> {
-        self.indices
-            .get(&self.typeid_to_uuid(type_id))
-            .copied()
-            .or_else(|| {
-                self.queued
-                    .read()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .components
-                    .get(&type_id)
-                    .map(|queued| queued.id)
-            })
-    }
+    pub fn get_id(&self, uuid: Uuid) -> Option<ComponentId> {
+        let uuid = UuidBytes::from_uuid(uuid);
 
-    /// Type-erased equivalent of [`Components::component_id()`] using UUID.
-    #[inline]
-    pub fn get_id_by_uuid(&self, uuid: [u8; 16]) -> Option<ComponentId> {
-        // FIXME(hack3rmann): replicate .get_id above
-        self.indices.get(&UuidBytes(uuid)).copied()
+        self.indices.get(&uuid).copied().or_else(|| {
+            self.queued
+                .read()
+                .unwrap_or_else(PoisonError::into_inner)
+                .components
+                .get(&uuid)
+                .map(|queued| queued.id)
+        })
     }
 
     /// Returns the [`ComponentId`] of the given [`Component`] type `T`.
@@ -723,38 +669,21 @@ impl Components {
     /// * [`World::component_id()`](crate::world::World::component_id)
     #[inline]
     pub fn component_id<T: Component>(&self) -> Option<ComponentId> {
-        // First try UUID-based lookup for dynamic library safety
-        let uuid_bytes = UuidBytes(T::UUID);
-        if let Some(&id) = self.indices.get(&uuid_bytes) {
-            Some(id)
-        } else {
-            // Fallback to TypeId for backward compatibility
-            self.get_id(TypeId::of::<T>())
-        }
+        self.get_id(UuidBytes::of::<T>().to_uuid())
     }
 
-    /// Type-erased equivalent of [`Components::resource_id()`] using TypeId (deprecated).
+    /// Type-erased equivalent of [`Components::resource_id()`] using [`Uuid`]
     #[inline]
-    // FIXME:
-    // #[deprecated(note = "Use get_resource_id_by_uuid instead for dynamic library safety")]
-    pub fn get_resource_id(&self, type_id: TypeId) -> Option<ComponentId> {
-        self.resource_indices
-            .get(&self.typeid_to_uuid(type_id))
-            .copied()
-            .or_else(|| {
-                self.queued
-                    .read()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .resources
-                    .get(&type_id)
-                    .map(|queued| queued.id)
-            })
-    }
-
-    /// Type-erased equivalent of [`Components::resource_id()`] using UUID.
-    #[inline]
-    pub fn get_resource_id_by_uuid(&self, uuid: [u8; 16]) -> Option<ComponentId> {
-        self.resource_indices.get(&UuidBytes(uuid)).copied()
+    pub fn get_resource_id(&self, uuid: Uuid) -> Option<ComponentId> {
+        let uuid = UuidBytes::from_uuid(uuid);
+        self.resource_indices.get(&uuid).copied().or_else(|| {
+            self.queued
+                .read()
+                .unwrap_or_else(PoisonError::into_inner)
+                .resources
+                .get(&uuid)
+                .map(|queued| queued.id)
+        })
     }
 
     /// Returns the [`ComponentId`] of the given [`Resource`] type `T`.
@@ -786,18 +715,18 @@ impl Components {
     /// * [`Components::get_resource_id()`]
     #[inline]
     pub fn resource_id<T: Resource>(&self) -> Option<ComponentId> {
-        self.get_resource_id(TypeId::of::<T>())
+        self.get_resource_id(UuidBytes::of::<T>().to_uuid())
     }
 
     /// # Safety
     ///
-    /// The [`ComponentDescriptor`] must match the [`TypeId`].
+    /// The [`ComponentDescriptor`] must match the [`Uuid`].
     /// The [`ComponentId`] must be unique.
-    /// The [`TypeId`] and [`ComponentId`] must not be registered or queued.
+    /// The [`Uuid`] and [`ComponentId`] must not be registered or queued.
     #[inline]
     pub(super) unsafe fn register_resource_unchecked(
         &mut self,
-        type_id: TypeId,
+        uuid: Uuid,
         component_id: ComponentId,
         descriptor: ComponentDescriptor,
     ) {
@@ -806,7 +735,9 @@ impl Components {
             self.register_component_inner(component_id, descriptor);
         }
         // Insert to both maps for compatibility during migration
-        let prev = self.resource_type_id_indices.insert(type_id, component_id);
+        let prev = self
+            .resource_type_id_indices
+            .insert(UuidBytes::from_uuid(uuid), component_id);
         debug_assert!(prev.is_none());
     }
 

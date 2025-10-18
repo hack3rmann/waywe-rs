@@ -25,9 +25,20 @@ pub fn derive_resource(input: TokenStream) -> TokenStream {
     let struct_name = &ast.ident;
     let (impl_generics, type_generics, where_clause) = &ast.generics.split_for_impl();
 
+    let uuid = generate_uuid();
+    let uuid_bytes = quote_uuid(&uuid);
+
     TokenStream::from(quote! {
-        impl #impl_generics #waywe_ecs_path::resource::Resource for #struct_name #type_generics #where_clause {
+        // Implement TypeUuid trait with a generated UUID
+        impl #impl_generics #waywe_ecs_path::uuid::TypeUuid
+            for #struct_name #type_generics #where_clause
+        {
+            const UUID: [u8; 16] = #uuid_bytes;
         }
+
+        // FIXME(hack3rmann): what about generics?!
+        impl #impl_generics #waywe_ecs_path::resource::Resource
+            for #struct_name #type_generics #where_clause {}
     })
 }
 
@@ -214,6 +225,7 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
             const UUID: [u8; 16] = #uuid_bytes;
         }
 
+        // FIXME(hack3rmann): what about generics?!
         impl #impl_generics #waywe_ecs_path::component::Component for #struct_name #type_generics #where_clause {
             const STORAGE_TYPE: #waywe_ecs_path::component::StorageType = #storage;
             type Mutability = #mutable_type;

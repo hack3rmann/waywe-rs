@@ -289,7 +289,7 @@ fn apply_or_insert_field_mapped(
             relationship_hook_mode,
         );
     } else {
-        let is_component = entity.world().components().get_id(type_id).is_some();
+        let is_component = entity.world().components().get_id(todo!()).is_some();
 
         if is_component {
             panic!(

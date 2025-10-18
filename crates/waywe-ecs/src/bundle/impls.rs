@@ -1,13 +1,12 @@
-use bevy_ptr::{MovingPtr, OwningPtr};
-use core::any::TypeId;
-use core::mem::MaybeUninit;
-use variadics_please::all_tuples_enumerated;
-
 use crate::{
     bundle::{Bundle, BundleFromComponents, DynamicBundle, NoBundleEffect},
     component::{Component, ComponentId, Components, ComponentsRegistrator, StorageType},
+    uuid::UuidBytes,
     world::EntityWorldMut,
 };
+use bevy_ptr::{MovingPtr, OwningPtr};
+use core::mem::MaybeUninit;
+use variadics_please::all_tuples_enumerated;
 
 // SAFETY:
 // - `Bundle::component_ids` calls `ids` for C's component id (and nothing else)
@@ -18,13 +17,7 @@ unsafe impl<C: Component> Bundle for C {
     }
 
     fn get_component_ids(components: &Components, ids: &mut impl FnMut(Option<ComponentId>)) {
-        // First try UUID-based lookup for dynamic library safety
-        if let Ok(uuid) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| C::UUID)) {
-            ids(components.get_id_by_uuid(uuid))
-        } else {
-            // Fallback to TypeId for backward compatibility
-            ids(components.get_id(TypeId::of::<C>()));
-        }
+        ids(components.get_id(UuidBytes::of::<C>().to_uuid()));
     }
 }
 

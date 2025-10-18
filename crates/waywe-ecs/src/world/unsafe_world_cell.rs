@@ -14,12 +14,15 @@ use crate::{
     query::{DebugCheckedUnwrap, ReleaseStateQueryData},
     resource::Resource,
     storage::{ComponentSparseSet, Storages, Table},
+    uuid::UuidBytes,
     world::RawCommandQueue,
 };
 use bevy_platform::sync::atomic::Ordering;
 use bevy_ptr::{Ptr, UnsafeCellDeref};
-use core::{any::TypeId, cell::UnsafeCell, fmt::Debug, marker::PhantomData, panic::Location, ptr};
+use core::{cell::UnsafeCell, fmt::Debug, marker::PhantomData, panic::Location, ptr};
 use thiserror::Error;
+use uuid::Uuid;
+use waywe_uuid::TypeUuid;
 
 /// Variant of the [`World`] where resource and component accesses take `&self`, and the responsibility to avoid
 /// aliasing violations are given to the caller instead of being checked at compile-time by rust's unique XOR shared rule.
@@ -401,7 +404,9 @@ impl<'w> UnsafeWorldCell<'w> {
     /// - no mutable reference to the resource exists at the same time
     #[inline]
     pub unsafe fn get_resource<R: Resource>(self) -> Option<&'w R> {
-        let component_id = self.components().get_valid_resource_id(TypeId::of::<R>())?;
+        let component_id = self
+            .components()
+            .get_valid_resource_id(UuidBytes::of::<R>().to_uuid())?;
         // SAFETY: caller ensures `self` has permission to access the resource
         //  caller also ensure that no mutable reference to the resource exists
         unsafe {
@@ -419,7 +424,9 @@ impl<'w> UnsafeWorldCell<'w> {
     /// - no mutable reference to the resource exists at the same time
     #[inline]
     pub unsafe fn get_resource_ref<R: Resource>(self) -> Option<Ref<'w, R>> {
-        let component_id = self.components().get_valid_resource_id(TypeId::of::<R>())?;
+        let component_id = self
+            .components()
+            .get_valid_resource_id(UuidBytes::of::<R>().to_uuid())?;
 
         // SAFETY: caller ensures `self` has permission to access the resource
         // caller also ensures that no mutable reference to the resource exists
@@ -470,8 +477,10 @@ impl<'w> UnsafeWorldCell<'w> {
     /// - the [`UnsafeWorldCell`] has permission to access the resource
     /// - no mutable reference to the resource exists at the same time
     #[inline]
-    pub unsafe fn get_non_send_resource<R: 'static>(self) -> Option<&'w R> {
-        let component_id = self.components().get_valid_resource_id(TypeId::of::<R>())?;
+    pub unsafe fn get_non_send_resource<R: TypeUuid>(self) -> Option<&'w R> {
+        let component_id = self
+            .components()
+            .get_valid_resource_id(Uuid::from_bytes(R::UUID))?;
         // SAFETY: caller ensures that `self` has permission to access `R`
         //  caller ensures that no mutable reference exists to `R`
         unsafe {
@@ -514,7 +523,9 @@ impl<'w> UnsafeWorldCell<'w> {
     #[inline]
     pub unsafe fn get_resource_mut<R: Resource>(self) -> Option<Mut<'w, R>> {
         self.assert_allows_mutable_access();
-        let component_id = self.components().get_valid_resource_id(TypeId::of::<R>())?;
+        let component_id = self
+            .components()
+            .get_valid_resource_id(UuidBytes::of::<R>().to_uuid())?;
         // SAFETY:
         // - caller ensures `self` has permission to access the resource mutably
         // - caller ensures no other references to the resource exist
@@ -576,9 +587,11 @@ impl<'w> UnsafeWorldCell<'w> {
     /// - the [`UnsafeWorldCell`] has permission to access the resource mutably
     /// - no other references to the resource exist at the same time
     #[inline]
-    pub unsafe fn get_non_send_resource_mut<R: 'static>(self) -> Option<Mut<'w, R>> {
+    pub unsafe fn get_non_send_resource_mut<R: TypeUuid>(self) -> Option<Mut<'w, R>> {
         self.assert_allows_mutable_access();
-        let component_id = self.components().get_valid_resource_id(TypeId::of::<R>())?;
+        let component_id = self
+            .components()
+            .get_valid_resource_id(UuidBytes::of::<R>().to_uuid())?;
         // SAFETY:
         // - caller ensures that `self` has permission to access the resource
         // - caller ensures that the resource is unaliased
@@ -789,7 +802,7 @@ impl<'w> UnsafeEntityCell<'w> {
     /// [`Self::contains_id`] or [`Self::contains_type_id`].
     #[inline]
     pub fn contains<T: Component>(self) -> bool {
-        self.contains_type_id(TypeId::of::<T>())
+        self.contains_uuid(UuidBytes::of::<T>().to_uuid())
     }
 
     /// Returns `true` if the current entity has a component identified by `component_id`.
@@ -805,16 +818,16 @@ impl<'w> UnsafeEntityCell<'w> {
         self.archetype().contains(component_id)
     }
 
-    /// Returns `true` if the current entity has a component with the type identified by `type_id`.
+    /// Returns `true` if the current entity has a component with the type identified by `uuid`.
     /// Otherwise, this returns false.
     ///
     /// ## Notes
     ///
     /// - If you know the concrete type of the component, you should prefer [`Self::contains`].
-    /// - If you have a [`ComponentId`] instead of a [`TypeId`], consider using [`Self::contains_id`].
+    /// - If you have a [`ComponentId`] instead of a [`Uuid`], consider using [`Self::contains_id`].
     #[inline]
-    pub fn contains_type_id(self, type_id: TypeId) -> bool {
-        let Some(id) = self.world.components().get_id(type_id) else {
+    pub fn contains_uuid(self, uuid: Uuid) -> bool {
+        let Some(id) = self.world.components().get_id(uuid) else {
             return false;
         };
         self.contains_id(id)
@@ -826,7 +839,10 @@ impl<'w> UnsafeEntityCell<'w> {
     /// - no other mutable references to the component exist at the same time
     #[inline]
     pub unsafe fn get<T: Component>(self) -> Option<&'w T> {
-        let component_id = self.world.components().get_valid_id(TypeId::of::<T>())?;
+        let component_id = self
+            .world
+            .components()
+            .get_valid_id(UuidBytes::of::<T>().to_uuid())?;
         // SAFETY:
         // - `storage_type` is correct (T component_id + T::STORAGE_TYPE)
         // - `location` is valid
@@ -852,7 +868,10 @@ impl<'w> UnsafeEntityCell<'w> {
     pub unsafe fn get_ref<T: Component>(self) -> Option<Ref<'w, T>> {
         let last_change_tick = self.last_run;
         let change_tick = self.this_run;
-        let component_id = self.world.components().get_valid_id(TypeId::of::<T>())?;
+        let component_id = self
+            .world
+            .components()
+            .get_valid_id(UuidBytes::of::<T>().to_uuid())?;
 
         // SAFETY:
         // - `storage_type` is correct (T component_id + T::STORAGE_TYPE)
@@ -884,7 +903,10 @@ impl<'w> UnsafeEntityCell<'w> {
     /// - no other mutable references to the component exist at the same time
     #[inline]
     pub unsafe fn get_change_ticks<T: Component>(self) -> Option<ComponentTicks> {
-        let component_id = self.world.components().get_valid_id(TypeId::of::<T>())?;
+        let component_id = self
+            .world
+            .components()
+            .get_valid_id(UuidBytes::of::<T>().to_uuid())?;
 
         // SAFETY:
         // - entity location is valid
@@ -968,7 +990,10 @@ impl<'w> UnsafeEntityCell<'w> {
     ) -> Option<Mut<'w, T>> {
         self.world.assert_allows_mutable_access();
 
-        let component_id = self.world.components().get_valid_id(TypeId::of::<T>())?;
+        let component_id = self
+            .world
+            .components()
+            .get_valid_id(UuidBytes::of::<T>().to_uuid())?;
 
         // SAFETY:
         // - `storage_type` is correct

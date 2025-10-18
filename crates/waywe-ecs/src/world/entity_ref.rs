@@ -17,19 +17,20 @@ use crate::{
     resource::Resource,
     storage::{SparseSets, Table},
     system::IntoObserverSystem,
+    uuid::UuidBytes,
     world::{Mut, Ref, World, error::EntityComponentError, unsafe_world_cell::UnsafeEntityCell},
 };
 use alloc::vec::Vec;
 use bevy_platform::collections::{HashMap, HashSet};
 use bevy_ptr::{MovingPtr, OwningPtr, Ptr, move_as_ptr};
 use core::{
-    any::TypeId,
     cmp::Ordering,
     hash::{Hash, Hasher},
     marker::PhantomData,
     mem::MaybeUninit,
 };
 use thiserror::Error;
+use uuid::Uuid;
 
 /// A read-only reference to a particular [`Entity`] and all of its components.
 ///
@@ -89,10 +90,10 @@ impl<'w> EntityRef<'w> {
     /// ## Notes
     ///
     /// If you do not know the concrete type of a component, consider using
-    /// [`Self::contains_id`] or [`Self::contains_type_id`].
+    /// [`Self::contains_id`] or [`Self::contains_uuid`].
     #[inline]
     pub fn contains<T: Component>(&self) -> bool {
-        self.contains_type_id(TypeId::of::<T>())
+        self.contains_uuid(UuidBytes::of::<T>().to_uuid())
     }
 
     /// Returns `true` if the current entity has a component identified by `component_id`.
@@ -108,16 +109,16 @@ impl<'w> EntityRef<'w> {
         self.cell.contains_id(component_id)
     }
 
-    /// Returns `true` if the current entity has a component with the type identified by `type_id`.
+    /// Returns `true` if the current entity has a component with the type identified by `uuid`.
     /// Otherwise, this returns false.
     ///
     /// ## Notes
     ///
     /// - If you know the concrete type of the component, you should prefer [`Self::contains`].
-    /// - If you have a [`ComponentId`] instead of a [`TypeId`], consider using [`Self::contains_id`].
+    /// - If you have a [`ComponentId`] instead of a [`Uuid`], consider using [`Self::contains_id`].
     #[inline]
-    pub fn contains_type_id(&self, type_id: TypeId) -> bool {
-        self.cell.contains_type_id(type_id)
+    pub fn contains_uuid(&self, uuid: Uuid) -> bool {
+        self.cell.contains_uuid(uuid)
     }
 
     /// Gets access to the component of type `T` for the current entity.
@@ -504,10 +505,10 @@ impl<'w> EntityMut<'w> {
     /// ## Notes
     ///
     /// If you do not know the concrete type of a component, consider using
-    /// [`Self::contains_id`] or [`Self::contains_type_id`].
+    /// [`Self::contains_id`] or [`Self::contains_uuid`].
     #[inline]
     pub fn contains<T: Component>(&self) -> bool {
-        self.contains_type_id(TypeId::of::<T>())
+        self.contains_uuid(UuidBytes::of::<T>().to_uuid())
     }
 
     /// Returns `true` if the current entity has a component identified by `component_id`.
@@ -523,16 +524,16 @@ impl<'w> EntityMut<'w> {
         self.cell.contains_id(component_id)
     }
 
-    /// Returns `true` if the current entity has a component with the type identified by `type_id`.
+    /// Returns `true` if the current entity has a component with the type identified by `uuid`.
     /// Otherwise, this returns false.
     ///
     /// ## Notes
     ///
     /// - If you know the concrete type of the component, you should prefer [`Self::contains`].
-    /// - If you have a [`ComponentId`] instead of a [`TypeId`], consider using [`Self::contains_id`].
+    /// - If you have a [`ComponentId`] instead of a [`Uuid`], consider using [`Self::contains_id`].
     #[inline]
-    pub fn contains_type_id(&self, type_id: TypeId) -> bool {
-        self.cell.contains_type_id(type_id)
+    pub fn contains_uuid(&self, uuid: Uuid) -> bool {
+        self.cell.contains_uuid(uuid)
     }
 
     /// Gets access to the component of type `T` for the current entity.
@@ -1322,14 +1323,14 @@ impl<'w> EntityWorldMut<'w> {
     /// ## Notes
     ///
     /// If you do not know the concrete type of a component, consider using
-    /// [`Self::contains_id`] or [`Self::contains_type_id`].
+    /// [`Self::contains_id`] or [`Self::contains_uuid`].
     ///
     /// # Panics
     ///
     /// If the entity has been despawned while this `EntityWorldMut` is still alive.
     #[inline]
     pub fn contains<T: Component>(&self) -> bool {
-        self.contains_type_id(TypeId::of::<T>())
+        self.contains_uuid(UuidBytes::of::<T>().to_uuid())
     }
 
     /// Returns `true` if the current entity has a component identified by `component_id`.
@@ -1350,21 +1351,20 @@ impl<'w> EntityWorldMut<'w> {
             .contains_id(component_id)
     }
 
-    /// Returns `true` if the current entity has a component with the type identified by `type_id`.
+    /// Returns `true` if the current entity has a component with the type identified by `uuid`.
     /// Otherwise, this returns false.
     ///
     /// ## Notes
     ///
     /// - If you know the concrete type of the component, you should prefer [`Self::contains`].
-    /// - If you have a [`ComponentId`] instead of a [`TypeId`], consider using [`Self::contains_id`].
+    /// - If you have a [`ComponentId`] instead of a [`Uuid`], consider using [`Self::contains_id`].
     ///
     /// # Panics
     ///
     /// If the entity has been despawned while this `EntityWorldMut` is still alive.
     #[inline]
-    pub fn contains_type_id(&self, type_id: TypeId) -> bool {
-        self.as_unsafe_entity_cell_readonly()
-            .contains_type_id(type_id)
+    pub fn contains_uuid(&self, uuid: Uuid) -> bool {
+        self.as_unsafe_entity_cell_readonly().contains_uuid(uuid)
     }
 
     /// Gets access to the component of type `T` for the current entity.
@@ -3582,10 +3582,10 @@ impl<'w, 's> FilteredEntityRef<'w, 's> {
     /// ## Notes
     ///
     /// If you do not know the concrete type of a component, consider using
-    /// [`Self::contains_id`] or [`Self::contains_type_id`].
+    /// [`Self::contains_id`] or [`Self::contains_uuid`].
     #[inline]
     pub fn contains<T: Component>(&self) -> bool {
-        self.contains_type_id(TypeId::of::<T>())
+        self.contains_uuid(UuidBytes::of::<T>().to_uuid())
     }
 
     /// Returns `true` if the current entity has a component identified by `component_id`.
@@ -3601,16 +3601,16 @@ impl<'w, 's> FilteredEntityRef<'w, 's> {
         self.entity.contains_id(component_id)
     }
 
-    /// Returns `true` if the current entity has a component with the type identified by `type_id`.
+    /// Returns `true` if the current entity has a component with the type identified by `uuid`.
     /// Otherwise, this returns false.
     ///
     /// ## Notes
     ///
     /// - If you know the concrete type of the component, you should prefer [`Self::contains`].
-    /// - If you have a [`ComponentId`] instead of a [`TypeId`], consider using [`Self::contains_id`].
+    /// - If you have a [`ComponentId`] instead of a [`Uuid`], consider using [`Self::contains_id`].
     #[inline]
-    pub fn contains_type_id(&self, type_id: TypeId) -> bool {
-        self.entity.contains_type_id(type_id)
+    pub fn contains_uuid(&self, uuid: Uuid) -> bool {
+        self.entity.contains_uuid(uuid)
     }
 
     /// Gets access to the component of type `T` for the current entity.
@@ -3621,7 +3621,7 @@ impl<'w, 's> FilteredEntityRef<'w, 's> {
             .entity
             .world()
             .components()
-            .get_valid_id(TypeId::of::<T>())?;
+            .get_valid_id(UuidBytes::of::<T>().to_uuid())?;
         self.access
             .has_component_read(id)
             // SAFETY: We have read access
@@ -3639,7 +3639,7 @@ impl<'w, 's> FilteredEntityRef<'w, 's> {
             .entity
             .world()
             .components()
-            .get_valid_id(TypeId::of::<T>())?;
+            .get_valid_id(UuidBytes::of::<T>().to_uuid())?;
         self.access
             .has_component_read(id)
             // SAFETY: We have read access
@@ -3655,7 +3655,7 @@ impl<'w, 's> FilteredEntityRef<'w, 's> {
             .entity
             .world()
             .components()
-            .get_valid_id(TypeId::of::<T>())?;
+            .get_valid_id(UuidBytes::of::<T>().to_uuid())?;
         self.access
             .has_component_read(id)
             // SAFETY: We have read access
@@ -3912,10 +3912,10 @@ impl<'w, 's> FilteredEntityMut<'w, 's> {
     /// ## Notes
     ///
     /// If you do not know the concrete type of a component, consider using
-    /// [`Self::contains_id`] or [`Self::contains_type_id`].
+    /// [`Self::contains_id`] or [`Self::contains_uuid`].
     #[inline]
     pub fn contains<T: Component>(&self) -> bool {
-        self.contains_type_id(TypeId::of::<T>())
+        self.contains_uuid(UuidBytes::of::<T>().to_uuid())
     }
 
     /// Returns `true` if the current entity has a component identified by `component_id`.
@@ -3931,16 +3931,16 @@ impl<'w, 's> FilteredEntityMut<'w, 's> {
         self.entity.contains_id(component_id)
     }
 
-    /// Returns `true` if the current entity has a component with the type identified by `type_id`.
+    /// Returns `true` if the current entity has a component with the type identified by `uuid`.
     /// Otherwise, this returns false.
     ///
     /// ## Notes
     ///
     /// - If you know the concrete type of the component, you should prefer [`Self::contains`].
-    /// - If you have a [`ComponentId`] instead of a [`TypeId`], consider using [`Self::contains_id`].
+    /// - If you have a [`ComponentId`] instead of a [`Uuid`], consider using [`Self::contains_id`].
     #[inline]
-    pub fn contains_type_id(&self, type_id: TypeId) -> bool {
-        self.entity.contains_type_id(type_id)
+    pub fn contains_uuid(&self, uuid: Uuid) -> bool {
+        self.entity.contains_uuid(uuid)
     }
 
     /// Gets access to the component of type `T` for the current entity.
@@ -3967,7 +3967,7 @@ impl<'w, 's> FilteredEntityMut<'w, 's> {
             .entity
             .world()
             .components()
-            .get_valid_id(TypeId::of::<T>())?;
+            .get_valid_id(UuidBytes::of::<T>().to_uuid())?;
         self.access
             .has_component_write(id)
             // SAFETY: We have write access
@@ -3999,7 +3999,7 @@ impl<'w, 's> FilteredEntityMut<'w, 's> {
             .entity
             .world()
             .components()
-            .get_valid_id(TypeId::of::<T>())?;
+            .get_valid_id(UuidBytes::of::<T>().to_uuid())?;
         self.access
             .has_component_write(id)
             // SAFETY:
@@ -4276,10 +4276,10 @@ where
     /// ## Notes
     ///
     /// If you do not know the concrete type of a component, consider using
-    /// [`Self::contains_id`] or [`Self::contains_type_id`].
+    /// [`Self::contains_id`] or [`Self::contains_uuid`].
     #[inline]
     pub fn contains<T: Component>(&self) -> bool {
-        self.contains_type_id(TypeId::of::<T>())
+        self.contains_uuid(UuidBytes::of::<T>().to_uuid())
     }
 
     /// Returns `true` if the current entity has a component identified by `component_id`.
@@ -4295,16 +4295,16 @@ where
         self.entity.contains_id(component_id)
     }
 
-    /// Returns `true` if the current entity has a component with the type identified by `type_id`.
+    /// Returns `true` if the current entity has a component with the type identified by `uuid`.
     /// Otherwise, this returns false.
     ///
     /// ## Notes
     ///
     /// - If you know the concrete type of the component, you should prefer [`Self::contains`].
-    /// - If you have a [`ComponentId`] instead of a [`TypeId`], consider using [`Self::contains_id`].
+    /// - If you have a [`ComponentId`] instead of a [`Uuid`], consider using [`Self::contains_id`].
     #[inline]
-    pub fn contains_type_id(&self, type_id: TypeId) -> bool {
-        self.entity.contains_type_id(type_id)
+    pub fn contains_uuid(&self, uuid: Uuid) -> bool {
+        self.entity.contains_uuid(uuid)
     }
 
     /// Retrieves the change ticks for the given component. This can be useful for implementing change
@@ -4315,7 +4315,7 @@ where
             .entity
             .world()
             .components()
-            .get_valid_id(TypeId::of::<T>())?;
+            .get_valid_id(UuidBytes::of::<T>().to_uuid())?;
         let components = self.entity.world().components();
         (!bundle_contains_component::<B>(components, component_id))
             .then(|| {
@@ -4515,7 +4515,7 @@ where
     /// [`Self::contains_id`] or [`Self::contains_type_id`].
     #[inline]
     pub fn contains<T: Component>(&self) -> bool {
-        self.contains_type_id(TypeId::of::<T>())
+        self.contains_uuid(UuidBytes::of::<T>().to_uuid())
     }
 
     /// Returns `true` if the current entity has a component identified by `component_id`.
@@ -4531,16 +4531,16 @@ where
         self.entity.contains_id(component_id)
     }
 
-    /// Returns `true` if the current entity has a component with the type identified by `type_id`.
+    /// Returns `true` if the current entity has a component with the type identified by `uuid`.
     /// Otherwise, this returns false.
     ///
     /// ## Notes
     ///
     /// - If you know the concrete type of the component, you should prefer [`Self::contains`].
-    /// - If you have a [`ComponentId`] instead of a [`TypeId`], consider using [`Self::contains_id`].
+    /// - If you have a [`ComponentId`] instead of a [`Uuid`], consider using [`Self::contains_id`].
     #[inline]
-    pub fn contains_type_id(&self, type_id: TypeId) -> bool {
-        self.entity.contains_type_id(type_id)
+    pub fn contains_uuid(&self, uuid: Uuid) -> bool {
+        self.entity.contains_uuid(uuid)
     }
 
     /// Gets the component of the given [`ComponentId`] from the entity.

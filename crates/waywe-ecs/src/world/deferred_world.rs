@@ -1,6 +1,7 @@
 use core::ops::Deref;
 
 use bevy_utils::prelude::DebugName;
+use waywe_uuid::TypeUuid;
 
 use crate::{
     archetype::Archetype,
@@ -490,7 +491,7 @@ impl<'w> DeferredWorld<'w> {
     /// This function will panic if it isn't called from the same thread that the resource was inserted from.
     #[inline]
     #[track_caller]
-    pub fn non_send_resource_mut<R: 'static>(&mut self) -> Mut<'_, R> {
+    pub fn non_send_resource_mut<R: TypeUuid>(&mut self) -> Mut<'_, R> {
         match self.get_non_send_resource_mut() {
             Some(x) => x,
             None => panic!(
@@ -508,7 +509,7 @@ impl<'w> DeferredWorld<'w> {
     /// # Panics
     /// This function will panic if it isn't called from the same thread that the resource was inserted from.
     #[inline]
-    pub fn get_non_send_resource_mut<R: 'static>(&mut self) -> Option<Mut<'_, R>> {
+    pub fn get_non_send_resource_mut<R: TypeUuid>(&mut self) -> Option<Mut<'_, R>> {
         // SAFETY: &mut self ensure that there are no outstanding accesses to the resource
         unsafe { self.world.get_non_send_resource_mut() }
     }

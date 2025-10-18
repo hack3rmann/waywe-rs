@@ -70,7 +70,7 @@ impl World {
         entity: Entity,
         type_id: TypeId,
     ) -> Result<&dyn Reflect, GetComponentReflectError> {
-        let Some(component_id) = self.components().get_valid_id(type_id) else {
+        let Some(component_id) = self.components().get_valid_id(todo!()) else {
             return Err(GetComponentReflectError::NoCorrespondingComponentId(
                 type_id,
             ));
@@ -155,7 +155,7 @@ impl World {
             ));
         };
 
-        let Some(component_id) = self.components().get_valid_id(type_id) else {
+        let Some(component_id) = self.components().get_valid_id(todo!()) else {
             return Err(GetComponentReflectError::NoCorrespondingComponentId(
                 type_id,
             ));

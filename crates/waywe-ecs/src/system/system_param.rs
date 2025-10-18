@@ -34,6 +34,7 @@ use core::{
     panic::Location,
 };
 use thiserror::Error;
+use waywe_uuid::TypeUuid;
 
 use super::Populated;
 use variadics_please::{all_tuples, all_tuples_enumerated};
@@ -1379,7 +1380,7 @@ pub struct NonSend<'w, T: 'static> {
 }
 
 // SAFETY: Only reads a single World non-send resource
-unsafe impl<'w, T> ReadOnlySystemParam for NonSend<'w, T> {}
+unsafe impl<'w, T: TypeUuid> ReadOnlySystemParam for NonSend<'w, T> {}
 
 impl<'w, T> Debug for NonSend<'w, T>
 where
@@ -1432,7 +1433,7 @@ impl<'a, T> From<NonSendMut<'a, T>> for NonSend<'a, T> {
 
 // SAFETY: NonSendComponentId access is applied to SystemMeta. If this
 // NonSend conflicts with any prior access, a panic will occur.
-unsafe impl<'a, T: 'static> SystemParam for NonSend<'a, T> {
+unsafe impl<'a, T: TypeUuid> SystemParam for NonSend<'a, T> {
     type State = ComponentId;
     type Item<'w, 's> = NonSend<'w, T>;
 
@@ -1508,7 +1509,7 @@ unsafe impl<'a, T: 'static> SystemParam for NonSend<'a, T> {
 
 // SAFETY: NonSendMut ComponentId access is applied to SystemMeta. If this
 // NonSendMut conflicts with any prior access, a panic will occur.
-unsafe impl<'a, T: 'static> SystemParam for NonSendMut<'a, T> {
+unsafe impl<'a, T: TypeUuid> SystemParam for NonSendMut<'a, T> {
     type State = ComponentId;
     type Item<'w, 's> = NonSendMut<'w, T>;
 

@@ -92,12 +92,12 @@ pub fn component_clone_via_reflect(source: &SourceComponent, ctx: &mut Component
     };
     let component_info = ctx.component_info();
     // checked in read_source_component_reflect
-    let type_id = component_info.type_id().unwrap();
+    let type_id = component_info.uuid().unwrap();
 
     // Try to clone using `reflect_clone`
     if let Ok(mut component) = source_component_reflect.reflect_clone() {
         if let Some(reflect_component) =
-            registry.get_type_data::<crate::reflect::ReflectComponent>(type_id)
+            registry.get_type_data::<crate::reflect::ReflectComponent>(todo!())
         {
             reflect_component.map_entities(&mut *component, ctx.entity_mapper());
         }
@@ -109,13 +109,13 @@ pub fn component_clone_via_reflect(source: &SourceComponent, ctx: &mut Component
 
     // Try to clone using ReflectFromReflect
     if let Some(reflect_from_reflect) =
-        registry.get_type_data::<bevy_reflect::ReflectFromReflect>(type_id)
+        registry.get_type_data::<bevy_reflect::ReflectFromReflect>(todo!())
     {
         if let Some(mut component) =
             reflect_from_reflect.from_reflect(source_component_reflect.as_partial_reflect())
         {
             if let Some(reflect_component) =
-                registry.get_type_data::<crate::reflect::ReflectComponent>(type_id)
+                registry.get_type_data::<crate::reflect::ReflectComponent>(todo!())
             {
                 reflect_component.map_entities(&mut *component, ctx.entity_mapper());
             }
@@ -127,7 +127,7 @@ pub fn component_clone_via_reflect(source: &SourceComponent, ctx: &mut Component
     }
     // Else, try to clone using ReflectDefault
     if let Some(reflect_default) =
-        registry.get_type_data::<bevy_reflect::std_traits::ReflectDefault>(type_id)
+        registry.get_type_data::<bevy_reflect::std_traits::ReflectDefault>(todo!())
     {
         let mut component = reflect_default.default();
         component.apply(source_component_reflect.as_partial_reflect());
@@ -137,7 +137,7 @@ pub fn component_clone_via_reflect(source: &SourceComponent, ctx: &mut Component
     }
     // Otherwise, try to clone using ReflectFromWorld
     if let Some(reflect_from_world) =
-        registry.get_type_data::<crate::reflect::ReflectFromWorld>(type_id)
+        registry.get_type_data::<crate::reflect::ReflectFromWorld>(todo!())
     {
         use crate::{entity::EntityMapper, world::World};
 
@@ -149,11 +149,11 @@ pub fn component_clone_via_reflect(source: &SourceComponent, ctx: &mut Component
         drop(registry);
         ctx.queue_deferred(move |world: &mut World, mapper: &mut dyn EntityMapper| {
             let mut component = reflect_from_world.from_world(world);
-            assert_eq!(type_id, (*component).type_id());
+            // assert_eq!(type_id, (*component).type_id());
             component.apply(source_component_cloned.as_partial_reflect());
             if let Some(reflect_component) = app_registry
                 .read()
-                .get_type_data::<crate::reflect::ReflectComponent>(type_id)
+                .get_type_data::<crate::reflect::ReflectComponent>(todo!())
             {
                 reflect_component.map_entities(&mut *component, mapper);
             }

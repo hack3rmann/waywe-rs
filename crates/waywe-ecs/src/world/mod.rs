@@ -28,6 +28,8 @@ pub use entity_ref::{
 pub use filtered_resource::*;
 pub use identifier::WorldId;
 pub use spawn_batch::*;
+use uuid::Uuid;
+use waywe_uuid::TypeUuid;
 
 use crate::{
     archetype::{ArchetypeId, Archetypes},
@@ -54,6 +56,7 @@ use crate::{
     schedule::{Schedule, ScheduleLabel, Schedules},
     storage::{ResourceData, Storages},
     system::Commands,
+    uuid::UuidBytes,
     world::{
         command_queue::RawCommandQueue,
         error::{
@@ -65,7 +68,7 @@ use alloc::{boxed::Box, vec::Vec};
 use bevy_platform::sync::atomic::{AtomicU32, Ordering};
 use bevy_ptr::{MovingPtr, OwningPtr, Ptr, UnsafeCellDeref, move_as_ptr};
 use bevy_utils::prelude::DebugName;
-use core::{any::TypeId, fmt};
+use core::{any::Any, fmt};
 use log::warn;
 use unsafe_world_cell::{UnsafeEntityCell, UnsafeWorldCell};
 
@@ -622,7 +625,8 @@ impl World {
     /// Returns [`None`] if the [`Resource`] type has not yet been initialized within the
     /// [`World`] using [`World::register_resource`], [`World::init_resource`] or [`World::insert_resource`].
     pub fn resource_id<T: Resource>(&self) -> Option<ComponentId> {
-        self.components.get_resource_id(TypeId::of::<T>())
+        self.components
+            .get_resource_id(UuidBytes::of::<T>().to_uuid())
     }
 
     /// Returns [`EntityRef`]s that expose read-only operations for the given
@@ -1663,7 +1667,7 @@ impl World {
     /// since the last call to [`World::clear_trackers`].
     pub fn removed<T: Component>(&self) -> impl Iterator<Item = Entity> + '_ {
         self.components
-            .get_valid_id(TypeId::of::<T>())
+            .get_valid_id(UuidBytes::of::<T>().to_uuid())
             .map(|component_id| self.removed_with_id(component_id))
             .into_iter()
             .flatten()
@@ -1767,7 +1771,7 @@ impl World {
     /// Panics if called from a thread other than the main thread.
     #[inline]
     #[track_caller]
-    pub fn init_non_send_resource<R: 'static + FromWorld>(&mut self) -> ComponentId {
+    pub fn init_non_send_resource<R: TypeUuid + Any + FromWorld>(&mut self) -> ComponentId {
         let caller = MaybeLocation::caller();
         let component_id = self.components_registrator().register_non_send::<R>();
         if self
@@ -1798,7 +1802,7 @@ impl World {
     /// from a different thread than where the original value was inserted from.
     #[inline]
     #[track_caller]
-    pub fn insert_non_send_resource<R: 'static>(&mut self, value: R) {
+    pub fn insert_non_send_resource<R: TypeUuid + Any>(&mut self, value: R) {
         let caller = MaybeLocation::caller();
         let component_id = self.components_registrator().register_non_send::<R>();
         OwningPtr::make(value, |ptr| {
@@ -1812,7 +1816,9 @@ impl World {
     /// Removes the resource of a given type and returns it, if it exists. Otherwise returns `None`.
     #[inline]
     pub fn remove_resource<R: Resource>(&mut self) -> Option<R> {
-        let component_id = self.components.get_valid_resource_id(TypeId::of::<R>())?;
+        let component_id = self
+            .components
+            .get_valid_resource_id(UuidBytes::of::<R>().to_uuid())?;
         let (ptr, _, _) = self.storages.resources.get_mut(component_id)?.remove()?;
         // SAFETY: `component_id` was gotten via looking up the `R` type
         unsafe { Some(ptr.read::<R>()) }
@@ -1830,8 +1836,10 @@ impl World {
     /// If a value is present, this function will panic if called from a different
     /// thread than where the value was inserted from.
     #[inline]
-    pub fn remove_non_send_resource<R: 'static>(&mut self) -> Option<R> {
-        let component_id = self.components.get_valid_resource_id(TypeId::of::<R>())?;
+    pub fn remove_non_send_resource<R: TypeUuid>(&mut self) -> Option<R> {
+        let component_id = self
+            .components
+            .get_valid_resource_id(Uuid::from_bytes(R::UUID))?;
         let (ptr, _, _) = self
             .storages
             .non_send_resources
@@ -1845,7 +1853,7 @@ impl World {
     #[inline]
     pub fn contains_resource<R: Resource>(&self) -> bool {
         self.components
-            .get_valid_resource_id(TypeId::of::<R>())
+            .get_valid_resource_id(UuidBytes::of::<R>().to_uuid())
             .and_then(|component_id| self.storages.resources.get(component_id))
             .is_some_and(ResourceData::is_present)
     }
@@ -1861,9 +1869,9 @@ impl World {
 
     /// Returns `true` if a resource of type `R` exists. Otherwise returns `false`.
     #[inline]
-    pub fn contains_non_send<R: 'static>(&self) -> bool {
+    pub fn contains_non_send<R: TypeUuid>(&self) -> bool {
         self.components
-            .get_valid_resource_id(TypeId::of::<R>())
+            .get_valid_resource_id(Uuid::from_bytes(R::UUID))
             .and_then(|component_id| self.storages.non_send_resources.get(component_id))
             .is_some_and(ResourceData::is_present)
     }
@@ -1886,7 +1894,7 @@ impl World {
     ///   was called.
     pub fn is_resource_added<R: Resource>(&self) -> bool {
         self.components
-            .get_valid_resource_id(TypeId::of::<R>())
+            .get_valid_resource_id(UuidBytes::of::<R>().to_uuid())
             .is_some_and(|component_id| self.is_resource_added_by_id(component_id))
     }
 
@@ -1917,7 +1925,7 @@ impl World {
     ///   was called.
     pub fn is_resource_changed<R: Resource>(&self) -> bool {
         self.components
-            .get_valid_resource_id(TypeId::of::<R>())
+            .get_valid_resource_id(UuidBytes::of::<R>().to_uuid())
             .is_some_and(|component_id| self.is_resource_changed_by_id(component_id))
     }
 
@@ -1942,7 +1950,7 @@ impl World {
     /// Retrieves the change ticks for the given resource.
     pub fn get_resource_change_ticks<R: Resource>(&self) -> Option<ComponentTicks> {
         self.components
-            .get_valid_resource_id(TypeId::of::<R>())
+            .get_valid_resource_id(UuidBytes::of::<R>().to_uuid())
             .and_then(|component_id| self.get_resource_change_ticks_by_id(component_id))
     }
 
@@ -2183,7 +2191,7 @@ impl World {
     /// This function will panic if it isn't called from the same thread that the resource was inserted from.
     #[inline]
     #[track_caller]
-    pub fn non_send_resource<R: 'static>(&self) -> &R {
+    pub fn non_send_resource<R: TypeUuid>(&self) -> &R {
         match self.get_non_send_resource() {
             Some(x) => x,
             None => panic!(
@@ -2205,7 +2213,7 @@ impl World {
     /// This function will panic if it isn't called from the same thread that the resource was inserted from.
     #[inline]
     #[track_caller]
-    pub fn non_send_resource_mut<R: 'static>(&mut self) -> Mut<'_, R> {
+    pub fn non_send_resource_mut<R: TypeUuid>(&mut self) -> Mut<'_, R> {
         match self.get_non_send_resource_mut() {
             Some(x) => x,
             None => panic!(
@@ -2223,7 +2231,7 @@ impl World {
     /// # Panics
     /// This function will panic if it isn't called from the same thread that the resource was inserted from.
     #[inline]
-    pub fn get_non_send_resource<R: 'static>(&self) -> Option<&R> {
+    pub fn get_non_send_resource<R: TypeUuid>(&self) -> Option<&R> {
         // SAFETY:
         // - `as_unsafe_world_cell_readonly` gives permission to access the entire world immutably
         // - `&self` ensures that there are no mutable borrows of world data
@@ -2236,7 +2244,7 @@ impl World {
     /// # Panics
     /// This function will panic if it isn't called from the same thread that the resource was inserted from.
     #[inline]
-    pub fn get_non_send_resource_mut<R: 'static>(&mut self) -> Option<Mut<'_, R>> {
+    pub fn get_non_send_resource_mut<R: TypeUuid>(&mut self) -> Option<Mut<'_, R>> {
         // SAFETY:
         // - `as_unsafe_world_cell` gives permission to access the entire world mutably
         // - `&mut self` ensures that there are no borrows of world data
@@ -2620,7 +2628,9 @@ impl World {
         let last_change_tick = self.last_change_tick();
         let change_tick = self.change_tick();
 
-        let component_id = self.components.get_valid_resource_id(TypeId::of::<R>())?;
+        let component_id = self
+            .components
+            .get_valid_resource_id(UuidBytes::of::<R>().to_uuid())?;
         let (ptr, mut ticks, mut caller) = self
             .storages
             .resources
@@ -4106,7 +4116,7 @@ mod tests {
         fn to_type_ids(component_infos: Vec<&ComponentInfo>) -> HashSet<Option<TypeId>> {
             component_infos
                 .into_iter()
-                .map(ComponentInfo::type_id)
+                .map(ComponentInfo::uuid)
                 .collect()
         }
 

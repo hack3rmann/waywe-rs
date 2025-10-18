@@ -14,6 +14,7 @@ use crate::{
     entity::{Entities, Entity, EntityMapper, hash_map::EntityHashMap},
     query::DebugCheckedUnwrap,
     relationship::RelationshipHookMode,
+    uuid::UuidBytes,
     world::World,
 };
 
@@ -30,8 +31,8 @@ impl<'a> SourceComponent<'a> {
     pub fn read<C: Component>(&self) -> Option<&C> {
         if self
             .info
-            .type_id()
-            .is_some_and(|id| id == TypeId::of::<C>())
+            .uuid()
+            .is_some_and(|id| id == UuidBytes::of::<C>().to_uuid())
         {
             // SAFETY:
             // - Components and ComponentId are from the same world
@@ -60,9 +61,9 @@ impl<'a> SourceComponent<'a> {
         &self,
         registry: &bevy_reflect::TypeRegistry,
     ) -> Option<&dyn bevy_reflect::Reflect> {
-        let type_id = self.info.type_id()?;
-        let reflect_from_ptr = registry.get_type_data::<bevy_reflect::ReflectFromPtr>(type_id)?;
-        if reflect_from_ptr.type_id() != type_id {
+        let type_id = self.info.uuid()?;
+        let reflect_from_ptr = registry.get_type_data::<bevy_reflect::ReflectFromPtr>(todo!())?;
+        if reflect_from_ptr.type_id() != todo!() {
             return None;
         }
         // SAFETY: `source_component_ptr` stores data represented by `component_id`, which we used to get `ReflectFromPtr`.
@@ -188,8 +189,8 @@ impl<'a, 'b> ComponentCloneCtx<'a, 'b> {
         }
         if self
             .component_info
-            .type_id()
-            .is_none_or(|id| id != TypeId::of::<C>())
+            .uuid()
+            .is_none_or(|id| id != UuidBytes::of::<C>().to_uuid())
         {
             panic!("TypeId of component '{short_name}' does not match source component TypeId")
         };
@@ -237,12 +238,12 @@ impl<'a, 'b> ComponentCloneCtx<'a, 'b> {
         }
         let source_type_id = self
             .component_info
-            .type_id()
+            .uuid()
             .expect("Source component must have TypeId");
         let component_type_id = component.type_id();
-        if source_type_id != component_type_id {
-            panic!("Passed component TypeId does not match source component TypeId")
-        }
+        // if source_type_id != todo!() {
+        //     panic!("Passed component TypeId does not match source component TypeId")
+        // }
         let component_layout = self.component_info.layout();
 
         let component_data_ptr = Box::into_raw(component).cast::<u8>();
@@ -917,18 +918,14 @@ impl<'w> EntityClonerBuilder<'w, OptOut> {
     }
 
     /// Extends the list of components that shouldn't be cloned.
-    /// Supports filtering by [`TypeId`], [`ComponentId`], [`BundleId`](`crate::bundle::BundleId`), and [`IntoIterator`] yielding one of these.
+    /// Supports filtering by [`Uuid`](uuid::Uuid), [`ComponentId`],
+    /// [`BundleId`](`crate::bundle::BundleId`), and [`IntoIterator`] yielding one of these.
     ///
     /// If component `A` is denied here and component `B` requires `A`, then `A`
     /// is denied as well. See [`Self::without_required_by_components`] to alter
     /// this behavior.
     pub fn deny_by_ids<M: Marker>(&mut self, ids: impl FilterableIds<M>) -> &mut Self {
         ids.filter_ids(&mut |ids| match ids {
-            FilterableId::Type(type_id) => {
-                if let Some(id) = self.world.components().get_valid_id(type_id) {
-                    self.filter.filter_deny(id, self.world);
-                }
-            }
             FilterableId::Component(component_id) => {
                 self.filter.filter_deny(component_id, self.world);
             }
@@ -941,7 +938,7 @@ impl<'w> EntityClonerBuilder<'w, OptOut> {
                 }
             }
             FilterableId::Uuid(uuid) => {
-                if let Some(id) = self.world.components().get_valid_id_by_uuid(uuid) {
+                if let Some(id) = self.world.components().get_valid_id(uuid) {
                     self.filter.filter_deny(id, self.world);
                 }
             }
@@ -1017,11 +1014,6 @@ impl<'w> EntityClonerBuilder<'w, OptIn> {
         insert_mode: InsertMode,
     ) {
         ids.filter_ids(&mut |id| match id {
-            FilterableId::Type(type_id) => {
-                if let Some(id) = self.world.components().get_valid_id(type_id) {
-                    self.filter.filter_allow(id, self.world, insert_mode);
-                }
-            }
             FilterableId::Component(component_id) => {
                 self.filter
                     .filter_allow(component_id, self.world, insert_mode);
@@ -1035,7 +1027,7 @@ impl<'w> EntityClonerBuilder<'w, OptIn> {
                 }
             }
             FilterableId::Uuid(uuid) => {
-                if let Some(id) = self.world.components().get_valid_id_by_uuid(uuid) {
+                if let Some(id) = self.world.components().get_valid_id(uuid) {
                     self.filter.filter_allow(id, self.world, insert_mode);
                 }
             }
@@ -1387,8 +1379,8 @@ impl Required {
 
 mod private {
     use crate::{bundle::BundleId, component::ComponentId};
-    use core::any::TypeId;
     use derive_more::From;
+    use uuid::Uuid;
 
     /// Marker trait to allow multiple blanket implementations for [`FilterableIds`].
     pub trait Marker {}
@@ -1402,10 +1394,9 @@ mod private {
     /// Defines types of ids that [`EntityClonerBuilder`](`super::EntityClonerBuilder`) can filter components by.
     #[derive(From)]
     pub enum FilterableId {
-        Type(TypeId),
         Component(ComponentId),
         Bundle(BundleId),
-        Uuid([u8; 16]), // For dynamic library safety
+        Uuid(Uuid),
     }
 
     impl<'a, T> From<&'a T> for FilterableId

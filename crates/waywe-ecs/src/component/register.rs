@@ -5,16 +5,13 @@ use crate::{
     },
     query::DebugCheckedUnwrap as _,
     resource::Resource,
-    uuid::UuidBytes,
+    uuid::{UuidBytes, UuidMap},
 };
 use alloc::{boxed::Box, vec::Vec};
 use bevy_platform::sync::PoisonError;
-use bevy_utils::TypeIdMap;
-use core::{
-    any::{Any, TypeId},
-    fmt::Debug,
-    ops::Deref,
-};
+use core::{any::Any, fmt::Debug, ops::Deref};
+use uuid::Uuid;
+use waywe_uuid::TypeUuid;
 
 /// Generates [`ComponentId`]s.
 #[derive(Debug, Default)]
@@ -185,8 +182,9 @@ impl<'w> ComponentsRegistrator<'w> {
     /// Same as [`Self::register_component_unchecked`] but keeps a checks for safety.
     #[inline]
     pub(super) fn register_component_checked<T: Component>(&mut self) -> ComponentId {
-        let type_id = TypeId::of::<T>();
-        if let Some(&id) = self.indices.get(&type_id) {
+        let uuid = UuidBytes::of::<T>();
+
+        if let Some(&id) = self.indices.get(&uuid) {
             enforce_no_required_components_recursion(self, &self.recursion_check_stack, id);
             return id;
         }
@@ -197,7 +195,7 @@ impl<'w> ComponentsRegistrator<'w> {
             .get_mut()
             .unwrap_or_else(PoisonError::into_inner)
             .components
-            .remove(&type_id)
+            .remove(&uuid)
         {
             // If we are trying to register something that has already been queued, we respect the queue.
             // Just like if we are trying to register something that already is, we respect the first registration.
@@ -222,14 +220,13 @@ impl<'w> ComponentsRegistrator<'w> {
             self.components
                 .register_component_inner(id, ComponentDescriptor::new::<T>());
         }
-        let type_id = TypeId::of::<T>();
+        let uuid = UuidBytes::of::<T>();
         // Insert into both maps for compatibility during migration
-        let prev = self.components.type_id_indices.insert(type_id, id);
+        let prev = self.components.type_id_indices.insert(uuid, id);
         debug_assert!(prev.is_none());
 
         // Also insert into UUID map for dynamic library safety
-        let uuid_bytes = UuidBytes(T::UUID);
-        let prev_uuid = self.components.indices.insert(uuid_bytes, id);
+        let prev_uuid = self.components.indices.insert(uuid, id);
         debug_assert!(prev_uuid.is_none());
 
         self.recursion_check_stack.push(id);
@@ -300,7 +297,7 @@ impl<'w> ComponentsRegistrator<'w> {
     pub fn register_resource<T: Resource>(&mut self) -> ComponentId {
         // SAFETY: The [`ComponentDescriptor`] matches the [`TypeId`]
         unsafe {
-            self.register_resource_with(TypeId::of::<T>(), || {
+            self.register_resource_with(UuidBytes::of::<T>().to_uuid(), || {
                 ComponentDescriptor::new_resource::<T>()
             })
         }
@@ -310,10 +307,10 @@ impl<'w> ComponentsRegistrator<'w> {
     /// If a resource of this type has already been registered, this will return
     /// the ID of the pre-existing resource.
     #[inline]
-    pub fn register_non_send<T: Any>(&mut self) -> ComponentId {
+    pub fn register_non_send<T: TypeUuid + Any>(&mut self) -> ComponentId {
         // SAFETY: The [`ComponentDescriptor`] matches the [`TypeId`]
         unsafe {
-            self.register_resource_with(TypeId::of::<T>(), || {
+            self.register_resource_with(UuidBytes::of::<T>().to_uuid(), || {
                 ComponentDescriptor::new_non_send::<T>(StorageType::default())
             })
         }
@@ -323,14 +320,16 @@ impl<'w> ComponentsRegistrator<'w> {
     ///
     /// # Safety
     ///
-    /// The [`ComponentDescriptor`] must match the [`TypeId`].
+    /// The [`ComponentDescriptor`] must match the [`Uuid`].
     #[inline]
     unsafe fn register_resource_with(
         &mut self,
-        type_id: TypeId,
+        uuid: Uuid,
         descriptor: impl FnOnce() -> ComponentDescriptor,
     ) -> ComponentId {
-        if let Some(id) = self.components.resource_type_id_indices.get(&type_id) {
+        let uuid = UuidBytes::from_uuid(uuid);
+
+        if let Some(id) = self.components.resource_type_id_indices.get(&uuid) {
             return *id;
         }
 
@@ -340,7 +339,7 @@ impl<'w> ComponentsRegistrator<'w> {
             .get_mut()
             .unwrap_or_else(PoisonError::into_inner)
             .resources
-            .remove(&type_id)
+            .remove(&uuid)
         {
             // If we are trying to register something that has already been queued, we respect the queue.
             // Just like if we are trying to register something that already is, we respect the first registration.
@@ -351,7 +350,7 @@ impl<'w> ComponentsRegistrator<'w> {
         // SAFETY: The resource is not currently registered, the id is fresh, and the [`ComponentDescriptor`] matches the [`TypeId`]
         unsafe {
             self.components
-                .register_resource_unchecked(type_id, id, descriptor());
+                .register_resource_unchecked(uuid.to_uuid(), id, descriptor());
         }
         id
     }
@@ -427,8 +426,8 @@ impl QueuedRegistration {
 /// Allows queuing components to be registered.
 #[derive(Default)]
 pub struct QueuedComponents {
-    pub(super) components: TypeIdMap<QueuedRegistration>,
-    pub(super) resources: TypeIdMap<QueuedRegistration>,
+    pub(super) components: UuidMap<QueuedRegistration>,
+    pub(super) resources: UuidMap<QueuedRegistration>,
     pub(super) dynamic_registrations: Vec<QueuedRegistration>,
 }
 
@@ -505,7 +504,7 @@ impl<'w> ComponentsQueuedRegistrator<'w> {
     /// The [`TypeId`] must not already be registered as a component.
     unsafe fn register_arbitrary_component(
         &self,
-        type_id: TypeId,
+        uuid: Uuid,
         descriptor: ComponentDescriptor,
         func: impl FnOnce(&mut ComponentsRegistrator, ComponentId, ComponentDescriptor) + 'static,
     ) -> ComponentId {
@@ -514,7 +513,7 @@ impl<'w> ComponentsQueuedRegistrator<'w> {
             .write()
             .unwrap_or_else(PoisonError::into_inner)
             .components
-            .entry(type_id)
+            .entry(UuidBytes::from_uuid(uuid))
             .or_insert_with(|| {
                 // SAFETY: The id was just generated.
                 unsafe { QueuedRegistration::new(self.ids.next(), descriptor, func) }
@@ -527,10 +526,10 @@ impl<'w> ComponentsQueuedRegistrator<'w> {
     ///
     /// # Safety
     ///
-    /// The [`TypeId`] must not already be registered as a resource.
+    /// The [`Uuid`] must not already be registered as a resource.
     unsafe fn register_arbitrary_resource(
         &self,
-        type_id: TypeId,
+        uuid: Uuid,
         descriptor: ComponentDescriptor,
         func: impl FnOnce(&mut ComponentsRegistrator, ComponentId, ComponentDescriptor) + 'static,
     ) -> ComponentId {
@@ -539,7 +538,7 @@ impl<'w> ComponentsQueuedRegistrator<'w> {
             .write()
             .unwrap_or_else(PoisonError::into_inner)
             .resources
-            .entry(type_id)
+            .entry(UuidBytes::from_uuid(uuid))
             .or_insert_with(|| {
                 // SAFETY: The id was just generated.
                 unsafe { QueuedRegistration::new(self.ids.next(), descriptor, func) }
@@ -582,7 +581,7 @@ impl<'w> ComponentsQueuedRegistrator<'w> {
             // SAFETY: We just checked that this type was not already registered.
             unsafe {
                 self.register_arbitrary_component(
-                    TypeId::of::<T>(),
+                    UuidBytes::of::<T>().to_uuid(),
                     ComponentDescriptor::new::<T>(),
                     |registrator, id, _descriptor| {
                         // SAFETY: We just checked that this is not currently registered or queued, and if it was registered since, this would have been dropped from the queue.
@@ -631,12 +630,12 @@ impl<'w> ComponentsQueuedRegistrator<'w> {
     /// See type level docs for details.
     #[inline]
     pub fn queue_register_resource<T: Resource>(&self) -> ComponentId {
-        let type_id = TypeId::of::<T>();
-        self.get_resource_id(type_id).unwrap_or_else(|| {
+        let uuid = UuidBytes::of::<T>().to_uuid();
+        self.get_resource_id(uuid).unwrap_or_else(|| {
             // SAFETY: We just checked that this type was not already registered.
             unsafe {
                 self.register_arbitrary_resource(
-                    type_id,
+                    uuid,
                     ComponentDescriptor::new_resource::<T>(),
                     move |registrator, id, descriptor| {
                         // SAFETY: We just checked that this is not currently registered or queued, and if it was registered since, this would have been dropped from the queue.
@@ -645,7 +644,7 @@ impl<'w> ComponentsQueuedRegistrator<'w> {
                         unsafe {
                             registrator
                                 .components
-                                .register_resource_unchecked(type_id, id, descriptor);
+                                .register_resource_unchecked(uuid, id, descriptor);
                         }
                     },
                 )
@@ -664,13 +663,13 @@ impl<'w> ComponentsQueuedRegistrator<'w> {
     /// Technically speaking, the returned [`ComponentId`] is not valid, but it will become valid later.
     /// See type level docs for details.
     #[inline]
-    pub fn queue_register_non_send<T: Any>(&self) -> ComponentId {
-        let type_id = TypeId::of::<T>();
-        self.get_resource_id(type_id).unwrap_or_else(|| {
+    pub fn queue_register_non_send<T: TypeUuid + Any>(&self) -> ComponentId {
+        let uuid = UuidBytes::of::<T>().to_uuid();
+        self.get_resource_id(uuid).unwrap_or_else(|| {
             // SAFETY: We just checked that this type was not already registered.
             unsafe {
                 self.register_arbitrary_resource(
-                    type_id,
+                    uuid,
                     ComponentDescriptor::new_non_send::<T>(StorageType::default()),
                     move |registrator, id, descriptor| {
                         // SAFETY: We just checked that this is not currently registered or queued, and if it was registered since, this would have been dropped from the queue.
@@ -679,7 +678,7 @@ impl<'w> ComponentsQueuedRegistrator<'w> {
                         unsafe {
                             registrator
                                 .components
-                                .register_resource_unchecked(type_id, id, descriptor);
+                                .register_resource_unchecked(uuid, id, descriptor);
                         }
                     },
                 )
