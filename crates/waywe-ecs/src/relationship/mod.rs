@@ -575,6 +575,7 @@ mod tests {
             reason = "This struct is used as a compilation test to test the derive macros, and as such is intentionally never constructed."
         )]
         #[derive(Component)]
+        #[uuid(rebound(T: TypeId))]
         #[relationship(relationship_target=Target<T>)]
         struct Source<T: Send + Sync + 'static>(#[relationship] Entity, PhantomData<T>);
 
@@ -583,6 +584,7 @@ mod tests {
             reason = "This struct is used as a compilation test to test the derive macros, and as such is intentionally never constructed."
         )]
         #[derive(Component)]
+        #[uuid(rebound(T: TypeId))]
         #[relationship_target(relationship=Source<T>)]
         struct Target<T: Send + Sync + 'static>(#[relationship] Vec<Entity>, PhantomData<T>);
 

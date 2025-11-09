@@ -646,6 +646,7 @@ impl<'a, 'w> RequiredComponentsRegistrator<'a, 'w> {
 #[cfg(test)]
 mod tests {
     use alloc::string::{String, ToString};
+    use waywe_uuid::TypeUuid;
 
     use crate::{
         bundle::Bundle,
@@ -733,7 +734,7 @@ mod tests {
         struct X;
 
         #[derive(Component, Default)]
-        struct Y<T> {
+        struct Y<T: TypeUuid> {
             value: T,
         }
 

@@ -51,7 +51,7 @@ pub fn waywe_uuid_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStr
         .map(|byte_str| syn::parse_str::<LitInt>(&byte_str).unwrap());
 
     let gen = quote! {
-        impl waywe_uuid::TypeUuid for #name {
+        impl waywe_uuid::ConstTypeUuid for #name {
             const UUID: waywe_uuid::Bytes = [
                 #( #bytes ),*
             ];
@@ -87,7 +87,7 @@ pub fn external_type_uuid(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
         .map(|byte_str| syn::parse_str::<LitInt>(&byte_str).unwrap());
 
     let gen = quote! {
-        impl crate::TypeUuid for #path {
+        impl crate::ConstTypeUuid for #path {
             const UUID: crate::Bytes = [
                 #( #bytes ),*
             ];

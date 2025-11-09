@@ -5,6 +5,11 @@ use syn::{
     parse_macro_input, parse_quote, spanned::Spanned,
 };
 
+use crate::{
+    component::{make_type_params, parse_uuid_attributes},
+    uuid::{generate_uuid, quote_uuid},
+};
+
 pub const EVENT: &str = "event";
 pub const ENTITY_EVENT: &str = "entity_event";
 pub const PROPAGATE: &str = "propagate";
@@ -22,6 +27,8 @@ pub fn derive_event(input: TokenStream) -> TokenStream {
         .make_where_clause()
         .predicates
         .push(parse_quote! { Self: Send + Sync + 'static });
+
+    let uuid_info = parse_uuid_attributes(&ast.attrs);
 
     let mut processed_attrs = Vec::new();
     let mut trigger: Option<Type> = None;
@@ -52,8 +59,30 @@ pub fn derive_event(input: TokenStream) -> TokenStream {
     let struct_name = &ast.ident;
     let (impl_generics, type_generics, where_clause) = &ast.generics.split_for_impl();
 
+    let uuid = generate_uuid();
+    let uuid_bytes = quote_uuid(&uuid);
+    let type_parameters = make_type_params(&uuid_info, &ast.generics.params);
+
     TokenStream::from(quote! {
-        impl #impl_generics #waywe_ecs_path::event::Event for #struct_name #type_generics #where_clause {
+        // Implement TypeUuid trait with a generated UUID
+        impl #impl_generics #waywe_ecs_path::uuid::TypeUuid
+            for #struct_name #type_generics #where_clause
+        {
+            fn uuid() -> [u8; 16] {
+                #waywe_ecs_path::uuid::UuidBuilder::new(
+                    #waywe_ecs_path::uuid::Uuid::from_bytes(
+                        #uuid_bytes
+                    )
+                )
+                    #( #type_parameters )*
+                    .build()
+                    .into_bytes()
+            }
+        }
+
+        impl #impl_generics #waywe_ecs_path::event::Event
+            for #struct_name #type_generics #where_clause
+        {
             type Trigger<'a> = #trigger;
         }
     })
@@ -67,6 +96,7 @@ pub fn derive_entity_event(input: TokenStream) -> TokenStream {
         .predicates
         .push(parse_quote! { Self: Send + Sync + 'static });
 
+    let uuid_info = parse_uuid_attributes(&ast.attrs);
     let mut auto_propagate = false;
     let mut propagate = false;
     let mut traversal: Option<Type> = None;
@@ -142,12 +172,37 @@ pub fn derive_entity_event(input: TokenStream) -> TokenStream {
     } else {
         quote! {#waywe_ecs_path::event::EntityTrigger}
     };
+
+    let uuid = generate_uuid();
+    let uuid_bytes = quote_uuid(&uuid);
+    let type_parameters = make_type_params(&uuid_info, &ast.generics.params);
+
     TokenStream::from(quote! {
-        impl #impl_generics #waywe_ecs_path::event::Event for #struct_name #type_generics #where_clause {
+        // Implement TypeUuid trait with a generated UUID
+        impl #impl_generics #waywe_ecs_path::uuid::TypeUuid
+            for #struct_name #type_generics #where_clause
+        {
+            fn uuid() -> [u8; 16] {
+                #waywe_ecs_path::uuid::UuidBuilder::new(
+                    #waywe_ecs_path::uuid::Uuid::from_bytes(
+                        #uuid_bytes
+                    )
+                )
+                    #( #type_parameters )*
+                    .build()
+                    .into_bytes()
+            }
+        }
+
+        impl #impl_generics #waywe_ecs_path::event::Event
+            for #struct_name #type_generics #where_clause
+        {
             type Trigger<'a> = #trigger;
         }
 
-        impl #impl_generics #waywe_ecs_path::event::EntityEvent for #struct_name #type_generics #where_clause {
+        impl #impl_generics #waywe_ecs_path::event::EntityEvent
+            for #struct_name #type_generics #where_clause
+        {
             fn event_target(&self) -> #waywe_ecs_path::entity::Entity {
                 self.#entity_field
             }

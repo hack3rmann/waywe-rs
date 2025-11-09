@@ -480,7 +480,7 @@ impl<'w> UnsafeWorldCell<'w> {
     pub unsafe fn get_non_send_resource<R: TypeUuid>(self) -> Option<&'w R> {
         let component_id = self
             .components()
-            .get_valid_resource_id(Uuid::from_bytes(R::UUID))?;
+            .get_valid_resource_id(Uuid::from_bytes(R::uuid()))?;
         // SAFETY: caller ensures that `self` has permission to access `R`
         //  caller ensures that no mutable reference exists to `R`
         unsafe {

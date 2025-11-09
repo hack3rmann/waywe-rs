@@ -299,7 +299,7 @@ impl ComponentDescriptor {
             name: DebugName::type_name::<T>(),
             storage_type,
             is_send_and_sync: false,
-            uuid: Some(Uuid::from_bytes(T::UUID)),
+            uuid: Some(Uuid::from_bytes(T::uuid())),
             layout: Layout::new::<T>(),
             drop: needs_drop::<T>().then_some(Self::drop_ptr::<T> as _),
             mutable: true,
@@ -574,7 +574,7 @@ impl Components {
     /// * [`World::component_id()`](crate::world::World::component_id)
     #[inline]
     pub fn valid_component_id<T: Component>(&self) -> Option<ComponentId> {
-        self.indices.get(&UuidBytes(T::UUID)).copied()
+        self.indices.get(&UuidBytes(T::uuid())).copied()
     }
 
     /// Type-erased equivalent of [`Components::valid_resource_id()`] using [`Uuid`]

@@ -25,6 +25,9 @@
 //!
 //! [`TypeUuid`]: ./trait.TypeUuid.html
 
+use core::{any::TypeId, mem, slice};
+use sha2_const::Sha256;
+
 #[doc(hidden)]
 pub use waywe_uuid_derive::*;
 
@@ -54,8 +57,18 @@ pub type Bytes = [u8; 16];
 /// #[uuid = "d4adfc76-f5f4-40b0-8e28-8a51a12f5e46"]
 /// struct MyType;
 /// ```
-pub trait TypeUuid {
+pub trait ConstTypeUuid {
     const UUID: Bytes;
+}
+
+impl<T: ConstTypeUuid> TypeUuid for T {
+    fn uuid() -> Bytes {
+        Self::UUID
+    }
+}
+
+pub trait TypeUuid {
+    fn uuid() -> Bytes;
 }
 
 /// Allows the TypeUuid constants to be retrieved via a trait object.
@@ -65,20 +78,33 @@ pub trait TypeUuid {
 /// [`TypeUuid`], which you should implement instead.
 ///
 /// [`TypeUuid`]: ./trait.TypeUuid.html
-pub trait TypeUuidDynamic: private::Sealed {
+pub trait TypeUuidDynamic {
     fn uuid(&self) -> Bytes;
 }
 
 impl<T: TypeUuid> TypeUuidDynamic for T {
     fn uuid(&self) -> Bytes {
-        Self::UUID
+        Self::uuid()
     }
 }
 
-mod private {
-    pub trait Sealed {}
+pub fn type_id_uuid_of<T: 'static>() -> Bytes {
+    type_id_uuid(TypeId::of::<T>())
+}
 
-    impl<T: super::TypeUuid> Sealed for T {}
+pub fn type_id_uuid(id: TypeId) -> Bytes {
+    let id_bytes =
+        unsafe { slice::from_raw_parts((&raw const id).cast::<u8>(), mem::size_of::<TypeId>()) };
+    let hash = Sha256::new().update(id_bytes).finalize();
+    let mut bytes = [0_u8; 16];
+
+    unsafe {
+        bytes
+            .as_mut_ptr()
+            .copy_from_nonoverlapping(hash.as_ptr(), mem::size_of::<TypeId>().min(16))
+    };
+
+    bytes
 }
 
 // Implement `TypeUuid` for primitive types and types defined in the standard library.

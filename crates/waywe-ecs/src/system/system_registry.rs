@@ -18,6 +18,8 @@ use thiserror::Error;
 
 /// A small wrapper for [`BoxedSystem`] that also keeps track whether or not the system has been initialized.
 #[derive(Component)]
+#[uuid(rebound(I: TypeId))]
+#[uuid(rebound(O: TypeId))]
 #[require(SystemIdMarker = SystemIdMarker::typed_system_id_marker::<I, O>(), Internal)]
 pub(crate) struct RegisteredSystem<I, O> {
     initialized: bool,
@@ -163,6 +165,7 @@ impl<I: SystemInput, O> core::fmt::Debug for SystemId<I, O> {
 ///
 /// This resource is inserted by [`World::register_system_cached`].
 #[derive(Resource)]
+#[uuid(rebound(S: TypeId))]
 pub struct CachedSystemId<S> {
     /// The cached `SystemId` as an `Entity`.
     pub entity: Entity,
@@ -592,6 +595,7 @@ mod tests {
     use core::cell::Cell;
 
     use bevy_utils::default;
+    use waywe_uuid::TypeUuid;
 
     use crate::{
         prelude::*,
@@ -995,6 +999,8 @@ mod tests {
         use crate::system::RegisteredSystemError;
         use alloc::string::ToString;
 
+        #[derive(TypeUuid)]
+        #[uuid = "df78c419-f853-4898-b223-0af52aadb15c"]
         struct T;
         impl Resource for T {}
         fn system(_: Res<T>) {}

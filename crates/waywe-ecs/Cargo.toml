@@ -76,6 +76,7 @@ critical-section = [
 hotpatching = ["dep:subsecond"]
 
 [dependencies]
+sha2-const.workspace = true
 waywe-uuid.workspace = true
 uuid = "1.18.1"
 bevy_ptr = "0.17.2"

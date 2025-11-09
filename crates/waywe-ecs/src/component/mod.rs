@@ -13,17 +13,14 @@ use crate::{
     world::{FromWorld, World},
 };
 use core::{fmt::Debug, marker::PhantomData, ops::Deref};
+use waywe_uuid::TypeUuid;
 
+pub use bevy_ecs_macros::Component;
 pub use clone::*;
 pub use info::*;
 pub use register::*;
 pub use required::*;
 pub use tick::*;
-use waywe_uuid::TypeUuid;
-
-// Re-export types needed for the dynamic library safety refactoring
-pub use crate::uuid::{UuidBytes, UuidMap};
-pub use bevy_ecs_macros::Component;
 
 // Generate a UUID based on type information to ensure dynamic library safety
 #[doc(hidden)]

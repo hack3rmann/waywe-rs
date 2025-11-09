@@ -1836,7 +1836,7 @@ impl World {
     pub fn remove_non_send_resource<R: TypeUuid>(&mut self) -> Option<R> {
         let component_id = self
             .components
-            .get_valid_resource_id(Uuid::from_bytes(R::UUID))?;
+            .get_valid_resource_id(Uuid::from_bytes(R::uuid()))?;
         let (ptr, _, _) = self
             .storages
             .non_send_resources
@@ -1868,7 +1868,7 @@ impl World {
     #[inline]
     pub fn contains_non_send<R: TypeUuid>(&self) -> bool {
         self.components
-            .get_valid_resource_id(Uuid::from_bytes(R::UUID))
+            .get_valid_resource_id(Uuid::from_bytes(R::uuid()))
             .and_then(|component_id| self.storages.non_send_resources.get(component_id))
             .is_some_and(ResourceData::is_present)
     }

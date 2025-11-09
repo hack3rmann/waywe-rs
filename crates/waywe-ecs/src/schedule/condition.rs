@@ -1,11 +1,10 @@
-use alloc::{boxed::Box, format};
-use bevy_utils::prelude::DebugName;
-use core::ops::Not;
-
 use crate::system::{
     Adapt, AdapterSystem, CombinatorSystem, Combine, IntoSystem, ReadOnlySystem, RunSystemError,
     System, SystemIn, SystemInput,
 };
+use alloc::{boxed::Box, format};
+use bevy_utils::prelude::DebugName;
+use core::ops::Not;
 
 /// A type-erased run condition stored in a [`Box`].
 pub type BoxedCondition<In = ()> = Box<dyn ReadOnlySystem<In = In, Out = bool>>;

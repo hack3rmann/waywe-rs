@@ -21,6 +21,7 @@ pub use mut_iterators::*;
 pub use update::*;
 
 pub use bevy_ecs_macros::Message;
+use waywe_uuid::TypeUuid;
 
 use crate::change_detection::MaybeLocation;
 use core::{
@@ -91,7 +92,7 @@ use core::{
     label = "invalid `Message`",
     note = "consider annotating `{Self}` with `#[derive(Message)]`"
 )]
-pub trait Message: Send + Sync + 'static {}
+pub trait Message: Send + Sync + TypeUuid + 'static {}
 
 #[derive(Debug)]
 pub(crate) struct MessageInstance<M: Message> {

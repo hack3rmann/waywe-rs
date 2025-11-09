@@ -3,6 +3,7 @@ mod trigger;
 
 pub use bevy_ecs_macros::{EntityEvent, Event};
 pub use trigger::*;
+use waywe_uuid::TypeUuid;
 
 use crate::{
     component::{Component, ComponentId},
@@ -85,7 +86,7 @@ use core::marker::PhantomData;
     label = "invalid `Event`",
     note = "consider annotating `{Self}` with `#[derive(Event)]`"
 )]
-pub trait Event: Send + Sync + Sized + 'static {
+pub trait Event: Send + Sync + Sized + TypeUuid + 'static {
     /// Defines which observers will run, what data will be passed to them, and the order they will be run in. See [`Trigger`] for more info.
     type Trigger<'a>: Trigger<Self>;
 }

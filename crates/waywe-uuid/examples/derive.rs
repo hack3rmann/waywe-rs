@@ -6,6 +6,6 @@ use waywe_uuid::TypeUuid;
 struct MyType;
 
 fn main() {
-    let uuid = Uuid::from_bytes(MyType::UUID);
+    let uuid = Uuid::from_bytes(MyType::uuid());
     println!("{}", uuid);
 }

@@ -1,21 +1,169 @@
 use crate::uuid::{generate_uuid, quote_uuid};
 use proc_macro::TokenStream;
-use proc_macro2::{Span, TokenStream as TokenStream2};
+use proc_macro2::{Delimiter, Group, Punct, Spacing, Span, TokenStream as TokenStream2};
 use quote::{ToTokens, format_ident, quote};
 use std::collections::HashSet;
 use syn::{
-    Data, DataEnum, DataStruct, DeriveInput, Expr, ExprCall, ExprPath, Field, Fields, Ident,
-    LitStr, Member, Path, Result, Token, Type, Visibility, braced, parenthesized,
-    parse::Parse,
+    Attribute, Data, DataEnum, DataStruct, DeriveInput, Error, Expr, ExprCall, ExprLit, ExprPath,
+    Field, Fields, GenericParam, Ident, Lit, LitStr, MacroDelimiter, Member, Meta, MetaList,
+    MetaNameValue, Path, Result, Token, Type, Visibility, braced, parenthesized,
+    parse::{Parse, ParseStream},
     parse_macro_input, parse_quote,
     punctuated::Punctuated,
     spanned::Spanned,
     token::{Brace, Comma, Paren},
 };
 
+#[derive(Debug, Clone)]
+pub struct UuidAttribute {
+    #[expect(dead_code, reason = "")]
+    uuid: Option<String>,
+    bounds: Vec<UuidGenericBound>,
+}
+
+#[derive(Clone, Copy, Default, Debug)]
+pub enum UuidReboundType {
+    #[default]
+    TypeUuid,
+    TypeId,
+}
+
+#[derive(Debug, Clone)]
+pub struct UuidGenericBound {
+    ident: Ident,
+    rebound_type: UuidReboundType,
+}
+
+impl Parse for UuidGenericBound {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let rebound_ident = input.parse::<Ident>()?;
+
+        if rebound_ident != "rebound" {
+            return Err(Error::new(
+                rebound_ident.span(),
+                "expected 'rebound' identifier",
+            ));
+        }
+
+        let group = input.parse::<Group>()?;
+
+        if group.delimiter() != Delimiter::Parenthesis {
+            return Err(Error::new(group.span(), "expected parenthesis"));
+        }
+
+        let inner = syn::parse2::<UuidGenericBoundInnerGroup>(group.stream())?;
+
+        Ok(inner.into())
+    }
+}
+
+struct UuidGenericBoundInnerGroup {
+    ident: Ident,
+    rebound_type: UuidReboundType,
+}
+
+impl Parse for UuidGenericBoundInnerGroup {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let ident = input.parse::<Ident>()?;
+        let colon = input.parse::<Punct>()?;
+
+        if colon.as_char() != ':' || colon.spacing() != Spacing::Alone {
+            return Err(Error::new(colon.span(), "expected ':' alone"));
+        }
+
+        let rebound_type_ident = input.parse::<Ident>()?;
+
+        let rebound_type = match rebound_type_ident.to_string().as_str() {
+            "TypeId" => UuidReboundType::TypeId,
+            "TypeUuid" => UuidReboundType::TypeUuid,
+            _ => {
+                return Err(Error::new(
+                    rebound_type_ident.span(),
+                    "expected 'TypeId' or 'TypeUuid'",
+                ));
+            }
+        };
+
+        Ok(Self {
+            ident,
+            rebound_type,
+        })
+    }
+}
+
+impl From<UuidGenericBoundInnerGroup> for UuidGenericBound {
+    fn from(value: UuidGenericBoundInnerGroup) -> Self {
+        Self {
+            ident: value.ident,
+            rebound_type: value.rebound_type,
+        }
+    }
+}
+
+pub fn parse_uuid_attributes<'a>(
+    attributes: impl IntoIterator<Item = &'a Attribute>,
+) -> UuidAttribute {
+    let uuid_attributes = attributes
+        .into_iter()
+        .filter(|attr| attr.meta.path().is_ident("uuid"))
+        .collect::<Vec<_>>();
+
+    let uuid = uuid_attributes.iter().find_map(|attr| match &attr.meta {
+        Meta::NameValue(MetaNameValue {
+            value: Expr::Lit(ExprLit {
+                lit: Lit::Str(lit), ..
+            }),
+            ..
+        }) => Some(lit.value()),
+        _ => None,
+    });
+
+    let bounds = uuid_attributes
+        .iter()
+        .filter_map(|attr| match &attr.meta {
+            Meta::List(MetaList {
+                delimiter: MacroDelimiter::Paren(_),
+                tokens,
+                ..
+            }) => syn::parse2::<UuidGenericBound>(tokens.clone()).ok(),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+
+    UuidAttribute { uuid, bounds }
+}
+
+pub fn make_type_params(
+    uuid_info: &UuidAttribute,
+    params: &Punctuated<GenericParam, Comma>,
+) -> Vec<TokenStream2> {
+    params
+        .iter()
+        .flat_map(|param| match param {
+            GenericParam::Type(type_param) => Some(type_param.ident.clone()),
+            GenericParam::Lifetime(_) | GenericParam::Const(_) => None,
+        })
+        .map(
+            |ident| match uuid_info.bounds.iter().find(|bound| bound.ident == ident) {
+                Some(UuidGenericBound {
+                    rebound_type: UuidReboundType::TypeId,
+                    ..
+                }) => quote! { .add_from_type_id::<#ident>() },
+                None
+                | Some(UuidGenericBound {
+                    rebound_type: UuidReboundType::TypeUuid,
+                    ..
+                }) => quote! { .add::<#ident>() },
+            },
+        )
+        .collect::<Vec<_>>()
+}
+
 pub fn derive_resource(input: TokenStream) -> TokenStream {
     let mut ast = parse_macro_input!(input as DeriveInput);
     let waywe_ecs_path: Path = crate::waywe_ecs_path();
+
+    let uuid_info = parse_uuid_attributes(&ast.attrs);
 
     ast.generics
         .make_where_clause()
@@ -28,15 +176,25 @@ pub fn derive_resource(input: TokenStream) -> TokenStream {
     let uuid = generate_uuid();
     let uuid_bytes = quote_uuid(&uuid);
 
+    let type_parameters = make_type_params(&uuid_info, &ast.generics.params);
+
     TokenStream::from(quote! {
         // Implement TypeUuid trait with a generated UUID
         impl #impl_generics #waywe_ecs_path::uuid::TypeUuid
             for #struct_name #type_generics #where_clause
         {
-            const UUID: [u8; 16] = #uuid_bytes;
+            fn uuid() -> [u8; 16] {
+                #waywe_ecs_path::uuid::UuidBuilder::new(
+                    #waywe_ecs_path::uuid::Uuid::from_bytes(
+                        #uuid_bytes
+                    )
+                )
+                    #( #type_parameters )*
+                    .build()
+                    .into_bytes()
+            }
         }
 
-        // FIXME(hack3rmann): what about generics?!
         impl #impl_generics #waywe_ecs_path::resource::Resource
             for #struct_name #type_generics #where_clause {}
     })
@@ -46,6 +204,8 @@ pub fn derive_resource(input: TokenStream) -> TokenStream {
 pub fn derive_component(input: TokenStream) -> TokenStream {
     let mut ast = parse_macro_input!(input as DeriveInput);
     let waywe_ecs_path: Path = crate::waywe_ecs_path();
+
+    let uuid_info = parse_uuid_attributes(&ast.attrs);
 
     let attrs = match parse_component_attr(&ast) {
         Ok(attrs) => attrs,
@@ -86,7 +246,7 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
 
     let on_insert_path = if relationship.is_some() {
         if attrs.on_insert.is_some() {
-            return syn::Error::new(
+            return Error::new(
                 ast.span(),
                 "Custom on_insert hooks are not supported as relationships already define an on_insert hook",
             )
@@ -103,7 +263,7 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
 
     let on_replace_path = if relationship.is_some() {
         if attrs.on_replace.is_some() {
-            return syn::Error::new(
+            return Error::new(
                 ast.span(),
                 "Custom on_replace hooks are not supported as Relationships already define an on_replace hook",
             )
@@ -114,7 +274,7 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
         Some(quote!(<Self as #waywe_ecs_path::relationship::Relationship>::on_replace))
     } else if attrs.relationship_target.is_some() {
         if attrs.on_replace.is_some() {
-            return syn::Error::new(
+            return Error::new(
                 ast.span(),
                 "Custom on_replace hooks are not supported as RelationshipTarget already defines an on_replace hook",
             )
@@ -134,7 +294,7 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
         .is_some_and(|target| target.linked_spawn)
     {
         if attrs.on_despawn.is_some() {
-            return syn::Error::new(
+            return Error::new(
                 ast.span(),
                 "Custom on_despawn hooks are not supported as this RelationshipTarget already defines an on_despawn hook, via the 'linked_spawn' attribute",
             )
@@ -217,16 +377,30 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
     let uuid = generate_uuid();
     let uuid_bytes = quote_uuid(&uuid);
 
+    let type_parameters = make_type_params(&uuid_info, &ast.generics.params);
+
     TokenStream::from(quote! {
         #required_component_docs
 
         // Implement TypeUuid trait with a generated UUID
-        impl #impl_generics #waywe_ecs_path::uuid::TypeUuid for #struct_name #type_generics #where_clause {
-            const UUID: [u8; 16] = #uuid_bytes;
+        impl #impl_generics #waywe_ecs_path::uuid::TypeUuid
+            for #struct_name #type_generics #where_clause
+        {
+            fn uuid() -> [u8; 16] {
+                #waywe_ecs_path::uuid::UuidBuilder::new(
+                    #waywe_ecs_path::uuid::Uuid::from_bytes(
+                        #uuid_bytes
+                    )
+                )
+                    #( #type_parameters )*
+                    .build()
+                    .into_bytes()
+            }
         }
 
-        // FIXME(hack3rmann): what about generics?!
-        impl #impl_generics #waywe_ecs_path::component::Component for #struct_name #type_generics #where_clause {
+        impl #impl_generics #waywe_ecs_path::component::Component
+            for #struct_name #type_generics #where_clause
+        {
             const STORAGE_TYPE: #waywe_ecs_path::component::StorageType = #storage;
             type Mutability = #mutable_type;
             fn register_required_components(
@@ -385,7 +559,7 @@ impl HookAttributeKind {
             Expr::Path(path) => Ok(HookAttributeKind::Path(path)),
             Expr::Call(call) => Ok(HookAttributeKind::Call(call)),
             // throw meaningful error on all other expressions
-            _ => Err(syn::Error::new(
+            _ => Err(Error::new(
                 value.span(),
                 [
                     "Not supported in this position, please use one of the following:",
@@ -413,7 +587,7 @@ impl HookAttributeKind {
 }
 
 impl Parse for HookAttributeKind {
-    fn parse(input: syn::parse::ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> Result<Self> {
         input.parse::<Expr>().and_then(Self::from_expr)
     }
 }
@@ -433,7 +607,7 @@ impl MapEntitiesAttributeKind {
         match value {
             Expr::Path(path) => Ok(Self::Path(path)),
             // throw meaningful error on all other expressions
-            _ => Err(syn::Error::new(
+            _ => Err(Error::new(
                 value.span(),
                 [
                     "Not supported in this position, please use one of the following:",
@@ -458,7 +632,7 @@ impl MapEntitiesAttributeKind {
 }
 
 impl Parse for MapEntitiesAttributeKind {
-    fn parse(input: syn::parse::ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> Result<Self> {
         if input.peek(Token![=]) {
             input.parse::<Token![=]>()?;
             input.parse::<Expr>().and_then(Self::from_expr)
@@ -571,7 +745,7 @@ fn parse_component_attr(ast: &DeriveInput) -> Result<Attrs> {
                 attr.parse_args_with(Punctuated::<Require, Comma>::parse_terminated)?;
             for require in punctuated.iter() {
                 if !require_paths.insert(require.path.to_token_stream().to_string()) {
-                    return Err(syn::Error::new(
+                    return Err(Error::new(
                         require.path.span(),
                         "Duplicate required components are not allowed.",
                     ));
@@ -592,7 +766,7 @@ fn parse_component_attr(ast: &DeriveInput) -> Result<Attrs> {
     }
 
     if attrs.relationship_target.is_some() && attrs.clone_behavior.is_some() {
-        return Err(syn::Error::new(
+        return Err(Error::new(
             attrs.clone_behavior.span(),
             "A Relationship Target already has its own clone behavior, please remove `clone_behavior = ...`",
         ));
@@ -602,7 +776,7 @@ fn parse_component_attr(ast: &DeriveInput) -> Result<Attrs> {
 }
 
 impl Parse for Require {
-    fn parse(input: syn::parse::ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> Result<Self> {
         let mut path = input.parse::<Path>()?;
         let mut last_segment_is_lower = false;
         let mut is_constructor_call = false;
@@ -695,7 +869,7 @@ mod kw {
 }
 
 impl Parse for Relationship {
-    fn parse(input: syn::parse::ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> Result<Self> {
         input.parse::<kw::relationship_target>()?;
         input.parse::<Token![=]>()?;
         Ok(Relationship {
@@ -705,7 +879,7 @@ impl Parse for Relationship {
 }
 
 impl Parse for RelationshipTarget {
-    fn parse(input: syn::parse::ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> Result<Self> {
         let mut relationship: Option<Type> = None;
         let mut linked_spawn: bool = false;
 
@@ -726,9 +900,8 @@ impl Parse for RelationshipTarget {
             }
         }
         Ok(RelationshipTarget {
-            relationship: relationship.ok_or_else(|| {
-                syn::Error::new(input.span(), "Missing `relationship = X` attribute")
-            })?,
+            relationship: relationship
+                .ok_or_else(|| Error::new(input.span(), "Missing `relationship = X` attribute"))?,
             linked_spawn,
         })
     }
@@ -748,7 +921,7 @@ fn derive_relationship(
         ..
     }) = &ast.data
     else {
-        return Err(syn::Error::new(
+        return Err(Error::new(
             ast.span(),
             "Relationship can only be derived for structs.",
         ));
@@ -805,7 +978,7 @@ fn derive_relationship_target(
         ..
     }) = &ast.data
     else {
-        return Err(syn::Error::new(
+        return Err(Error::new(
             ast.span(),
             "RelationshipTarget can only be derived for structs.",
         ));
@@ -813,7 +986,7 @@ fn derive_relationship_target(
     let field = relationship_field(fields, "RelationshipTarget", struct_token.span())?;
 
     if field.vis != Visibility::Inherited {
-        return Err(syn::Error::new(
+        return Err(Error::new(
             field.span(),
             "The collection in RelationshipTarget must be private to prevent users from directly mutating it, which could invalidate the correctness of relationships.",
         ));
@@ -870,7 +1043,7 @@ fn relationship_field<'a>(
                 .attrs
                 .iter()
                 .any(|attr| attr.path().is_ident(RELATIONSHIP))
-        }).ok_or(syn::Error::new(
+        }).ok_or(Error::new(
             span,
             format!("{derive} derive expected named structs with a single field or with a field annotated with #[relationship].")
         )),
@@ -881,11 +1054,11 @@ fn relationship_field<'a>(
                     .iter()
                     .any(|attr| attr.path().is_ident(RELATIONSHIP))
             })
-            .ok_or(syn::Error::new(
+            .ok_or(Error::new(
                 span,
                 format!("{derive} derive expected unnamed structs with one field or with a field annotated with #[relationship]."),
             )),
-        Fields::Unit => Err(syn::Error::new(
+        Fields::Unit => Err(Error::new(
             span,
             format!("{derive} derive expected named or unnamed struct, found unit struct."),
         )),

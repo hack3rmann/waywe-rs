@@ -5,6 +5,7 @@ members = [
     "crates/dxt",
     "crates/extractor",
     "crates/project-parser",
+    "crates/sha2-const",
     "crates/waywe-ipc",
     "crates/transmute-extra",
     "crates/unite-json",
@@ -38,6 +39,7 @@ repository = "https://www.github.com/hack3rmann/waywe-rs"
 wayland-client = { path = "crates/wayland-client", features = ["smallvec"] }
 wayland-server = { path = "crates/wayland-server" }
 wayland-sys = { path = "crates/wayland-sys" }
+sha2-const = { path = "crates/sha2-const" }
 waywe-ipc = { path = "crates/waywe-ipc" }
 waywe-runtime = { path = "crates/waywe-runtime" }
 waywe-scene = { path = "crates/waywe-scene" }

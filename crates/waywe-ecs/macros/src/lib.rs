@@ -569,19 +569,15 @@ pub fn derive_system_set(input: TokenStream) -> TokenStream {
 }
 
 pub(crate) fn waywe_ecs_path() -> syn::Path {
-    let crate_name = env::var("CARGO_PKG_NAME").unwrap();
-
-    let path = if crate_name != "waywe-ecs" {
-        quote! { ::waywe_ecs }
+    if env::var("CARGO_PKG_NAME").unwrap() != "waywe-ecs" {
+        parse_quote! { ::waywe_ecs }
     } else {
-        quote! { crate }
-    };
-
-    syn::parse(path.into()).unwrap()
+        parse_quote! { crate }
+    }
 }
 
 /// Implement the `Event` trait.
-#[proc_macro_derive(Event, attributes(event))]
+#[proc_macro_derive(Event, attributes(event, uuid))]
 pub fn derive_event(input: TokenStream) -> TokenStream {
     event::derive_event(input)
 }
@@ -599,19 +595,19 @@ pub fn derive_event(input: TokenStream) -> TokenStream {
 /// #[entity_event(auto_propagate)]
 /// struct MyEvent;
 /// ```
-#[proc_macro_derive(EntityEvent, attributes(entity_event, event_target))]
+#[proc_macro_derive(EntityEvent, attributes(entity_event, event_target, uuid))]
 pub fn derive_entity_event(input: TokenStream) -> TokenStream {
     event::derive_entity_event(input)
 }
 
 /// Implement the `Message` trait.
-#[proc_macro_derive(Message)]
+#[proc_macro_derive(Message, attributes(uuid))]
 pub fn derive_message(input: TokenStream) -> TokenStream {
     message::derive_message(input)
 }
 
 /// Implement the `Resource` trait.
-#[proc_macro_derive(Resource)]
+#[proc_macro_derive(Resource, attributes(uuid))]
 pub fn derive_resource(input: TokenStream) -> TokenStream {
     component::derive_resource(input)
 }
@@ -701,7 +697,7 @@ pub fn derive_resource(input: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_derive(
     Component,
-    attributes(component, require, relationship, relationship_target, entities)
+    attributes(component, require, relationship, relationship_target, entities, uuid)
 )]
 pub fn derive_component(input: TokenStream) -> TokenStream {
     component::derive_component(input)
