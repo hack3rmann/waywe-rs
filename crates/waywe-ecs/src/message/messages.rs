@@ -8,6 +8,7 @@ use core::{
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
+use waywe_uuid::TypeUuid;
 
 /// A message collection that represents the messages that occurred within the last two
 /// [`Messages::update`] calls.
@@ -85,7 +86,7 @@ use core::{
 /// [`MessageReader`]: super::MessageReader
 /// [`MessageWriter`]: super::MessageWriter
 /// [`message_update_system`]: super::message_update_system
-#[derive(Debug, Resource)]
+#[derive(Debug, Resource, TypeUuid)]
 pub struct Messages<E: Message> {
     /// Holds the oldest still active messages.
     /// Note that `a.start_message_count + a.len()` should always be equal to `messages_b.start_message_count`.
@@ -419,10 +420,11 @@ impl<E: Message> ExactSizeIterator for WriteBatchIds<E> {
 #[cfg(test)]
 mod tests {
     use crate::message::{Message, Messages};
+    use waywe_uuid::TypeUuid;
 
     #[test]
     fn iter_current_update_messages_iterates_over_current_messages() {
-        #[derive(Message, Clone)]
+        #[derive(Message, Clone, TypeUuid)]
         struct TestMessage;
 
         let mut test_messages = Messages::<TestMessage>::default();

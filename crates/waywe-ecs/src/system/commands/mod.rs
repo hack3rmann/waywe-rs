@@ -286,11 +286,11 @@ impl<'w, 's> Commands<'w, 's> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Label(&'static str);
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Strength(u32);
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Agility(u32);
     ///
     /// fn example_system(mut commands: Commands) {
@@ -342,9 +342,9 @@ impl<'w, 's> Commands<'w, 's> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct ComponentA(u32);
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct ComponentB(u32);
     ///
     /// #[derive(Bundle)]
@@ -417,12 +417,12 @@ impl<'w, 's> Commands<'w, 's> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Resource)]
+    /// #[derive(Resource, TypeUuid)]
     /// struct PlayerEntity {
     ///     entity: Entity
     /// }
     ///
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Label(&'static str);
     ///
     /// fn example_system(mut commands: Commands, player: Res<PlayerEntity>) {
@@ -457,12 +457,12 @@ impl<'w, 's> Commands<'w, 's> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Resource)]
+    /// #[derive(Resource, TypeUuid)]
     /// struct PlayerEntity {
     ///     entity: Entity
     /// }
     ///
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Label(&'static str);
     ///
     /// fn example_system(mut commands: Commands, player: Res<PlayerEntity>) -> Result {
@@ -514,7 +514,7 @@ impl<'w, 's> Commands<'w, 's> {
     /// ```
     /// use bevy_ecs::prelude::*;
     ///
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Score(u32);
     ///
     /// fn example_system(mut commands: Commands) {
@@ -556,7 +556,7 @@ impl<'w, 's> Commands<'w, 's> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Resource, Default)]
+    /// #[derive(Resource, TypeUuid, Default)]
     /// struct Counter(u64);
     ///
     /// struct AddToCounter(String);
@@ -607,7 +607,7 @@ impl<'w, 's> Commands<'w, 's> {
     /// # use bevy_ecs::prelude::*;
     /// use bevy_ecs::error::warn;
     ///
-    /// #[derive(Resource, Default)]
+    /// #[derive(Resource, TypeUuid, Default)]
     /// struct Counter(u64);
     ///
     /// struct AddToCounter(String);
@@ -796,7 +796,7 @@ impl<'w, 's> Commands<'w, 's> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Resource, Default)]
+    /// #[derive(Resource, TypeUuid, Default)]
     /// struct Scoreboard {
     ///     current_score: u32,
     ///     high_score: u32,
@@ -820,7 +820,7 @@ impl<'w, 's> Commands<'w, 's> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Resource)]
+    /// #[derive(Resource, TypeUuid)]
     /// struct Scoreboard {
     ///     current_score: u32,
     ///     high_score: u32,
@@ -845,7 +845,7 @@ impl<'w, 's> Commands<'w, 's> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Resource)]
+    /// #[derive(Resource, TypeUuid)]
     /// struct Scoreboard {
     ///     current_score: u32,
     ///     high_score: u32,
@@ -930,7 +930,7 @@ impl<'w, 's> Commands<'w, 's> {
     ///
     /// ```
     /// # use bevy_ecs::{prelude::*, world::CommandQueue, system::SystemId};
-    /// #[derive(Resource)]
+    /// #[derive(Resource, TypeUuid)]
     /// struct Counter(i32);
     ///
     /// fn register_system(
@@ -1189,7 +1189,7 @@ impl<'w, 's> Commands<'w, 's> {
     /// ```
     /// # use bevy_ecs::prelude::*;
     /// # use bevy_ecs::schedule::ScheduleLabel;
-    /// # #[derive(Default, Resource)]
+    /// # #[derive(Default, Resource, TypeUuid)]
     /// # struct Counter(u32);
     /// #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone, Copy)]
     /// struct FooSchedule;
@@ -1298,13 +1298,13 @@ impl<'a> EntityCommands<'a> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource)]
+    /// # #[derive(Resource, TypeUuid)]
     /// # struct PlayerEntity { entity: Entity }
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Level(u32);
     ///
     ///
-    /// #[derive(Component, Default)]
+    /// #[derive(Component, TypeUuid, Default)]
     /// struct Mana {
     ///     max: u32,
     ///     current: u32,
@@ -1347,13 +1347,13 @@ impl<'a> EntityCommands<'a> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource)]
+    /// # #[derive(Resource, TypeUuid)]
     /// # struct PlayerEntity { entity: Entity }
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Health(u32);
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Strength(u32);
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Defense(u32);
     ///
     /// #[derive(Bundle)]
@@ -1397,12 +1397,12 @@ impl<'a> EntityCommands<'a> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource)]
+    /// # #[derive(Resource, TypeUuid)]
     /// # struct PlayerEntity { entity: Entity }
     /// # impl PlayerEntity { fn is_spectator(&self) -> bool { true } }
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct StillLoadingStats;
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Health(u32);
     ///
     /// fn add_health_system(mut commands: Commands, player: Res<PlayerEntity>) {
@@ -1520,13 +1520,13 @@ impl<'a> EntityCommands<'a> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource)]
+    /// # #[derive(Resource, TypeUuid)]
     /// # struct PlayerEntity { entity: Entity }
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Health(u32);
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Strength(u32);
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Defense(u32);
     ///
     /// #[derive(Bundle)]
@@ -1625,13 +1625,13 @@ impl<'a> EntityCommands<'a> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource)]
+    /// # #[derive(Resource, TypeUuid)]
     /// # struct PlayerEntity { entity: Entity }
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Health(u32);
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Strength(u32);
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Defense(u32);
     ///
     /// #[derive(Bundle)]
@@ -1666,14 +1666,14 @@ impl<'a> EntityCommands<'a> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource)]
+    /// # #[derive(Resource, TypeUuid)]
     /// # struct PlayerEntity { entity: Entity }
     /// # impl PlayerEntity { fn is_spectator(&self) -> bool { true } }
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Health(u32);
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Strength(u32);
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Defense(u32);
     ///
     /// #[derive(Bundle)]
@@ -1727,13 +1727,13 @@ impl<'a> EntityCommands<'a> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource)]
+    /// # #[derive(Resource, TypeUuid)]
     /// # struct PlayerEntity { entity: Entity }
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Health(u32);
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Strength(u32);
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Defense(u32);
     ///
     /// #[derive(Bundle)]
@@ -1769,13 +1769,13 @@ impl<'a> EntityCommands<'a> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource)]
+    /// # #[derive(Resource, TypeUuid)]
     /// # struct PlayerEntity { entity: Entity }
     /// #
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// #[require(B)]
     /// struct A;
-    /// #[derive(Component, Default)]
+    /// #[derive(Component, TypeUuid, Default)]
     /// struct B;
     ///
     /// fn remove_with_requires_system(mut commands: Commands, player: Res<PlayerEntity>) {
@@ -1822,7 +1822,7 @@ impl<'a> EntityCommands<'a> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource)]
+    /// # #[derive(Resource, TypeUuid)]
     /// # struct CharacterToRemove { entity: Entity }
     /// #
     /// fn remove_character_system(
@@ -1957,13 +1957,13 @@ impl<'a> EntityCommands<'a> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource)]
+    /// # #[derive(Resource, TypeUuid)]
     /// # struct PlayerEntity { entity: Entity }
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Health(u32);
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Strength(u32);
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Defense(u32);
     ///
     /// #[derive(Bundle)]
@@ -2028,9 +2028,9 @@ impl<'a> EntityCommands<'a> {
     /// Configure through [`EntityClonerBuilder<OptOut>`] as follows:
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component, Clone)]
+    /// #[derive(Component, TypeUuid, Clone)]
     /// struct ComponentA(u32);
-    /// #[derive(Component, Clone)]
+    /// #[derive(Component, TypeUuid, Clone)]
     /// struct ComponentB(u32);
     ///
     /// fn example_system(mut commands: Commands) {
@@ -2073,9 +2073,9 @@ impl<'a> EntityCommands<'a> {
     /// Configure through [`EntityClonerBuilder<OptIn>`] as follows:
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component, Clone)]
+    /// #[derive(Component, TypeUuid, Clone)]
     /// struct ComponentA(u32);
-    /// #[derive(Component, Clone)]
+    /// #[derive(Component, TypeUuid, Clone)]
     /// struct ComponentB(u32);
     ///
     /// fn example_system(mut commands: Commands) {
@@ -2120,9 +2120,9 @@ impl<'a> EntityCommands<'a> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component, Clone)]
+    /// #[derive(Component, TypeUuid, Clone)]
     /// struct ComponentA(u32);
-    /// #[derive(Component, Clone)]
+    /// #[derive(Component, TypeUuid, Clone)]
     /// struct ComponentB(u32);
     ///
     /// fn example_system(mut commands: Commands) {
@@ -2155,9 +2155,9 @@ impl<'a> EntityCommands<'a> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component, Clone)]
+    /// #[derive(Component, TypeUuid, Clone)]
     /// struct ComponentA(u32);
-    /// #[derive(Component, Clone)]
+    /// #[derive(Component, TypeUuid, Clone)]
     /// struct ComponentB(u32);
     ///
     /// fn example_system(mut commands: Commands) {
@@ -2200,9 +2200,9 @@ impl<'a> EntityCommands<'a> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component, Clone)]
+    /// #[derive(Component, TypeUuid, Clone)]
     /// struct ComponentA(u32);
-    /// #[derive(Component, Clone)]
+    /// #[derive(Component, TypeUuid, Clone)]
     /// struct ComponentB(u32);
     ///
     /// fn example_system(mut commands: Commands) {
@@ -2413,9 +2413,9 @@ impl<'a, T: Component> EntityEntryCommands<'a, T> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource)]
+    /// # #[derive(Resource, TypeUuid)]
     /// # struct PlayerEntity { entity: Entity }
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Level(u32);
     ///
     /// fn level_up_system(mut commands: Commands, player: Res<PlayerEntity>) {
@@ -2449,16 +2449,17 @@ mod tests {
     };
     use alloc::{string::String, sync::Arc, vec, vec::Vec};
     use core::sync::atomic::{AtomicUsize, Ordering};
+    use waywe_uuid::TypeUuid;
 
     #[expect(
         dead_code,
         reason = "This struct is used to test how `Drop` behavior works in regards to SparseSet storage, and as such is solely a wrapper around `DropCk` to make it use the SparseSet storage. Because of this, the inner field is intentionally never read."
     )]
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     #[component(storage = "SparseSet")]
     struct SparseDropCk(DropCk);
 
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     struct DropCk(Arc<AtomicUsize>);
     impl DropCk {
         fn new_pair() -> (Self, Arc<AtomicUsize>) {
@@ -2473,8 +2474,8 @@ mod tests {
         }
     }
 
-    #[derive(Component, Resource)]
-    struct W<T>(T);
+    #[derive(Component, Resource, TypeUuid)]
+    struct W<T: TypeUuid>(T);
 
     fn simple_command(world: &mut World) {
         world.spawn((W(0u32), W(42u64)));
@@ -2775,14 +2776,14 @@ mod tests {
 
     #[test]
     fn remove_component_with_required_components() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[require(Y)]
         struct X;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct Y;
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct Z;
 
         let mut world = World::default();

@@ -72,9 +72,9 @@ use variadics_please::all_tuples;
 /// # use bevy_ecs::prelude::*;
 /// use bevy_ecs::query::QueryData;
 /// #
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct ComponentA;
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct ComponentB;
 ///
 /// #[derive(QueryData)]
@@ -113,7 +113,7 @@ use variadics_please::all_tuples;
 /// # use bevy_ecs::prelude::*;
 /// # use bevy_ecs::query::QueryData;
 /// #
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct ComponentA;
 /// #
 /// #[derive(QueryData)]
@@ -129,7 +129,7 @@ use variadics_please::all_tuples;
 /// # use bevy_ecs::prelude::*;
 /// # use bevy_ecs::query::QueryData;
 /// #
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct ComponentA;
 /// #
 /// #[derive(QueryData)]
@@ -149,10 +149,10 @@ use variadics_please::all_tuples;
 /// # use bevy_ecs::prelude::*;
 /// # use bevy_ecs::query::QueryData;
 /// #
-/// #[derive(Component)]
+/// #[derive(Component, TypeUuid)]
 /// struct Health(f32);
 ///
-/// #[derive(Component)]
+/// #[derive(Component, TypeUuid)]
 /// struct Buff(f32);
 ///
 /// #[derive(QueryData)]
@@ -204,7 +204,7 @@ use variadics_please::all_tuples;
 /// # use bevy_ecs::prelude::*;
 /// # use bevy_ecs::query::QueryData;
 /// #
-/// # #[derive(Component, Debug)]
+/// # #[derive(Component, TypeUuid, Debug)]
 /// # struct ComponentA;
 /// #
 /// #[derive(QueryData)]
@@ -229,11 +229,11 @@ use variadics_please::all_tuples;
 /// # use bevy_ecs::prelude::*;
 /// # use bevy_ecs::query::QueryData;
 /// #
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct ComponentA;
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct ComponentB;
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct ComponentC;
 /// #
 /// #[derive(QueryData)]
@@ -2319,9 +2319,9 @@ impl<T: ReleaseStateQueryData> ReleaseStateQueryData for Option<T> {
 /// # use bevy_ecs::system::IntoSystem;
 /// # use bevy_ecs::system::Query;
 /// #
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct IsHungry;
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct Name { name: &'static str };
 /// #
 /// fn food_entity_system(query: Query<(&Name, Has<IsHungry>) >) {
@@ -2342,9 +2342,9 @@ impl<T: ReleaseStateQueryData> ReleaseStateQueryData for Option<T> {
 /// # use bevy_ecs::system::IntoSystem;
 /// # use bevy_ecs::system::Query;
 /// #
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct Alpha{has_beta: bool};
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct Beta { has_alpha: bool };
 /// #
 /// // Unlike `Option<&T>`, `Has<T>` is compatible with `&mut T`
@@ -2990,11 +2990,12 @@ mod tests {
     use crate::system::{Query, assert_is_system};
     use bevy_ecs::prelude::Schedule;
     use bevy_ecs_macros::QueryData;
+    use waywe_uuid::TypeUuid;
 
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     pub struct A;
 
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     pub struct B;
 
     // Tests that each variant of struct can be used as a `WorldQuery`.
@@ -3185,10 +3186,10 @@ mod tests {
 
         pub trait ClientState: Component {}
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         pub struct ClientFetch;
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         pub struct C;
 
         impl ClientState for C {}
@@ -3203,7 +3204,7 @@ mod tests {
     // See: https://github.com/bevyengine/bevy/issues/13735
     #[test]
     fn test_entity_ref_query_with_ticks() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         pub struct C;
 
         fn system(query: Query<EntityRef>) {

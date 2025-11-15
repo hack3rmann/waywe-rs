@@ -19,6 +19,7 @@
 use crate::{plugin::Plugin, wallpaper::Wallpaper};
 use glam::UVec2;
 use waywe_ecs::prelude::*;
+use waywe_uuid::TypeUuid;
 
 /// Plugin for cursor functionality.
 ///
@@ -35,14 +36,16 @@ impl Plugin for CursorPlugin {
 }
 
 /// Event triggered when the cursor moves.
-#[derive(Clone, Copy, Debug, Event)]
+#[derive(Clone, Copy, Debug, Event, TypeUuid)]
+#[uuid = "bd244623-f6cf-42c7-9a22-cdcbfc7adf2e"]
 pub struct CursorMoved {
     /// New cursor position in pixels.
     pub position: UVec2,
 }
 
 /// Resource tracking cursor position.
-#[derive(Clone, Copy, Debug, Resource, Default)]
+#[derive(Clone, Copy, Debug, Resource, TypeUuid, Default)]
+#[uuid = "9799dc6e-a5e7-4501-9251-12b9607e7f39"]
 pub struct Cursor {
     /// Current cursor position in pixels.
     pub position: UVec2,

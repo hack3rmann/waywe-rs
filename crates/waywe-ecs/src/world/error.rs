@@ -1,13 +1,12 @@
 //! Contains error types returned by bevy's schedule.
 
-use alloc::vec::Vec;
-use bevy_utils::prelude::DebugName;
-
 use crate::{
     component::ComponentId,
     entity::{Entity, EntityDoesNotExistError},
     schedule::InternedScheduleLabel,
 };
+use alloc::vec::Vec;
+use bevy_utils::prelude::DebugName;
 
 /// The error type returned by [`World::try_run_schedule`] if the provided schedule does not exist.
 ///
@@ -87,14 +86,15 @@ mod tests {
         prelude::*,
         system::{RunSystemOnce, command::trigger},
     };
+    use waywe_uuid::TypeUuid;
 
     // Inspired by https://github.com/bevyengine/bevy/issues/19623
     #[test]
     fn fixing_panicking_entity_commands() {
-        #[derive(EntityEvent)]
+        #[derive(EntityEvent, TypeUuid)]
         struct Kill(Entity);
 
-        #[derive(EntityEvent)]
+        #[derive(EntityEvent, TypeUuid)]
         struct FollowupEvent(Entity);
 
         fn despawn(kill: On<Kill>, mut commands: Commands) {

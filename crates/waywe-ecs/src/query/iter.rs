@@ -67,7 +67,7 @@ impl<'w, 's, D: QueryData, F: QueryFilter> QueryIter<'w, 's, D, F> {
     /// ```
     /// # use bevy_ecs::prelude::*;
     /// #
-    /// # #[derive(Component)]
+    /// # #[derive(Component, TypeUuid)]
     /// # struct ComponentA;
     ///
     /// fn combinations(query: Query<&ComponentA>) {
@@ -104,7 +104,7 @@ impl<'w, 's, D: QueryData, F: QueryFilter> QueryIter<'w, 's, D, F> {
     /// ```
     /// # use bevy_ecs::prelude::*;
     /// #
-    /// # #[derive(Component)]
+    /// # #[derive(Component, TypeUuid)]
     /// # struct ComponentA;
     ///
     /// fn combinations(mut query: Query<&mut ComponentA>) {
@@ -419,13 +419,13 @@ impl<'w, 's, D: QueryData, F: QueryFilter> QueryIter<'w, 's, D, F> {
     /// # use bevy_ecs::prelude::*;
     /// # use std::{ops::{Deref, DerefMut}, iter::Sum};
     /// #
-    /// # #[derive(Component)]
+    /// # #[derive(Component, TypeUuid)]
     /// # struct PartMarker;
     /// #
-    /// # #[derive(Component, PartialEq, Eq, PartialOrd, Ord)]
+    /// # #[derive(Component, TypeUuid, PartialEq, Eq, PartialOrd, Ord)]
     /// # struct PartIndex(usize);
     /// #
-    /// # #[derive(Component, Clone, Copy)]
+    /// # #[derive(Component, TypeUuid, Clone, Copy)]
     /// # struct PartValue(f32);
     /// #
     /// # impl Deref for PartValue {
@@ -436,7 +436,7 @@ impl<'w, 's, D: QueryData, F: QueryFilter> QueryIter<'w, 's, D, F> {
     /// #     }
     /// # }
     /// #
-    /// # #[derive(Component)]
+    /// # #[derive(Component, TypeUuid)]
     /// # struct ParentValue(f32);
     /// #
     /// # impl Deref for ParentValue {
@@ -453,19 +453,19 @@ impl<'w, 's, D: QueryData, F: QueryFilter> QueryIter<'w, 's, D, F> {
     /// #     }
     /// # }
     /// #
-    /// # #[derive(Component, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    /// # #[derive(Component, TypeUuid, Debug, PartialEq, Eq, PartialOrd, Ord)]
     /// # struct Length(usize);
     /// #
-    /// # #[derive(Component, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    /// # #[derive(Component, TypeUuid, Debug, PartialEq, Eq, PartialOrd, Ord)]
     /// # struct Width(usize);
     /// #
-    /// # #[derive(Component, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    /// # #[derive(Component, TypeUuid, Debug, PartialEq, Eq, PartialOrd, Ord)]
     /// # struct Height(usize);
     /// #
-    /// # #[derive(Component, PartialEq, Eq, PartialOrd, Ord)]
+    /// # #[derive(Component, TypeUuid, PartialEq, Eq, PartialOrd, Ord)]
     /// # struct ParentEntity(Entity);
     /// #
-    /// # #[derive(Component, Clone, Copy)]
+    /// # #[derive(Component, TypeUuid, Clone, Copy)]
     /// # struct ChildPartCount(usize);
     /// #
     /// # impl Deref for ChildPartCount {
@@ -547,10 +547,10 @@ impl<'w, 's, D: QueryData, F: QueryFilter> QueryIter<'w, 's, D, F> {
     /// #
     /// # let mut world = World::new();
     /// #
-    /// # #[derive(Component)]
+    /// # #[derive(Component, TypeUuid)]
     /// # struct PartMarker;
     /// #
-    /// #[derive(Component, PartialEq, Eq, PartialOrd, Ord)]
+    /// #[derive(Component, TypeUuid, PartialEq, Eq, PartialOrd, Ord)]
     /// enum Flying {
     ///     Enabled,
     ///     Disabled
@@ -613,7 +613,7 @@ impl<'w, 's, D: QueryData, F: QueryFilter> QueryIter<'w, 's, D, F> {
     /// #
     /// # let mut world = World::new();
     /// #
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct PartValue(f32);
     ///
     /// // We can use a cmp function on components do not implement Ord.
@@ -699,7 +699,7 @@ impl<'w, 's, D: QueryData, F: QueryFilter> QueryIter<'w, 's, D, F> {
     /// # use bevy_ecs::prelude::*;
     /// # use std::ops::Deref;
     /// #
-    /// # #[derive(Component)]
+    /// # #[derive(Component, TypeUuid)]
     /// # struct PartMarker;
     /// #
     /// # impl Deref for PartValue {
@@ -712,10 +712,10 @@ impl<'w, 's, D: QueryData, F: QueryFilter> QueryIter<'w, 's, D, F> {
     /// #
     /// # let mut world = World::new();
     /// #
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct AvailableMarker;
     ///
-    /// #[derive(Component, PartialEq, Eq, PartialOrd, Ord, Copy, Clone)]
+    /// #[derive(Component, TypeUuid, PartialEq, Eq, PartialOrd, Ord, Copy, Clone)]
     /// enum Rarity {
     ///   Common,
     ///   Rare,
@@ -723,7 +723,7 @@ impl<'w, 's, D: QueryData, F: QueryFilter> QueryIter<'w, 's, D, F> {
     ///   Legendary
     /// };
     ///
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct PartValue(f32);
     ///
     /// // We can sort with the internals of components that do not implement Ord.
@@ -1300,13 +1300,13 @@ impl<'w, 's, D: QueryData, F: QueryFilter, I: Iterator<Item: EntityEquivalent>>
     /// # use bevy_ecs::prelude::*;
     /// # use std::{ops::{Deref, DerefMut}, iter::Sum};
     /// #
-    /// # #[derive(Component)]
+    /// # #[derive(Component, TypeUuid)]
     /// # struct PartMarker;
     /// #
-    /// # #[derive(Component, PartialEq, Eq, PartialOrd, Ord)]
+    /// # #[derive(Component, TypeUuid, PartialEq, Eq, PartialOrd, Ord)]
     /// # struct PartIndex(usize);
     /// #
-    /// # #[derive(Component, Clone, Copy)]
+    /// # #[derive(Component, TypeUuid, Clone, Copy)]
     /// # struct PartValue(usize);
     /// #
     /// # impl Deref for PartValue {
@@ -1323,16 +1323,16 @@ impl<'w, 's, D: QueryData, F: QueryFilter, I: Iterator<Item: EntityEquivalent>>
     /// #     }
     /// # }
     /// #
-    /// # #[derive(Component, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    /// # #[derive(Component, TypeUuid, Debug, PartialEq, Eq, PartialOrd, Ord)]
     /// # struct Length(usize);
     /// #
-    /// # #[derive(Component, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    /// # #[derive(Component, TypeUuid, Debug, PartialEq, Eq, PartialOrd, Ord)]
     /// # struct Width(usize);
     /// #
-    /// # #[derive(Component, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    /// # #[derive(Component, TypeUuid, Debug, PartialEq, Eq, PartialOrd, Ord)]
     /// # struct Height(usize);
     /// #
-    /// # #[derive(Component, PartialEq, Eq, PartialOrd, Ord)]
+    /// # #[derive(Component, TypeUuid, PartialEq, Eq, PartialOrd, Ord)]
     /// # struct ParentEntity(Entity);
     /// #
     /// # let mut world = World::new();
@@ -1410,11 +1410,11 @@ impl<'w, 's, D: QueryData, F: QueryFilter, I: Iterator<Item: EntityEquivalent>>
     /// #
     /// # let mut world = World::new();
     /// #
-    /// # #[derive(Component)]
+    /// # #[derive(Component, TypeUuid)]
     /// # struct PartMarker;
     /// #
     /// # let entity_list: Vec<Entity> = Vec::new();
-    /// #[derive(Component, PartialEq, Eq, PartialOrd, Ord)]
+    /// #[derive(Component, TypeUuid, PartialEq, Eq, PartialOrd, Ord)]
     /// enum Flying {
     ///     Enabled,
     ///     Disabled
@@ -1478,7 +1478,7 @@ impl<'w, 's, D: QueryData, F: QueryFilter, I: Iterator<Item: EntityEquivalent>>
     /// # let mut world = World::new();
     /// # let entity_list: Vec<Entity> = Vec::new();
     /// #
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct PartValue(f32);
     ///
     /// // We can use a cmp function on components do not implement Ord.
@@ -1563,7 +1563,7 @@ impl<'w, 's, D: QueryData, F: QueryFilter, I: Iterator<Item: EntityEquivalent>>
     /// # use bevy_ecs::prelude::*;
     /// # use std::ops::Deref;
     /// #
-    /// # #[derive(Component)]
+    /// # #[derive(Component, TypeUuid)]
     /// # struct PartMarker;
     /// #
     /// # impl Deref for PartValue {
@@ -1577,10 +1577,10 @@ impl<'w, 's, D: QueryData, F: QueryFilter, I: Iterator<Item: EntityEquivalent>>
     /// # let mut world = World::new();
     /// # let entity_list: Vec<Entity> = Vec::new();
     /// #
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct AvailableMarker;
     ///
-    /// #[derive(Component, PartialEq, Eq, PartialOrd, Ord, Copy, Clone)]
+    /// #[derive(Component, TypeUuid, PartialEq, Eq, PartialOrd, Ord, Copy, Clone)]
     /// enum Rarity {
     ///   Common,
     ///   Rare,
@@ -1588,7 +1588,7 @@ impl<'w, 's, D: QueryData, F: QueryFilter, I: Iterator<Item: EntityEquivalent>>
     ///   Legendary
     /// };
     ///
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct PartValue(f32);
     ///
     /// // We can sort with the internals of components that do not implement Ord.
@@ -2146,7 +2146,7 @@ impl<'w, 's, D: QueryData, F: QueryFilter, I: Iterator<Item = Entity>> Debug
 ///
 /// ```
 /// # use bevy_ecs::prelude::*;
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct ComponentA;
 /// #
 /// fn some_system(query: Query<&ComponentA>) {
@@ -2160,7 +2160,7 @@ impl<'w, 's, D: QueryData, F: QueryFilter, I: Iterator<Item = Entity>> Debug
 ///
 /// ```
 /// # use bevy_ecs::prelude::*;
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct ComponentA;
 /// #
 /// fn some_system(mut query: Query<&mut ComponentA>) {
@@ -2650,14 +2650,15 @@ impl<T> Ord for NeutralOrd<T> {
 mod tests {
     use alloc::vec::Vec;
     use std::println;
+    use waywe_uuid::TypeUuid;
 
     use crate::component::Component;
     use crate::entity::Entity;
     use crate::prelude::World;
 
-    #[derive(Component, Debug, PartialEq, PartialOrd, Clone, Copy)]
+    #[derive(Component, TypeUuid, Debug, PartialEq, PartialOrd, Clone, Copy)]
     struct A(f32);
-    #[derive(Component, Debug, Eq, PartialEq, Clone, Copy)]
+    #[derive(Component, TypeUuid, Debug, Eq, PartialEq, Clone, Copy)]
     #[component(storage = "SparseSet")]
     struct Sparse(usize);
 
@@ -2956,7 +2957,7 @@ mod tests {
     // The lens items created during the sort must not be live at the same time as the mutable references returned from the iterator.
     #[test]
     fn query_iter_many_sorts_duplicate_entities_no_ub() {
-        #[derive(Component, Ord, PartialOrd, Eq, PartialEq)]
+        #[derive(Component, TypeUuid, Ord, PartialOrd, Eq, PartialEq)]
         struct C(usize);
 
         let mut world = World::new();

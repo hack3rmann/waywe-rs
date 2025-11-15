@@ -10,6 +10,7 @@ use core::{
     hash::{BuildHasher, Hash, Hasher},
     ops::Deref,
 };
+use waywe_uuid::TypeUuid;
 #[cfg(feature = "serialize")]
 use {
     alloc::string::ToString,
@@ -26,7 +27,7 @@ use {
 /// [`Name`] should not be treated as a globally unique identifier for entities,
 /// as multiple entities can have the same name.  [`Entity`] should be
 /// used instead as the default unique identifier.
-#[derive(Component, Clone)]
+#[derive(Component, TypeUuid, Clone)]
 pub struct Name {
     hash: u64, // Won't be serialized
     name: Cow<'static, str>,
@@ -96,7 +97,7 @@ impl core::fmt::Debug for Name {
 ///
 /// ```
 /// # use bevy_ecs::prelude::*;
-/// # #[derive(Component)] pub struct Score(f32);
+/// # #[derive(Component, TypeUuid)] pub struct Score(f32);
 /// fn increment_score(mut scores: Query<(NameOrEntity, &mut Score)>) {
 ///     for (name, mut score) in &mut scores {
 ///         score.0 += 1.0;

@@ -10,6 +10,7 @@ use core::any::TypeId;
 use fixedbitset::FixedBitSet;
 use log::{info, warn};
 use thiserror::Error;
+use waywe_uuid::TypeUuid;
 
 #[cfg(not(feature = "bevy_debug_stepping"))]
 use log::error;
@@ -91,7 +92,7 @@ enum Update {
 #[error("not available until all configured schedules have been run; try again next frame")]
 pub struct NotReady;
 
-#[derive(Resource, Default)]
+#[derive(Resource, TypeUuid, Default)]
 /// Resource for controlling system stepping behavior
 pub struct Stepping {
     // [`ScheduleState`] for each [`Schedule`] with stepping enabled
@@ -1352,7 +1353,7 @@ mod tests {
         // The second system, we need to know when it has been called, so we'll
         // add a resource for tracking if it has been run.  The system will
         // increment the run count.
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct RunCount(usize);
         world.insert_resource(RunCount(0));
         let second_system = |mut run_count: ResMut<RunCount>| {

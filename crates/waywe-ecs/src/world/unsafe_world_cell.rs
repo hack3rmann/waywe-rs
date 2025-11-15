@@ -165,7 +165,7 @@ impl<'w> UnsafeWorldCell<'w> {
     /// [//]: # (This test fails miri.)
     /// ```no_run
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Component)] struct Player;
+    /// # #[derive(Component, TypeUuid)] struct Player;
     /// # fn store_but_dont_use<T>(_: T) {}
     /// # let mut world = World::new();
     /// // Make an UnsafeWorldCell.
@@ -1346,6 +1346,7 @@ impl ContainsEntity for UnsafeEntityCell<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use waywe_uuid::TypeUuid;
 
     #[test]
     #[should_panic = "is forbidden"]
@@ -1356,7 +1357,7 @@ mod tests {
         let _ = unsafe { world_cell.world_mut() };
     }
 
-    #[derive(Resource)]
+    #[derive(Resource, TypeUuid)]
     struct R;
 
     #[test]
@@ -1369,7 +1370,7 @@ mod tests {
         let _ = unsafe { world_cell.get_resource_mut::<R>() };
     }
 
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     struct C;
 
     #[test]

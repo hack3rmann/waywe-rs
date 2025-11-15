@@ -224,7 +224,7 @@ impl<'a, 'b> ComponentCloneCtx<'a, 'b> {
 /// use bevy_ecs::prelude::*;
 /// use bevy_ecs::entity::EntityCloner;
 ///
-/// #[derive(Component, Clone, PartialEq, Eq)]
+/// #[derive(Component, TypeUuid, Clone, PartialEq, Eq)]
 /// struct A {
 ///     field: usize,
 /// }
@@ -242,7 +242,7 @@ impl<'a, 'b> ComponentCloneCtx<'a, 'b> {
 ///```
 ///
 /// # Default cloning strategy
-/// By default, all types that derive [`Component`] and implement either [`Clone`] or `Reflect` (with `ReflectComponent`) will be cloned
+/// By default, all types that derive [`Component`] and implement either [`Clone`] or `Reflect` (with `ReflectComponent, TypeUuid`) will be cloned
 /// (with `Clone`-based implementation preferred in case component implements both).
 ///
 /// It should be noted that if `Component` is implemented manually or if `Clone` implementation is conditional
@@ -255,7 +255,7 @@ impl<'a, 'b> ComponentCloneCtx<'a, 'b> {
 /// ```
 /// # use bevy_ecs::prelude::*;
 /// # use bevy_ecs::component::{StorageType, ComponentCloneBehavior, Mutable};
-/// #[derive(Clone, Component)]
+/// #[derive(Clone, Component, TypeUuid)]
 /// #[component(clone_behavior = clone::<Self>())]
 /// struct SomeComponent;
 ///
@@ -789,7 +789,7 @@ impl<'w> EntityClonerBuilder<'w, OptOut> {
     ///
     /// If component `A` is denied in the `builder` closure here and component `B`
     /// requires `A`, then `A` will be inserted with the value defined in `B`'s
-    /// [`Component` derive](https://docs.rs/bevy/latest/bevy/ecs/component/trait.Component.html#required-components).
+    /// [`Component` derive](https://docs.rs/bevy/latest/bevy/ecs/component/trait.Component, TypeUuid.html#required-components).
     /// This assumes `A` is missing yet at the target entity.
     pub fn without_required_by_components(&mut self, builder: impl FnOnce(&mut Self)) -> &mut Self {
         self.filter.attach_required_by_components = false;
@@ -856,7 +856,7 @@ impl<'w> EntityClonerBuilder<'w, OptIn> {
     ///
     /// If component `A` is allowed in the `builder` closure here and requires
     /// component `B`, then `B` will be inserted with the value defined in `A`'s
-    /// [`Component` derive](https://docs.rs/bevy/latest/bevy/ecs/component/trait.Component.html#required-components).
+    /// [`Component` derive](https://docs.rs/bevy/latest/bevy/ecs/component/trait.Component, TypeUuid.html#required-components).
     /// This assumes `B` is missing yet at the target entity.
     pub fn without_required_components(&mut self, builder: impl FnOnce(&mut Self)) -> &mut Self {
         self.filter.attach_required_components = false;
@@ -1361,10 +1361,11 @@ mod tests {
     };
     use bevy_ptr::OwningPtr;
     use core::{alloc::Layout, ops::Deref};
+    use waywe_uuid::TypeUuid;
 
     #[test]
     fn clone_entity_using_clone() {
-        #[derive(Component, Clone, PartialEq, Eq)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Eq)]
         struct A {
             field: usize,
         }
@@ -1383,12 +1384,12 @@ mod tests {
 
     #[test]
     fn clone_entity_with_allow_filter() {
-        #[derive(Component, Clone, PartialEq, Eq)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Eq)]
         struct A {
             field: usize,
         }
 
-        #[derive(Component, Clone)]
+        #[derive(Component, TypeUuid, Clone)]
         struct B;
 
         let mut world = World::default();
@@ -1408,16 +1409,16 @@ mod tests {
 
     #[test]
     fn clone_entity_with_deny_filter() {
-        #[derive(Component, Clone, PartialEq, Eq)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Eq)]
         struct A {
             field: usize,
         }
 
-        #[derive(Component, Clone)]
+        #[derive(Component, TypeUuid, Clone)]
         #[require(C)]
         struct B;
 
-        #[derive(Component, Clone, Default)]
+        #[derive(Component, TypeUuid, Clone, Default)]
         struct C;
 
         let mut world = World::default();
@@ -1438,11 +1439,11 @@ mod tests {
 
     #[test]
     fn clone_entity_with_deny_filter_without_required_by() {
-        #[derive(Component, Clone)]
+        #[derive(Component, TypeUuid, Clone)]
         #[require(B { field: 5 })]
         struct A;
 
-        #[derive(Component, Clone, PartialEq, Eq)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Eq)]
         struct B {
             field: usize,
         }
@@ -1468,15 +1469,15 @@ mod tests {
 
     #[test]
     fn clone_entity_with_deny_filter_if_new() {
-        #[derive(Component, Clone, PartialEq, Eq)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Eq)]
         struct A {
             field: usize,
         }
 
-        #[derive(Component, Clone)]
+        #[derive(Component, TypeUuid, Clone)]
         struct B;
 
-        #[derive(Component, Clone)]
+        #[derive(Component, TypeUuid, Clone)]
         struct C;
 
         let mut world = World::default();
@@ -1500,7 +1501,7 @@ mod tests {
 
     #[test]
     fn allow_and_allow_if_new_always_allows() {
-        #[derive(Component, Clone, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
         struct A(u8);
 
         let mut world = World::default();
@@ -1526,11 +1527,11 @@ mod tests {
 
     #[test]
     fn with_and_without_required_components_include_required() {
-        #[derive(Component, Clone, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
         #[require(B(5))]
         struct A;
 
-        #[derive(Component, Clone, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
         struct B(u8);
 
         let mut world = World::default();
@@ -1559,11 +1560,11 @@ mod tests {
 
     #[test]
     fn clone_required_becoming_explicit() {
-        #[derive(Component, Clone, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
         #[require(B(5))]
         struct A;
 
-        #[derive(Component, Clone, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
         struct B(u8);
 
         let mut world = World::default();
@@ -1587,11 +1588,11 @@ mod tests {
 
     #[test]
     fn required_not_cloned_because_requiring_missing() {
-        #[derive(Component, Clone)]
+        #[derive(Component, TypeUuid, Clone)]
         #[require(B)]
         struct A;
 
-        #[derive(Component, Clone, Default)]
+        #[derive(Component, TypeUuid, Clone, Default)]
         struct B;
 
         let mut world = World::default();
@@ -1607,15 +1608,15 @@ mod tests {
 
     #[test]
     fn clone_entity_with_required_components() {
-        #[derive(Component, Clone, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
         #[require(B)]
         struct A;
 
-        #[derive(Component, Clone, PartialEq, Debug, Default)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug, Default)]
         #[require(C(5))]
         struct B;
 
-        #[derive(Component, Clone, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
         struct C(u32);
 
         let mut world = World::default();
@@ -1634,15 +1635,15 @@ mod tests {
 
     #[test]
     fn clone_entity_with_default_required_components() {
-        #[derive(Component, Clone, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
         #[require(B)]
         struct A;
 
-        #[derive(Component, Clone, PartialEq, Debug, Default)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug, Default)]
         #[require(C(5))]
         struct B;
 
-        #[derive(Component, Clone, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
         struct C(u32);
 
         let mut world = World::default();
@@ -1663,15 +1664,15 @@ mod tests {
 
     #[test]
     fn clone_entity_with_missing_required_components() {
-        #[derive(Component, Clone, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
         #[require(B)]
         struct A;
 
-        #[derive(Component, Clone, PartialEq, Debug, Default)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug, Default)]
         #[require(C(5))]
         struct B;
 
-        #[derive(Component, Clone, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
         struct C(u32);
 
         let mut world = World::default();
@@ -1690,14 +1691,14 @@ mod tests {
 
     #[test]
     fn skipped_required_components_counter_is_reset_on_early_return() {
-        #[derive(Component, Clone, PartialEq, Debug, Default)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug, Default)]
         #[require(B(5))]
         struct A;
 
-        #[derive(Component, Clone, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
         struct B(u32);
 
-        #[derive(Component, Clone, PartialEq, Debug, Default)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug, Default)]
         struct C;
 
         let mut world = World::default();
@@ -1815,11 +1816,11 @@ mod tests {
 
     #[test]
     fn cloning_with_required_components_preserves_existing() {
-        #[derive(Component, Clone, PartialEq, Debug, Default)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug, Default)]
         #[require(B(5))]
         struct A;
 
-        #[derive(Component, Clone, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
         struct B(u32);
 
         let mut world = World::default();
@@ -1837,11 +1838,11 @@ mod tests {
 
     #[test]
     fn move_without_clone() {
-        #[derive(Component, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, PartialEq, Debug)]
         #[component(storage = "SparseSet")]
         struct A;
 
-        #[derive(Component, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, PartialEq, Debug)]
         struct B(Vec<u8>);
 
         let mut world = World::default();
@@ -1862,7 +1863,7 @@ mod tests {
 
     #[test]
     fn move_with_remove_hook() {
-        #[derive(Component, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, PartialEq, Debug)]
         #[component(on_remove=remove_hook)]
         struct B(Option<Vec<u8>>);
 
@@ -1885,11 +1886,11 @@ mod tests {
 
     #[test]
     fn move_with_deferred() {
-        #[derive(Component, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, PartialEq, Debug)]
         #[component(clone_behavior=Custom(custom))]
         struct A(u32);
 
-        #[derive(Component, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, PartialEq, Debug)]
         struct B(u32);
 
         fn custom(_src: &SourceComponent, ctx: &mut ComponentCloneCtx) {
@@ -1918,15 +1919,15 @@ mod tests {
 
     #[test]
     fn move_relationship() {
-        #[derive(Component, Clone, PartialEq, Eq, Debug)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Eq, Debug)]
         #[relationship(relationship_target=Target)]
         struct Source(Entity);
 
-        #[derive(Component, Clone, PartialEq, Eq, Debug)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Eq, Debug)]
         #[relationship_target(relationship=Source)]
         struct Target(Vec<Entity>);
 
-        #[derive(Component, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, PartialEq, Debug)]
         struct A(u32);
 
         let mut world = World::default();
@@ -1969,7 +1970,7 @@ mod tests {
 
     #[test]
     fn move_hierarchy() {
-        #[derive(Component, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, PartialEq, Debug)]
         struct A(u32);
 
         let mut world = World::default();
@@ -2021,7 +2022,7 @@ mod tests {
     // Cloned:   E3 Target{target: [], data: [4,5,6]}
     #[test]
     fn clone_relationship_with_data() {
-        #[derive(Component, Clone)]
+        #[derive(Component, TypeUuid, Clone)]
         #[relationship(relationship_target=Target)]
         struct Source {
             #[relationship]
@@ -2029,7 +2030,7 @@ mod tests {
             data: Vec<u8>,
         }
 
-        #[derive(Component, Clone)]
+        #[derive(Component, TypeUuid, Clone)]
         #[relationship_target(relationship=Source)]
         struct Target {
             #[relationship]
@@ -2072,7 +2073,7 @@ mod tests {
     //            | E4 Source{target: E3, data: [1,2,3]}
     #[test]
     fn clone_linked_relationship_with_data() {
-        #[derive(Component, Clone)]
+        #[derive(Component, TypeUuid, Clone)]
         #[relationship(relationship_target=Target)]
         struct Source {
             #[relationship]
@@ -2080,7 +2081,7 @@ mod tests {
             data: Vec<u8>,
         }
 
-        #[derive(Component, Clone)]
+        #[derive(Component, TypeUuid, Clone)]
         #[relationship_target(relationship=Source, linked_spawn)]
         struct Target {
             #[relationship]
@@ -2126,7 +2127,7 @@ mod tests {
     // Moved:    E3 Target{target: [], data: [4,5,6]}
     #[test]
     fn move_relationship_with_data() {
-        #[derive(Component, Clone, PartialEq, Eq, Debug)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Eq, Debug)]
         #[relationship(relationship_target=Target)]
         struct Source {
             #[relationship]
@@ -2134,7 +2135,7 @@ mod tests {
             data: Vec<u8>,
         }
 
-        #[derive(Component, Clone, PartialEq, Eq, Debug)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Eq, Debug)]
         #[relationship_target(relationship=Source)]
         struct Target {
             #[relationship]
@@ -2186,7 +2187,7 @@ mod tests {
     //            | E4 Source{target: E3, data: [1,2,3]}
     #[test]
     fn move_linked_relationship_with_data() {
-        #[derive(Component, Clone, PartialEq, Eq, Debug)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Eq, Debug)]
         #[relationship(relationship_target=Target)]
         struct Source {
             #[relationship]
@@ -2194,7 +2195,7 @@ mod tests {
             data: Vec<u8>,
         }
 
-        #[derive(Component, Clone, PartialEq, Eq, Debug)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Eq, Debug)]
         #[relationship_target(relationship=Source, linked_spawn)]
         struct Target {
             #[relationship]

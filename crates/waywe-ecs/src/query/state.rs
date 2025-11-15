@@ -880,7 +880,7 @@ impl<D: QueryData, F: QueryFilter> QueryState<D, F> {
     /// use bevy_ecs::prelude::*;
     /// use bevy_ecs::query::QueryEntityError;
     ///
-    /// #[derive(Component, PartialEq, Debug)]
+    /// #[derive(Component, TypeUuid, PartialEq, Debug)]
     /// struct A(usize);
     ///
     /// let mut world = World::new();
@@ -918,7 +918,7 @@ impl<D: QueryData, F: QueryFilter> QueryState<D, F> {
     /// ```
     /// use bevy_ecs::{prelude::*, query::QueryEntityError, entity::{EntitySetIterator, UniqueEntityArray, UniqueEntityVec}};
     ///
-    /// #[derive(Component, PartialEq, Debug)]
+    /// #[derive(Component, TypeUuid, PartialEq, Debug)]
     /// struct A(usize);
     ///
     /// let mut world = World::new();
@@ -967,7 +967,7 @@ impl<D: QueryData, F: QueryFilter> QueryState<D, F> {
     /// use bevy_ecs::prelude::*;
     /// use bevy_ecs::query::QueryEntityError;
     ///
-    /// #[derive(Component, PartialEq, Debug)]
+    /// #[derive(Component, TypeUuid, PartialEq, Debug)]
     /// struct A(usize);
     ///
     /// let mut world = World::new();
@@ -1013,7 +1013,7 @@ impl<D: QueryData, F: QueryFilter> QueryState<D, F> {
     /// ```
     /// use bevy_ecs::{prelude::*, query::QueryEntityError, entity::{EntitySetIterator, UniqueEntityArray, UniqueEntityVec}};
     ///
-    /// #[derive(Component, PartialEq, Debug)]
+    /// #[derive(Component, TypeUuid, PartialEq, Debug)]
     /// struct A(usize);
     ///
     /// let mut world = World::new();
@@ -1349,7 +1349,7 @@ impl<D: QueryData, F: QueryFilter> QueryState<D, F> {
     /// use bevy_ecs::prelude::*;
     /// use bevy_ecs::query::QueryEntityError;
     ///
-    /// #[derive(Component, PartialEq, Debug)]
+    /// #[derive(Component, TypeUuid, PartialEq, Debug)]
     /// struct A(usize);
     ///
     /// # bevy_tasks::ComputeTaskPool::get_or_init(|| bevy_tasks::TaskPool::new());
@@ -1646,7 +1646,7 @@ impl<D: QueryData, F: QueryFilter> QueryState<D, F> {
     /// use bevy_ecs::prelude::*;
     /// use bevy_ecs::query::QuerySingleError;
     ///
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct A(usize);
     ///
     /// fn my_system(query: Query<&A>, mut commands: Commands) {
@@ -1667,7 +1667,7 @@ impl<D: QueryData, F: QueryFilter> QueryState<D, F> {
     /// ```rust
     /// use bevy_ecs::prelude::*;
     ///
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct A(usize);
     ///
     /// fn my_system(query: Query<&A>) {
@@ -1685,7 +1685,7 @@ impl<D: QueryData, F: QueryFilter> QueryState<D, F> {
     /// ```rust
     /// use bevy_ecs::prelude::*;
     ///
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct A(usize);
     ///
     /// fn my_system(query: Query<&A>) -> Result {
@@ -1780,6 +1780,8 @@ impl<D: QueryData, F: QueryFilter> From<QueryBuilder<'_, D, F>> for QueryState<D
 
 #[cfg(test)]
 mod tests {
+    use waywe_uuid::TypeUuid;
+
     use crate::{
         component::Component,
         entity_disabling::DefaultQueryFilters,
@@ -1818,13 +1820,13 @@ mod tests {
         let _panics = query_state.get_many_mut(&mut world_2, []);
     }
 
-    #[derive(Component, PartialEq, Debug)]
+    #[derive(Component, TypeUuid, PartialEq, Debug)]
     struct A(usize);
 
-    #[derive(Component, PartialEq, Debug)]
+    #[derive(Component, TypeUuid, PartialEq, Debug)]
     struct B(usize);
 
-    #[derive(Component, PartialEq, Debug)]
+    #[derive(Component, TypeUuid, PartialEq, Debug)]
     struct C(usize);
 
     #[test]
@@ -2048,10 +2050,10 @@ mod tests {
     /// Regression test for issue #14528
     #[test]
     fn transmute_from_sparse_to_dense() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct Dense;
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[component(storage = "SparseSet")]
         struct Sparse;
 
@@ -2069,10 +2071,10 @@ mod tests {
     }
     #[test]
     fn transmute_from_dense_to_sparse() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct Dense;
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[component(storage = "SparseSet")]
         struct Sparse;
 
@@ -2202,10 +2204,10 @@ mod tests {
         assert_eq!(1, query.iter(&world).count());
     }
 
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     struct Table;
 
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     #[component(storage = "SparseSet")]
     struct Sparse;
 

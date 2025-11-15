@@ -32,6 +32,7 @@ use waywe_ecs::{
     system::{StaticSystemParam, SystemParamItem, lifetimeless::SRes},
 };
 use waywe_runtime::{gpu::Wgpu, shaders::ShaderDescriptor};
+use waywe_uuid::TypeUuid;
 use wgpu::util::DeviceExt;
 
 /// Plugin for image functionality.
@@ -62,7 +63,8 @@ impl Plugin for ImagePlugin {
 }
 
 /// Image asset containing raw pixel data.
-#[derive(Debug, Deref, DerefMut)]
+#[derive(Debug, Deref, DerefMut, TypeUuid)]
+#[uuid = "0b55727d-8868-40cc-8d07-74596634b5b3"]
 pub struct Image {
     /// The underlying image data.
     pub image: image::RgbaImage,
@@ -130,7 +132,8 @@ pub fn extract_image_materials(
 impl Asset for Image {}
 
 /// GPU pipeline for rendering images.
-#[derive(Resource)]
+#[derive(Resource, TypeUuid)]
+#[uuid = "4d4e9cdf-b461-4f4c-8907-5d426ee9705a"]
 pub struct ImagePipeline {
     /// Sampler for texture filtering.
     pub sampler: wgpu::Sampler,
@@ -192,6 +195,8 @@ impl ShaderDescriptor for SceneImageFragmentShader {
 }
 
 /// Material that displays an image.
+#[derive(TypeUuid)]
+#[uuid = "63c30d65-834e-489b-9d65-7ff968b3a446"]
 pub struct ImageMaterial {
     /// The image to display.
     pub image: AssetHandle<Image>,
@@ -205,6 +210,8 @@ impl Material for ImageMaterial {
 }
 
 /// GPU-ready image data.
+#[derive(TypeUuid)]
+#[uuid = "d27284c3-2d58-4ee6-9c4c-bc540f382c5b"]
 pub struct RenderImage {
     /// The GPU texture.
     pub texture: wgpu::Texture,

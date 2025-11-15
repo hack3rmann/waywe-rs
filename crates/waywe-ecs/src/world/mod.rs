@@ -343,13 +343,13 @@ impl World {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct A;
     ///
-    /// #[derive(Component, Default, PartialEq, Eq, Debug)]
+    /// #[derive(Component, TypeUuid, Default, PartialEq, Eq, Debug)]
     /// struct B(usize);
     ///
-    /// #[derive(Component, Default, PartialEq, Eq, Debug)]
+    /// #[derive(Component, TypeUuid, Default, PartialEq, Eq, Debug)]
     /// struct C(u32);
     ///
     /// # let mut world = World::default();
@@ -391,13 +391,13 @@ impl World {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct A;
     ///
-    /// #[derive(Component, Default, PartialEq, Eq, Debug)]
+    /// #[derive(Component, TypeUuid, Default, PartialEq, Eq, Debug)]
     /// struct B(usize);
     ///
-    /// #[derive(Component, PartialEq, Eq, Debug)]
+    /// #[derive(Component, TypeUuid, PartialEq, Eq, Debug)]
     /// struct C(u32);
     ///
     /// # let mut world = World::default();
@@ -446,13 +446,13 @@ impl World {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct A;
     ///
-    /// #[derive(Component, Default, PartialEq, Eq, Debug)]
+    /// #[derive(Component, TypeUuid, Default, PartialEq, Eq, Debug)]
     /// struct B(usize);
     ///
-    /// #[derive(Component, Default, PartialEq, Eq, Debug)]
+    /// #[derive(Component, TypeUuid, Default, PartialEq, Eq, Debug)]
     /// struct C(u32);
     ///
     /// # let mut world = World::default();
@@ -499,13 +499,13 @@ impl World {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct A;
     ///
-    /// #[derive(Component, Default, PartialEq, Eq, Debug)]
+    /// #[derive(Component, TypeUuid, Default, PartialEq, Eq, Debug)]
     /// struct B(usize);
     ///
-    /// #[derive(Component, PartialEq, Eq, Debug)]
+    /// #[derive(Component, TypeUuid, PartialEq, Eq, Debug)]
     /// struct C(u32);
     ///
     /// # let mut world = World::default();
@@ -587,7 +587,7 @@ impl World {
     ///
     /// let mut world = World::new();
     ///
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct ComponentA;
     ///
     /// let component_a_id = world.register_component::<ComponentA>();
@@ -646,7 +646,7 @@ impl World {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Position {
     ///   x: f32,
     ///   y: f32,
@@ -663,7 +663,7 @@ impl World {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Position {
     ///   x: f32,
     ///   y: f32,
@@ -684,7 +684,7 @@ impl World {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Position {
     ///   x: f32,
     ///   y: f32,
@@ -705,7 +705,7 @@ impl World {
     ///
     /// ```
     /// # use bevy_ecs::{prelude::*, entity::EntityHashSet};
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Position {
     ///   x: f32,
     ///   y: f32,
@@ -772,7 +772,7 @@ impl World {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Position {
     ///   x: f32,
     ///   y: f32,
@@ -793,7 +793,7 @@ impl World {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Position {
     ///   x: f32,
     ///   y: f32,
@@ -816,7 +816,7 @@ impl World {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Position {
     ///   x: f32,
     ///   y: f32,
@@ -839,7 +839,7 @@ impl World {
     ///
     /// ```
     /// # use bevy_ecs::{prelude::*, entity::EntityHashSet};
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Position {
     ///   x: f32,
     ///   y: f32,
@@ -1031,9 +1031,9 @@ impl World {
     ///
     /// ```rust
     /// # use bevy_ecs::{prelude::*, world::DeferredWorld};
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Targets(Vec<Entity>);
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct TargetedBy(Entity);
     ///
     /// let mut world: World = // ...
@@ -1071,14 +1071,14 @@ impl World {
     /// ```
     /// use bevy_ecs::{component::Component, world::World};
     ///
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Position {
     ///   x: f32,
     ///   y: f32,
     /// }
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Label(&'static str);
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Num(u32);
     ///
     /// let mut world = World::new();
@@ -1106,19 +1106,19 @@ impl World {
     /// ```
     /// use bevy_ecs::{bundle::Bundle, component::Component, world::World};
     ///
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Position {
     ///   x: f32,
     ///   y: f32,
     /// }
     ///
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Velocity {
     ///     x: f32,
     ///     y: f32,
     /// };
     ///
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Name(&'static str);
     ///
     /// #[derive(Bundle)]
@@ -1231,9 +1231,9 @@ impl World {
     /// ```
     /// use bevy_ecs::{component::Component, entity::Entity, world::World};
     ///
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Str(&'static str);
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Num(u32);
     ///
     /// let mut world = World::new();
@@ -1258,7 +1258,7 @@ impl World {
     /// ```
     /// use bevy_ecs::{component::Component, world::World};
     ///
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Position {
     ///   x: f32,
     ///   y: f32,
@@ -1279,7 +1279,7 @@ impl World {
     /// ```
     /// use bevy_ecs::{component::Component, world::World};
     ///
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Position {
     ///   x: f32,
     ///   y: f32,
@@ -1314,7 +1314,7 @@ impl World {
     /// ```rust
     /// # use bevy_ecs::prelude::*;
     /// #
-    /// #[derive(Component, PartialEq, Eq, Debug)]
+    /// #[derive(Component, TypeUuid, PartialEq, Eq, Debug)]
     /// #[component(immutable)]
     /// struct Foo(bool);
     ///
@@ -1397,7 +1397,7 @@ impl World {
     /// ```
     /// use bevy_ecs::{component::Component, world::World};
     ///
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Position {
     ///   x: f32,
     ///   y: f32,
@@ -1465,7 +1465,7 @@ impl World {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Component, Default)]
+    /// # #[derive(Component, TypeUuid, Default)]
     /// # struct Transform;
     /// // a whole new world
     /// let mut world = World::new();
@@ -1496,13 +1496,13 @@ impl World {
     /// ```
     /// use bevy_ecs::{component::Component, entity::Entity, world::World};
     ///
-    /// #[derive(Component, Debug, PartialEq)]
+    /// #[derive(Component, TypeUuid, Debug, PartialEq)]
     /// struct Position {
     ///   x: f32,
     ///   y: f32,
     /// }
     ///
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Velocity {
     ///   x: f32,
     ///   y: f32,
@@ -1532,9 +1532,9 @@ impl World {
     /// ```
     /// use bevy_ecs::{component::Component, entity::Entity, world::World};
     ///
-    /// #[derive(Component, PartialEq, Eq, PartialOrd, Ord, Debug)]
+    /// #[derive(Component, TypeUuid, PartialEq, Eq, PartialOrd, Ord, Debug)]
     /// struct Order(i32);
-    /// #[derive(Component, PartialEq, Debug)]
+    /// #[derive(Component, TypeUuid, PartialEq, Debug)]
     /// struct Label(&'static str);
     ///
     /// let mut world = World::new();
@@ -1563,9 +1563,9 @@ impl World {
     /// ```
     /// use bevy_ecs::{component::Component, entity::Entity, world::World, query::With};
     ///
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct A;
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct B;
     ///
     /// let mut world = World::new();
@@ -1587,7 +1587,7 @@ impl World {
     /// ```
     /// use bevy_ecs::{component::Component, entity::Entity, world::World};
     ///
-    /// #[derive(Component, Debug, PartialEq)]
+    /// #[derive(Component, TypeUuid, Debug, PartialEq)]
     /// struct Position {
     ///   x: f32,
     ///   y: f32,
@@ -1615,7 +1615,7 @@ impl World {
     /// ```
     /// use bevy_ecs::{component::Component, entity::Entity, world::World};
     ///
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct A;
     ///
     /// let mut world = World::new();
@@ -1638,9 +1638,9 @@ impl World {
     /// ```
     /// use bevy_ecs::{component::Component, entity::Entity, world::World, query::With};
     ///
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct A;
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct B;
     ///
     /// let mut world = World::new();
@@ -2071,7 +2071,7 @@ impl World {
     /// ```
     /// # use bevy_ecs::prelude::*;
     /// #
-    /// #[derive(Resource)]
+    /// #[derive(Resource, TypeUuid)]
     /// struct MyResource(i32);
     ///
     /// # let mut world = World::new();
@@ -2117,7 +2117,7 @@ impl World {
     /// ```
     /// # use bevy_ecs::prelude::*;
     /// #
-    /// #[derive(Resource)]
+    /// #[derive(Resource, TypeUuid)]
     /// struct Foo(i32);
     ///
     /// impl Default for Foo {
@@ -2126,7 +2126,7 @@ impl World {
     ///     }
     /// }
     ///
-    /// #[derive(Resource)]
+    /// #[derive(Resource, TypeUuid)]
     /// struct MyResource(i32);
     ///
     /// impl FromWorld for MyResource {
@@ -2591,9 +2591,9 @@ impl World {
     /// # Example
     /// ```
     /// use bevy_ecs::prelude::*;
-    /// #[derive(Resource)]
+    /// #[derive(Resource, TypeUuid)]
     /// struct A(u32);
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct B(u32);
     /// let mut world = World::new();
     /// world.insert_resource(A(1));
@@ -2958,7 +2958,7 @@ impl World {
     ///     }
     /// }
     /// #
-    /// # #[derive(Resource)] struct Count(u32);
+    /// # #[derive(Resource, TypeUuid)] struct Count(u32);
     /// # let mut world = World::new();
     /// # world.insert_resource(Count(0));
     /// # let saved_last_tick = world.last_change_tick();
@@ -3217,9 +3217,9 @@ impl World {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource)]
+    /// # #[derive(Resource, TypeUuid)]
     /// # struct A(u32);
-    /// # #[derive(Resource)]
+    /// # #[derive(Resource, TypeUuid)]
     /// # struct B(u32);
     /// #
     /// # let mut world = World::new();
@@ -3243,9 +3243,9 @@ impl World {
     /// # use std::collections::HashMap;
     /// # use std::any::TypeId;
     /// # use bevy_ptr::Ptr;
-    /// # #[derive(Resource)]
+    /// # #[derive(Resource, TypeUuid)]
     /// # struct A(u32);
-    /// # #[derive(Resource)]
+    /// # #[derive(Resource, TypeUuid)]
     /// # struct B(u32);
     /// #
     /// # let mut world = World::new();
@@ -3318,9 +3318,9 @@ impl World {
     /// # use bevy_ecs::change_detection::MutUntyped;
     /// # use std::collections::HashMap;
     /// # use std::any::TypeId;
-    /// # #[derive(Resource)]
+    /// # #[derive(Resource, TypeUuid)]
     /// # struct A(u32);
-    /// # #[derive(Resource)]
+    /// # #[derive(Resource, TypeUuid)]
     /// # struct B(u32);
     /// #
     /// # let mut world = World::new();
@@ -3575,7 +3575,7 @@ impl World {
     /// # use bevy_ecs::{prelude::*, schedule::ScheduleLabel};
     /// # #[derive(ScheduleLabel, Debug, Clone, Copy, PartialEq, Eq, Hash)]
     /// # pub struct MySchedule;
-    /// # #[derive(Resource)]
+    /// # #[derive(Resource, TypeUuid)]
     /// # struct Counter(usize);
     /// #
     /// # let mut world = World::new();
@@ -3749,6 +3749,7 @@ mod tests {
         sync::atomic::{AtomicBool, AtomicU32, Ordering},
     };
     use std::{println, sync::Mutex};
+    use waywe_uuid::TypeUuid;
 
     type ID = u8;
 
@@ -3758,7 +3759,7 @@ mod tests {
         Drop(ID),
     }
 
-    #[derive(Resource, Component)]
+    #[derive(Resource, Component, TypeUuid)]
     struct MayPanicInDrop {
         drop_log: Arc<Mutex<Vec<DropLogItem>>>,
         expected_panic_flag: Arc<AtomicBool>,
@@ -3864,13 +3865,13 @@ mod tests {
         );
     }
 
-    #[derive(Resource)]
+    #[derive(Resource, TypeUuid)]
     struct TestResource(u32);
 
-    #[derive(Resource)]
+    #[derive(Resource, TypeUuid)]
     struct TestResource2(String);
 
-    #[derive(Resource)]
+    #[derive(Resource, TypeUuid)]
     struct TestResource3;
 
     #[test]
@@ -4051,7 +4052,7 @@ mod tests {
         assert_eq!(DROP_COUNT.load(Ordering::SeqCst), 1);
     }
 
-    #[derive(Resource)]
+    #[derive(Resource, TypeUuid)]
     struct TestFromWorld(u32);
     impl FromWorld for TestFromWorld {
         fn from_world(world: &mut World) -> Self {
@@ -4086,13 +4087,13 @@ mod tests {
         assert_eq!(resource.0, 0);
     }
 
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     struct Foo;
 
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     struct Bar;
 
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     struct Baz;
 
     #[test]
@@ -4226,10 +4227,10 @@ mod tests {
 
     #[test]
     fn iterate_entities_mut() {
-        #[derive(Component, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, PartialEq, Debug)]
         struct A(i32);
 
-        #[derive(Component, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, PartialEq, Debug)]
         struct B(i32);
 
         let mut world = World::new();
@@ -4461,7 +4462,7 @@ mod tests {
 
     #[test]
     fn entities_and_commands() {
-        #[derive(Component, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, PartialEq, Debug)]
         struct Foo(u32);
 
         let mut world = World::new();
@@ -4480,7 +4481,7 @@ mod tests {
 
     #[test]
     fn entities_and_commands_deferred() {
-        #[derive(Component, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, PartialEq, Debug)]
         struct Foo(u32);
 
         let mut world = World::new();

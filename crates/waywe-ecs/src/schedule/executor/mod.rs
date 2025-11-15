@@ -3,18 +3,6 @@ mod multi_threaded;
 mod simple;
 mod single_threaded;
 
-use alloc::{vec, vec::Vec};
-use bevy_utils::prelude::DebugName;
-use core::any::TypeId;
-
-#[expect(deprecated, reason = "We still need to support this.")]
-pub use self::{simple::SimpleExecutor, single_threaded::SingleThreadedExecutor};
-
-#[cfg(feature = "std")]
-pub use self::multi_threaded::{MainThreadExecutor, MultiThreadedExecutor};
-
-use fixedbitset::FixedBitSet;
-
 use crate::{
     component::{CheckChangeTicks, Tick},
     error::{BevyError, ErrorContext, Result},
@@ -27,6 +15,16 @@ use crate::{
     system::{RunSystemError, System, SystemIn, SystemParamValidationError, SystemStateFlags},
     world::{DeferredWorld, World, unsafe_world_cell::UnsafeWorldCell},
 };
+use alloc::{vec, vec::Vec};
+use bevy_utils::prelude::DebugName;
+use core::any::TypeId;
+use fixedbitset::FixedBitSet;
+
+#[expect(deprecated, reason = "We still need to support this.")]
+pub use self::{simple::SimpleExecutor, single_threaded::SingleThreadedExecutor};
+
+#[cfg(feature = "std")]
+pub use self::multi_threaded::{MainThreadExecutor, MultiThreadedExecutor};
 
 /// Types that can run a [`SystemSchedule`] on a [`World`].
 pub(super) trait SystemExecutor: Send + Sync {
@@ -328,8 +326,9 @@ mod tests {
         system::{Populated, Res, ResMut, Single},
         world::World,
     };
+    use waywe_uuid::TypeUuid;
 
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     struct TestComponent;
 
     const EXECUTORS: [ExecutorKind; 3] = [
@@ -339,13 +338,13 @@ mod tests {
         ExecutorKind::MultiThreaded,
     ];
 
-    #[derive(Resource, Default)]
+    #[derive(Resource, TypeUuid, Default)]
     struct TestState {
         populated_ran: bool,
         single_ran: bool,
     }
 
-    #[derive(Resource, Default)]
+    #[derive(Resource, TypeUuid, Default)]
     struct Counter(u8);
 
     fn set_single_state(mut _single: Single<&TestComponent>, mut state: ResMut<TestState>) {

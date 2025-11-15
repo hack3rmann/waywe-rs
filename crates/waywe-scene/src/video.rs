@@ -44,6 +44,7 @@ use video::{
 use waywe_ecs::{
     prelude::*,
     system::{StaticSystemParam, SystemParamItem, lifetimeless::SRes},
+    uuid::TypeUuid,
 };
 use waywe_runtime::{gpu::Wgpu, shaders::ShaderDescriptor};
 use wgpu::wgc::api;
@@ -84,7 +85,8 @@ pub fn advance_videos(mut videos: ResMut<Assets<Video>>, time: Res<Time>) {
 }
 
 /// Video file asset.
-#[derive(Debug)]
+#[derive(Debug, TypeUuid)]
+#[uuid = "7b869259-52c9-4a29-ae2b-9868ba32dedb"]
 pub struct Video {
     /// Path to the video file.
     pub path: CString,
@@ -248,7 +250,8 @@ impl Video {
 }
 
 /// GPU-ready video texture.
-#[derive(Debug)]
+#[derive(Debug, TypeUuid)]
+#[uuid = "e5231111-0918-4389-a42e-f83a138a1a7b"]
 pub struct RenderVideo {
     /// The GPU texture containing the video frame.
     pub texture: wgpu::Texture,
@@ -549,7 +552,8 @@ impl RenderAsset for RenderVideo {
 }
 
 /// GPU pipeline for rendering videos.
-#[derive(Resource)]
+#[derive(Resource, TypeUuid)]
+#[uuid = "a2f295e4-f8eb-455a-b9d4-1c5645c3bc00"]
 pub struct VideoPipeline {
     /// Sampler for texture filtering.
     pub sampler: wgpu::Sampler,
@@ -596,6 +600,8 @@ impl ShaderDescriptor for SceneVideoFramgentShader {
 }
 
 /// Material that displays a video.
+#[derive(TypeUuid)]
+#[uuid = "f57c2a91-8dd7-4dee-8a9e-15c0b2469ba0"]
 pub struct VideoMaterial {
     /// The video to display.
     pub video: AssetHandle<Video>,

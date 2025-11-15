@@ -2,6 +2,7 @@ use crate::change_detection::MAX_CHANGE_AGE;
 use bevy_ecs_macros::Event;
 use bevy_ptr::UnsafeCellDeref;
 use core::cell::UnsafeCell;
+use waywe_uuid::TypeUuid;
 
 /// A value that tracks when a system ran relative to other systems.
 /// This is used to power change detection.
@@ -103,7 +104,7 @@ impl Tick {
 ///     schedule.0.check_change_ticks(*check);
 /// });
 /// ```
-#[derive(Debug, Clone, Copy, Event)]
+#[derive(Debug, Clone, Copy, Event, TypeUuid)]
 pub struct CheckChangeTicks(pub(crate) Tick);
 
 impl CheckChangeTicks {

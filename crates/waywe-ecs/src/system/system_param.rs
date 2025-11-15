@@ -56,13 +56,13 @@ use variadics_please::{all_tuples, all_tuples_enumerated};
 ///
 /// ```
 /// # use bevy_ecs::prelude::*;
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct SomeComponent;
-/// # #[derive(Resource)]
+/// # #[derive(Resource, TypeUuid)]
 /// # struct SomeResource;
 /// # #[derive(Message)]
 /// # struct SomeMessage;
-/// # #[derive(Resource)]
+/// # #[derive(Resource, TypeUuid)]
 /// # struct SomeOtherResource;
 /// # use bevy_ecs::system::SystemParam;
 /// # #[derive(SystemParam)]
@@ -94,7 +94,7 @@ use variadics_please::{all_tuples, all_tuples_enumerated};
 ///
 /// ```
 /// # use bevy_ecs::prelude::*;
-/// # #[derive(Resource)]
+/// # #[derive(Resource, TypeUuid)]
 /// # struct SomeResource;
 /// use std::marker::PhantomData;
 /// use bevy_ecs::system::SystemParam;
@@ -143,7 +143,7 @@ use variadics_please::{all_tuples, all_tuples_enumerated};
 ///
 /// ```
 /// # use bevy_ecs::prelude::*;
-/// # #[derive(Resource)]
+/// # #[derive(Resource, TypeUuid)]
 /// # struct SomeResource;
 /// # use bevy_ecs::system::SystemParam;
 /// #
@@ -197,7 +197,7 @@ use variadics_please::{all_tuples, all_tuples_enumerated};
 /// use custom_param::CustomParam;
 ///
 /// # use bevy_ecs::prelude::*;
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct A;
 /// #
 /// # let mut world = World::new();
@@ -546,13 +546,13 @@ unsafe impl<'w, 's, D: ReadOnlyQueryData + 'static, F: QueryFilter + 'static> Re
 /// ```should_panic
 /// # use bevy_ecs::prelude::*;
 /// #
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct Health;
 /// #
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct Enemy;
 /// #
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct Ally;
 /// #
 /// // This will panic at runtime when the system gets initialized.
@@ -575,13 +575,13 @@ unsafe impl<'w, 's, D: ReadOnlyQueryData + 'static, F: QueryFilter + 'static> Re
 /// ```
 /// # use bevy_ecs::prelude::*;
 /// #
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct Health;
 /// #
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct Enemy;
 /// #
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct Ally;
 /// #
 /// // Given the following system
@@ -1046,7 +1046,7 @@ unsafe impl<'w> SystemParam for DeferredWorld<'w> {
 /// # use bevy_ecs::prelude::*;
 /// # use bevy_ecs::system::assert_is_system;
 /// struct Config(u32);
-/// #[derive(Resource)]
+/// #[derive(Resource, TypeUuid)]
 /// struct MyU32Wrapper(u32);
 /// fn reset_to_system(value: Config) -> impl FnMut(ResMut<MyU32Wrapper>) {
 ///     move |mut val| val.0 = value.0
@@ -1161,20 +1161,20 @@ pub trait SystemBuffer: FromWorld + Send + 'static {
 /// ```
 /// # use bevy_ecs::prelude::*;
 /// // Tracks whether or not there is a threat the player should be aware of.
-/// #[derive(Resource, Default)]
+/// #[derive(Resource, TypeUuid, Default)]
 /// pub struct Alarm(bool);
 ///
-/// #[derive(Component)]
+/// #[derive(Component, TypeUuid)]
 /// pub struct Settlement {
 ///     // ...
 /// }
 ///
 /// // A threat from inside the settlement.
-/// #[derive(Component)]
+/// #[derive(Component, TypeUuid)]
 /// pub struct Criminal;
 ///
 /// // A threat from outside the settlement.
-/// #[derive(Component)]
+/// #[derive(Component, TypeUuid)]
 /// pub struct Monster;
 ///
 /// # impl Criminal { pub fn is_threat(&self, _: &Settlement) -> bool { true } }
@@ -1182,7 +1182,7 @@ pub trait SystemBuffer: FromWorld + Send + 'static {
 /// use bevy_ecs::system::{Deferred, SystemBuffer, SystemMeta};
 ///
 /// // Uses deferred mutations to allow signaling the alarm from multiple systems in parallel.
-/// #[derive(Resource, Default)]
+/// #[derive(Resource, TypeUuid, Default)]
 /// struct AlarmFlag(bool);
 ///
 /// impl AlarmFlag {
@@ -1855,7 +1855,7 @@ unsafe impl<T: ReadOnlySystemParam> ReadOnlySystemParam for Result<T, SystemPara
 ///
 /// ```
 /// # use bevy_ecs::prelude::*;
-/// # #[derive(Resource)]
+/// # #[derive(Resource, TypeUuid)]
 /// # struct SomeResource;
 /// // This system will fail if `SomeResource` is not present.
 /// fn fails_on_missing_resource(res: Res<SomeResource>) {}
@@ -1877,7 +1877,7 @@ impl<T> If<T> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource)]
+    /// # #[derive(Resource, TypeUuid)]
     /// # struct SomeResource;
     /// fn skips_on_missing_resource(If(res): If<Res<SomeResource>>) {
     ///     let some_resource: Res<SomeResource> = res;
@@ -2389,10 +2389,10 @@ unsafe impl<T: ?Sized> ReadOnlySystemParam for PhantomData<T> {}
 /// ```
 /// # use bevy_ecs::{prelude::*, system::*};
 /// #
-/// # #[derive(Default, Resource)]
+/// # #[derive(Default, Resource, TypeUuid)]
 /// # struct A;
 /// #
-/// # #[derive(Default, Resource)]
+/// # #[derive(Default, Resource, TypeUuid)]
 /// # struct B;
 /// #
 /// # let mut world = World::new();
@@ -2885,7 +2885,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn non_send_alias() {
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct A(usize);
         fn my_system(mut res0: NonSendMut<A>, mut res1: NonSendMut<A>) {
             res0.0 += 1;
@@ -2928,14 +2928,14 @@ mod tests {
             _local: Local<'s, T>,
         }
 
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct R;
 
         fn my_system(_: SpecialRes<R>, _: SpecialLocal<u32>) {}
         assert_is_system(my_system);
     }
 
-    #[derive(Resource)]
+    #[derive(Resource, TypeUuid)]
     pub struct R<const I: usize>;
 
     // Compile test for https://github.com/bevyengine/bevy/pull/7001.
@@ -3019,7 +3019,7 @@ mod tests {
     // Regression test for https://github.com/bevyengine/bevy/issues/4200.
     #[test]
     fn system_param_private_fields() {
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct PrivateResource;
 
         #[expect(
@@ -3051,7 +3051,7 @@ mod tests {
     // Regression test for https://github.com/bevyengine/bevy/issues/1727.
     #[test]
     fn system_param_name_collision() {
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         pub struct FetchState;
 
         #[derive(SystemParam)]
@@ -3129,7 +3129,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn missing_resource_error() {
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         pub struct MissingResource;
 
         let mut schedule = crate::schedule::Schedule::default();

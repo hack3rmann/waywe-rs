@@ -13,12 +13,14 @@
 
 use std::time::{Duration, Instant};
 use waywe_ecs::prelude::*;
+use waywe_uuid::TypeUuid;
 
 /// Time tracking resource.
 ///
 /// This resource tracks the elapsed time and time between frames,
 /// which is essential for animations and consistent updates.
-#[derive(Resource)]
+#[derive(Resource, TypeUuid)]
+#[uuid = "a7449336-c9d4-4cbe-8df8-cb68d218966f"]
 pub struct Time {
     /// The previous frame's timestamp.
     pub prev: Instant,

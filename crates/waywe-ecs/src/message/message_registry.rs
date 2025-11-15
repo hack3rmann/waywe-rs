@@ -6,6 +6,7 @@ use crate::{
     world::World,
 };
 use alloc::vec::Vec;
+use waywe_uuid::TypeUuid;
 
 #[doc(hidden)]
 struct RegisteredMessage {
@@ -19,7 +20,7 @@ struct RegisteredMessage {
 
 /// A registry of all of the [`Messages`] in the [`World`], used by [`message_update_system`](crate::message::message_update_system)
 /// to update all of the messages.
-#[derive(Resource, Default)]
+#[derive(Resource, TypeUuid, Default)]
 pub struct MessageRegistry {
     /// Should the messages be updated?
     ///

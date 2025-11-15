@@ -1,7 +1,5 @@
 //! Logic for evaluating observers, and storing functions inside of observers.
 
-use core::any::Any;
-
 use crate::{
     error::ErrorContext,
     event::Event,
@@ -12,6 +10,7 @@ use crate::{
     world::DeferredWorld,
 };
 use bevy_ptr::PtrMut;
+use core::any::Any;
 
 /// Type for function that is run when an observer is triggered.
 ///
@@ -125,8 +124,9 @@ mod tests {
         event::Event,
         observer::On,
     };
+    use waywe_uuid::TypeUuid;
 
-    #[derive(Event)]
+    #[derive(Event, TypeUuid)]
     struct TriggerEvent;
 
     #[test]
@@ -144,7 +144,7 @@ mod tests {
 
     #[test]
     fn test_fallible_observer_ignored_errors() {
-        #[derive(Resource, Default)]
+        #[derive(Resource, Default, TypeUuid)]
         struct Ran(bool);
 
         fn system(_: On<TriggerEvent>, mut ran: ResMut<Ran>) -> Result {

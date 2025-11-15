@@ -25,6 +25,7 @@ use waywe_ecs::{
     entity::{EntityHash, EntityHasher},
     prelude::*,
 };
+use waywe_uuid::TypeUuid;
 
 pub struct AssetServerPlugin;
 
@@ -138,7 +139,8 @@ impl AssetIdGenerator {
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AssetId(pub u64);
 
-#[derive(Resource, Debug, Default, Clone)]
+#[derive(Resource, TypeUuid, Debug, Default, Clone)]
+#[uuid = "5fd706ad-fa1d-43e9-b8ad-da5a67bb6430"]
 pub struct AssetServer(Arc<AssetServerInner>);
 
 impl Deref for AssetServer {

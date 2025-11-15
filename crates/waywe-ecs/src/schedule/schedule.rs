@@ -22,6 +22,7 @@ use pass::ScheduleBuildPassObj;
 use thiserror::Error;
 #[cfg(feature = "trace")]
 use tracing::info_span;
+use waywe_uuid::TypeUuid;
 
 use crate::{component::CheckChangeTicks, system::System};
 use crate::{
@@ -38,7 +39,7 @@ use Direction::{Incoming, Outgoing};
 pub use stepping::Stepping;
 
 /// Resource that stores [`Schedule`]s mapped to [`ScheduleLabel`]s excluding the current running [`Schedule`].
-#[derive(Default, Resource)]
+#[derive(Default, Resource, TypeUuid)]
 pub struct Schedules {
     inner: HashMap<InternedScheduleLabel, Schedule>,
     /// List of [`ComponentId`]s to ignore when reporting system order ambiguity conflicts
@@ -1767,8 +1768,7 @@ pub struct ScheduleNotInitialized;
 
 #[cfg(test)]
 mod tests {
-    use bevy_ecs_macros::ScheduleLabel;
-
+    use super::Schedules;
     use crate::{
         error::{DefaultErrorHandler, Result, ignore, panic},
         prelude::{ApplyDeferred, Res, Resource},
@@ -1778,13 +1778,13 @@ mod tests {
         system::Commands,
         world::World,
     };
+    use bevy_ecs_macros::ScheduleLabel;
+    use waywe_uuid::TypeUuid;
 
-    use super::Schedules;
-
-    #[derive(Resource)]
+    #[derive(Resource, TypeUuid)]
     struct Resource1;
 
-    #[derive(Resource)]
+    #[derive(Resource, TypeUuid)]
     struct Resource2;
 
     #[test]
@@ -1797,7 +1797,7 @@ mod tests {
             SyncPoint(usize),
         }
 
-        #[derive(Resource, Default)]
+        #[derive(Resource, TypeUuid, Default)]
         struct Log(Vec<Entry>);
 
         fn system<const N: usize>(mut res: ResMut<Log>, mut commands: Commands) {
@@ -2186,13 +2186,13 @@ mod tests {
     mod no_sync_chain {
         use super::*;
 
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct Ra;
 
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct Rb;
 
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct Rc;
 
         fn run_schedule(expected_num_systems: usize, add_systems: impl FnOnce(&mut Schedule)) {
@@ -2441,7 +2441,7 @@ mod tests {
     #[derive(ScheduleLabel, Hash, Debug, Clone, PartialEq, Eq)]
     struct TestSchedule;
 
-    #[derive(Resource)]
+    #[derive(Resource, TypeUuid)]
     struct CheckSystemRan(usize);
 
     #[test]
@@ -2563,7 +2563,7 @@ mod tests {
 
     #[test]
     fn test_default_error_handler() {
-        #[derive(Resource, Default)]
+        #[derive(Resource, TypeUuid, Default)]
         struct Ran(bool);
 
         fn system(mut ran: ResMut<Ran>) -> Result {

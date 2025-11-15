@@ -140,10 +140,11 @@ mod tests {
     use alloc::vec::Vec;
     use bevy_ecs_macros::Resource;
     use core::marker::PhantomData;
+    use waywe_uuid::TypeUuid;
 
     #[test]
     fn test_exclusive_system_params() {
-        #[derive(Resource, Default)]
+        #[derive(Resource, TypeUuid, Default)]
         struct Res {
             test_value: u32,
         }

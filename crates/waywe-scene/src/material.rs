@@ -25,6 +25,7 @@ use waywe_ecs::{
     system::{SystemParam, SystemParamItem},
 };
 use waywe_runtime::{gpu::Wgpu, shaders::ShaderDescriptor};
+use waywe_uuid::TypeUuid;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, PartialOrd, Ord, Hash, SystemSet)]
 pub enum MaterialSet {
@@ -44,7 +45,8 @@ impl Plugin for MaterialPlugin {
 }
 
 /// Vertex and fragment shaders for rendering.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, TypeUuid)]
+#[uuid = "2c519aba-5567-4b85-9d5c-123f807355e1"]
 pub struct VertexFragmentShader {
     /// Vertex shader module.
     pub vertex: wgpu::ShaderModule,
@@ -105,7 +107,8 @@ pub trait AsBindGroup {
 }
 
 /// GPU-ready material.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, TypeUuid)]
+#[uuid = "c208df8d-d65c-4668-b181-d40a5ae84dfc"]
 pub struct RenderMaterial {
     /// Shaders for rendering.
     pub shader: VertexFragmentShader,
@@ -118,5 +121,6 @@ pub struct RenderMaterial {
 impl Asset for RenderMaterial {}
 
 /// Handle to a render material component.
-#[derive(Component, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Component, TypeUuid, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[uuid = "26aa06f1-4bf6-4f54-859b-7553e12adc03"]
 pub struct RenderMaterialId(pub AssetId);

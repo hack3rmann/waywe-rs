@@ -7,6 +7,7 @@ use derive_more::Deref;
 use std::path::PathBuf;
 use waywe_ecs::prelude::*;
 use waywe_scene::prelude::*;
+use waywe_uuid::TypeUuid;
 
 /// A wallpaper that displays a static image.
 ///
@@ -19,7 +20,7 @@ pub struct ImageWallpaper {
 }
 
 /// Resource that holds the image path during initialization.
-#[derive(Resource, Deref)]
+#[derive(Resource, Deref, TypeUuid)]
 pub struct ImagePath(pub PathBuf);
 
 impl WallpaperBuilder for ImageWallpaper {

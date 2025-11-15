@@ -13,11 +13,11 @@
 //! ```
 //! # use bevy_ecs::prelude::*;
 //! #
-//! # #[derive(Component)]
+//! # #[derive(Component, TypeUuid)]
 //! # struct Player { alive: bool }
-//! # #[derive(Component)]
+//! # #[derive(Component, TypeUuid)]
 //! # struct Score(u32);
-//! # #[derive(Resource)]
+//! # #[derive(Resource, TypeUuid)]
 //! # struct Round(u32);
 //! #
 //! fn update_score_system(
@@ -214,7 +214,7 @@ pub trait IntoSystem<In: SystemInput, Out, Marker>: Sized {
     /// # world.insert_resource(T);
     /// # schedule.run(&mut world);
     ///
-    /// # #[derive(Resource)] struct T;
+    /// # #[derive(Resource, TypeUuid)] struct T;
     /// # type Err = ();
     /// fn my_system(res: Res<T>) -> Result<(), Err> {
     ///     // ...
@@ -329,7 +329,7 @@ impl<T: System> IntoSystem<T::In, T::Out, ()> for T {
 /// ```should_panic
 /// # use bevy_ecs::{prelude::*, system::assert_is_system};
 /// #
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct Transform;
 /// #
 /// fn my_system(query1: Query<&mut Transform>, query2: Query<&mut Transform>) {
@@ -362,7 +362,7 @@ pub fn assert_is_system<In: SystemInput, Out: 'static, Marker>(
 /// ```compile_fail
 /// # use bevy_ecs::{prelude::*, system::assert_is_read_only_system};
 /// #
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct Transform;
 /// #
 /// fn my_system(query: Query<&mut Transform>) {
@@ -396,11 +396,7 @@ pub fn assert_system_does_not_conflict<Out, Params, S: IntoSystem<(), Out, Param
 #[cfg(test)]
 #[expect(clippy::print_stdout, reason = "Allowed in tests.")]
 mod tests {
-    use alloc::{vec, vec::Vec};
-    use bevy_utils::default;
-    use core::any::TypeId;
-    use std::println;
-
+    use super::ScheduleSystem;
     use crate::{
         archetype::Archetypes,
         bundle::Bundles,
@@ -423,30 +419,32 @@ mod tests {
         },
         world::{DeferredWorld, EntityMut, FromWorld, World},
     };
+    use alloc::{vec, vec::Vec};
+    use bevy_utils::default;
+    use core::any::TypeId;
+    use std::println;
+    use waywe_uuid::TypeUuid;
 
-    use super::ScheduleSystem;
-
-    #[derive(Resource, PartialEq, Debug)]
+    #[derive(Resource, TypeUuid, PartialEq, Debug)]
     enum SystemRan {
         Yes,
         No,
     }
 
-    #[derive(Component, Resource, Debug, Eq, PartialEq, Default)]
+    #[derive(Component, Resource, TypeUuid, Debug, Eq, PartialEq, Default)]
     struct A;
-    #[derive(Component, Resource)]
+    #[derive(Component, Resource, TypeUuid)]
     struct B;
-    #[derive(Component, Resource)]
+    #[derive(Component, Resource, TypeUuid)]
     struct C;
-    #[derive(Component, Resource)]
+    #[derive(Component, Resource, TypeUuid)]
     struct D;
-    #[derive(Component, Resource)]
+    #[derive(Component, Resource, TypeUuid)]
     struct E;
-    #[derive(Component, Resource)]
+    #[derive(Component, Resource, TypeUuid)]
     struct F;
-
-    #[derive(Component, Debug)]
-    struct W<T>(T);
+    #[derive(Component, TypeUuid, Debug)]
+    struct W<T: TypeUuid>(T);
 
     #[test]
     fn simple_system() {
@@ -478,7 +476,7 @@ mod tests {
         use crate::resource::Resource;
         const ENTITIES_COUNT: usize = 1000;
 
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct EntitiesArray(Vec<Entity>);
 
         fn query_system(
@@ -558,13 +556,13 @@ mod tests {
     fn changed_resource_system() {
         use crate::resource::Resource;
 
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct Flipper(bool);
 
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct Added(usize);
 
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct Changed(usize);
 
         fn incr_e_on_flip(
@@ -905,7 +903,7 @@ mod tests {
         run_system(&mut world, sys);
     }
 
-    #[derive(Default, Resource)]
+    #[derive(Default, Resource, TypeUuid)]
     struct BufferRes {
         _buffer: Vec<u8>,
     }
@@ -955,7 +953,7 @@ mod tests {
             value: u32,
         }
 
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct ProtoFoo {
             value: u32,
         }
@@ -1018,7 +1016,9 @@ mod tests {
         let mut world = World::default();
 
         world.insert_resource(SystemRan::No);
+        #[derive(TypeUuid)]
         struct NotSend1(alloc::rc::Rc<i32>);
+        #[derive(TypeUuid)]
         struct NotSend2(alloc::rc::Rc<i32>);
 
         world.insert_non_send_resource(NotSend1(alloc::rc::Rc::new(1)));
@@ -1045,16 +1045,16 @@ mod tests {
         let spurious_entity = world.spawn_empty().id();
 
         // Track which entities we want to operate on
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct Despawned(Entity);
         world.insert_resource(Despawned(entity_to_despawn));
 
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct Removed(Entity);
         world.insert_resource(Removed(entity_to_remove_w_from));
 
         // Verify that all the systems actually ran
-        #[derive(Default, Resource)]
+        #[derive(Default, Resource, TypeUuid)]
         struct NSystems(usize);
         world.insert_resource(NSystems::default());
 
@@ -1167,11 +1167,8 @@ mod tests {
         let y_access = y.initialize(&mut world);
 
         let conflicts = x_access.get_conflicts(&y_access);
-        let b_id = world
-            .components()
-            .get_resource_id(TypeId::of::<B>())
-            .unwrap();
-        let d_id = world.components().get_id(TypeId::of::<D>()).unwrap();
+        let b_id = world.components().get_resource_id(B::uuid()).unwrap();
+        let d_id = world.components().get_id(D::uuid()).unwrap();
         assert_eq!(conflicts, vec![b_id, d_id].into());
     }
 
@@ -1248,10 +1245,10 @@ mod tests {
 
     #[test]
     fn read_system_state() {
-        #[derive(Eq, PartialEq, Debug, Resource)]
+        #[derive(Eq, PartialEq, Debug, Resource, TypeUuid)]
         struct A(usize);
 
-        #[derive(Component, Eq, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, Eq, PartialEq, Debug)]
         struct B(usize);
 
         let mut world = World::default();
@@ -1274,10 +1271,10 @@ mod tests {
 
     #[test]
     fn write_system_state() {
-        #[derive(Resource, Eq, PartialEq, Debug)]
+        #[derive(Resource, TypeUuid, Eq, PartialEq, Debug)]
         struct A(usize);
 
-        #[derive(Component, Eq, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, Eq, PartialEq, Debug)]
         struct B(usize);
 
         let mut world = World::default();
@@ -1301,7 +1298,7 @@ mod tests {
 
     #[test]
     fn system_state_change_detection() {
-        #[derive(Component, Eq, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, Eq, PartialEq, Debug)]
         struct A(usize);
 
         let mut world = World::default();
@@ -1356,10 +1353,10 @@ mod tests {
 
     #[test]
     fn system_state_archetype_update() {
-        #[derive(Component, Eq, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, Eq, PartialEq, Debug)]
         struct A(usize);
 
-        #[derive(Component, Eq, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, Eq, PartialEq, Debug)]
         struct B(usize);
 
         let mut world = World::default();
@@ -1426,7 +1423,7 @@ mod tests {
 
     #[test]
     fn immutable_mut_test() {
-        #[derive(Component, Eq, PartialEq, Debug, Clone, Copy)]
+        #[derive(Component, TypeUuid, Eq, PartialEq, Debug, Clone, Copy)]
         struct A(usize);
 
         let mut world = World::default();
@@ -1745,7 +1742,7 @@ mod tests {
 
     #[test]
     fn pipe_change_detection() {
-        #[derive(Resource, Default)]
+        #[derive(Resource, TypeUuid, Default)]
         struct Flag;
 
         #[derive(Default)]
@@ -1822,11 +1819,11 @@ mod tests {
     #[test]
     fn test_combinator_clone() {
         let mut world = World::new();
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct A;
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct B;
-        #[derive(Resource, PartialEq, Eq, Debug)]
+        #[derive(Resource, TypeUuid, PartialEq, Eq, Debug)]
         struct C(i32);
 
         world.insert_resource(A);

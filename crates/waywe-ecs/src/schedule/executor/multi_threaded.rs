@@ -8,6 +8,7 @@ use fixedbitset::FixedBitSet;
 #[cfg(feature = "std")]
 use std::eprintln;
 use std::sync::{Mutex, MutexGuard};
+use waywe_uuid::TypeUuid;
 
 #[cfg(feature = "trace")]
 use tracing::{Span, info_span};
@@ -873,7 +874,7 @@ unsafe fn evaluate_and_fold_conditions(
 }
 
 /// New-typed [`ThreadExecutor`] [`Resource`] that is used to run systems on the main thread
-#[derive(Resource, Clone)]
+#[derive(Resource, TypeUuid, Clone)]
 pub struct MainThreadExecutor(pub Arc<ThreadExecutor<'static>>);
 
 impl Default for MainThreadExecutor {
@@ -897,8 +898,9 @@ mod tests {
         system::Commands,
         world::World,
     };
+    use waywe_uuid::TypeUuid;
 
-    #[derive(Resource)]
+    #[derive(Resource, TypeUuid)]
     struct R;
 
     #[test]

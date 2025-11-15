@@ -35,6 +35,7 @@ raw-window-handle = "0.6.2"
 wgpu = { version = "27.0.1", features = ["glsl"] }
 daemonize = "0.5.0"
 for-sure = "0.1.1"
+waywe-uuid.workspace = true
 
 [dev-dependencies]
 libc = "0.2.171"

@@ -9,7 +9,6 @@ mod event;
 mod message;
 mod query_data;
 mod query_filter;
-mod uuid;
 mod world_query;
 
 use std::env;

@@ -479,8 +479,9 @@ impl BlobArray {
 #[cfg(test)]
 mod tests {
     use bevy_ecs::prelude::*;
+    use waywe_uuid::TypeUuid;
 
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     struct PanicOnDrop;
 
     impl Drop for PanicOnDrop {

@@ -30,6 +30,7 @@ mod tests {
     use alloc::string::ToString;
     use alloc::{vec, vec::Vec};
     use core::sync::atomic::{AtomicU32, Ordering};
+    use waywe_uuid::TypeUuid;
 
     pub use crate::{
         prelude::World,
@@ -47,13 +48,13 @@ mod tests {
         X,
     }
 
-    #[derive(Resource, Default)]
+    #[derive(Resource, TypeUuid, Default)]
     struct SystemOrder(Vec<u32>);
 
-    #[derive(Resource, Default)]
+    #[derive(Resource, TypeUuid, Default)]
     struct RunConditionBool(bool);
 
-    #[derive(Resource, Default)]
+    #[derive(Resource, TypeUuid, Default)]
     struct Counter(AtomicU32);
 
     fn make_exclusive_system(tag: u32) -> impl FnMut(&mut World) {
@@ -408,7 +409,7 @@ mod tests {
 
         #[test]
         fn system_conditions_and_change_detection() {
-            #[derive(Resource, Default)]
+            #[derive(Resource, TypeUuid, Default)]
             struct Bool2(pub bool);
 
             let mut world = World::default();
@@ -456,7 +457,7 @@ mod tests {
 
         #[test]
         fn system_set_conditions_and_change_detection() {
-            #[derive(Resource, Default)]
+            #[derive(Resource, TypeUuid, Default)]
             struct Bool2(pub bool);
 
             let mut world = World::default();
@@ -506,7 +507,7 @@ mod tests {
 
         #[test]
         fn mixed_conditions_and_change_detection() {
-            #[derive(Resource, Default)]
+            #[derive(Resource, TypeUuid, Default)]
             struct Bool2(pub bool);
 
             let mut world = World::default();
@@ -559,6 +560,7 @@ mod tests {
 
     mod schedule_build_errors {
         use super::*;
+        use waywe_uuid::TypeUuid;
 
         #[test]
         fn dependency_loop() {
@@ -747,7 +749,7 @@ mod tests {
 
         #[test]
         fn ambiguity() {
-            #[derive(Resource)]
+            #[derive(Resource, TypeUuid)]
             struct X;
 
             fn res_ref(_x: Res<X>) {}
@@ -779,19 +781,19 @@ mod tests {
         use super::*;
         use crate::prelude::*;
 
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct R;
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct A;
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct B;
 
-        #[derive(Message)]
+        #[derive(Message, TypeUuid)]
         struct E;
 
-        #[derive(Resource, Component)]
+        #[derive(Resource, Component, TypeUuid)]
         struct RC;
 
         fn empty_system() {}

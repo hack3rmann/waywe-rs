@@ -15,18 +15,19 @@ use bevy_ecs_macros::{Component, Resource};
 use bevy_utils::prelude::DebugName;
 use core::{any::TypeId, marker::PhantomData};
 use thiserror::Error;
+use waywe_uuid::TypeUuid;
 
 /// A small wrapper for [`BoxedSystem`] that also keeps track whether or not the system has been initialized.
-#[derive(Component)]
+#[derive(Component, TypeUuid)]
 #[uuid(rebound(I: TypeId))]
 #[uuid(rebound(O: TypeId))]
 #[require(SystemIdMarker = SystemIdMarker::typed_system_id_marker::<I, O>(), Internal)]
-pub(crate) struct RegisteredSystem<I, O> {
+pub(crate) struct RegisteredSystem<I: 'static, O: 'static> {
     initialized: bool,
     system: BoxedSystem<I, O>,
 }
 
-impl<I, O> RegisteredSystem<I, O> {
+impl<I: 'static, O: 'static> RegisteredSystem<I, O> {
     pub fn new(system: BoxedSystem<I, O>) -> Self {
         RegisteredSystem {
             initialized: false,
@@ -60,7 +61,7 @@ impl Default for TypeIdAndName {
 }
 
 /// Marker [`Component`](bevy_ecs::component::Component) for identifying [`SystemId`] [`Entity`]s.
-#[derive(Debug, Default, Clone, Component)]
+#[derive(Debug, Default, Clone, Component, TypeUuid)]
 pub struct SystemIdMarker {
     input_type_id: TypeIdAndName,
     output_type_id: TypeIdAndName,
@@ -164,9 +165,9 @@ impl<I: SystemInput, O> core::fmt::Debug for SystemId<I, O> {
 /// A cached [`SystemId`] distinguished by the unique function type of its system.
 ///
 /// This resource is inserted by [`World::register_system_cached`].
-#[derive(Resource)]
+#[derive(Resource, TypeUuid)]
 #[uuid(rebound(S: TypeId))]
-pub struct CachedSystemId<S> {
+pub struct CachedSystemId<S: 'static> {
     /// The cached `SystemId` as an `Entity`.
     pub entity: Entity,
     _marker: PhantomData<fn() -> S>,
@@ -280,7 +281,7 @@ impl World {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Resource, Default)]
+    /// #[derive(Resource, TypeUuid, Default)]
     /// struct ChangeDetector;
     ///
     /// let mut world = World::default();
@@ -305,10 +306,10 @@ impl World {
     /// ```
     /// # use bevy_ecs::prelude::*;
     ///
-    /// #[derive(Resource)]
+    /// #[derive(Resource, TypeUuid)]
     /// struct PlayerScore(i32);
     ///
-    /// #[derive(Resource)]
+    /// #[derive(Resource, TypeUuid)]
     /// struct OpponentScore(i32);
     ///
     /// fn get_player_score(player_score: Res<PlayerScore>) -> i32 {
@@ -592,22 +593,20 @@ impl<I: SystemInput, O> core::fmt::Debug for RegisteredSystemError<I, O> {
 
 #[cfg(test)]
 mod tests {
-    use core::cell::Cell;
-
-    use bevy_utils::default;
-    use waywe_uuid::TypeUuid;
-
     use crate::{
         prelude::*,
         system::{RegisteredSystemError, SystemId},
     };
+    use bevy_utils::default;
+    use core::cell::Cell;
+    use waywe_uuid::TypeUuid;
 
-    #[derive(Resource, Default, PartialEq, Debug)]
+    #[derive(Resource, TypeUuid, Default, PartialEq, Debug)]
     struct Counter(u8);
 
     #[test]
     fn change_detection() {
-        #[derive(Resource, Default)]
+        #[derive(Resource, TypeUuid, Default)]
         struct ChangeDetector;
 
         fn count_up_iff_changed(
@@ -752,7 +751,7 @@ mod tests {
     fn nested_systems() {
         use crate::system::SystemId;
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct Callback(SystemId);
 
         fn nested(query: Query<&Callback>, mut commands: Commands) {
@@ -782,7 +781,7 @@ mod tests {
     fn nested_systems_with_inputs() {
         use crate::system::SystemId;
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct Callback(SystemId<In<u8>>, u8);
 
         fn nested(query: Query<&Callback>, mut commands: Commands) {
@@ -970,7 +969,7 @@ mod tests {
 
     #[test]
     fn system_with_input_mut() {
-        #[derive(Event)]
+        #[derive(Event, TypeUuid)]
         struct MyEvent {
             cancelled: bool,
         }

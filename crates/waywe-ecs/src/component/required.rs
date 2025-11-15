@@ -657,17 +657,17 @@ mod tests {
 
     #[test]
     fn required_components() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[require(Y)]
         struct X;
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[require(Z = new_z())]
         struct Y {
             value: String,
         }
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct Z(u32);
 
         impl Default for Y {
@@ -729,11 +729,11 @@ mod tests {
 
     #[test]
     fn generic_required_components() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[require(Y<usize>)]
         struct X;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct Y<T: TypeUuid> {
             value: T,
         }
@@ -749,17 +749,17 @@ mod tests {
 
     #[test]
     fn required_components_spawn_nonexistent_hooks() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[require(Y)]
         struct X;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct Y;
 
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct A(usize);
 
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct I(usize);
 
         let mut world = World::new();
@@ -779,17 +779,17 @@ mod tests {
 
     #[test]
     fn required_components_insert_existing_hooks() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[require(Y)]
         struct X;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct Y;
 
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct A(usize);
 
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct I(usize);
 
         let mut world = World::new();
@@ -809,11 +809,11 @@ mod tests {
 
     #[test]
     fn required_components_take_leaves_required() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[require(Y)]
         struct X;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct Y;
 
         let mut world = World::new();
@@ -824,14 +824,14 @@ mod tests {
 
     #[test]
     fn required_components_retain_keeps_required() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[require(Y)]
         struct X;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct Y;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct Z;
 
         let mut world = World::new();
@@ -844,11 +844,11 @@ mod tests {
 
     #[test]
     fn required_components_spawn_then_insert_no_overwrite() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[require(Y)]
         struct X;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct Y(usize);
 
         let mut world = World::new();
@@ -864,11 +864,11 @@ mod tests {
 
     #[test]
     fn dynamic_required_components() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[require(Y)]
         struct X;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct Y;
 
         let mut world = World::new();
@@ -886,16 +886,16 @@ mod tests {
 
     #[test]
     fn remove_component_and_its_runtime_required_components() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct X;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct Y;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct Z;
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct V;
 
         let mut world = World::new();
@@ -931,18 +931,18 @@ mod tests {
 
     #[test]
     fn remove_component_and_its_required_components() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[require(Y)]
         struct X;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         #[require(Z)]
         struct Y;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct Z;
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct V;
 
         let mut world = World::new();
@@ -976,21 +976,21 @@ mod tests {
 
     #[test]
     fn remove_bundle_and_his_required_components() {
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         #[require(Y)]
         struct X;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct Y;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         #[require(W)]
         struct Z;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct W;
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct V;
 
         #[derive(Bundle, Default)]
@@ -1020,15 +1020,15 @@ mod tests {
     fn runtime_required_components() {
         // Same as `required_components` test but with runtime registration
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct X;
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct Y {
             value: String,
         }
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct Z(u32);
 
         impl Default for Y {
@@ -1091,13 +1091,13 @@ mod tests {
 
     #[test]
     fn runtime_required_components_override_1() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct X;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct Y;
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct Z(u32);
 
         let mut world = World::new();
@@ -1122,13 +1122,13 @@ mod tests {
     fn runtime_required_components_override_2() {
         // Same as `runtime_required_components_override_1` test but with different registration order
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct X;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct Y;
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct Z(u32);
 
         let mut world = World::new();
@@ -1152,14 +1152,14 @@ mod tests {
     #[test]
     fn runtime_required_components_propagate_up() {
         // `A` requires `B` directly.
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[require(B)]
         struct A;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct B;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct C;
 
         let mut world = World::new();
@@ -1175,16 +1175,16 @@ mod tests {
 
     #[test]
     fn runtime_required_components_propagate_up_even_more() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct A;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct B;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct C;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct D;
 
         let mut world = World::new();
@@ -1200,15 +1200,15 @@ mod tests {
 
     #[test]
     fn runtime_required_components_deep_require_does_not_override_shallow_require() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct A;
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct B;
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct C;
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct Counter(i32);
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct D;
 
         let mut world = World::new();
@@ -1230,19 +1230,19 @@ mod tests {
     #[test]
     fn runtime_required_components_deep_require_does_not_override_shallow_require_deep_subtree_after_shallow()
      {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct A;
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct B;
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct C;
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct D;
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct E;
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct Counter(i32);
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct F;
 
         let mut world = World::new();
@@ -1263,10 +1263,10 @@ mod tests {
 
     #[test]
     fn runtime_required_components_existing_archetype() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct X;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct Y;
 
         let mut world = World::new();
@@ -1282,11 +1282,11 @@ mod tests {
 
     #[test]
     fn runtime_required_components_fail_with_duplicate() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[require(Y)]
         struct X;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct Y;
 
         let mut world = World::new();
@@ -1300,18 +1300,18 @@ mod tests {
 
     #[test]
     fn required_components_bundle_priority() {
-        #[derive(Component, PartialEq, Eq, Clone, Copy, Debug)]
+        #[derive(Component, TypeUuid, PartialEq, Eq, Clone, Copy, Debug)]
         struct MyRequired(bool);
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         #[require(MyRequired(false))]
         struct MiddleMan;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         #[require(MiddleMan)]
         struct ConflictingRequire;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         #[require(MyRequired(true))]
         struct MyComponent;
 
@@ -1332,15 +1332,15 @@ mod tests {
     #[test]
     #[should_panic]
     fn required_components_recursion_errors() {
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         #[require(B)]
         struct A;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         #[require(C)]
         struct B;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         #[require(B)]
         struct C;
 
@@ -1350,7 +1350,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn required_components_self_errors() {
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         #[require(A)]
         struct A;
 
@@ -1359,22 +1359,22 @@ mod tests {
 
     #[test]
     fn regression_19333() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct X(usize);
 
-        #[derive(Default, Component)]
+        #[derive(Default, Component, TypeUuid)]
         #[require(X(0))]
         struct Base;
 
-        #[derive(Default, Component)]
+        #[derive(Default, Component, TypeUuid)]
         #[require(X(1), Base)]
         struct A;
 
-        #[derive(Default, Component)]
+        #[derive(Default, Component, TypeUuid)]
         #[require(A, Base)]
         struct B;
 
-        #[derive(Default, Component)]
+        #[derive(Default, Component, TypeUuid)]
         #[require(B, Base)]
         struct C;
 
@@ -1386,22 +1386,22 @@ mod tests {
 
     #[test]
     fn required_components_depth_first_2v1() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct X(usize);
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[require(Left, Right)]
         struct Root;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         #[require(LeftLeft)]
         struct Left;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         #[require(X(0))] // This is at depth 2 but is more on the left of the tree
         struct LeftLeft;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         #[require(X(1))] //. This is at depth 1 but is more on the right of the tree
         struct Right;
 
@@ -1413,26 +1413,26 @@ mod tests {
 
     #[test]
     fn required_components_depth_first_3v1() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct X(usize);
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[require(Left, Right)]
         struct Root;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         #[require(LeftLeft)]
         struct Left;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         #[require(LeftLeftLeft)]
         struct LeftLeft;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         #[require(X(0))] // This is at depth 3 but is more on the left of the tree
         struct LeftLeftLeft;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         #[require(X(1))] //. This is at depth 1 but is more on the right of the tree
         struct Right;
 
@@ -1444,19 +1444,19 @@ mod tests {
 
     #[test]
     fn runtime_required_components_depth_first_2v1() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct X(usize);
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct Root;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct Left;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct LeftLeft;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct Right;
 
         // Register bottom up: registering higher level components should pick up lower level ones.
@@ -1489,25 +1489,25 @@ mod tests {
 
     #[test]
     fn runtime_required_components_propagate_metadata_alternate() {
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         #[require(L1)]
         struct L0;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct L1;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         #[require(L3)]
         struct L2;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct L3;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         #[require(L5)]
         struct L4;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct L5;
 
         // Try to piece the 3 requirements together
@@ -1537,21 +1537,21 @@ mod tests {
 
     #[test]
     fn runtime_required_components_propagate_metadata_chain() {
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         #[require(L1)]
         struct L0;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct L1;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct L2;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         #[require(L4)]
         struct L3;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct L4;
 
         // Try to piece the 3 requirements together
@@ -1581,14 +1581,14 @@ mod tests {
 
     #[test]
     fn runtime_required_components_cyclic() {
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         #[require(B)]
         struct A;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct B;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct C;
 
         let mut world = World::new();

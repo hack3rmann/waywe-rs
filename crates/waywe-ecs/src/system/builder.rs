@@ -24,7 +24,7 @@ use variadics_please::all_tuples;
 /// #     prelude::*,
 /// #     system::{SystemParam, ParamBuilder},
 /// # };
-/// # #[derive(Resource)]
+/// # #[derive(Resource, TypeUuid)]
 /// # struct R;
 /// #
 /// # #[derive(SystemParam)]
@@ -129,10 +129,10 @@ pub unsafe trait SystemParamBuilder<P: SystemParam>: Sized {
 /// #     system::{SystemParam, ParamBuilder},
 /// # };
 /// #
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct A;
 /// #
-/// # #[derive(Resource)]
+/// # #[derive(Resource, TypeUuid)]
 /// # struct R;
 /// #
 /// # #[derive(SystemParam)]
@@ -226,7 +226,7 @@ unsafe impl<'w, 's, D: QueryData + 'static, F: QueryFilter + 'static>
 /// #     system::{SystemParam, QueryParamBuilder},
 /// # };
 /// #
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct Player;
 /// #
 /// # let mut world = World::new();
@@ -350,13 +350,13 @@ unsafe impl<P: SystemParam, B: SystemParamBuilder<P>> SystemParamBuilder<Vec<P>>
 /// ```
 /// # use bevy_ecs::{prelude::*, system::*};
 /// #
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct Health;
 /// #
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct Enemy;
 /// #
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct Ally;
 /// #
 /// # let mut world = World::new();
@@ -616,6 +616,7 @@ unsafe impl<P: SystemParam, B: SystemParamBuilder<P>> SystemParamBuilder<If<P>> 
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::{
         entity::Entities,
         error::Result,
@@ -623,19 +624,18 @@ mod tests {
         system::{Local, RunSystemOnce},
     };
     use alloc::vec;
+    use waywe_uuid::TypeUuid;
 
-    use super::*;
-
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     struct A;
 
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     struct B;
 
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     struct C;
 
-    #[derive(Resource, Default)]
+    #[derive(Resource, TypeUuid, Default)]
     struct R {
         foo: usize,
     }

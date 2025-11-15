@@ -12,3 +12,4 @@ waywe-ecs.workspace = true
 waywe-scene.workspace = true
 derive_more.workspace = true
 image.workspace = true
+waywe-uuid.workspace = true

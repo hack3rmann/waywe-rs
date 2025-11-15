@@ -1,3 +1,4 @@
+use super::OrderedRelationshipSourceCollection;
 use crate::{
     bundle::Bundle,
     entity::{Entity, hash_set::EntityHashSet},
@@ -10,8 +11,6 @@ use crate::{
 };
 use bevy_platform::prelude::{Box, Vec};
 use core::{marker::PhantomData, mem};
-
-use super::OrderedRelationshipSourceCollection;
 
 impl<'w> EntityWorldMut<'w> {
     /// Spawns a entity related to this entity (with the `R` relationship) by taking a bundle
@@ -657,10 +656,12 @@ impl<'w, R: Relationship> RelatedSpawnerCommands<'w, R> {
 
 #[cfg(test)]
 mod tests {
+    use waywe_uuid::TypeUuid;
+
     use super::*;
     use crate::prelude::{ChildOf, Children, Component};
 
-    #[derive(Component, Clone, Copy)]
+    #[derive(Component, TypeUuid, Clone, Copy)]
     struct TestComponent;
 
     #[test]
@@ -746,7 +747,7 @@ mod tests {
 
     #[test]
     fn add_related_keeps_relationship_data() {
-        #[derive(Component, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, PartialEq, Debug)]
         #[relationship(relationship_target = Parent)]
         struct Child {
             #[relationship]
@@ -754,7 +755,7 @@ mod tests {
             data: u8,
         }
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship_target(relationship = Child)]
         struct Parent(Vec<Entity>);
 
@@ -780,7 +781,7 @@ mod tests {
 
     #[test]
     fn insert_related_keeps_relationship_data() {
-        #[derive(Component, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, PartialEq, Debug)]
         #[relationship(relationship_target = Parent)]
         struct Child {
             #[relationship]
@@ -788,7 +789,7 @@ mod tests {
             data: u8,
         }
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship_target(relationship = Child)]
         struct Parent(Vec<Entity>);
 
@@ -816,7 +817,7 @@ mod tests {
 
     #[test]
     fn replace_related_keeps_relationship_data() {
-        #[derive(Component, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, PartialEq, Debug)]
         #[relationship(relationship_target = Parent)]
         struct Child {
             #[relationship]
@@ -824,7 +825,7 @@ mod tests {
             data: u8,
         }
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship_target(relationship = Child)]
         struct Parent(Vec<Entity>);
 
@@ -861,11 +862,11 @@ mod tests {
 
     #[test]
     fn replace_related_keeps_relationship_target_data() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship(relationship_target = Parent)]
         struct Child(Entity);
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship_target(relationship = Child)]
         struct Parent {
             #[relationship]
@@ -896,10 +897,10 @@ mod tests {
         use crate::prelude::Has;
         use crate::system::Query;
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct MyComponent;
 
-        #[derive(Component, Default)]
+        #[derive(Component, TypeUuid, Default)]
         struct ObserverResult {
             success: bool,
         }

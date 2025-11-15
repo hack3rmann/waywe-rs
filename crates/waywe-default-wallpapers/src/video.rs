@@ -5,7 +5,7 @@
 
 use derive_more::Deref;
 use std::path::PathBuf;
-use waywe_ecs::prelude::*;
+use waywe_ecs::{prelude::*, uuid::TypeUuid};
 use waywe_scene::{
     FrameRateSetting, Monitor, Startup,
     assets::Assets,
@@ -28,7 +28,7 @@ pub struct VideoWallpaper {
 }
 
 /// Resource that holds the video path during initialization.
-#[derive(Resource, Deref)]
+#[derive(Resource, Deref, TypeUuid)]
 pub struct VideoPath(pub PathBuf);
 
 impl WallpaperBuilder for VideoWallpaper {

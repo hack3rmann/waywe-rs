@@ -1,11 +1,9 @@
-use core::marker::PhantomData;
-
+use super::{FilteredAccess, QueryData, QueryFilter};
 use crate::{
     component::{ComponentId, StorageType},
     prelude::*,
 };
-
-use super::{FilteredAccess, QueryData, QueryFilter};
+use core::marker::PhantomData;
 
 /// Builder struct to create [`QueryState`] instances at runtime.
 ///
@@ -278,14 +276,15 @@ mod tests {
         world::{EntityMutExcept, EntityRefExcept, FilteredEntityMut, FilteredEntityRef},
     };
     use std::dbg;
+    use waywe_uuid::TypeUuid;
 
-    #[derive(Component, PartialEq, Debug)]
+    #[derive(Component, PartialEq, Debug, TypeUuid)]
     struct A(usize);
 
-    #[derive(Component, PartialEq, Debug)]
+    #[derive(Component, PartialEq, Debug, TypeUuid)]
     struct B(usize);
 
-    #[derive(Component, PartialEq, Debug)]
+    #[derive(Component, PartialEq, Debug, TypeUuid)]
     struct C(usize);
 
     #[test]
@@ -509,10 +508,10 @@ mod tests {
     /// Regression test for issue #14348
     #[test]
     fn builder_static_dense_dynamic_sparse() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct Dense;
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[component(storage = "SparseSet")]
         struct Sparse;
 

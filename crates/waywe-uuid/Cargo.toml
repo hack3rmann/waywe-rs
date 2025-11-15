@@ -14,6 +14,6 @@ categories = ["rust-patterns"]
 [dependencies]
 waywe-uuid-derive = { version = "0.1.2", path = "./waywe-uuid-derive" }
 sha2-const.workspace = true
+uuid = "1.18.1"
 
 [dev-dependencies]
-uuid = { version = "0.8", default-features = false }

@@ -59,8 +59,9 @@ mod tests {
         system::{In, IntoSystem},
         world::World,
     };
+    use waywe_uuid::TypeUuid;
 
-    #[derive(Event)]
+    #[derive(Event, TypeUuid)]
     struct TriggerEvent;
 
     #[test]

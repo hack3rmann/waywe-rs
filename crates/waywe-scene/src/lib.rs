@@ -108,6 +108,7 @@ use glam::UVec2;
 use std::time::Duration;
 use waywe_ecs::{prelude::*, schedule::ScheduleLabel};
 use waywe_runtime::{frame::FrameInfo, wayland::MonitorId};
+use waywe_uuid::TypeUuid;
 
 pub use glam;
 pub use waywe_ecs as ecs;
@@ -134,7 +135,8 @@ pub mod prelude {
 /// Frame rate configuration for the wallpaper.
 ///
 /// Controls how frequently the wallpaper updates and renders.
-#[derive(Clone, Copy, Resource, Debug, PartialEq)]
+#[derive(Clone, Copy, Resource, TypeUuid, Debug, PartialEq)]
+#[uuid = "23cc01a5-4dce-408e-97bd-370068188598"]
 pub enum FrameRateSetting {
     /// Target a specific frame duration (e.g., 16.67ms for 60 FPS).
     TargetFrameDuration(Duration),
@@ -182,18 +184,21 @@ pub struct PostExtract;
 /// Wrapper around the main ECS world.
 ///
 /// This resource holds the main world that runs logic updates.
-#[derive(Resource, Deref, DerefMut)]
+#[derive(Resource, TypeUuid, Deref, DerefMut)]
+#[uuid = "404f0fbf-1987-4fe0-a031-979f7b108deb"]
 pub struct MainWorld(pub World);
 
 /// Wrapper around a temporary world used during extraction.
 ///
 /// This resource holds a temporary world used to store the main world
 /// during the extraction process.
-#[derive(Resource, Default)]
+#[derive(Resource, TypeUuid, Default)]
+#[uuid = "625a064a-e500-422c-a54f-3a2b91c2ef38"]
 pub struct DummyWorld(pub World);
 
 /// Information about the monitor this wallpaper is rendering to.
-#[derive(Resource, Clone, Copy)]
+#[derive(Resource, TypeUuid, Clone, Copy)]
+#[uuid = "3c383d8f-51c5-4f3e-b23c-7bfb58641d38"]
 pub struct Monitor {
     /// Unique identifier for the monitor.
     pub id: MonitorId,
@@ -210,7 +215,8 @@ impl Monitor {
 
 bitflags! {
     /// Flags controlling wallpaper behavior.
-    #[derive(Clone, Copy, Debug, PartialEq, Default, Eq, PartialOrd, Ord, Hash, Resource)]
+    #[derive(Clone, Copy, Debug, PartialEq, Default, Eq, PartialOrd, Ord, Hash, Resource, TypeUuid)]
+    #[uuid = "b2985935-0c27-4150-b9af-d5a333aa7ca6"]
     pub struct WallpaperFlags: u32 {
         /// Startup systems have completed.
         const STARTUP_DONE = 1;

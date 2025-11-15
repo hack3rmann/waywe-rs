@@ -1,10 +1,11 @@
+use super::{Entity, UniqueEntityEquivalentSlice};
 use alloc::{
     boxed::Box,
     collections::{btree_map, btree_set},
     rc::Rc,
 };
 use bevy_platform::collections::HashSet;
-
+use bevy_platform::sync::Arc;
 use core::{
     array,
     fmt::{Debug, Formatter},
@@ -12,10 +13,6 @@ use core::{
     iter::{self, FusedIterator},
     option, result,
 };
-
-use super::{Entity, UniqueEntityEquivalentSlice};
-
-use bevy_platform::sync::Arc;
 
 /// A trait for types that contain an [`Entity`].
 ///
@@ -477,19 +474,19 @@ impl<I: Iterator<Item: EntityEquivalent> + Debug> Debug for UniqueEntityIter<I> 
 
 #[cfg(test)]
 mod tests {
-    use alloc::{vec, vec::Vec};
-
-    use crate::prelude::{Schedule, World};
-
-    use crate::component::Component;
-    use crate::entity::Entity;
-    use crate::query::{QueryState, With};
-    use crate::system::Query;
-    use crate::world::Mut;
-
     use super::UniqueEntityIter;
+    use crate::{
+        component::Component,
+        entity::Entity,
+        prelude::{Schedule, World},
+        query::{QueryState, With},
+        system::Query,
+        world::Mut,
+    };
+    use alloc::{vec, vec::Vec};
+    use waywe_uuid::TypeUuid;
 
-    #[derive(Component, Clone)]
+    #[derive(Component, TypeUuid, Clone)]
     pub struct Thing;
 
     #[expect(

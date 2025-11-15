@@ -41,7 +41,7 @@ pub type BoxedCondition<In = ()> = Box<dyn ReadOnlySystem<In = In, Out = bool>>;
 ///     })
 /// }
 ///
-/// # #[derive(Resource)] struct DidRun(bool);
+/// # #[derive(Resource, TypeUuid)] struct DidRun(bool);
 /// # fn my_system(mut did_run: ResMut<DidRun>) { did_run.0 = true; }
 /// # let mut schedule = Schedule::default();
 /// schedule.add_systems(my_system.run_if(every_other_time()));
@@ -64,7 +64,7 @@ pub type BoxedCondition<In = ()> = Box<dyn ReadOnlySystem<In = In, Out = bool>>;
 ///
 /// # fn always_true() -> bool { true }
 /// # let mut app = Schedule::default();
-/// # #[derive(Resource)] struct DidRun(bool);
+/// # #[derive(Resource, TypeUuid)] struct DidRun(bool);
 /// # fn my_system(mut did_run: ResMut<DidRun>) { did_run.0 = true; }
 /// app.add_systems(my_system.run_if(always_true.pipe(identity())));
 /// # let mut world = World::new();
@@ -85,7 +85,7 @@ pub trait SystemCondition<Marker, In: SystemInput = ()>:
     /// ```should_panic
     /// use bevy_ecs::prelude::*;
     ///
-    /// #[derive(Resource, PartialEq)]
+    /// #[derive(Resource, TypeUuid, PartialEq)]
     /// struct R(u32);
     ///
     /// # let mut app = Schedule::default();
@@ -103,7 +103,7 @@ pub trait SystemCondition<Marker, In: SystemInput = ()>:
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource, PartialEq)]
+    /// # #[derive(Resource, TypeUuid, PartialEq)]
     /// # struct R(u32);
     /// # let mut app = Schedule::default();
     /// # let mut world = World::new();
@@ -240,15 +240,15 @@ pub trait SystemCondition<Marker, In: SystemInput = ()>:
     /// ```
     /// use bevy_ecs::prelude::*;
     ///
-    /// #[derive(Resource, PartialEq)]
+    /// #[derive(Resource, TypeUuid, PartialEq)]
     /// struct A(u32);
     ///
-    /// #[derive(Resource, PartialEq)]
+    /// #[derive(Resource, TypeUuid, PartialEq)]
     /// struct B(u32);
     ///
     /// # let mut app = Schedule::default();
     /// # let mut world = World::new();
-    /// # #[derive(Resource)] struct C(bool);
+    /// # #[derive(Resource, TypeUuid)] struct C(bool);
     /// # fn my_system(mut c: ResMut<C>) { c.0 = true; }
     /// app.add_systems(
     ///     // Only run the system if either `A` or `B` exist.
@@ -417,7 +417,7 @@ pub mod common_conditions {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource, Default)]
+    /// # #[derive(Resource, TypeUuid, Default)]
     /// # struct Counter(u8);
     /// # let mut app = Schedule::default();
     /// # let mut world = World::new();
@@ -455,7 +455,7 @@ pub mod common_conditions {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource, Default)]
+    /// # #[derive(Resource, TypeUuid, Default)]
     /// # struct Counter(u8);
     /// # let mut app = Schedule::default();
     /// # let mut world = World::new();
@@ -494,7 +494,7 @@ pub mod common_conditions {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource, Default, PartialEq)]
+    /// # #[derive(Resource, TypeUuid, Default, PartialEq)]
     /// # struct Counter(u8);
     /// # let mut app = Schedule::default();
     /// # let mut world = World::new();
@@ -532,7 +532,7 @@ pub mod common_conditions {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource, Default, PartialEq)]
+    /// # #[derive(Resource, TypeUuid, Default, PartialEq)]
     /// # struct Counter(u8);
     /// # let mut app = Schedule::default();
     /// # let mut world = World::new();
@@ -575,7 +575,7 @@ pub mod common_conditions {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource, Default)]
+    /// # #[derive(Resource, TypeUuid, Default)]
     /// # struct Counter(u8);
     /// # let mut app = Schedule::default();
     /// # let mut world = World::new();
@@ -624,7 +624,7 @@ pub mod common_conditions {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource, Default)]
+    /// # #[derive(Resource, TypeUuid, Default)]
     /// # struct Counter(u8);
     /// # let mut app = Schedule::default();
     /// # let mut world = World::new();
@@ -675,7 +675,7 @@ pub mod common_conditions {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource, Default)]
+    /// # #[derive(Resource, TypeUuid, Default)]
     /// # struct Counter(u8);
     /// # let mut app = Schedule::default();
     /// # let mut world = World::new();
@@ -732,7 +732,7 @@ pub mod common_conditions {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource, Default)]
+    /// # #[derive(Resource, TypeUuid, Default)]
     /// # struct Counter(u8);
     /// # let mut app = Schedule::default();
     /// # let mut world = World::new();
@@ -749,7 +749,7 @@ pub mod common_conditions {
     ///     ),
     /// );
     ///
-    /// #[derive(Resource, Default)]
+    /// #[derive(Resource, TypeUuid, Default)]
     /// struct MyResource;
     ///
     /// // If `Counter` exists, increment it, otherwise insert `MyResource`
@@ -799,7 +799,7 @@ pub mod common_conditions {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource, Default)]
+    /// # #[derive(Resource, TypeUuid, Default)]
     /// # struct Counter(u8);
     /// # let mut app = Schedule::default();
     /// # let mut world = World::new();
@@ -810,7 +810,7 @@ pub mod common_conditions {
     ///     my_system.run_if(resource_removed::<MyResource>),
     /// );
     ///
-    /// #[derive(Resource, Default)]
+    /// #[derive(Resource, TypeUuid, Default)]
     /// struct MyResource;
     ///
     /// fn my_system(mut counter: ResMut<Counter>) {
@@ -851,7 +851,7 @@ pub mod common_conditions {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource, Default)]
+    /// # #[derive(Resource, TypeUuid, Default)]
     /// # struct Counter(u8);
     /// # let mut app = Schedule::default();
     /// # let mut world = World::new();
@@ -892,7 +892,7 @@ pub mod common_conditions {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource, Default)]
+    /// # #[derive(Resource, TypeUuid, Default)]
     /// # struct Counter(u8);
     /// # let mut app = Schedule::default();
     /// # let mut world = World::new();
@@ -936,7 +936,7 @@ pub mod common_conditions {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource, Default)]
+    /// # #[derive(Resource, TypeUuid, Default)]
     /// # struct Counter(u8);
     /// # let mut app = Schedule::default();
     /// # let mut world = World::new();
@@ -945,7 +945,7 @@ pub mod common_conditions {
     ///     my_system.run_if(any_with_component::<MyComponent>),
     /// );
     ///
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct MyComponent;
     ///
     /// fn my_system(mut counter: ResMut<Counter>) {
@@ -989,7 +989,7 @@ pub mod common_conditions {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource, Default)]
+    /// # #[derive(Resource, TypeUuid, Default)]
     /// # struct Counter(u8);
     /// # let mut app = Schedule::default();
     /// # let mut world = World::new();
@@ -1030,7 +1030,7 @@ pub mod common_conditions {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource, Default)]
+    /// # #[derive(Resource, TypeUuid, Default)]
     /// # struct Counter(u8);
     /// # let mut app = Schedule::default();
     /// # let mut world = World::new();
@@ -1039,7 +1039,7 @@ pub mod common_conditions {
     ///     my_system.run_if(condition_changed(resource_exists::<MyResource>)),
     /// );
     ///
-    /// #[derive(Resource)]
+    /// #[derive(Resource, TypeUuid)]
     /// struct MyResource;
     ///
     /// fn my_system(mut counter: ResMut<Counter>) {
@@ -1081,7 +1081,7 @@ pub mod common_conditions {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Resource, Default)]
+    /// # #[derive(Resource, TypeUuid, Default)]
     /// # struct Counter(u8);
     /// # let mut app = Schedule::default();
     /// # let mut world = World::new();
@@ -1090,7 +1090,7 @@ pub mod common_conditions {
     ///     my_system.run_if(condition_changed_to(true, resource_exists::<MyResource>)),
     /// );
     ///
-    /// #[derive(Resource)]
+    /// #[derive(Resource, TypeUuid)]
     /// struct MyResource;
     ///
     /// fn my_system(mut counter: ResMut<Counter>) {
@@ -1321,8 +1321,9 @@ mod tests {
         world::World,
     };
     use bevy_ecs_macros::{Resource, SystemSet};
+    use waywe_uuid::TypeUuid;
 
-    #[derive(Resource, Default)]
+    #[derive(Resource, TypeUuid, Default)]
     struct Counter(usize);
 
     fn increment_counter(mut counter: ResMut<Counter>) {
@@ -1428,13 +1429,13 @@ mod tests {
         schedule.run(&mut world);
         assert_eq!(world.resource::<Counter>().0, 0);
     }
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     struct TestComponent;
 
-    #[derive(Message)]
+    #[derive(Message, TypeUuid)]
     struct TestMessage;
 
-    #[derive(Resource)]
+    #[derive(Resource, TypeUuid)]
     struct TestResource(());
 
     fn test_system() {}
@@ -1463,7 +1464,7 @@ mod tests {
         let mut world = World::new();
         world.insert_resource(DefaultErrorHandler(my_error_handler));
 
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct MyResource;
 
         fn condition(_res: Res<MyResource>) -> bool {

@@ -4,15 +4,6 @@ mod related_methods;
 mod relationship_query;
 mod relationship_source_collection;
 
-use core::marker::PhantomData;
-
-use alloc::format;
-
-use bevy_utils::prelude::DebugName;
-pub use related_methods::*;
-pub use relationship_query::*;
-pub use relationship_source_collection::*;
-
 use crate::{
     component::{Component, ComponentCloneBehavior, Mutable},
     entity::{ComponentCloneCtx, Entity},
@@ -20,7 +11,14 @@ use crate::{
     lifecycle::HookContext,
     world::{DeferredWorld, EntityWorldMut},
 };
+use alloc::format;
+use bevy_utils::prelude::DebugName;
+use core::marker::PhantomData;
 use log::warn;
+
+pub use related_methods::*;
+pub use relationship_query::*;
+pub use relationship_source_collection::*;
 
 /// A [`Component`] on a "source" [`Entity`] that references another target [`Entity`], creating a "relationship" between them. Every [`Relationship`]
 /// has a corresponding [`RelationshipTarget`] type (and vice-versa), which exists on the "target" entity of a relationship and contains the list of all
@@ -33,7 +31,7 @@ use log::warn;
 /// A common example of a [`Relationship`] is the parent / child relationship. Bevy ECS includes a canonical form of this via the [`ChildOf`](crate::hierarchy::ChildOf)
 /// [`Relationship`] and the [`Children`](crate::hierarchy::Children) [`RelationshipTarget`].
 ///
-/// [`Relationship`] and [`RelationshipTarget`] should always be derived via the [`Component`] trait to ensure the hooks are set up properly.
+/// [`Relationship`] and [`RelationshipTarget`] should always be derived via the [`Component, TypeUuid`] trait to ensure the hooks are set up properly.
 ///
 /// ## Derive
 ///
@@ -46,7 +44,7 @@ use log::warn;
 /// ```
 /// # use bevy_ecs::component::Component;
 /// # use bevy_ecs::entity::Entity;
-/// #[derive(Component)]
+/// #[derive(Component, TypeUuid)]
 /// #[relationship(relationship_target = Children)]
 /// pub struct ChildOf {
 ///     #[relationship]
@@ -54,7 +52,7 @@ use log::warn;
 ///     internal: u8,
 /// };
 ///
-/// #[derive(Component)]
+/// #[derive(Component, TypeUuid)]
 /// #[relationship_target(relationship = ChildOf)]
 /// pub struct Children(Vec<Entity>);
 /// ```
@@ -65,11 +63,11 @@ use log::warn;
 /// ```
 /// # use bevy_ecs::component::Component;
 /// # use bevy_ecs::entity::Entity;
-/// #[derive(Component)]
+/// #[derive(Component, TypeUuid)]
 /// #[relationship(relationship_target = Children)]
 /// pub struct ChildOf(pub Entity);
 ///
-/// #[derive(Component)]
+/// #[derive(Component, TypeUuid)]
 /// #[relationship_target(relationship = ChildOf, linked_spawn)]
 /// pub struct Children(Vec<Entity>);
 /// ```
@@ -464,14 +462,15 @@ mod tests {
     use crate::world::World;
     use crate::{component::Component, entity::Entity};
     use alloc::vec::Vec;
+    use waywe_uuid::TypeUuid;
 
     #[test]
     fn custom_relationship() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship(relationship_target = LikedBy)]
         struct Likes(pub Entity);
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship_target(relationship = Likes)]
         struct LikedBy(Vec<Entity>);
 
@@ -484,11 +483,11 @@ mod tests {
 
     #[test]
     fn self_relationship_fails() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship(relationship_target = RelTarget)]
         struct Rel(Entity);
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship_target(relationship = Rel)]
         struct RelTarget(Vec<Entity>);
 
@@ -501,11 +500,11 @@ mod tests {
 
     #[test]
     fn relationship_with_missing_target_fails() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship(relationship_target = RelTarget)]
         struct Rel(Entity);
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship_target(relationship = Rel)]
         struct RelTarget(Vec<Entity>);
 
@@ -523,7 +522,7 @@ mod tests {
             dead_code,
             reason = "This struct is used as a compilation test to test the derive macros, and as such is intentionally never constructed."
         )]
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship(relationship_target=Target)]
         struct Source {
             #[relationship]
@@ -536,7 +535,7 @@ mod tests {
             dead_code,
             reason = "This struct is used as a compilation test to test the derive macros, and as such is intentionally never constructed."
         )]
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship_target(relationship=Source)]
         struct Target(Vec<Entity>);
 
@@ -548,7 +547,7 @@ mod tests {
             dead_code,
             reason = "This struct is used as a compilation test to test the derive macros, and as such is intentionally never constructed."
         )]
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship(relationship_target=Target)]
         struct Source(Entity);
 
@@ -556,7 +555,7 @@ mod tests {
             dead_code,
             reason = "This struct is used as a compilation test to test the derive macros, and as such is intentionally never constructed."
         )]
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship_target(relationship=Source)]
         struct Target {
             #[relationship]
@@ -574,7 +573,7 @@ mod tests {
             dead_code,
             reason = "This struct is used as a compilation test to test the derive macros, and as such is intentionally never constructed."
         )]
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[uuid(rebound(T: TypeId))]
         #[relationship(relationship_target=Target<T>)]
         struct Source<T: Send + Sync + 'static>(#[relationship] Entity, PhantomData<T>);
@@ -583,7 +582,7 @@ mod tests {
             dead_code,
             reason = "This struct is used as a compilation test to test the derive macros, and as such is intentionally never constructed."
         )]
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[uuid(rebound(T: TypeId))]
         #[relationship_target(relationship=Source<T>)]
         struct Target<T: Send + Sync + 'static>(#[relationship] Vec<Entity>, PhantomData<T>);
@@ -593,11 +592,11 @@ mod tests {
 
     #[test]
     fn parent_child_relationship_with_custom_relationship() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship(relationship_target = RelTarget)]
         struct Rel(Entity);
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship_target(relationship = Rel)]
         struct RelTarget(Entity);
 

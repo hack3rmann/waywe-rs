@@ -32,7 +32,7 @@ impl World {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct A;
     ///
     /// # let mut world = World::new();
@@ -257,6 +257,7 @@ mod tests {
     use alloc::{vec, vec::Vec};
 
     use bevy_ptr::OwningPtr;
+    use waywe_uuid::TypeUuid;
 
     use crate::{
         change_detection::MaybeLocation,
@@ -268,32 +269,32 @@ mod tests {
         world::DeferredWorld,
     };
 
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     struct A;
 
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     struct B;
 
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     #[component(storage = "SparseSet")]
     struct S;
 
-    #[derive(Event)]
+    #[derive(Event, TypeUuid)]
     struct EventA;
 
-    #[derive(EntityEvent)]
+    #[derive(EntityEvent, TypeUuid)]
     struct EntityEventA(Entity);
 
-    #[derive(EntityEvent)]
+    #[derive(EntityEvent, TypeUuid)]
     #[entity_event(trigger = EntityComponentsTrigger<'a>)]
     struct EntityComponentsEvent(Entity);
 
-    #[derive(Event)]
+    #[derive(Event, TypeUuid)]
     struct EventWithData {
         counter: usize,
     }
 
-    #[derive(Resource, Default)]
+    #[derive(Resource, TypeUuid, Default)]
     struct Order(Vec<&'static str>);
 
     impl Order {
@@ -303,7 +304,7 @@ mod tests {
         }
     }
 
-    #[derive(Component, EntityEvent)]
+    #[derive(Component, TypeUuid, EntityEvent)]
     #[entity_event(propagate, auto_propagate)]
     struct EventPropagating(Entity);
 
@@ -575,7 +576,7 @@ mod tests {
 
     #[test]
     fn observer_multiple_targets() {
-        #[derive(Resource, Default)]
+        #[derive(Resource, TypeUuid, Default)]
         struct R(i32);
 
         let mut world = World::new();
@@ -993,10 +994,10 @@ mod tests {
     #[test]
     #[should_panic]
     fn observer_invalid_params() {
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct ResA;
 
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct ResB;
 
         let mut world = World::new();
@@ -1009,7 +1010,7 @@ mod tests {
 
     #[test]
     fn observer_apply_deferred_from_param_set() {
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct ResA;
 
         let mut world = World::new();
@@ -1028,7 +1029,7 @@ mod tests {
     #[test]
     #[track_caller]
     fn observer_caller_location_event() {
-        #[derive(Event)]
+        #[derive(Event, TypeUuid)]
         struct EventA;
 
         let caller = MaybeLocation::caller();
@@ -1042,7 +1043,7 @@ mod tests {
     #[test]
     #[track_caller]
     fn observer_caller_location_command_archetype_move() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct Component;
 
         let caller = MaybeLocation::caller();

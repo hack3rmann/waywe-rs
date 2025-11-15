@@ -40,8 +40,8 @@ use uuid::Uuid;
 ///
 /// ```
 /// # use bevy_ecs::prelude::*;
-/// # #[derive(Component)] pub struct A;
-/// # #[derive(Component)] pub struct B;
+/// # #[derive(Component, TypeUuid)] pub struct A;
+/// # #[derive(Component, TypeUuid)] pub struct B;
 /// fn disjoint_system(
 ///     query1: Query<&mut A>,
 ///     query2: Query<EntityRef, Without<A>>,
@@ -182,7 +182,7 @@ impl<'w> EntityRef<'w> {
     /// ```
     /// # use bevy_ecs::prelude::*;
     /// #
-    /// # #[derive(Component, PartialEq, Debug)]
+    /// # #[derive(Component, TypeUuid, PartialEq, Debug)]
     /// # pub struct Foo(i32);
     /// # let mut world = World::new();
     /// let entity = world.spawn(Foo(42)).id();
@@ -200,9 +200,9 @@ impl<'w> EntityRef<'w> {
     /// ```
     /// # use bevy_ecs::prelude::*;
     /// #
-    /// # #[derive(Component, PartialEq, Debug)]
+    /// # #[derive(Component, TypeUuid, PartialEq, Debug)]
     /// # pub struct X(i32);
-    /// # #[derive(Component, PartialEq, Debug)]
+    /// # #[derive(Component, TypeUuid, PartialEq, Debug)]
     /// # pub struct Y(i32);
     /// # let mut world = World::new();
     /// let entity = world.spawn((X(42), Y(10))).id();
@@ -224,9 +224,9 @@ impl<'w> EntityRef<'w> {
     /// ```
     /// # use bevy_ecs::{prelude::*, component::ComponentId};
     /// #
-    /// # #[derive(Component, PartialEq, Debug)]
+    /// # #[derive(Component, TypeUuid, PartialEq, Debug)]
     /// # pub struct X(i32);
-    /// # #[derive(Component, PartialEq, Debug)]
+    /// # #[derive(Component, TypeUuid, PartialEq, Debug)]
     /// # pub struct Y(i32);
     /// # let mut world = World::new();
     /// let entity = world.spawn((X(42), Y(10))).id();
@@ -247,9 +247,9 @@ impl<'w> EntityRef<'w> {
     /// # use bevy_platform::collections::HashSet;
     /// # use bevy_ecs::{prelude::*, component::ComponentId};
     /// #
-    /// # #[derive(Component, PartialEq, Debug)]
+    /// # #[derive(Component, TypeUuid, PartialEq, Debug)]
     /// # pub struct X(i32);
-    /// # #[derive(Component, PartialEq, Debug)]
+    /// # #[derive(Component, TypeUuid, PartialEq, Debug)]
     /// # pub struct Y(i32);
     /// # let mut world = World::new();
     /// let entity = world.spawn((X(42), Y(10))).id();
@@ -439,7 +439,7 @@ unsafe impl EntityEquivalent for EntityRef<'_> {}
 ///
 /// ```
 /// # use bevy_ecs::prelude::*;
-/// # #[derive(Component)] pub struct A;
+/// # #[derive(Component, TypeUuid)] pub struct A;
 /// fn disjoint_system(
 ///     query1: Query<EntityMut, With<A>>,
 ///     query2: Query<EntityMut, Without<A>>,
@@ -568,9 +568,9 @@ impl<'w> EntityMut<'w> {
     /// ```
     /// # use bevy_ecs::prelude::*;
     /// #
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct X(usize);
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Y(usize);
     ///
     /// # let mut world = World::default();
@@ -603,9 +603,9 @@ impl<'w> EntityMut<'w> {
     /// ```
     /// # use bevy_ecs::prelude::*;
     /// #
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct X(usize);
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Y(usize);
     ///
     /// # let mut world = World::default();
@@ -803,7 +803,7 @@ impl<'w> EntityMut<'w> {
     /// ```
     /// # use bevy_ecs::prelude::*;
     /// #
-    /// # #[derive(Component, PartialEq, Debug)]
+    /// # #[derive(Component, TypeUuid, PartialEq, Debug)]
     /// # pub struct Foo(i32);
     /// # let mut world = World::new();
     /// let entity = world.spawn(Foo(42)).id();
@@ -823,9 +823,9 @@ impl<'w> EntityMut<'w> {
     /// ```
     /// # use bevy_ecs::prelude::*;
     /// #
-    /// # #[derive(Component, PartialEq, Debug)]
+    /// # #[derive(Component, TypeUuid, PartialEq, Debug)]
     /// # pub struct X(i32);
-    /// # #[derive(Component, PartialEq, Debug)]
+    /// # #[derive(Component, TypeUuid, PartialEq, Debug)]
     /// # pub struct Y(i32);
     /// # let mut world = World::new();
     /// let entity = world.spawn((X(42), Y(10))).id();
@@ -848,9 +848,9 @@ impl<'w> EntityMut<'w> {
     /// ```
     /// # use bevy_ecs::{prelude::*, component::ComponentId, change_detection::MutUntyped};
     /// #
-    /// # #[derive(Component, PartialEq, Debug)]
+    /// # #[derive(Component, TypeUuid, PartialEq, Debug)]
     /// # pub struct X(i32);
-    /// # #[derive(Component, PartialEq, Debug)]
+    /// # #[derive(Component, TypeUuid, PartialEq, Debug)]
     /// # pub struct Y(i32);
     /// # let mut world = World::new();
     /// let entity = world.spawn((X(42), Y(10))).id();
@@ -873,9 +873,9 @@ impl<'w> EntityMut<'w> {
     /// # use bevy_platform::collections::HashSet;
     /// # use bevy_ecs::{prelude::*, component::ComponentId};
     /// #
-    /// # #[derive(Component, PartialEq, Debug)]
+    /// # #[derive(Component, TypeUuid, PartialEq, Debug)]
     /// # pub struct X(i32);
-    /// # #[derive(Component, PartialEq, Debug)]
+    /// # #[derive(Component, TypeUuid, PartialEq, Debug)]
     /// # pub struct Y(i32);
     /// # let mut world = World::new();
     /// let entity = world.spawn((X(42), Y(10))).id();
@@ -1410,9 +1410,9 @@ impl<'w> EntityWorldMut<'w> {
     /// ```
     /// # use bevy_ecs::prelude::*;
     /// #
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct X(usize);
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Y(usize);
     ///
     /// # let mut world = World::default();
@@ -1445,9 +1445,9 @@ impl<'w> EntityWorldMut<'w> {
     /// ```
     /// # use bevy_ecs::prelude::*;
     /// #
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct X(usize);
-    /// #[derive(Component)]
+    /// #[derive(Component, TypeUuid)]
     /// struct Y(usize);
     ///
     /// # let mut world = World::default();
@@ -1538,7 +1538,7 @@ impl<'w> EntityWorldMut<'w> {
     /// ```rust
     /// # use bevy_ecs::prelude::*;
     /// #
-    /// #[derive(Component, PartialEq, Eq, Debug)]
+    /// #[derive(Component, TypeUuid, PartialEq, Eq, Debug)]
     /// #[component(immutable)]
     /// struct Foo(bool);
     ///
@@ -2746,7 +2746,7 @@ impl<'w> EntityWorldMut<'w> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Resource, Default, Clone, Copy)]
+    /// #[derive(Resource, TypeUuid, Default, Clone, Copy)]
     /// struct R(u32);
     ///
     /// # let mut world = World::new();
@@ -2811,7 +2811,7 @@ impl<'w> EntityWorldMut<'w> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component, Default, Clone, Copy, Debug, PartialEq)]
+    /// #[derive(Component, TypeUuid, Default, Clone, Copy, Debug, PartialEq)]
     /// struct Comp(u32);
     ///
     /// # let mut world = World::new();
@@ -2883,9 +2883,9 @@ impl<'w> EntityWorldMut<'w> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Component, Clone, PartialEq, Debug)]
+    /// # #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
     /// # struct ComponentA;
-    /// # #[derive(Component, Clone, PartialEq, Debug)]
+    /// # #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
     /// # struct ComponentB;
     /// # let mut world = World::new();
     /// # let entity = world.spawn((ComponentA, ComponentB)).id();
@@ -2931,9 +2931,9 @@ impl<'w> EntityWorldMut<'w> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// # #[derive(Component, Clone, PartialEq, Debug)]
+    /// # #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
     /// # struct ComponentA;
-    /// # #[derive(Component, Clone, PartialEq, Debug)]
+    /// # #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
     /// # struct ComponentB;
     /// # let mut world = World::new();
     /// # let entity = world.spawn((ComponentA, ComponentB)).id();
@@ -2997,9 +2997,9 @@ impl<'w> EntityWorldMut<'w> {
     /// # use bevy_ecs::prelude::*;
     /// # let mut world = World::new();
     /// # let entity = world.spawn((ComponentA, ComponentB)).id();
-    /// # #[derive(Component, Clone, PartialEq, Debug)]
+    /// # #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
     /// # struct ComponentA;
-    /// # #[derive(Component, Clone, PartialEq, Debug)]
+    /// # #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
     /// # struct ComponentB;
     /// // Create a clone of an entity but without ComponentA.
     /// let entity_clone = world.entity_mut(entity).clone_and_spawn_with_opt_out(|builder| {
@@ -3045,9 +3045,9 @@ impl<'w> EntityWorldMut<'w> {
     /// # use bevy_ecs::prelude::*;
     /// # let mut world = World::new();
     /// # let entity = world.spawn((ComponentA, ComponentB)).id();
-    /// # #[derive(Component, Clone, PartialEq, Debug)]
+    /// # #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
     /// # struct ComponentA;
-    /// # #[derive(Component, Clone, PartialEq, Debug)]
+    /// # #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
     /// # struct ComponentB;
     /// // Create a clone of an entity but only with ComponentA.
     /// let entity_clone = world.entity_mut(entity).clone_and_spawn_with_opt_in(|builder| {
@@ -3202,7 +3202,7 @@ impl<'w, 'a, T: Component<Mutability = Mutable>> ComponentEntry<'w, 'a, T> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component, Default, Clone, Copy, Debug, PartialEq)]
+    /// #[derive(Component, TypeUuid, Default, Clone, Copy, Debug, PartialEq)]
     /// struct Comp(u32);
     ///
     /// # let mut world = World::new();
@@ -3230,7 +3230,7 @@ impl<'w, 'a, T: Component> ComponentEntry<'w, 'a, T> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component, Default, Clone, Copy, Debug, PartialEq)]
+    /// #[derive(Component, TypeUuid, Default, Clone, Copy, Debug, PartialEq)]
     /// struct Comp(u32);
     ///
     /// # let mut world = World::new();
@@ -3260,7 +3260,7 @@ impl<'w, 'a, T: Component> ComponentEntry<'w, 'a, T> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component, Default, Clone, Copy, Debug, PartialEq)]
+    /// #[derive(Component, TypeUuid, Default, Clone, Copy, Debug, PartialEq)]
     /// struct Comp(u32);
     ///
     /// # let mut world = World::new();
@@ -3289,7 +3289,7 @@ impl<'w, 'a, T: Component> ComponentEntry<'w, 'a, T> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component, Default, Clone, Copy, Debug, PartialEq)]
+    /// #[derive(Component, TypeUuid, Default, Clone, Copy, Debug, PartialEq)]
     /// struct Comp(u32);
     ///
     /// # let mut world = World::new();
@@ -3315,7 +3315,7 @@ impl<'w, 'a, T: Component + Default> ComponentEntry<'w, 'a, T> {
     ///
     /// ```
     /// # use bevy_ecs::prelude::*;
-    /// #[derive(Component, Default, Clone, Copy, Debug, PartialEq)]
+    /// #[derive(Component, TypeUuid, Default, Clone, Copy, Debug, PartialEq)]
     /// struct Comp(u32);
     ///
     /// # let mut world = World::new();
@@ -3348,7 +3348,7 @@ impl<'w, 'a, T: Component> OccupiedComponentEntry<'w, 'a, T> {
     ///
     /// ```
     /// # use bevy_ecs::{prelude::*, world::ComponentEntry};
-    /// #[derive(Component, Default, Clone, Copy, Debug, PartialEq)]
+    /// #[derive(Component, TypeUuid, Default, Clone, Copy, Debug, PartialEq)]
     /// struct Comp(u32);
     ///
     /// # let mut world = World::new();
@@ -3370,7 +3370,7 @@ impl<'w, 'a, T: Component> OccupiedComponentEntry<'w, 'a, T> {
     ///
     /// ```
     /// # use bevy_ecs::{prelude::*, world::ComponentEntry};
-    /// #[derive(Component, Default, Clone, Copy, Debug, PartialEq)]
+    /// #[derive(Component, TypeUuid, Default, Clone, Copy, Debug, PartialEq)]
     /// struct Comp(u32);
     ///
     /// # let mut world = World::new();
@@ -3393,7 +3393,7 @@ impl<'w, 'a, T: Component> OccupiedComponentEntry<'w, 'a, T> {
     ///
     /// ```
     /// # use bevy_ecs::{prelude::*, world::ComponentEntry};
-    /// #[derive(Component, Default, Clone, Copy, Debug, PartialEq)]
+    /// #[derive(Component, TypeUuid, Default, Clone, Copy, Debug, PartialEq)]
     /// struct Comp(u32);
     ///
     /// # let mut world = World::new();
@@ -3424,7 +3424,7 @@ impl<'w, 'a, T: Component<Mutability = Mutable>> OccupiedComponentEntry<'w, 'a, 
     ///
     /// ```
     /// # use bevy_ecs::{prelude::*, world::ComponentEntry};
-    /// #[derive(Component, Default, Clone, Copy, Debug, PartialEq)]
+    /// #[derive(Component, TypeUuid, Default, Clone, Copy, Debug, PartialEq)]
     /// struct Comp(u32);
     ///
     /// # let mut world = World::new();
@@ -3457,7 +3457,7 @@ impl<'w, 'a, T: Component<Mutability = Mutable>> OccupiedComponentEntry<'w, 'a, 
     ///
     /// ```
     /// # use bevy_ecs::{prelude::*, world::ComponentEntry};
-    /// #[derive(Component, Default, Clone, Copy, Debug, PartialEq)]
+    /// #[derive(Component, TypeUuid, Default, Clone, Copy, Debug, PartialEq)]
     /// struct Comp(u32);
     ///
     /// # let mut world = World::new();
@@ -3489,7 +3489,7 @@ impl<'w, 'a, T: Component> VacantComponentEntry<'w, 'a, T> {
     ///
     /// ```
     /// # use bevy_ecs::{prelude::*, world::ComponentEntry};
-    /// #[derive(Component, Default, Clone, Copy, Debug, PartialEq)]
+    /// #[derive(Component, TypeUuid, Default, Clone, Copy, Debug, PartialEq)]
     /// struct Comp(u32);
     ///
     /// # let mut world = World::new();
@@ -3520,7 +3520,7 @@ impl<'w, 'a, T: Component> VacantComponentEntry<'w, 'a, T> {
 /// ```
 /// # use bevy_ecs::{prelude::*, world::FilteredEntityRef};
 /// #
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct A;
 /// #
 /// # let mut world = World::new();
@@ -3836,7 +3836,7 @@ unsafe impl EntityEquivalent for FilteredEntityRef<'_, '_> {}
 /// ```
 /// # use bevy_ecs::{prelude::*, world::FilteredEntityMut};
 /// #
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct A;
 /// #
 /// # let mut world = World::new();
@@ -5058,6 +5058,7 @@ mod tests {
     use bevy_ptr::{OwningPtr, Ptr};
     use core::panic::AssertUnwindSafe;
     use std::sync::OnceLock;
+    use waywe_uuid::TypeUuid;
 
     use crate::component::Tick;
     use crate::lifecycle::HookContext;
@@ -5071,10 +5072,10 @@ mod tests {
 
     use super::{EntityMutExcept, EntityRefExcept};
 
-    #[derive(Component, Clone, Copy, Debug, PartialEq)]
+    #[derive(Component, TypeUuid, Clone, Copy, Debug, PartialEq)]
     struct TestComponent(u32);
 
-    #[derive(Component, Clone, Copy, Debug, PartialEq)]
+    #[derive(Component, TypeUuid, Clone, Copy, Debug, PartialEq)]
     #[component(storage = "SparseSet")]
     struct TestComponent2(u32);
 
@@ -5142,7 +5143,7 @@ mod tests {
         assert!(entity.get_mut_by_id(invalid_component_id).is_err());
     }
 
-    #[derive(Resource)]
+    #[derive(Resource, TypeUuid)]
     struct R(usize);
 
     #[test]
@@ -5231,10 +5232,10 @@ mod tests {
     // regression test for https://github.com/bevyengine/bevy/pull/7805
     #[test]
     fn removing_sparse_updates_archetype_row() {
-        #[derive(Component, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, PartialEq, Debug)]
         struct Dense(u8);
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[component(storage = "SparseSet")]
         struct Sparse;
 
@@ -5249,10 +5250,10 @@ mod tests {
     // regression test for https://github.com/bevyengine/bevy/pull/7805
     #[test]
     fn removing_dense_updates_table_row() {
-        #[derive(Component, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, PartialEq, Debug)]
         struct Dense(u8);
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[component(storage = "SparseSet")]
         struct Sparse;
 
@@ -5267,7 +5268,7 @@ mod tests {
     // Test that calling retain with `()` removes all components.
     #[test]
     fn retain_nothing() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct Marker<const N: usize>;
 
         let mut world = World::new();
@@ -5280,7 +5281,7 @@ mod tests {
     // Test removing some components with `retain`, including components not on the entity.
     #[test]
     fn retain_some_components() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct Marker<const N: usize>;
 
         let mut world = World::new();
@@ -5296,10 +5297,10 @@ mod tests {
     // regression test for https://github.com/bevyengine/bevy/pull/7805
     #[test]
     fn inserting_sparse_updates_archetype_row() {
-        #[derive(Component, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, PartialEq, Debug)]
         struct Dense(u8);
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[component(storage = "SparseSet")]
         struct Sparse;
 
@@ -5314,13 +5315,13 @@ mod tests {
     // regression test for https://github.com/bevyengine/bevy/pull/7805
     #[test]
     fn inserting_dense_updates_archetype_row() {
-        #[derive(Component, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, PartialEq, Debug)]
         struct Dense(u8);
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct Dense2;
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[component(storage = "SparseSet")]
         struct Sparse;
 
@@ -5340,13 +5341,13 @@ mod tests {
 
     #[test]
     fn inserting_dense_updates_table_row() {
-        #[derive(Component, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, PartialEq, Debug)]
         struct Dense(u8);
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct Dense2;
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[component(storage = "SparseSet")]
         struct Sparse;
 
@@ -5367,10 +5368,10 @@ mod tests {
     // regression test for https://github.com/bevyengine/bevy/pull/7805
     #[test]
     fn despawning_entity_updates_archetype_row() {
-        #[derive(Component, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, PartialEq, Debug)]
         struct Dense(u8);
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[component(storage = "SparseSet")]
         struct Sparse;
 
@@ -5391,10 +5392,10 @@ mod tests {
     // regression test for https://github.com/bevyengine/bevy/pull/7805
     #[test]
     fn despawning_entity_updates_table_row() {
-        #[derive(Component, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, PartialEq, Debug)]
         struct Dense(u8);
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[component(storage = "SparseSet")]
         struct Sparse;
 
@@ -5671,7 +5672,7 @@ mod tests {
         world.run_system_once(system2).unwrap();
     }
 
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     struct A;
 
     #[test]
@@ -5834,10 +5835,10 @@ mod tests {
         assert!(e.get_change_ticks_by_id(a_id).is_none());
     }
 
-    #[derive(Component, PartialEq, Eq, Debug)]
+    #[derive(Component, TypeUuid, PartialEq, Eq, Debug)]
     struct X(usize);
 
-    #[derive(Component, PartialEq, Eq, Debug)]
+    #[derive(Component, TypeUuid, PartialEq, Eq, Debug)]
     struct Y(usize);
 
     #[test]
@@ -6112,7 +6113,7 @@ mod tests {
         assert_eq!((&mut X(8), &mut Y(9)), (x_component, y_component));
     }
 
-    #[derive(EntityEvent)]
+    #[derive(EntityEvent, TypeUuid)]
     struct TestEvent(Entity);
 
     #[test]
@@ -6152,7 +6153,7 @@ mod tests {
         a.location();
     }
 
-    #[derive(Resource)]
+    #[derive(Resource, TypeUuid)]
     struct TestFlush(usize);
 
     fn count_flush(world: &mut World) {
@@ -6198,10 +6199,10 @@ mod tests {
         assert_eq!(world.resource::<TestFlush>().0, 12);
     }
 
-    #[derive(Resource)]
+    #[derive(Resource, TypeUuid)]
     struct TestVec(Vec<&'static str>);
 
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     #[component(on_add = ord_a_hook_on_add, on_insert = ord_a_hook_on_insert, on_replace = ord_a_hook_on_replace, on_remove = ord_a_hook_on_remove)]
     struct OrdA;
 
@@ -6249,7 +6250,7 @@ mod tests {
         res.0.push("OrdA observer on_remove");
     }
 
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     #[component(on_add = ord_b_hook_on_add, on_insert = ord_b_hook_on_insert, on_replace = ord_b_hook_on_replace, on_remove = ord_b_hook_on_remove)]
     struct OrdB;
 
@@ -6338,13 +6339,13 @@ mod tests {
 
     #[test]
     fn entity_world_mut_clone_and_move_components() {
-        #[derive(Component, Clone, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
         struct A;
 
-        #[derive(Component, Clone, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
         struct B;
 
-        #[derive(Component, Clone, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
         struct C(u32);
 
         let mut world = World::new();
@@ -6365,19 +6366,19 @@ mod tests {
 
     #[test]
     fn entity_world_mut_clone_with_move_and_require() {
-        #[derive(Component, Clone, PartialEq, Debug)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug)]
         #[require(B(3))]
         struct A;
 
-        #[derive(Component, Clone, PartialEq, Debug, Default)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug, Default)]
         #[require(C(3))]
         struct B(u32);
 
-        #[derive(Component, Clone, PartialEq, Debug, Default)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug, Default)]
         #[require(D)]
         struct C(u32);
 
-        #[derive(Component, Clone, PartialEq, Debug, Default)]
+        #[derive(Component, TypeUuid, Clone, PartialEq, Debug, Default)]
         struct D;
 
         let mut world = World::new();
@@ -6412,7 +6413,7 @@ mod tests {
     fn update_despawned_by_after_observers() {
         let mut world = World::new();
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[component(on_remove = get_tracked)]
         struct C;
 
@@ -6474,7 +6475,7 @@ mod tests {
     fn with_component_activates_hooks() {
         use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
-        #[derive(Component, PartialEq, Eq, Debug)]
+        #[derive(Component, TypeUuid, PartialEq, Eq, Debug)]
         #[component(immutable)]
         struct Foo(bool);
 
@@ -6557,13 +6558,13 @@ mod tests {
     fn bundle_remove_only_triggers_for_present_components() {
         let mut world = World::default();
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct A;
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct B;
 
-        #[derive(Resource, PartialEq, Eq, Debug)]
+        #[derive(Resource, TypeUuid, PartialEq, Eq, Debug)]
         struct Tracker {
             a: bool,
             b: bool,
@@ -6593,7 +6594,7 @@ mod tests {
 
     #[test]
     fn spawned_after_swap_remove() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct Marker;
 
         let mut world = World::new();

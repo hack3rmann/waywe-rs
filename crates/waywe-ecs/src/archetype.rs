@@ -35,8 +35,9 @@ use core::{
     ops::{Index, IndexMut, RangeFrom},
 };
 use nonmax::NonMaxU32;
+use waywe_uuid::TypeUuid;
 
-#[derive(Event)]
+#[derive(Event, TypeUuid)]
 #[expect(dead_code, reason = "Prepare for the upcoming Query as Entities")]
 pub(crate) struct ArchetypeCreated(pub ArchetypeId);
 

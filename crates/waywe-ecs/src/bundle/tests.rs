@@ -1,11 +1,12 @@
 use crate::{
     archetype::ArchetypeCreated, lifecycle::HookContext, prelude::*, world::DeferredWorld,
 };
+use waywe_uuid::TypeUuid;
 
-#[derive(Component)]
+#[derive(Component, TypeUuid)]
 struct A;
 
-#[derive(Component)]
+#[derive(Component, TypeUuid)]
 #[component(on_add = a_on_add, on_insert = a_on_insert, on_replace = a_on_replace, on_remove = a_on_remove)]
 struct AMacroHooks;
 
@@ -25,19 +26,19 @@ fn a_on_remove(mut world: DeferredWorld, _: HookContext) {
     world.resource_mut::<R>().assert_order(3);
 }
 
-#[derive(Component)]
+#[derive(Component, TypeUuid)]
 struct B;
 
-#[derive(Component)]
+#[derive(Component, TypeUuid)]
 struct C;
 
-#[derive(Component)]
+#[derive(Component, TypeUuid)]
 struct D;
 
-#[derive(Component, Eq, PartialEq, Debug)]
+#[derive(Component, TypeUuid, Eq, PartialEq, Debug)]
 struct V(&'static str); // component with a value
 
-#[derive(Resource, Default)]
+#[derive(Resource, TypeUuid, Default)]
 struct R(usize);
 
 impl R {
@@ -214,11 +215,11 @@ fn insert_if_new() {
     assert_eq!(entity.get(), Some(&V("one")));
 }
 
-#[derive(Component, Debug, Eq, PartialEq)]
+#[derive(Component, TypeUuid, Debug, Eq, PartialEq)]
 #[component(storage = "SparseSet")]
 pub struct SparseV(&'static str);
 
-#[derive(Component, Debug, Eq, PartialEq)]
+#[derive(Component, TypeUuid, Debug, Eq, PartialEq)]
 #[component(storage = "SparseSet")]
 pub struct SparseA;
 
@@ -239,7 +240,7 @@ fn sparse_set_insert_if_new() {
 #[test]
 fn new_archetype_created() {
     let mut world = World::new();
-    #[derive(Resource, Default)]
+    #[derive(Resource, TypeUuid, Default)]
     struct Count(u32);
     world.init_resource::<Count>();
     world.add_observer(|_t: On<ArchetypeCreated>, mut count: ResMut<Count>| {

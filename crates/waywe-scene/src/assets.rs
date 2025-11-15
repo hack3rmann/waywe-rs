@@ -35,13 +35,15 @@ use waywe_ecs::{
     prelude::*,
     system::{StaticSystemParam, SystemParam, SystemParamItem},
 };
+use waywe_uuid::TypeUuid;
 
 pub type IdSmallVec = SmallVec<[AssetId; 4]>;
 
 /// Collection of assets of a specific type.
 ///
 /// Assets are stored with unique IDs and can be accessed by handle.
-#[derive(Resource)]
+#[derive(Resource, TypeUuid)]
+#[uuid = "ed441c11-eddf-4ce9-9a9c-cf1fc17b7b81"]
 pub struct Assets<A: Asset> {
     map: AssetIdHashMap<A>,
     changed_ids: IdSmallVec,
@@ -159,7 +161,8 @@ impl<A: Asset> FromWorld for Assets<A> {
     }
 }
 
-#[derive(Resource)]
+#[derive(Resource, TypeUuid)]
+#[uuid = "bcdc0211-c6ec-47e7-b812-82481c7c7650"]
 pub struct RefAssets<A: Asset> {
     map: AssetIdHashMap<A>,
     removed_ids: IdSmallVec,
@@ -316,10 +319,11 @@ impl<R1: Asset, R2: Asset> Plugin for RefAssetsRefDependencyPlugin<R1, R2> {
 /// Trait for types that can be used as assets.
 ///
 /// Assets must be sendable between threads and have a static lifetime.
-pub trait Asset: Send + Sync + 'static {}
+pub trait Asset: TypeUuid + Send + Sync + 'static {}
 
 /// Collection of GPU-ready assets.
-#[derive(Resource)]
+#[derive(Resource, TypeUuid)]
+#[uuid = "29e4afc4-1c6e-4ae5-8fa8-1ac428c6a707"]
 pub struct RenderAssets<A: RenderAsset> {
     map: AssetIdHashMap<A>,
     removed_ids: IdSmallVec,
@@ -373,7 +377,7 @@ impl<A: RenderAsset> Default for RenderAssets<A> {
 }
 
 /// Trait for assets that have GPU-ready counterparts.
-pub trait RenderAsset: Send + Sync + 'static {
+pub trait RenderAsset: TypeUuid + Send + Sync + 'static {
     /// The source asset type.
     type Asset: Asset;
     /// System parameters needed for extraction.

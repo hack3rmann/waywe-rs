@@ -25,6 +25,7 @@ use crate::{
 use glam::{Mat4, Quat, Vec3};
 use smallvec::SmallVec;
 use waywe_ecs::prelude::*;
+use waywe_uuid::TypeUuid;
 
 /// Plugin for transform functionality.
 ///
@@ -45,7 +46,8 @@ impl Plugin for TransformPlugin {
 /// Local transformation component.
 ///
 /// Defines the position, scale, and rotation of an entity relative to its parent.
-#[derive(Debug, PartialEq, Clone, Copy, Component)]
+#[derive(Debug, PartialEq, Clone, Copy, Component, TypeUuid)]
+#[uuid = "311a65a4-0a24-42b4-8519-7ddd68f45a7a"]
 #[require(GlobalTransform)]
 pub struct Transform {
     /// Translation (position) in 3D space.
@@ -115,7 +117,8 @@ impl Default for Transform {
 ///
 /// Represents the absolute position, scale, and rotation of an entity
 /// in world space, calculated from the hierarchy.
-#[derive(Debug, Default, PartialEq, Clone, Copy, Component)]
+#[derive(Debug, Default, PartialEq, Clone, Copy, Component, TypeUuid)]
+#[uuid = "06353292-33c6-4b65-abb6-432d8780f9e5"]
 pub struct GlobalTransform(pub Transform);
 
 /// System to update simple transforms (no hierarchy).
@@ -176,13 +179,15 @@ pub fn propagate_transforms(
     }
 }
 
-#[derive(Debug, Default, PartialEq, Clone, Copy, Component)]
+#[derive(Debug, Default, PartialEq, Clone, Copy, Component, TypeUuid)]
+#[uuid = "473c6451-3793-407f-971c-d00a0055d620"]
 pub struct PreExtractTransform(pub Transform);
 
 /// Model matrix for rendering.
 ///
 /// A 4x4 transformation matrix that can be directly used in shaders.
-#[derive(Debug, Default, PartialEq, Clone, Copy, Component)]
+#[derive(Debug, Default, PartialEq, Clone, Copy, Component, TypeUuid)]
+#[uuid = "992b9dfe-fc85-42ee-8905-7c6de0dcb681"]
 pub struct ModelMatrix(pub Mat4);
 
 /// System to extract transforms for rendering.

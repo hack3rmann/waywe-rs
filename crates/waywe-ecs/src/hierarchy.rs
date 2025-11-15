@@ -20,6 +20,7 @@ use bevy_utils::prelude::DebugName;
 use core::ops::Deref;
 use core::slice;
 use log::warn;
+use waywe_uuid::TypeUuid;
 
 /// Stores the parent entity of this child entity with this component.
 ///
@@ -87,7 +88,7 @@ use log::warn;
 /// ```
 ///
 /// [`Relationship`]: crate::relationship::Relationship
-#[derive(Component, Clone, PartialEq, Eq, Debug)]
+#[derive(Component, TypeUuid, Clone, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[relationship(relationship_target = Children)]
 #[doc(alias = "IsChild", alias = "Parent")]
@@ -127,7 +128,7 @@ impl FromWorld for ChildOf {
 ///
 /// [`Relationship`]: crate::relationship::Relationship
 /// [`RelationshipTarget`]: crate::relationship::RelationshipTarget
-#[derive(Component, Default, Debug, PartialEq, Eq)]
+#[derive(Component, TypeUuid, Default, Debug, PartialEq, Eq)]
 #[relationship_target(relationship = ChildOf, linked_spawn)]
 #[doc(alias = "IsParent")]
 pub struct Children(Vec<Entity>);

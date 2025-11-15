@@ -1,16 +1,16 @@
 //! [`Event`] functionality.
 mod trigger;
 
-pub use bevy_ecs_macros::{EntityEvent, Event};
-pub use trigger::*;
-use waywe_uuid::TypeUuid;
-
 use crate::{
     component::{Component, ComponentId},
     entity::Entity,
     world::World,
 };
 use core::marker::PhantomData;
+use waywe_uuid::TypeUuid;
+
+pub use bevy_ecs_macros::{EntityEvent, Event};
+pub use trigger::*;
 
 /// An [`Event`] is something that "happens" at a given moment.
 ///
@@ -327,7 +327,7 @@ impl World {
 ///
 /// This type is an implementation detail and should never be made public.
 // TODO: refactor events to store their metadata on distinct entities, rather than using `ComponentId`
-#[derive(Component)]
+#[derive(Component, TypeUuid)]
 struct EventWrapperComponent<E: Event>(PhantomData<E>);
 
 /// A unique identifier for an [`Event`], used by [observers].
@@ -371,13 +371,14 @@ mod tests {
     use alloc::{vec, vec::Vec};
     use bevy_ecs::{message::*, system::assert_is_read_only_system};
     use bevy_ecs_macros::Message;
+    use waywe_uuid::TypeUuid;
 
-    #[derive(Message, Copy, Clone, PartialEq, Eq, Debug)]
+    #[derive(Message, Copy, Clone, PartialEq, Eq, Debug, TypeUuid)]
     struct TestEvent {
         i: usize,
     }
 
-    #[derive(Message, Clone, PartialEq, Debug, Default)]
+    #[derive(Message, Clone, PartialEq, Debug, Default, TypeUuid)]
     struct EmptyTestEvent;
 
     fn get_events<E: Message + Clone>(
@@ -769,7 +770,7 @@ mod tests {
         use crate::prelude::*;
         use core::sync::atomic::{AtomicUsize, Ordering};
 
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct Counter(AtomicUsize);
 
         let mut world = World::new();
@@ -811,7 +812,7 @@ mod tests {
         use crate::prelude::*;
         use core::sync::atomic::{AtomicUsize, Ordering};
 
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct Counter(AtomicUsize);
 
         let mut world = World::new();

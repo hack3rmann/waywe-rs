@@ -12,10 +12,10 @@
 //! use bevy_ecs::prelude::*;
 //!
 //! // Our custom disabling component!
-//! #[derive(Component, Clone)]
+//! #[derive(Component, TypeUuid, Clone)]
 //! struct Prefab;
 //!
-//! #[derive(Component)]
+//! #[derive(Component, TypeUuid)]
 //! struct A;
 //!
 //! let mut world = World::new();
@@ -59,7 +59,7 @@
 //!
 //! let mut world = World::default();
 //!
-//! #[derive(Component)]
+//! #[derive(Component, TypeUuid)]
 //! struct CustomDisabled;
 //!
 //! world.register_disabling_component::<CustomDisabled>();
@@ -103,6 +103,7 @@ use crate::{
 };
 use bevy_ecs_macros::{Component, Resource};
 use smallvec::SmallVec;
+use waywe_uuid::TypeUuid;
 
 /// A marker component for disabled entities.
 ///
@@ -118,7 +119,7 @@ use smallvec::SmallVec;
 /// See [the module docs] for more info.
 ///
 /// [the module docs]: crate::entity_disabling
-#[derive(Component, Clone, Debug, Default)]
+#[derive(Component, TypeUuid, Clone, Debug, Default)]
 // This component is registered as a disabling component during World::bootstrap
 pub struct Disabled;
 
@@ -133,7 +134,7 @@ pub struct Disabled;
 /// These are "internal implementation details", and may not be robust to these changes or stable across minor Bevy versions.
 ///
 /// [the module docs]: crate::entity_disabling
-#[derive(Component, Clone, Debug, Default)]
+#[derive(Component, TypeUuid, Clone, Debug, Default)]
 // This component is registered as a disabling component during World::bootstrap
 pub struct Internal;
 
@@ -168,7 +169,7 @@ pub struct Internal;
 ///
 /// Think carefully about whether you need to use a new disabling component,
 /// and clearly communicate their presence in any libraries you publish.
-#[derive(Resource, Debug)]
+#[derive(Resource, TypeUuid, Debug)]
 pub struct DefaultQueryFilters {
     // We only expect a few components per application to act as disabling components, so we use a SmallVec here
     // to avoid heap allocation in most cases.
@@ -250,6 +251,7 @@ mod tests {
         system::SystemIdMarker,
     };
     use alloc::{vec, vec::Vec};
+    use waywe_uuid::TypeUuid;
 
     #[test]
     fn filters_modify_access() {
@@ -311,7 +313,7 @@ mod tests {
         assert_eq!(0, applied_access.without_filters().count());
     }
 
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     struct CustomDisabled;
 
     #[test]
@@ -367,7 +369,7 @@ mod tests {
         let mut query = world.query_filtered::<&SystemIdMarker, With<Internal>>();
         assert_eq!(query.iter(&world).count(), 1);
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct A;
         world.add_observer(|_: On<Add, A>| {});
         let mut query = world.query::<()>();

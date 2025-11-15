@@ -370,6 +370,7 @@ mod test {
         panic::AssertUnwindSafe,
         sync::atomic::{AtomicU32, Ordering},
     };
+    use waywe_uuid::TypeUuid;
 
     #[cfg(miri)]
     use alloc::format;
@@ -434,7 +435,7 @@ mod test {
         assert_eq!(drops_b.load(Ordering::Relaxed), 1);
     }
 
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     struct A;
 
     struct SpawnCommand;
@@ -501,7 +502,7 @@ mod test {
     fn test_command_queue_inner_nested_panic_safe() {
         std::panic::set_hook(Box::new(|_| {}));
 
-        #[derive(Resource, Default)]
+        #[derive(Resource, TypeUuid, Default)]
         struct Order(Vec<usize>);
 
         let mut world = World::new();

@@ -7,9 +7,11 @@ use derive_more::{Deref, DerefMut};
 use std::sync::Arc;
 use waywe_ecs::{entity::EntityHashMap, prelude::*, schedule::ScheduleLabel};
 use waywe_runtime::gpu::Wgpu;
+use waywe_uuid::TypeUuid;
 
 /// Links an entity in the render world to its corresponding entity in the main world.
-#[derive(Component, Clone, Copy)]
+#[derive(Component, TypeUuid, Clone, Copy)]
+#[uuid = "56dfc659-ac5b-4411-87d6-ebb0d307e11b"]
 pub struct MainEntity(pub Entity);
 
 /// Schedule label for the extraction phase.
@@ -41,9 +43,11 @@ pub enum RenderSet {
 }
 
 /// GPU resources available to the render world.
-#[derive(Resource, Clone, Deref, DerefMut)]
+#[derive(Resource, TypeUuid, Clone, Deref, DerefMut)]
+#[uuid = "07df9612-f895-4155-9df6-52f46f778832"]
 pub struct RenderGpu(pub Arc<Wgpu>);
 
 /// Maps entities from the main world to the render world.
-#[derive(Resource, Default, Clone, Deref, DerefMut)]
+#[derive(Resource, TypeUuid, Default, Clone, Deref, DerefMut)]
+#[uuid = "d9942e39-d234-4ddf-82f2-f441519a467e"]
 pub struct EntityMap(pub EntityHashMap<Entity>);

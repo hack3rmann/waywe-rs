@@ -71,6 +71,7 @@ use core::{
     option,
 };
 use derive_more::derive::Into;
+use waywe_uuid::TypeUuid;
 
 /// The type used for [`Component`] lifecycle hooks such as `on_add`, `on_insert` or `on_remove`.
 pub type ComponentHook = for<'w> fn(DeferredWorld<'w>, HookContext);
@@ -110,10 +111,10 @@ pub struct HookContext {
 /// use bevy_ecs::prelude::*;
 /// use bevy_platform::collections::HashSet;
 ///
-/// #[derive(Component)]
+/// #[derive(Component, TypeUuid)]
 /// struct MyTrackedComponent;
 ///
-/// #[derive(Resource, Default)]
+/// #[derive(Resource, TypeUuid, Default)]
 /// struct TrackedEntities(HashSet<Entity>);
 ///
 /// let mut world = World::new();
@@ -324,7 +325,7 @@ pub const DESPAWN: EventKey = EventKey(ComponentId::new(4));
 /// Trigger emitted when a component is inserted onto an entity that does not already have that
 /// component. Runs before `Insert`.
 /// See [`ComponentHooks::on_add`](`crate::lifecycle::ComponentHooks::on_add`) for more information.
-#[derive(Debug, Clone, EntityEvent)]
+#[derive(Debug, Clone, EntityEvent, TypeUuid)]
 #[entity_event(trigger = EntityComponentsTrigger<'a>)]
 #[doc(alias = "OnAdd")]
 pub struct Add {
@@ -335,7 +336,7 @@ pub struct Add {
 /// Trigger emitted when a component is inserted, regardless of whether or not the entity already
 /// had that component. Runs after `Add`, if it ran.
 /// See [`ComponentHooks::on_insert`](`crate::lifecycle::ComponentHooks::on_insert`) for more information.
-#[derive(Debug, Clone, EntityEvent)]
+#[derive(Debug, Clone, EntityEvent, TypeUuid)]
 #[entity_event(trigger = EntityComponentsTrigger<'a>)]
 #[doc(alias = "OnInsert")]
 pub struct Insert {
@@ -348,7 +349,7 @@ pub struct Insert {
 ///
 /// Runs before the value is replaced, so you can still access the original component data.
 /// See [`ComponentHooks::on_replace`](`crate::lifecycle::ComponentHooks::on_replace`) for more information.
-#[derive(Debug, Clone, EntityEvent)]
+#[derive(Debug, Clone, EntityEvent, TypeUuid)]
 #[entity_event(trigger = EntityComponentsTrigger<'a>)]
 #[doc(alias = "OnReplace")]
 pub struct Replace {
@@ -359,7 +360,7 @@ pub struct Replace {
 /// Trigger emitted when a component is removed from an entity, and runs before the component is
 /// removed, so you can still access the component data.
 /// See [`ComponentHooks::on_remove`](`crate::lifecycle::ComponentHooks::on_remove`) for more information.
-#[derive(Debug, Clone, EntityEvent)]
+#[derive(Debug, Clone, EntityEvent, TypeUuid)]
 #[entity_event(trigger = EntityComponentsTrigger<'a>)]
 #[doc(alias = "OnRemove")]
 pub struct Remove {
@@ -369,7 +370,7 @@ pub struct Remove {
 
 /// [`EntityEvent`] emitted for each component on an entity when it is despawned.
 /// See [`ComponentHooks::on_despawn`](`crate::lifecycle::ComponentHooks::on_despawn`) for more information.
-#[derive(Debug, Clone, EntityEvent)]
+#[derive(Debug, Clone, EntityEvent, TypeUuid)]
 #[entity_event(trigger = EntityComponentsTrigger<'a>)]
 #[doc(alias = "OnDespawn")]
 pub struct Despawn {
@@ -399,7 +400,7 @@ pub type OnDespawn = Despawn;
 
 /// Wrapper around [`Entity`] for [`RemovedComponents`].
 /// Internally, `RemovedComponents` uses these as an [`Messages<RemovedComponentEntity>`].
-#[derive(Message, Debug, Clone, Into)]
+#[derive(Message, Debug, Clone, Into, TypeUuid)]
 pub struct RemovedComponentEntity(Entity);
 
 /// Wrapper around a [`MessageCursor<RemovedComponentEntity>`] so that we
@@ -513,7 +514,7 @@ impl RemovedComponentMessages {
 /// # use bevy_ecs::system::IntoSystem;
 /// # use bevy_ecs::lifecycle::RemovedComponents;
 /// #
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct MyComponent;
 /// fn react_on_removal(mut removed: RemovedComponents<MyComponent>) {
 ///     removed.read().for_each(|removed_entity| println!("{}", removed_entity));

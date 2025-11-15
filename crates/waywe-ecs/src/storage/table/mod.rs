@@ -859,9 +859,10 @@ mod tests {
         storage::{TableBuilder, TableId, TableRow, Tables},
     };
     use alloc::vec::Vec;
+    use waywe_uuid::TypeUuid;
 
-    #[derive(Component)]
-    struct W<T>(T);
+    #[derive(Component, TypeUuid)]
+    struct W<T: TypeUuid>(T);
 
     #[test]
     fn only_one_empty_table() {

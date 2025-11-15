@@ -124,12 +124,14 @@ pub mod __macro_exports {
     pub use crate::query::DebugCheckedUnwrap;
     pub use alloc::vec::Vec;
 }
+#[cfg(feature = "hotpatching")]
+use waywe_uuid::TypeUuid;
 
 /// Event sent when a hotpatch happens.
 ///
 /// Can be used for causing custom behavior on hot-patch.
 #[cfg(feature = "hotpatching")]
-#[derive(Message, Default)]
+#[derive(Message, TypeUuid, Default)]
 pub struct HotPatched;
 
 /// Resource which "changes" when a hotpatch happens.
@@ -141,7 +143,7 @@ pub struct HotPatched;
 /// Used by Executors and other places which run systems
 /// [`System::refresh_hotpatch`](crate::system::System::refresh_hotpatch) only when necessary.
 #[cfg(feature = "hotpatching")]
-#[derive(resource::Resource, Default)]
+#[derive(resource::Resource, TypeUuid, Default)]
 pub struct HotPatchChanges;
 
 #[cfg(test)]
@@ -166,18 +168,20 @@ mod tests {
         sync::atomic::{AtomicUsize, Ordering},
     };
     use std::sync::Mutex;
+    use uuid::Uuid;
+    use waywe_uuid::TypeUuid;
 
-    #[derive(Component, Resource, Debug, PartialEq, Eq, Hash, Clone, Copy)]
+    #[derive(Component, Resource, TypeUuid, Debug, PartialEq, Eq, Hash, Clone, Copy)]
     struct A(usize);
-    #[derive(Component, Debug, PartialEq, Eq, Hash, Clone, Copy)]
+    #[derive(Component, TypeUuid, Debug, PartialEq, Eq, Hash, Clone, Copy)]
     struct B(usize);
-    #[derive(Component, Debug, PartialEq, Eq, Clone, Copy)]
+    #[derive(Component, TypeUuid, Debug, PartialEq, Eq, Clone, Copy)]
     struct C;
 
     #[derive(Default)]
     struct NonSendA(PhantomData<*mut ()>);
 
-    #[derive(Component, Clone, Debug)]
+    #[derive(Component, Clone, Debug, TypeUuid)]
     struct DropCk(Arc<AtomicUsize>);
     impl DropCk {
         fn new_pair() -> (Self, Arc<AtomicUsize>) {
@@ -196,14 +200,14 @@ mod tests {
         dead_code,
         reason = "This struct is used to test how `Drop` behavior works in regards to SparseSet storage, and as such is solely a wrapper around `DropCk` to make it use the SparseSet storage. Because of this, the inner field is intentionally never read."
     )]
-    #[derive(Component, Clone, Debug)]
+    #[derive(Component, TypeUuid, Clone, Debug)]
     #[component(storage = "SparseSet")]
     struct DropCkSparse(DropCk);
 
-    #[derive(Component, Copy, Clone, PartialEq, Eq, Debug)]
+    #[derive(Component, TypeUuid, Copy, Clone, PartialEq, Eq, Debug)]
     #[component(storage = "Table")]
     struct TableStored(&'static str);
-    #[derive(Component, Copy, Clone, PartialEq, Eq, Hash, Debug)]
+    #[derive(Component, TypeUuid, Copy, Clone, PartialEq, Eq, Hash, Debug)]
     #[component(storage = "SparseSet")]
     struct SparseStored(u32);
 
@@ -330,7 +334,7 @@ mod tests {
             }
         );
 
-        #[derive(Default, Component, PartialEq, Debug)]
+        #[derive(Default, Component, TypeUuid, PartialEq, Debug)]
         struct Ignored;
 
         #[derive(Bundle, PartialEq, Debug)]
@@ -1238,11 +1242,12 @@ mod tests {
     #[test]
     fn resource() {
         use crate::resource::Resource;
+        use waywe_uuid::TypeUuid;
 
-        #[derive(Resource, PartialEq, Debug)]
+        #[derive(Resource, PartialEq, Debug, TypeUuid)]
         struct Num(i32);
 
-        #[derive(Resource, PartialEq, Debug)]
+        #[derive(Resource, PartialEq, Debug, TypeUuid)]
         struct BigNum(u64);
 
         let mut world = World::default();
@@ -1254,7 +1259,7 @@ mod tests {
         world.insert_resource(Num(123));
         let resource_id = world
             .components()
-            .get_resource_id(TypeId::of::<Num>())
+            .get_resource_id(Uuid::from_bytes(Num::uuid()))
             .unwrap();
 
         assert_eq!(world.resource::<Num>().0, 123);
@@ -1311,7 +1316,7 @@ mod tests {
 
         let current_resource_id = world
             .components()
-            .get_resource_id(TypeId::of::<Num>())
+            .get_resource_id(Uuid::from_bytes(Num::uuid()))
             .unwrap();
         assert_eq!(
             resource_id, current_resource_id,
@@ -1856,14 +1861,14 @@ mod tests {
 
     #[test]
     fn map_struct_entities() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[expect(
             unused,
             reason = "extra fields are used to ensure the derive works properly"
         )]
         struct Foo(usize, #[entities] Entity);
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[expect(
             unused,
             reason = "extra fields are used to ensure the derive works properly"
@@ -1898,7 +1903,7 @@ mod tests {
 
     #[test]
     fn map_enum_entities() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[expect(
             unused,
             reason = "extra fields are used to ensure the derive works properly"
@@ -1938,14 +1943,14 @@ mod tests {
         dead_code,
         reason = "This struct is used as a compilation test to test the derive macros, and as such is intentionally never constructed."
     )]
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     struct ComponentA(u32);
 
     #[expect(
         dead_code,
         reason = "This struct is used as a compilation test to test the derive macros, and as such is intentionally never constructed."
     )]
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     struct ComponentB(u32);
 
     #[derive(Bundle)]
@@ -1972,7 +1977,7 @@ mod tests {
         dead_code,
         reason = "This struct is used as a compilation test to test the derive macros, and as such is intentionally never constructed."
     )]
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     struct MyEntities {
         #[entities]
         entities: Vec<Entity>,
@@ -1987,7 +1992,7 @@ mod tests {
         dead_code,
         reason = "This struct is used as a compilation test to test the derive macros, and as such is intentionally never constructed."
     )]
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     struct MyEntitiesTuple(#[entities] Vec<Entity>, #[entities] Entity, usize);
 
     #[test]
@@ -1998,7 +2003,7 @@ mod tests {
             dead_code,
             reason = "This struct is used as a compilation test to test the derive macros, and as such this field is intentionally never used."
         )]
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[component(clone_behavior = Ignore)]
         struct IgnoreClone;
 
@@ -2006,7 +2011,7 @@ mod tests {
             dead_code,
             reason = "This struct is used as a compilation test to test the derive macros, and as such this field is intentionally never used."
         )]
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[component(clone_behavior = Default)]
         struct DefaultClone;
 
@@ -2014,7 +2019,7 @@ mod tests {
             dead_code,
             reason = "This struct is used as a compilation test to test the derive macros, and as such this field is intentionally never used."
         )]
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[component(clone_behavior = Custom(custom_clone))]
         struct CustomClone;
 
@@ -2022,7 +2027,7 @@ mod tests {
             dead_code,
             reason = "This struct is used as a compilation test to test the derive macros, and as such this field is intentionally never used."
         )]
-        #[derive(Component, Clone)]
+        #[derive(Component, TypeUuid, Clone)]
         #[component(clone_behavior = clone::<Self>())]
         struct CloneFunction;
 

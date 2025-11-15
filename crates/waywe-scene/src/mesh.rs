@@ -53,6 +53,7 @@ use waywe_ecs::{
     system::{SystemParamItem, lifetimeless::SRes},
 };
 use waywe_runtime::{gpu::Wgpu, wayland::MonitorId};
+use waywe_uuid::TypeUuid;
 
 /// Plugin for mesh rendering functionality.
 ///
@@ -105,7 +106,8 @@ pub struct PushConst {
 }
 
 /// Render pipeline for meshes.
-#[derive(Debug)]
+#[derive(Debug, TypeUuid)]
+#[uuid = "20e1701d-64da-43e8-936e-bb8003ade825"]
 pub struct MeshPipeline {
     /// Pipeline layout.
     pub layout: wgpu::PipelineLayout,
@@ -188,7 +190,8 @@ impl MeshPipeline {
 }
 
 /// Geometric mesh asset.
-#[derive(Default)]
+#[derive(Default, TypeUuid)]
+#[uuid = "533771c0-f20f-4d3c-89a1-5822b84e88b5"]
 pub struct Mesh {
     /// Vertices defining the mesh geometry.
     pub vertices: SmallVec<[Vertex; 12]>,
@@ -213,16 +216,19 @@ impl Mesh {
 }
 
 /// Component to render a mesh.
-#[derive(Clone, Debug, Component)]
+#[derive(Clone, Debug, Component, TypeUuid)]
+#[uuid = "049ba8a1-9381-41cd-8c86-cacd3b78fe81"]
 #[require(Transform)]
 pub struct Mesh3d(pub AssetHandle<Mesh>);
 
 /// Component to apply a material to a mesh.
-#[derive(Component)]
+#[derive(Component, TypeUuid)]
+#[uuid = "f4625ef4-ea31-4aa3-be2b-e7bcb7677b53"]
 pub struct MeshMaterial<M: Material>(pub AssetHandle<M>);
 
 /// GPU-ready mesh data.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, TypeUuid)]
+#[uuid = "3dc089fc-3a67-4180-be70-9e27f4fb26e6"]
 pub struct RenderMesh {
     /// Vertex buffer.
     pub vertices: wgpu::Buffer,
@@ -296,7 +302,8 @@ impl RenderMesh {
 }
 
 /// Handle to a render mesh component.
-#[derive(Component, Clone, Copy, Debug)]
+#[derive(Component, Clone, Copy, Debug, TypeUuid)]
+#[uuid = "e7b3ebda-9c1b-44dd-9c8c-87322f58d073"]
 #[require(ModelMatrix)]
 pub struct RenderMeshId(pub AssetId);
 
@@ -423,10 +430,12 @@ pub fn render_meshes(
     }
 }
 
-#[derive(Resource, Deref)]
+#[derive(Resource, Deref, TypeUuid)]
+#[uuid = "1b6bbfef-f199-4aad-95db-f2c685c6bf31"]
 pub struct SurfaceView(pub wgpu::TextureView);
 
-#[derive(Resource)]
+#[derive(Resource, TypeUuid)]
+#[uuid = "2ec1c6ec-128e-4619-b827-e6cd82df37f3"]
 pub struct CommandEncoder(NonNull<wgpu::CommandEncoder>);
 
 unsafe impl Send for CommandEncoder {}

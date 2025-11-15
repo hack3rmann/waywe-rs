@@ -1,10 +1,9 @@
-use bevy_utils::prelude::DebugName;
-use thiserror::Error;
-
 use crate::{
     archetype::ArchetypeId,
     entity::{Entity, EntityDoesNotExistError},
 };
+use bevy_utils::prelude::DebugName;
+use thiserror::Error;
 
 /// An error that occurs when retrieving a specific [`Entity`]'s query result from [`Query`](crate::system::Query) or [`QueryState`](crate::query::QueryState).
 // TODO: return the type_name as part of this error
@@ -65,16 +64,17 @@ pub enum QuerySingleError {
 mod test {
     use crate::{prelude::World, query::QueryEntityError};
     use bevy_ecs_macros::Component;
+    use waywe_uuid::TypeUuid;
 
     #[test]
     fn query_does_not_match() {
         let mut world = World::new();
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct Present1;
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct Present2;
-        #[derive(Component, Debug, PartialEq)]
+        #[derive(Component, TypeUuid, Debug, PartialEq)]
         struct NotPresent;
 
         let entity = world.spawn((Present1, Present2));

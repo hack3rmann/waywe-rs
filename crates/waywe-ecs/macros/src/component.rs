@@ -1,12 +1,10 @@
-use crate::uuid::{generate_uuid, quote_uuid};
 use proc_macro::TokenStream;
-use proc_macro2::{Delimiter, Group, Punct, Spacing, Span, TokenStream as TokenStream2};
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{ToTokens, format_ident, quote};
 use std::collections::HashSet;
 use syn::{
-    Attribute, Data, DataEnum, DataStruct, DeriveInput, Error, Expr, ExprCall, ExprLit, ExprPath,
-    Field, Fields, GenericParam, Ident, Lit, LitStr, MacroDelimiter, Member, Meta, MetaList,
-    MetaNameValue, Path, Result, Token, Type, Visibility, braced, parenthesized,
+    Data, DataEnum, DataStruct, DeriveInput, Error, Expr, ExprCall, ExprPath, Field, Fields, Ident,
+    LitStr, Member, Path, Result, Token, Type, Visibility, braced, parenthesized,
     parse::{Parse, ParseStream},
     parse_macro_input, parse_quote,
     punctuated::Punctuated,
@@ -14,156 +12,9 @@ use syn::{
     token::{Brace, Comma, Paren},
 };
 
-#[derive(Debug, Clone)]
-pub struct UuidAttribute {
-    #[expect(dead_code, reason = "")]
-    uuid: Option<String>,
-    bounds: Vec<UuidGenericBound>,
-}
-
-#[derive(Clone, Copy, Default, Debug)]
-pub enum UuidReboundType {
-    #[default]
-    TypeUuid,
-    TypeId,
-}
-
-#[derive(Debug, Clone)]
-pub struct UuidGenericBound {
-    ident: Ident,
-    rebound_type: UuidReboundType,
-}
-
-impl Parse for UuidGenericBound {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let rebound_ident = input.parse::<Ident>()?;
-
-        if rebound_ident != "rebound" {
-            return Err(Error::new(
-                rebound_ident.span(),
-                "expected 'rebound' identifier",
-            ));
-        }
-
-        let group = input.parse::<Group>()?;
-
-        if group.delimiter() != Delimiter::Parenthesis {
-            return Err(Error::new(group.span(), "expected parenthesis"));
-        }
-
-        let inner = syn::parse2::<UuidGenericBoundInnerGroup>(group.stream())?;
-
-        Ok(inner.into())
-    }
-}
-
-struct UuidGenericBoundInnerGroup {
-    ident: Ident,
-    rebound_type: UuidReboundType,
-}
-
-impl Parse for UuidGenericBoundInnerGroup {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let ident = input.parse::<Ident>()?;
-        let colon = input.parse::<Punct>()?;
-
-        if colon.as_char() != ':' || colon.spacing() != Spacing::Alone {
-            return Err(Error::new(colon.span(), "expected ':' alone"));
-        }
-
-        let rebound_type_ident = input.parse::<Ident>()?;
-
-        let rebound_type = match rebound_type_ident.to_string().as_str() {
-            "TypeId" => UuidReboundType::TypeId,
-            "TypeUuid" => UuidReboundType::TypeUuid,
-            _ => {
-                return Err(Error::new(
-                    rebound_type_ident.span(),
-                    "expected 'TypeId' or 'TypeUuid'",
-                ));
-            }
-        };
-
-        Ok(Self {
-            ident,
-            rebound_type,
-        })
-    }
-}
-
-impl From<UuidGenericBoundInnerGroup> for UuidGenericBound {
-    fn from(value: UuidGenericBoundInnerGroup) -> Self {
-        Self {
-            ident: value.ident,
-            rebound_type: value.rebound_type,
-        }
-    }
-}
-
-pub fn parse_uuid_attributes<'a>(
-    attributes: impl IntoIterator<Item = &'a Attribute>,
-) -> UuidAttribute {
-    let uuid_attributes = attributes
-        .into_iter()
-        .filter(|attr| attr.meta.path().is_ident("uuid"))
-        .collect::<Vec<_>>();
-
-    let uuid = uuid_attributes.iter().find_map(|attr| match &attr.meta {
-        Meta::NameValue(MetaNameValue {
-            value: Expr::Lit(ExprLit {
-                lit: Lit::Str(lit), ..
-            }),
-            ..
-        }) => Some(lit.value()),
-        _ => None,
-    });
-
-    let bounds = uuid_attributes
-        .iter()
-        .filter_map(|attr| match &attr.meta {
-            Meta::List(MetaList {
-                delimiter: MacroDelimiter::Paren(_),
-                tokens,
-                ..
-            }) => syn::parse2::<UuidGenericBound>(tokens.clone()).ok(),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-
-    UuidAttribute { uuid, bounds }
-}
-
-pub fn make_type_params(
-    uuid_info: &UuidAttribute,
-    params: &Punctuated<GenericParam, Comma>,
-) -> Vec<TokenStream2> {
-    params
-        .iter()
-        .flat_map(|param| match param {
-            GenericParam::Type(type_param) => Some(type_param.ident.clone()),
-            GenericParam::Lifetime(_) | GenericParam::Const(_) => None,
-        })
-        .map(
-            |ident| match uuid_info.bounds.iter().find(|bound| bound.ident == ident) {
-                Some(UuidGenericBound {
-                    rebound_type: UuidReboundType::TypeId,
-                    ..
-                }) => quote! { .add_from_type_id::<#ident>() },
-                None
-                | Some(UuidGenericBound {
-                    rebound_type: UuidReboundType::TypeUuid,
-                    ..
-                }) => quote! { .add::<#ident>() },
-            },
-        )
-        .collect::<Vec<_>>()
-}
-
 pub fn derive_resource(input: TokenStream) -> TokenStream {
     let mut ast = parse_macro_input!(input as DeriveInput);
     let waywe_ecs_path: Path = crate::waywe_ecs_path();
-
-    let uuid_info = parse_uuid_attributes(&ast.attrs);
 
     ast.generics
         .make_where_clause()
@@ -173,28 +24,7 @@ pub fn derive_resource(input: TokenStream) -> TokenStream {
     let struct_name = &ast.ident;
     let (impl_generics, type_generics, where_clause) = &ast.generics.split_for_impl();
 
-    let uuid = generate_uuid();
-    let uuid_bytes = quote_uuid(&uuid);
-
-    let type_parameters = make_type_params(&uuid_info, &ast.generics.params);
-
     TokenStream::from(quote! {
-        // Implement TypeUuid trait with a generated UUID
-        impl #impl_generics #waywe_ecs_path::uuid::TypeUuid
-            for #struct_name #type_generics #where_clause
-        {
-            fn uuid() -> [u8; 16] {
-                #waywe_ecs_path::uuid::UuidBuilder::new(
-                    #waywe_ecs_path::uuid::Uuid::from_bytes(
-                        #uuid_bytes
-                    )
-                )
-                    #( #type_parameters )*
-                    .build()
-                    .into_bytes()
-            }
-        }
-
         impl #impl_generics #waywe_ecs_path::resource::Resource
             for #struct_name #type_generics #where_clause {}
     })
@@ -204,8 +34,6 @@ pub fn derive_resource(input: TokenStream) -> TokenStream {
 pub fn derive_component(input: TokenStream) -> TokenStream {
     let mut ast = parse_macro_input!(input as DeriveInput);
     let waywe_ecs_path: Path = crate::waywe_ecs_path();
-
-    let uuid_info = parse_uuid_attributes(&ast.attrs);
 
     let attrs = match parse_component_attr(&ast) {
         Ok(attrs) => attrs,
@@ -374,29 +202,8 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
         )
     };
 
-    let uuid = generate_uuid();
-    let uuid_bytes = quote_uuid(&uuid);
-
-    let type_parameters = make_type_params(&uuid_info, &ast.generics.params);
-
     TokenStream::from(quote! {
         #required_component_docs
-
-        // Implement TypeUuid trait with a generated UUID
-        impl #impl_generics #waywe_ecs_path::uuid::TypeUuid
-            for #struct_name #type_generics #where_clause
-        {
-            fn uuid() -> [u8; 16] {
-                #waywe_ecs_path::uuid::UuidBuilder::new(
-                    #waywe_ecs_path::uuid::Uuid::from_bytes(
-                        #uuid_bytes
-                    )
-                )
-                    #( #type_parameters )*
-                    .build()
-                    .into_bytes()
-            }
-        }
 
         impl #impl_generics #waywe_ecs_path::component::Component
             for #struct_name #type_generics #where_clause

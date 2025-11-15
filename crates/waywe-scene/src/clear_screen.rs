@@ -9,6 +9,7 @@ use derive_more::Deref;
 use glam::Vec3;
 use waywe_ecs::prelude::*;
 use waywe_runtime::{gpu::Wgpu, shaders::ShaderDescriptor, wayland::MonitorId};
+use waywe_uuid::TypeUuid;
 
 pub struct ClearScreenPlugin;
 
@@ -22,7 +23,8 @@ impl Plugin for ClearScreenPlugin {
     }
 }
 
-#[derive(Resource, Default, Clone, Copy)]
+#[derive(Resource, TypeUuid, Default, Clone, Copy)]
+#[uuid = "f90fba48-9109-48ad-8ea2-16f1a30abe96"]
 pub struct ClearColor(pub Vec3);
 
 impl ClearColor {
@@ -66,7 +68,8 @@ impl ShaderDescriptor for NoOpFragmentShader {
     }
 }
 
-#[derive(Resource, Deref)]
+#[derive(Resource, TypeUuid, Deref)]
+#[uuid = "59922076-e013-4b43-af96-06ea17a39176"]
 pub struct ClearPipeline(pub wgpu::RenderPipeline);
 
 impl ClearPipeline {

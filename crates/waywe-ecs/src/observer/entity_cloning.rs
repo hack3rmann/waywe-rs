@@ -1,5 +1,6 @@
 //! Logic to track observers when cloning entities.
 
+use super::Observer;
 use crate::{
     component::ComponentCloneBehavior,
     entity::{
@@ -8,8 +9,6 @@ use crate::{
     observer::ObservedBy,
     world::World,
 };
-
-use super::Observer;
 
 impl<Filter: CloneByFilter> EntityClonerBuilder<'_, Filter> {
     /// Sets the option to automatically add cloned entities to the observers targeting source entity.
@@ -79,11 +78,12 @@ mod tests {
         system::ResMut,
         world::World,
     };
+    use waywe_uuid::TypeUuid;
 
-    #[derive(Resource, Default)]
+    #[derive(Resource, TypeUuid, Default)]
     struct Num(usize);
 
-    #[derive(EntityEvent)]
+    #[derive(EntityEvent, TypeUuid)]
     struct E(Entity);
 
     #[test]

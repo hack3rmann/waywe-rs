@@ -319,19 +319,19 @@ where
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::{
         resource::Resource,
         schedule::{Schedule, tests::ResMut},
         system::{IntoSystem, System},
     };
-
-    use super::*;
+    use waywe_uuid::TypeUuid;
 
     #[test]
     fn test_schedule_label() {
         use crate::world::World;
 
-        #[derive(Resource)]
+        #[derive(Resource, TypeUuid)]
         struct Flag(bool);
 
         #[derive(ScheduleLabel, Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]

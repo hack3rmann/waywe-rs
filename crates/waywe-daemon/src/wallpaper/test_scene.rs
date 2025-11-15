@@ -20,7 +20,7 @@
 
 use smallvec::{SmallVec, smallvec};
 use std::time::Duration;
-use waywe_ecs::prelude::*;
+use waywe_ecs::{prelude::*, uuid::TypeUuid};
 use waywe_scene::prelude::*;
 
 /// A test wallpaper with multiple meshes and animations.
@@ -55,14 +55,14 @@ impl WallpaperBuilder for SceneTestWallpaper {
 }
 
 /// Component that controls the time scale for animation.
-#[derive(Component)]
+#[derive(Component, TypeUuid)]
 pub struct TimeScale(pub f32);
 
-#[derive(Component)]
+#[derive(Component, TypeUuid)]
 pub struct DespawnTime(pub Duration);
 
 /// Resource that holds pre-loaded test assets.
-#[derive(Resource)]
+#[derive(Resource, TypeUuid)]
 pub struct TestAssets {
     /// A quad mesh for rendering.
     pub quad_mesh: AssetHandle<Mesh>,

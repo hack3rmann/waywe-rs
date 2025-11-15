@@ -122,17 +122,18 @@ mod tests {
     use bevy_ecs_macros::QueryFilter;
     use core::{any::type_name, fmt::Debug, hash::Hash};
     use std::{collections::HashSet, println};
+    use waywe_uuid::TypeUuid;
 
-    #[derive(Component, Debug, Hash, Eq, PartialEq, Clone, Copy, PartialOrd, Ord)]
+    #[derive(Component, TypeUuid, Debug, Hash, Eq, PartialEq, Clone, Copy, PartialOrd, Ord)]
     struct A(usize);
-    #[derive(Component, Debug, Hash, Eq, PartialEq, Clone, Copy)]
+    #[derive(Component, TypeUuid, Debug, Hash, Eq, PartialEq, Clone, Copy)]
     struct B(usize);
-    #[derive(Component, Debug, Eq, PartialEq, Clone, Copy)]
+    #[derive(Component, TypeUuid, Debug, Eq, PartialEq, Clone, Copy)]
     struct C(usize);
-    #[derive(Component, Debug, Eq, PartialEq, Clone, Copy)]
+    #[derive(Component, TypeUuid, Debug, Eq, PartialEq, Clone, Copy)]
     struct D(usize);
 
-    #[derive(Component, Debug, Hash, Eq, PartialEq, Clone, Copy, PartialOrd, Ord)]
+    #[derive(Component, TypeUuid, Debug, Hash, Eq, PartialEq, Clone, Copy, PartialOrd, Ord)]
     #[component(storage = "SparseSet")]
     struct Sparse(usize);
 
@@ -748,7 +749,7 @@ mod tests {
 
     #[test]
     fn mut_to_immut_query_methods_have_immut_item() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         struct Foo;
 
         let mut world = World::new();
@@ -811,7 +812,7 @@ mod tests {
         assert_eq!(values, vec![&B(2)]);
     }
 
-    #[derive(Resource)]
+    #[derive(Resource, TypeUuid)]
     struct R;
 
     /// `QueryData` that performs read access on R to test that resource access is tracked

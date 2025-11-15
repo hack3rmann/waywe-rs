@@ -1,11 +1,12 @@
-use alloc::collections::{BTreeSet, btree_set};
+use crate::entity::{Entity, EntityHashSet, EntityIndexSet};
+use alloc::{
+    collections::{BTreeSet, btree_set},
+    vec::Vec,
+};
 use core::{
     hash::BuildHasher,
     ops::{Deref, DerefMut},
 };
-
-use crate::entity::{Entity, EntityHashSet, EntityIndexSet};
-use alloc::vec::Vec;
 use indexmap::IndexSet;
 use smallvec::SmallVec;
 
@@ -584,17 +585,19 @@ impl RelationshipSourceCollection for BTreeSet<Entity> {
 
 #[cfg(test)]
 mod tests {
+    use waywe_uuid::TypeUuid;
+
     use super::*;
     use crate::prelude::{Component, World};
     use crate::relationship::RelationshipTarget;
 
     #[test]
     fn vec_relationship_source_collection() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship(relationship_target = RelTarget)]
         struct Rel(Entity);
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship_target(relationship = Rel, linked_spawn)]
         struct RelTarget(Vec<Entity>);
 
@@ -611,11 +614,11 @@ mod tests {
 
     #[test]
     fn smallvec_relationship_source_collection() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship(relationship_target = RelTarget)]
         struct Rel(Entity);
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship_target(relationship = Rel, linked_spawn)]
         struct RelTarget(SmallVec<[Entity; 4]>);
 
@@ -632,11 +635,11 @@ mod tests {
 
     #[test]
     fn entity_relationship_source_collection() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship(relationship_target = RelTarget)]
         struct Rel(Entity);
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship_target(relationship = Rel)]
         struct RelTarget(Entity);
 
@@ -653,11 +656,11 @@ mod tests {
 
     #[test]
     fn one_to_one_relationships() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship(relationship_target = Below)]
         struct Above(Entity);
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship_target(relationship = Above)]
         struct Below(Entity);
 
@@ -687,11 +690,11 @@ mod tests {
     #[test]
     fn entity_index_map() {
         for add_before in [false, true] {
-            #[derive(Component)]
+            #[derive(Component, TypeUuid)]
             #[relationship(relationship_target = RelTarget)]
             struct Rel(Entity);
 
-            #[derive(Component)]
+            #[derive(Component, TypeUuid)]
             #[relationship_target(relationship = Rel, linked_spawn)]
             struct RelTarget(Vec<Entity>);
 
@@ -724,11 +727,11 @@ mod tests {
 
     #[test]
     fn one_to_one_relationship_shared_target() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship(relationship_target = Below)]
         struct Above(Entity);
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship_target(relationship = Above)]
         struct Below(Entity);
         let mut world = World::new();
@@ -758,11 +761,11 @@ mod tests {
 
     #[test]
     fn one_to_one_relationship_reinsert() {
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship(relationship_target = Below)]
         struct Above(Entity);
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[relationship_target(relationship = Above)]
         struct Below(Entity);
 

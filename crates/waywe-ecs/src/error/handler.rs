@@ -1,8 +1,8 @@
-use core::fmt::Display;
-
 use crate::{component::Tick, error::BevyError, prelude::Resource};
 use bevy_utils::prelude::DebugName;
+use core::fmt::Display;
 use derive_more::derive::{Deref, DerefMut};
+use waywe_uuid::TypeUuid;
 
 /// Context for a [`BevyError`] to aid in debugging.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -110,7 +110,7 @@ pub type ErrorHandler = fn(BevyError, ErrorContext);
 /// that schedule until it's completed.
 ///
 /// [`Schedule`]: crate::schedule::Schedule
-#[derive(Resource, Deref, DerefMut, Copy, Clone)]
+#[derive(Resource, TypeUuid, Deref, DerefMut, Copy, Clone)]
 pub struct DefaultErrorHandler(pub ErrorHandler);
 
 impl Default for DefaultErrorHandler {

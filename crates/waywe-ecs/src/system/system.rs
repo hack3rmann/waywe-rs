@@ -295,7 +295,7 @@ where
 /// ```
 /// # use bevy_ecs::prelude::*;
 /// # use bevy_ecs::system::RunSystemOnce;
-/// #[derive(Resource, Default)]
+/// #[derive(Resource, TypeUuid, Default)]
 /// struct Counter(u8);
 ///
 /// fn increment(mut counter: Local<Counter>) {
@@ -341,7 +341,7 @@ where
 /// # use bevy_ecs::prelude::*;
 /// # use bevy_ecs::system::RunSystemOnce;
 ///
-/// #[derive(Component)]
+/// #[derive(Component, TypeUuid)]
 /// struct T(usize);
 ///
 /// let mut world = World::default();
@@ -361,7 +361,7 @@ where
 /// # use bevy_ecs::prelude::*;
 /// # use bevy_ecs::system::RunSystemOnce;
 ///
-/// #[derive(Component)]
+/// #[derive(Component, TypeUuid)]
 /// struct T(usize);
 ///
 /// fn count(query: Query<&T>) -> usize {
@@ -458,9 +458,11 @@ mod tests {
     use super::*;
     use crate::prelude::*;
     use alloc::string::ToString;
+    use waywe_uuid::TypeUuid;
 
     #[test]
     fn run_system_once() {
+        #[derive(TypeUuid)]
         struct T(usize);
 
         impl Resource for T {}
@@ -476,7 +478,7 @@ mod tests {
         assert_eq!(world.resource::<T>().0, 1);
     }
 
-    #[derive(Resource, Default, PartialEq, Debug)]
+    #[derive(Resource, TypeUuid, Default, PartialEq, Debug)]
     struct Counter(u8);
 
     fn count_up(mut counter: ResMut<Counter>) {
@@ -494,7 +496,7 @@ mod tests {
         assert_eq!(*world.resource::<Counter>(), Counter(2));
     }
 
-    #[derive(Component)]
+    #[derive(Component, TypeUuid)]
     struct A;
 
     fn spawn_entity(mut commands: Commands) {
@@ -524,6 +526,7 @@ mod tests {
 
     #[test]
     fn run_system_once_invalid_params() {
+        #[derive(TypeUuid)]
         struct T;
         impl Resource for T {}
         fn system(_: Res<T>) {}

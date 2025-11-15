@@ -15,6 +15,7 @@ use crate::{
 use derive_more::Deref;
 use glam::{UVec2, Vec2, Vec3};
 use waywe_ecs::{prelude::*, system::SystemParam};
+use waywe_uuid::TypeUuid;
 
 pub struct SpritePlugin;
 
@@ -34,7 +35,8 @@ impl Plugin for SpritePlugin {
     }
 }
 
-#[derive(Resource, Deref)]
+#[derive(Resource, TypeUuid, Deref)]
+#[uuid = "46deb074-7104-46fc-86ac-0192ace5c3ca"]
 pub struct QuadMesh(pub AssetHandle<Mesh>);
 
 impl FromWorld for QuadMesh {
@@ -79,7 +81,8 @@ pub struct SpriteAssets<'w> {
     videos: Res<'w, Assets<Video>>,
 }
 
-#[derive(Component)]
+#[derive(Component, TypeUuid)]
+#[uuid = "750c653b-fff2-46df-b623-e89d0f13775a"]
 #[require(Transform)]
 pub struct Sprite {
     pub texture: SpriteTexture,

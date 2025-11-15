@@ -39,7 +39,7 @@ pub const MAX_CHANGE_AGE: u32 = u32::MAX - (2 * CHECK_TICK_THRESHOLD - 1);
 /// ```
 /// use bevy_ecs::prelude::*;
 ///
-/// #[derive(Resource)]
+/// #[derive(Resource, TypeUuid)]
 /// struct MyResource(u32);
 ///
 /// fn my_system(mut resource: Res<MyResource>) {
@@ -94,7 +94,7 @@ pub trait DetectChanges {
 /// ```
 /// use bevy_ecs::prelude::*;
 ///
-/// #[derive(Resource)]
+/// #[derive(Resource, TypeUuid)]
 /// struct MyResource(u32);
 ///
 /// fn my_system(mut resource: ResMut<MyResource>) {
@@ -168,7 +168,7 @@ pub trait DetectChangesMut: DetectChanges {
     ///
     /// ```
     /// # use bevy_ecs::{prelude::*, schedule::common_conditions::resource_changed};
-    /// #[derive(Resource, PartialEq, Eq)]
+    /// #[derive(Resource, TypeUuid, PartialEq, Eq)]
     /// pub struct Score(u32);
     ///
     /// fn reset_score(mut score: ResMut<Score>) {
@@ -225,7 +225,7 @@ pub trait DetectChangesMut: DetectChanges {
     ///
     /// ```
     /// # use bevy_ecs::{prelude::*, schedule::common_conditions::{resource_changed, on_event}};
-    /// #[derive(Resource, PartialEq, Eq)]
+    /// #[derive(Resource, TypeUuid, PartialEq, Eq)]
     /// pub struct Score(u32);
     ///
     /// #[derive(Message, PartialEq, Eq)]
@@ -295,7 +295,7 @@ pub trait DetectChangesMut: DetectChanges {
     /// # extern crate alloc;
     /// # use alloc::borrow::ToOwned;
     /// # use bevy_ecs::{prelude::*, schedule::common_conditions::resource_changed};
-    /// #[derive(Resource)]
+    /// #[derive(Resource, TypeUuid)]
     /// pub struct Message(String);
     ///
     /// fn update_message(mut message: ResMut<Message>) {
@@ -482,7 +482,7 @@ macro_rules! impl_methods {
             /// # use bevy_ecs::prelude::*;
             /// # #[derive(PartialEq)] pub struct Vec2;
             /// # impl Vec2 { pub const ZERO: Self = Self; }
-            /// # #[derive(Component)] pub struct Transform { translation: Vec2 }
+            /// # #[derive(Component, TypeUuid)] pub struct Transform { translation: Vec2 }
             /// // When run, zeroes the translation of every entity.
             /// fn reset_positions(mut transforms: Query<&mut Transform>) {
             ///     for transform in &mut transforms {
@@ -804,7 +804,7 @@ impl<'w, T: 'static> From<NonSendMut<'w, T>> for Mut<'w, T> {
 /// # use bevy_ecs::system::Query;
 /// # use bevy_ecs::world::Ref;
 /// # use bevy_ecs_macros::Component;
-/// # #[derive(Component)]
+/// # #[derive(Component, TypeUuid)]
 /// # struct MyComponent;
 ///
 /// fn how_many_changed_1(query: Query<(), Changed<MyComponent>>) {
@@ -903,10 +903,10 @@ impl_debug!(Ref<'w, T>,);
 /// # use bevy_ecs::prelude::*;
 /// # use bevy_ecs::query::QueryData;
 /// #
-/// #[derive(Component, Clone, Debug)]
+/// #[derive(Component, TypeUuid, Clone, Debug)]
 /// struct Name(String);
 ///
-/// #[derive(Component, Clone, Copy, Debug)]
+/// #[derive(Component, TypeUuid, Clone, Copy, Debug)]
 /// struct Health(f32);
 ///
 /// fn my_system(mut query: Query<(Mut<Name>, &mut Health)>) {
@@ -1492,10 +1492,7 @@ impl MaybeLocation {
 
 #[cfg(test)]
 mod tests {
-    use bevy_ecs_macros::Resource;
-    use bevy_ptr::PtrMut;
-    use core::ops::{Deref, DerefMut};
-
+    use super::{DetectChanges, DetectChangesMut, MutUntyped};
     use crate::{
         change_detection::{
             CHECK_TICK_THRESHOLD, MAX_CHANGE_AGE, MaybeLocation, Mut, NonSendMut, Ref, ResMut,
@@ -1505,16 +1502,17 @@ mod tests {
         system::{IntoSystem, Single, System},
         world::World,
     };
+    use bevy_ecs_macros::Resource;
+    use core::ops::{Deref, DerefMut};
+    use waywe_uuid::TypeUuid;
 
-    use super::{DetectChanges, DetectChangesMut, MutUntyped};
-
-    #[derive(Component, PartialEq)]
+    #[derive(Component, TypeUuid, PartialEq)]
     struct C;
 
-    #[derive(Resource)]
+    #[derive(Resource, TypeUuid)]
     struct R;
 
-    #[derive(Resource, PartialEq)]
+    #[derive(Resource, TypeUuid, PartialEq)]
     struct R2(u8);
 
     impl Deref for R2 {

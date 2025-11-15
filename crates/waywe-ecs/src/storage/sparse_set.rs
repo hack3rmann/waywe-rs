@@ -666,6 +666,7 @@ mod tests {
         storage::SparseSet,
     };
     use alloc::{vec, vec::Vec};
+    use waywe_uuid::TypeUuid;
 
     #[derive(Debug, Eq, PartialEq)]
     struct Foo(usize);
@@ -723,10 +724,10 @@ mod tests {
     fn sparse_sets() {
         let mut sets = SparseSets::default();
 
-        #[derive(Component, Default, Debug)]
+        #[derive(Component, TypeUuid, Default, Debug)]
         struct TestComponent1;
 
-        #[derive(Component, Default, Debug)]
+        #[derive(Component, TypeUuid, Default, Debug)]
         struct TestComponent2;
 
         assert_eq!(sets.len(), 0);

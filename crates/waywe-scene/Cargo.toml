@@ -16,6 +16,7 @@ ash = "0.38.0"
 itertools = "0.14.0"
 variadics_please = "1.1.0"
 waywe-ecs.workspace = true
+waywe-uuid.workspace = true
 static_assertions.workspace = true
 bitflags.workspace = true
 bytemuck.workspace = true

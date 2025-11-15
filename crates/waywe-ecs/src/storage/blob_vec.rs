@@ -511,6 +511,7 @@ mod tests {
         string::{String, ToString},
     };
     use core::{alloc::Layout, cell::RefCell};
+    use waywe_uuid::TypeUuid;
 
     /// # Safety
     ///
@@ -697,7 +698,7 @@ mod tests {
     fn aligned_zst() {
         // NOTE: This test is explicitly for uncovering potential UB with miri.
 
-        #[derive(Component)]
+        #[derive(Component, TypeUuid)]
         #[repr(align(32))]
         struct Zst;
 
