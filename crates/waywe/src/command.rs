@@ -1,3 +1,4 @@
+use file_format::{FileFormat, Kind};
 use image::{DynamicImage, ImageError, ImageReader, RgbImage};
 use std::{
     ffi::CStr,
@@ -142,41 +143,40 @@ pub fn execute_preview(result_path: &Path, monitor_name: Option<&str>) -> Result
     Ok(())
 }
 
-pub fn execute_video(
+pub fn execute_show(
     path: &Path,
     monitor_name: Option<String>,
 ) -> Result<DaemonCommand, ExecuteError> {
-    let absolute_path = path.canonicalize()?;
+    let file_kind = FileFormat::from_file(path)?.kind();
 
-    if !is_video_path_valid(absolute_path.clone()) {
-        return Err(ExecuteError::InvalidVideo {
-            path: absolute_path,
-        });
-    }
+    Ok(match file_kind {
+        Kind::Image => {
+            let reader = ImageReader::open(path)?.with_guessed_format()?;
+            let _image = reader.decode()?;
+            let absolute_path = path.canonicalize()?;
 
-    Ok(DaemonCommand::SetVideo {
-        path: absolute_path,
-        monitor: monitor_name,
-    })
-}
+            DaemonCommand::SetImage {
+                path: absolute_path,
+                monitor: monitor_name,
+            }
+        }
+        Kind::Video => {
+            let absolute_path = path.canonicalize()?;
 
-pub fn execute_image(
-    path: &Path,
-    monitor_name: Option<String>,
-) -> Result<DaemonCommand, ExecuteError> {
-    let reader = ImageReader::open(path)?.with_guessed_format()?;
-    let _image = reader.decode()?;
-    let absolute_path = path.canonicalize()?;
+            if !is_video_path_valid(absolute_path.clone()) {
+                return Err(ExecuteError::InvalidVideo {
+                    path: absolute_path,
+                });
+            }
 
-    Ok(DaemonCommand::SetImage {
-        path: absolute_path,
-        monitor: monitor_name,
-    })
-}
-
-pub fn execute_scene(monitor_name: Option<String>) -> Result<DaemonCommand, ExecuteError> {
-    Ok(DaemonCommand::SetScene {
-        monitor: monitor_name,
+            DaemonCommand::SetVideo {
+                path: absolute_path,
+                monitor: monitor_name,
+            }
+        }
+        _ => DaemonCommand::SetScene {
+            monitor: monitor_name,
+        },
     })
 }
 

@@ -22,3 +22,4 @@ image.workspace = true
 transmute-extra.workspace = true
 thiserror.workspace = true
 anyhow = "1.0.99"
+file-format = { version = "0.28.0", features = ["reader-mp4"] }
