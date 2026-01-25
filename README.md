@@ -33,17 +33,24 @@ https://github.com/user-attachments/assets/48a8b135-bbf2-4055-8453-19292a923939
 ### Clone the repo
 
 ```shell
-git clone --depth=1 https://github.com/hack3rmann/waywe-rs.git
+git clone https://github.com/hack3rmann/waywe-rs.git --depth 1
 ```
 
-### Build and install
+### Build
 
-Install both `waywe` and `waywe-daemon`.
+Build whole project
 
 ```shell
 cd waywe-rs
-CARGO_TAREGT_DIR=target cargo install --path waywe
-CARGO_TAREGT_DIR=target cargo install --path waywe-daemon
+cargo build --release --locked
+```
+
+### Install
+
+You can find both `waywe` and `waywe-daemon` executables under `target/release` directory:
+
+```shell
+sudo cp target/release/waywe target/release/waywe-daemon /usr/bin
 ```
 
 ## Usage
