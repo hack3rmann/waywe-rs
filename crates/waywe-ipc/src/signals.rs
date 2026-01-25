@@ -20,7 +20,7 @@ pub fn setup() {
     };
 
     let action = libc::sigaction {
-        sa_sigaction: signal_handler as usize,
+        sa_sigaction: signal_handler as *const () as usize,
         sa_mask,
         sa_flags: 0,
         sa_restorer: None,
