@@ -66,8 +66,8 @@ waywe-daemon --run-in-background
 Then use the `waywe` cli tool to control daemon's behavior:
 
 ```shell
-waywe video path/to/your/video.mp4
-waywe image path/to/your/picture.jpg
+waywe show path/to/your/video.mp4
+waywe show path/to/your/picture.jpg
 ```
 
 Note that it will set the same wallpaper for all currently plugged monitors.
