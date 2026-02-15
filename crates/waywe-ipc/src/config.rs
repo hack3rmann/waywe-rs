@@ -122,8 +122,12 @@ pub type InterpolationFn = fn(f32) -> f32;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
+#[derive(Default)]
 pub enum CenterPosition {
-    Point { position: Vec2 },
+    Point {
+        position: Vec2,
+    },
+    #[default]
     Random,
 }
 
@@ -141,12 +145,6 @@ impl CenterPosition {
                 )
             }
         }
-    }
-}
-
-impl Default for CenterPosition {
-    fn default() -> Self {
-        Self::Random
     }
 }
 

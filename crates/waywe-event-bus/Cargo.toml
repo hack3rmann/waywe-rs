@@ -1,0 +1,20 @@
+[package]
+name = "waywe-event-bus"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+uuid = { version = "1.20.0", features = ["v7", "zerocopy"] }
+bincode.workspace = true
+smallvec.workspace = true
+rustix.workspace = true
+tracing.workspace = true
+box_into_inner.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+bytemuck.workspace = true
+static_assertions.workspace = true

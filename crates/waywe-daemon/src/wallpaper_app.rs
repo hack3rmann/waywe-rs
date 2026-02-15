@@ -293,12 +293,14 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
             }
 
             runtime.task_pool.spawn(move |mut emitter| {
-                let event = WallpaperPreparedEvent {
-                    wallpaper: wallpaper::create(gpu, wayland, &path, ty, monitor_id),
-                    monitor_id,
-                };
+                let wallpaper = wallpaper::create(gpu, wayland, &path, ty, monitor_id);
 
-                emitter.emit(event).unwrap();
+                emitter
+                    .emit(WallpaperPreparedEvent {
+                        wallpaper,
+                        monitor_id,
+                    })
+                    .unwrap();
             });
         }
     }

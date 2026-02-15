@@ -18,7 +18,7 @@ members = [
     "crates/waywe-default-wallpapers",
     "crates/waywe-ipc",
     "crates/waywe-runtime",
-    "crates/waywe-scene",
+    "crates/waywe-scene", "crates/waywe-event-bus",
 ]
 
 [workspace.package]
