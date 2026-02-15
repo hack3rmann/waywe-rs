@@ -1,0 +1,14 @@
+[Unit]
+Description=GPU-accelerated wallpaper engine
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+MemoryDenyWriteExecute=yes
+NoNewPrivileges=yes
+ExecStart=/usr/bin/waywe-daemon
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
