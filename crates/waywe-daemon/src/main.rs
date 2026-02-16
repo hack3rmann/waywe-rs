@@ -10,7 +10,7 @@ use std::{
     env, fs,
     io::{self, ErrorKind},
 };
-use tracing::error;
+use tracing::{info, error};
 use tracing_subscriber::EnvFilter;
 use wallpaper_app::WallpaperApp;
 use waywe_ipc::config::Config;
@@ -41,49 +41,56 @@ fn main() {
         error!(?error, "failed to start daemon in the background");
     }
 
+    // Waywe does not create the config file for you,
+    // but it looks for one in the following locations on UNIX systems:
+    // 1.  $XDG_CONFIG_HOME/waywe/config.toml
+    // 2.  $HOME/.config/waywe/config.toml
+    // 3.  /etc/waywe/config.toml
     let config = 'config: {
-        let Some(mut home_dir) = env::home_dir() else {
-            error!("can not find home directory");
-            break 'config Config::default();
+        let trailing = "waywe/config.toml";
+        let xdg_path = env::var_os("XDG_CONFIG_HOME").map(|xdg| {
+            let mut p = std::path::PathBuf::from(xdg);
+            p.push(trailing);
+            p
+        });
+
+        let home_path = env::home_dir().map(|mut home| {
+            home.push(".config");
+            home.push(trailing);
+            home
+        });
+
+        let etc_path = {
+            let mut etc = std::path::PathBuf::from("/etc");
+            etc.push(trailing);
+            Some(etc)
         };
 
-        let config_path = {
-            home_dir.push(".config/waywe/config.toml");
-            home_dir
-        };
-
-        let contents = match fs::read_to_string(&config_path) {
-            Ok(contents) => contents,
-            Err(error) if error.kind() == ErrorKind::NotFound => {
-                let config_dir = config_path.parent().unwrap();
-                let config = Config::default();
-
-                match fs::create_dir_all(config_dir) {
-                    Ok(()) => {}
-                    Err(error) => {
-                        error!(?error, "failed to create config directory");
-                        break 'config config;
+        for path in [xdg_path, home_path, etc_path].into_iter().flatten() {
+            match fs::read_to_string(&path) {
+                Ok(contents) => {
+                    match toml::from_str(&contents) {
+                        Ok(config) => {
+                            info!("loaded config at {}", path.display());
+                            break 'config config;
+                        }
+                        Err(error) => {
+                            error!(?error, "invalid config at {}", path.display());
+                            continue;
+                        }
                     }
                 }
-
-                let config_string = toml::to_string(&config).unwrap();
-
-                if let Err(error) = fs::write(&config_path, &config_string) {
-                    error!(?error, "failed to save the default config");
+                Err(error) if error.kind() == ErrorKind::NotFound => {
+                    continue;
                 }
-
-                break 'config config;
-            }
-            Err(error) => panic!("failed to load config: {error:?}"),
-        };
-
-        match toml::from_str(&contents) {
-            Ok(config) => config,
-            Err(error) => {
-                error!(?error, "failed to load config");
-                Config::default()
+                Err(error) => {
+                    error!(?error, "failed to read config at {}", path.display());
+                    continue;
+                }
             }
         }
+
+        Config::default()
     };
 
     let app = WallpaperApp::from_config(config);
