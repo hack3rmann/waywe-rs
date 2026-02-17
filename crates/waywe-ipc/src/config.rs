@@ -1,7 +1,8 @@
 use glam::Vec2;
 use rand::distr::{Distribution as _, Uniform};
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use std::{env, fs, io::ErrorKind, path::PathBuf, time::Duration};
+use tracing::{error, info};
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -9,6 +10,64 @@ pub struct Config {
     pub animation: AnimationConfig,
     #[serde(default)]
     pub effects: Vec<Effects>,
+}
+
+impl Config {
+    /// Tries to read config file from HOME paths. If fails, returns the default one.
+    ///
+    /// Waywe does not create the config file for you,
+    /// but it looks for one in the following locations on UNIX systems:
+    ///
+    /// 1. `$XDG_CONFIG_HOME/waywe/config.toml`
+    /// 2. `$HOME/.config/waywe/config.toml`
+    /// 3. `/etc/waywe/config.toml`
+    pub fn read() -> Self {
+        const TRAILING: &str = "waywe/config.toml";
+
+        let xdg_path = env::var_os("XDG_CONFIG_HOME").map(|xdg| {
+            let mut p = PathBuf::from(xdg);
+            p.push(TRAILING);
+            p
+        });
+
+        let home_path = env::home_dir().map(|mut home| {
+            home.push(".config");
+            home.push(TRAILING);
+            home
+        });
+
+        let etc_path = {
+            let mut etc = PathBuf::from("/etc");
+            etc.push(TRAILING);
+            Some(etc)
+        };
+
+        let home_paths = [xdg_path, home_path, etc_path].into_iter().flatten();
+
+        for path in home_paths {
+            match fs::read_to_string(&path) {
+                Ok(contents) => match toml::from_str(&contents) {
+                    Ok(config) => {
+                        info!("loaded config at {}", path.display());
+                        return config;
+                    }
+                    Err(error) => {
+                        error!(?error, "invalid config at {}", path.display());
+                        continue;
+                    }
+                },
+                Err(error) if error.kind() == ErrorKind::NotFound => {
+                    continue;
+                }
+                Err(error) => {
+                    error!(?error, "failed to read config at {}", path.display());
+                    continue;
+                }
+            }
+        }
+
+        Config::default()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -122,8 +181,12 @@ pub type InterpolationFn = fn(f32) -> f32;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
+#[derive(Default)]
 pub enum CenterPosition {
-    Point { position: Vec2 },
+    Point {
+        position: Vec2,
+    },
+    #[default]
     Random,
 }
 
@@ -141,12 +204,6 @@ impl CenterPosition {
                 )
             }
         }
-    }
-}
-
-impl Default for CenterPosition {
-    fn default() -> Self {
-        Self::Random
     }
 }
 
