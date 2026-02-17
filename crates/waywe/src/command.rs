@@ -24,6 +24,8 @@ pub enum ExecuteError {
     ProfileIo(#[from] SetupProfileError),
     #[error("no wallpaper is running")]
     NoWallpaper,
+    #[error("unsupported file format '{0:?}'")]
+    UnsupportedFileFormat(Kind),
     #[error(transparent)]
     VideoOpen(#[from] BackendError),
     #[error(transparent)]
@@ -174,9 +176,7 @@ pub fn execute_show(
                 monitor: monitor_name,
             }
         }
-        _ => DaemonCommand::SetScene {
-            monitor: monitor_name,
-        },
+        _ => return Err(ExecuteError::UnsupportedFileFormat(file_kind)),
     })
 }
 
