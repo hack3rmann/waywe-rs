@@ -3436,7 +3436,7 @@ dependencies = [
 
 [[package]]
 name = "waywe-event-bus"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "bincode",
  "box_into_inner",

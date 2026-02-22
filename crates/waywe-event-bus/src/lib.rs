@@ -1,15 +1,13 @@
-use crate::event::{EventHeader, ExternalEvent};
+use crate::event::{EventHeader, ExternalEvent, InternalEvent};
 use bincode::error::DecodeError;
-use box_into_inner::IntoInner as _;
 use bytemuck::Zeroable;
 use rustix::{
     fs::OFlags,
     io::Errno,
-    net::{self, AddressFamily, RecvFlags, SocketAddrUnix, SocketFlags, SocketType},
+    net::{self, AddressFamily, RecvFlags, SendFlags, SocketAddrUnix, SocketFlags, SocketType},
 };
 use smallvec::{SmallVec, smallvec};
 use std::{
-    any::{Any, TypeId},
     io::{self, ErrorKind, PipeReader, PipeWriter, Read as _},
     mem,
     os::fd::{AsFd, BorrowedFd, OwnedFd},
@@ -83,11 +81,21 @@ impl ExternalEventBus {
         }
     }
 
-    pub fn try_recv(&self) -> Result<ExternalEvent, Errno> {
+    pub fn remove_disconnected(&mut self) {
+        self.server_connections.retain(|fd| {
+            !matches!(
+                net::send(fd, &[], SendFlags::DONTWAIT),
+                Ok(0) | Err(Errno::CONNRESET | Errno::PIPE)
+            )
+        });
+    }
+
+    pub fn try_recv(&mut self) -> Result<ExternalEvent, Errno> {
         for fd in &self.server_connections {
             let mut header = EventHeader::zeroed();
 
             match net::recv(fd, bytemuck::bytes_of_mut(&mut header), RecvFlags::DONTWAIT) {
+                Ok(0) | Err(Errno::CONNRESET | Errno::PIPE) => continue, // disconnected
                 Ok(n_bytes) => assert_eq!(
                     n_bytes,
                     mem::size_of_val(&header),
@@ -109,78 +117,6 @@ impl ExternalEventBus {
         }
 
         Err(Errno::AGAIN)
-    }
-}
-
-pub trait TryReplicate: Any + Send {
-    fn try_replicate(&self) -> Option<Box<dyn TryReplicate>> {
-        None
-    }
-}
-
-impl dyn TryReplicate {
-    pub fn downcast<T: Any>(self: Box<Self>) -> Result<Box<T>, Box<Self>> {
-        if TypeId::of::<T>() == self.as_ref().type_id() {
-            Ok((self as Box<dyn Any>).downcast::<T>().unwrap())
-        } else {
-            Err(self)
-        }
-    }
-}
-
-impl<T: Clone + Any + Send> TryReplicate for T {
-    fn try_replicate(&self) -> Option<Box<dyn TryReplicate>> {
-        Some(Box::new(self.clone()))
-    }
-}
-
-pub struct InternalEvent(Option<Box<dyn TryReplicate>>);
-
-impl InternalEvent {
-    pub fn underlying_type(&self) -> Option<TypeId> {
-        self.0.as_ref().map(Box::as_ref).map(|e| e.type_id())
-    }
-
-    /// # Safety
-    ///
-    /// - event should contain a value
-    /// - underlying type should be exactly `E`
-    pub unsafe fn downcast_unchecked<E: IntoInternalEvent>(self) -> E {
-        let any = unsafe { self.0.unwrap_unchecked() };
-        let boxed = unsafe { any.downcast::<E>().unwrap_unchecked() };
-        boxed.into_inner()
-    }
-
-    pub async fn handle<T: IntoInternalEvent>(&mut self, f: impl AsyncFnOnce(T)) {
-        // Try to replicate the event. Take the event if could not replicate
-        let replicated = self.0.as_deref().and_then(TryReplicate::try_replicate);
-
-        let Some(any_value) = replicated.or_else(|| self.0.take()) else {
-            return;
-        };
-
-        let boxed_value = match any_value.downcast::<T>() {
-            Ok(value) => value,
-            Err(other) => {
-                self.0 = Some(other);
-                return;
-            }
-        };
-
-        let value = boxed_value.into_inner();
-        f(value).await;
-    }
-}
-
-pub trait IntoInternalEvent: TryReplicate {
-    fn into_event(self) -> InternalEvent
-    where
-        Self: Sized;
-}
-
-impl<T: TryReplicate> IntoInternalEvent for T {
-    fn into_event(self) -> InternalEvent {
-        InternalEvent(Some(Box::new(self)))
     }
 }
 
