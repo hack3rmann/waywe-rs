@@ -101,9 +101,11 @@ direction = "out"
 # - "ease-out": f(t) = 1 - (1 - t)**2
 # - "ease-in-out": f(t) = 3 * x**2 - 2 * x**3
 easing = "ease-out"
+# Animation style: "circle" | "slide"
+style = "circle"
 
 [animation.center-position]
-# Amination circle center position type: "random" | "point" [default="random"]
+# Animation circle center position type: "random" | "point" [default="random"]
 #
 # - "random": center will be picked randomly on screen and `position` parameter will be ignored
 # - "point": center position will be at point `position` (see next)
@@ -126,6 +128,26 @@ type = "blur"
 n_levels = 4
 # Growth rate of blur passes on each downsample step (0 for no growth)
 level_multiplier = 2
+```
+
+And if you want slide animation:
+
+```
+[animation]
+duration-milliseconds = 2000
+easing = "ease-out"
+# Animation style: "circle" | "slide"
+style = "slide"
+
+[animation.angle]
+# Animation angle type: "random" | "value" [default="random"]
+#
+# - "random": angle will be picked randomly from 0 to 360 and `value` will be ignored 
+# - "value": angle in degrees
+type = "random"
+# value from 0 to 360 degrees
+degrees = 0
+
 ```
 
 ## Troubleshooting

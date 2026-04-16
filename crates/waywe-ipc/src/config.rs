@@ -130,7 +130,7 @@ pub enum Animation {
         direction: AnimationDirection,
     },
     Slide {
-        #[serde(default, rename = "angle-degrees")]
+        #[serde(default)]
         angle: Angle,
     },
 }
@@ -250,6 +250,7 @@ impl CenterPosition {
 #[derive(Default)]
 pub enum Angle {
     Value {
+        #[serde(rename = "degrees")]
         angle_degrees: f32,
     },
     #[default]
@@ -279,7 +280,7 @@ mod tests {
     use super::*;
 
     #[test]
-    //#[ignore = "used for debugging only"]
+    #[ignore = "used for debugging only"]
     fn print_config_circle() {
         let config = Config {
             animation: AnimationConfig {
@@ -291,8 +292,9 @@ mod tests {
         let string = toml::to_string(&config).unwrap();
         println!("{string}");
     }
+
     #[test]
-    //#[ignore = "used for debugging only"]
+    #[ignore = "used for debugging only"]
     fn print_config_slide() {
         let config = Config {
             animation: AnimationConfig {
