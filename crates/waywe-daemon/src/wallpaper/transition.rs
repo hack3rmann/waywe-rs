@@ -5,10 +5,13 @@ use glam::{UVec2, Vec2};
 use smallvec::SmallVec;
 use std::{
     collections::VecDeque,
+    f32::consts::PI,
     mem,
     time::{Duration, Instant},
 };
-use waywe_ipc::config::{AnimationConfig, AnimationDirection};
+use waywe_ipc::config::{
+    Angle, Animation, AnimationConfig, AnimationDirection, AnimationStyle, CenterPosition,
+};
 use waywe_runtime::{
     effects::{Effects, config::EffectsBuilder},
     frame::{FrameError, FrameInfo},
@@ -100,14 +103,29 @@ impl ShaderDescriptor for FullScreenVertexShader {
     }
 }
 
-pub struct FullScreenFragmentShader;
+pub struct TransitionCircleFragmentShader;
 
-impl ShaderDescriptor for FullScreenFragmentShader {
+impl ShaderDescriptor for TransitionCircleFragmentShader {
     fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
         wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("../shaders/transition.glsl").into(),
+                shader: include_str!("../shaders/transition-circle.glsl").into(),
+                stage: wgpu::naga::ShaderStage::Fragment,
+                defines: &[],
+            },
+        }
+    }
+}
+
+pub struct TransitionSlideFragmentShader;
+
+impl ShaderDescriptor for TransitionSlideFragmentShader {
+    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
+        wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Glsl {
+                shader: include_str!("../shaders/transition-slide.glsl").into(),
                 stage: wgpu::naga::ShaderStage::Fragment,
                 defines: &[],
             },
@@ -121,13 +139,76 @@ pub struct WallpaperTransitionPipeline {
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub sampler: wgpu::Sampler,
     pub vertices: wgpu::Buffer,
+    pub pipeline_cache: wgpu::PipelineCache,
+    pub pipeline_layout: wgpu::PipelineLayout,
+    pub surface_format: wgpu::TextureFormat,
 }
 
 impl WallpaperTransitionPipeline {
-    pub fn new(gpu: &Wgpu, monitor_id: MonitorId) -> Self {
-        gpu.require_shader::<FullScreenVertexShader>();
-        gpu.require_shader::<FullScreenFragmentShader>();
+    pub fn create_pipeline<V: ShaderDescriptor, F: ShaderDescriptor>(
+        gpu: &Wgpu,
+        layout: &wgpu::PipelineLayout,
+        surface_format: wgpu::TextureFormat,
+        pipeline_cache: &wgpu::PipelineCache,
+    ) -> wgpu::RenderPipeline {
+        gpu.require_shader::<V>();
+        gpu.require_shader::<F>();
 
+        gpu.device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("image-pipeline"),
+                layout: Some(layout),
+                vertex: wgpu::VertexState {
+                    module: &gpu.shader_cache.get::<V>().unwrap(),
+                    entry_point: Some("main"),
+                    compilation_options: wgpu::PipelineCompilationOptions {
+                        constants: &[],
+                        zero_initialize_workgroup_memory: false,
+                    },
+                    buffers: &[wgpu::VertexBufferLayout {
+                        array_stride: mem::size_of_val(&SCREEN_TRIANGLE[0]) as u64,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &[wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Float32x2,
+                            offset: 0,
+                            shader_location: 0,
+                        }],
+                    }],
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &gpu.shader_cache.get::<F>().unwrap(),
+                    entry_point: Some("main"),
+                    compilation_options: wgpu::PipelineCompilationOptions {
+                        constants: &[],
+                        zero_initialize_workgroup_memory: false,
+                    },
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: surface_format,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    strip_index_format: None,
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: None,
+                    unclipped_depth: false,
+                    polygon_mode: wgpu::PolygonMode::Fill,
+                    conservative: false,
+                },
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState {
+                    count: 1,
+                    mask: !0,
+                    alpha_to_coverage_enabled: false,
+                },
+                multiview: None,
+                cache: Some(pipeline_cache),
+            })
+    }
+
+    pub fn new(gpu: &Wgpu, monitor_id: MonitorId, animation_style: AnimationStyle) -> Self {
         let vertices = gpu.device.create_buffer_init(&BufferInitDescriptor {
             label: Some("fullscreen-triangle"),
             contents: bytemuck::cast_slice(&SCREEN_TRIANGLE),
@@ -184,69 +265,53 @@ impl WallpaperTransitionPipeline {
             surfaces[&monitor_id].format
         };
 
-        let pipeline = gpu
-            .device
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some("image-pipeline"),
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &gpu.shader_cache.get::<FullScreenVertexShader>().unwrap(),
-                    entry_point: Some("main"),
-                    compilation_options: wgpu::PipelineCompilationOptions {
-                        constants: &[],
-                        zero_initialize_workgroup_memory: false,
-                    },
-                    buffers: &[wgpu::VertexBufferLayout {
-                        array_stride: mem::size_of_val(&SCREEN_TRIANGLE[0]) as u64,
-                        step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &[wgpu::VertexAttribute {
-                            format: wgpu::VertexFormat::Float32x2,
-                            offset: 0,
-                            shader_location: 0,
-                        }],
-                    }],
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &gpu.shader_cache.get::<FullScreenFragmentShader>().unwrap(),
-                    entry_point: Some("main"),
-                    compilation_options: wgpu::PipelineCompilationOptions {
-                        constants: &[],
-                        zero_initialize_workgroup_memory: false,
-                    },
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: surface_format,
-                        blend: None,
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                }),
-                primitive: wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::TriangleList,
-                    strip_index_format: None,
-                    front_face: wgpu::FrontFace::Ccw,
-                    cull_mode: None,
-                    unclipped_depth: false,
-                    polygon_mode: wgpu::PolygonMode::Fill,
-                    conservative: false,
-                },
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState {
-                    count: 1,
-                    mask: !0,
-                    alpha_to_coverage_enabled: false,
-                },
-                multiview: None,
-                cache: None,
-            });
+        // Safety: data is None
+        let pipeline_cache = unsafe {
+            gpu.device
+                .create_pipeline_cache(&wgpu::PipelineCacheDescriptor {
+                    data: None,
+                    label: None,
+                    fallback: false,
+                })
+        };
+
+        let pipeline = match animation_style {
+            AnimationStyle::Slide => Self::create_pipeline::<
+                FullScreenVertexShader,
+                TransitionSlideFragmentShader,
+            >(
+                gpu, &pipeline_layout, surface_format, &pipeline_cache
+            ),
+
+            AnimationStyle::Circle => Self::create_pipeline::<
+                FullScreenVertexShader,
+                TransitionCircleFragmentShader,
+            >(
+                gpu, &pipeline_layout, surface_format, &pipeline_cache
+            ),
+        };
 
         let sampler = gpu.device.create_sampler(&Default::default());
 
         Self {
             monitor_id,
+            pipeline_cache,
             pipeline,
+            pipeline_layout,
             bind_group_layout,
+            surface_format,
             sampler,
             vertices,
         }
+    }
+
+    pub fn switch_shader<F: ShaderDescriptor>(&mut self, gpu: &Wgpu) {
+        self.pipeline = Self::create_pipeline::<FullScreenVertexShader, F>(
+            gpu,
+            &self.pipeline_layout,
+            self.surface_format,
+            &self.pipeline_cache,
+        );
     }
 
     pub fn render(
@@ -275,25 +340,170 @@ impl WallpaperTransitionPipeline {
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &state.bind_group, &[]);
         pass.set_vertex_buffer(0, self.vertices.slice(..));
-        pass.set_push_constants(
-            wgpu::ShaderStages::FRAGMENT,
-            0,
-            bytemuck::bytes_of(animation_state),
-        );
+        pass.set_push_constants(wgpu::ShaderStages::FRAGMENT, 0, animation_state.bytes());
 
         pass.draw(0..SCREEN_TRIANGLE.len() as u32, 0..1);
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub enum AnimationState {
+    Circle(CircleAnimationState),
+    Slide(SlideAnimationState),
+}
+
+impl Default for AnimationState {
+    fn default() -> Self {
+        Self::Circle(CircleAnimationState::default())
+    }
+}
+
+impl AnimationState {
+    pub fn bytes(&self) -> &[u8] {
+        match self {
+            Self::Circle(circle) => bytemuck::bytes_of(circle),
+            Self::Slide(slide) => bytemuck::bytes_of(slide),
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Default, Pod, Zeroable)]
-pub struct AnimationState {
+pub struct CircleAnimationState {
     pub centre: Vec2,
     pub radius: f32,
     pub direction: f32,
 }
 
-pub struct OngoingTransition {
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Default, Pod, Zeroable)]
+pub struct SlideAnimationState {
+    pub position: Vec2,
+    pub normal: Vec2,
+}
+
+fn corners_with_aspect_ratio(aspect_ratio: f32) -> [Vec2; 4] {
+    [
+        Vec2::new(-1.0 / aspect_ratio, -1.0),
+        Vec2::new(1.0 / aspect_ratio, -1.0),
+        Vec2::new(1.0 / aspect_ratio, 1.0),
+        Vec2::new(-1.0 / aspect_ratio, 1.0),
+    ]
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum OngoingTransition {
+    Slide(SlideTransition),
+    Circular(CircularTransition),
+}
+
+impl OngoingTransition {
+    pub fn new(aspect_ratio: f32, config: &AnimationConfig) -> Self {
+        let duration = Duration::from_millis(config.duration_milliseconds);
+
+        match config.animation {
+            Animation::Circle {
+                center_position,
+                direction,
+            } => Self::Circular(CircularTransition::new(
+                aspect_ratio,
+                center_position,
+                direction,
+                duration,
+            )),
+            Animation::Slide { angle } => {
+                Self::Slide(SlideTransition::new(aspect_ratio, angle, duration))
+            }
+        }
+    }
+
+    pub fn update(&mut self) {
+        match self {
+            Self::Circular(circular) => circular.update(),
+            Self::Slide(slide) => slide.update(),
+        }
+    }
+
+    pub fn is_finished(&self) -> bool {
+        match self {
+            Self::Circular(circular) => circular.is_finished(),
+            Self::Slide(slide) => slide.is_finished(),
+        }
+    }
+
+    pub fn state(&self, ease: impl FnOnce(f32) -> f32) -> AnimationState {
+        match self {
+            Self::Circular(circular) => AnimationState::Circle(circular.state(ease)),
+            Self::Slide(slide) => AnimationState::Slide(slide.state(ease)),
+        }
+    }
+
+    pub fn animation_style(&self) -> AnimationStyle {
+        match self {
+            Self::Circular(..) => AnimationStyle::Circle,
+            Self::Slide(..) => AnimationStyle::Slide,
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct SlideTransition {
+    /// Amount of work done in 0..=1 (normalized time)
+    pub done_fraction: f32,
+    pub scale: f32,
+    pub start_time: Instant,
+    pub animation_duration: Duration,
+    pub position: Vec2,
+    pub normal: Vec2,
+}
+
+impl SlideTransition {
+    pub fn new(aspect_ratio: f32, angle: Angle, duraition: Duration) -> Self {
+        let corners = corners_with_aspect_ratio(aspect_ratio);
+
+        let angle = angle.get_radians();
+
+        let normal = Vec2::new(angle.cos(), angle.sin());
+
+        let scale = 2.0 * (angle.sin().abs() + angle.cos().abs() / aspect_ratio);
+        let corner_idx = ((2.0 * angle / PI) as i32).rem_euclid(4);
+
+        let position = corners[corner_idx as usize];
+
+        Self {
+            done_fraction: 0.0,
+            scale,
+            start_time: Instant::now(),
+            animation_duration: duraition,
+            normal,
+            position,
+        }
+    }
+
+    pub fn update(&mut self) {
+        let total = self.start_time.elapsed().as_secs_f32() / self.animation_duration.as_secs_f32();
+        self.done_fraction = total.min(1.0);
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.done_fraction >= 1.0
+    }
+
+    #[inline]
+    pub fn amount_with_easing(&self, ease: impl FnOnce(f32) -> f32) -> f32 {
+        ease(self.done_fraction) * self.scale
+    }
+
+    pub fn state(&self, ease: impl FnOnce(f32) -> f32) -> SlideAnimationState {
+        SlideAnimationState {
+            normal: self.normal,
+            position: self.position + self.amount_with_easing(ease) * self.normal,
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct CircularTransition {
     /// Amount of work done in 0..=1 (normalized time)
     pub done_fraction: f32,
     pub scale: f32,
@@ -303,16 +513,16 @@ pub struct OngoingTransition {
     pub centre: Vec2,
 }
 
-impl OngoingTransition {
-    pub fn new(aspect_ratio: f32, config: &AnimationConfig) -> Self {
-        let corners = [
-            Vec2::new(-1.0 / aspect_ratio, -1.0),
-            Vec2::new(1.0 / aspect_ratio, -1.0),
-            Vec2::new(1.0 / aspect_ratio, 1.0),
-            Vec2::new(-1.0 / aspect_ratio, 1.0),
-        ];
+impl CircularTransition {
+    pub fn new(
+        aspect_ratio: f32,
+        center_position: CenterPosition,
+        direction: AnimationDirection,
+        duration: Duration,
+    ) -> Self {
+        let corners = corners_with_aspect_ratio(aspect_ratio);
 
-        let stretched_centre = config.center_position.get();
+        let stretched_centre = center_position.get();
         let centre = Vec2::new(stretched_centre.x / aspect_ratio, stretched_centre.y);
 
         let scale = centre
@@ -325,8 +535,8 @@ impl OngoingTransition {
             done_fraction: 0.0,
             scale,
             start_time: Instant::now(),
-            animation_duration: Duration::from_millis(config.duration_milliseconds),
-            direction: config.direction,
+            animation_duration: duration,
+            direction,
             centre,
         }
     }
@@ -344,10 +554,6 @@ impl OngoingTransition {
         self.done_fraction >= 1.0
     }
 
-    pub fn amount(&self) -> f32 {
-        self.amount_with_easing(|t| t)
-    }
-
     #[inline]
     pub fn amount_with_easing(&self, ease: impl FnOnce(f32) -> f32) -> f32 {
         let t = match self.direction {
@@ -361,6 +567,14 @@ impl OngoingTransition {
         match self.direction {
             AnimationDirection::Out => 1.0,
             AnimationDirection::In => -1.0,
+        }
+    }
+
+    pub fn state(&self, ease: impl FnOnce(f32) -> f32) -> CircleAnimationState {
+        CircleAnimationState {
+            centre: self.centre(),
+            radius: self.amount_with_easing(ease),
+            direction: self.direction(),
         }
     }
 }
@@ -444,8 +658,11 @@ impl RunningWallpapers {
 
     pub fn init_transitions(&mut self, gpu: &Wgpu) {
         if self.is_transitioning() && Almost::is_nil(&self.transition_pipeline) {
-            self.transition_pipeline =
-                Value(WallpaperTransitionPipeline::new(gpu, self.monitor_id));
+            self.transition_pipeline = Value(WallpaperTransitionPipeline::new(
+                gpu,
+                self.monitor_id,
+                self.config.animation.style(),
+            ));
             self.textures = Value(WallpaperTransitionState::new(
                 gpu,
                 &self.transition_pipeline,
@@ -487,11 +704,18 @@ impl RunningWallpapers {
             let frame_info = wallpaper.frame(gpu, &self.textures.to, encoder);
             frame_result = frame_result.min_or_60_fps(frame_info);
 
-            let state = AnimationState {
-                centre: transition.centre(),
-                radius: transition.amount_with_easing(self.config.easing.get()),
-                direction: transition.direction(),
-            };
+            let state = transition.state(self.config.easing.get());
+
+            if transition.animation_style() != self.config.animation.style() {
+                match transition.animation_style() {
+                    AnimationStyle::Circle => self
+                        .transition_pipeline
+                        .switch_shader::<TransitionCircleFragmentShader>(gpu),
+                    AnimationStyle::Slide => self
+                        .transition_pipeline
+                        .switch_shader::<TransitionSlideFragmentShader>(gpu),
+                }
+            }
 
             self.transition_pipeline
                 .render(&self.textures, &surface_view, encoder, &state);

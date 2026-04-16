@@ -48,7 +48,8 @@ impl Wgpu {
         let features = wgpu::Features::TEXTURE_FORMAT_NV12
             | wgpu::Features::PUSH_CONSTANTS
             | wgpu::Features::BGRA8UNORM_STORAGE
-            | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
+            | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            | wgpu::Features::PIPELINE_CACHE;
         let memory_hints = wgpu::MemoryHints::Performance;
 
         let open_device = unsafe {
@@ -63,7 +64,7 @@ impl Wgpu {
             let mut enabled_phd_features =
                 adapter.physical_device_features(&enabled_extensions, features);
 
-            let family_index = 0; //TODO
+            let family_index = 0;
             let family_info = vk::DeviceQueueCreateInfo::default()
                 .queue_family_index(family_index)
                 .queue_priorities(&[1.0]);
