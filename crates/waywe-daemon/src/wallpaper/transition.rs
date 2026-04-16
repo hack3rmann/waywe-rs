@@ -265,6 +265,7 @@ impl WallpaperTransitionPipeline {
             surfaces[&monitor_id].format
         };
 
+        // Safety: data is None
         let pipeline_cache = unsafe {
             gpu.device
                 .create_pipeline_cache(&wgpu::PipelineCacheDescriptor {
@@ -345,9 +346,16 @@ impl WallpaperTransitionPipeline {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
 pub enum AnimationState {
     Circle(CircleAnimationState),
     Slide(SlideAnimationState),
+}
+
+impl Default for AnimationState {
+    fn default() -> Self {
+        Self::Circle(CircleAnimationState::default())
+    }
 }
 
 impl AnimationState {
@@ -383,6 +391,7 @@ fn corners_with_aspect_ratio(aspect_ratio: f32) -> [Vec2; 4] {
     ]
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub enum OngoingTransition {
     Slide(SlideTransition),
     Circular(CircularTransition),
@@ -437,6 +446,7 @@ impl OngoingTransition {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
 pub struct SlideTransition {
     /// Amount of work done in 0..=1 (normalized time)
     pub done_fraction: f32,
@@ -492,6 +502,7 @@ impl SlideTransition {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
 pub struct CircularTransition {
     /// Amount of work done in 0..=1 (normalized time)
     pub done_fraction: f32,

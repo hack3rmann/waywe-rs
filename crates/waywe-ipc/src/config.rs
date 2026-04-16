@@ -115,8 +115,8 @@ impl Default for BlurConfig {
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum AnimationStyle {
-    Circle,
     #[default]
+    Circle,
     Slide,
 }
 
