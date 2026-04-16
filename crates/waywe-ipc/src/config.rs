@@ -121,7 +121,7 @@ pub enum AnimationStyle {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case", tag = "style")]
 pub enum Animation {
     Circle {
         #[serde(default)]
@@ -160,7 +160,7 @@ pub struct AnimationConfig {
     pub duration_milliseconds: u64,
     #[serde(default)]
     pub easing: Interpolation,
-    #[serde(default)]
+    #[serde(default, flatten)]
     pub animation: Animation,
 }
 
