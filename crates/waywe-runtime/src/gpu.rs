@@ -64,7 +64,7 @@ impl Wgpu {
             let mut enabled_phd_features =
                 adapter.physical_device_features(&enabled_extensions, features);
 
-            let family_index = 0; //TODO
+            let family_index = 0;
             let family_info = vk::DeviceQueueCreateInfo::default()
                 .queue_family_index(family_index)
                 .queue_priorities(&[1.0]);

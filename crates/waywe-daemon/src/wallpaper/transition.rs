@@ -9,7 +9,9 @@ use std::{
     mem,
     time::{Duration, Instant},
 };
-use waywe_ipc::config::{Animation, AnimationConfig, AnimationDirection, AnimationStyle};
+use waywe_ipc::config::{
+    Angle, Animation, AnimationConfig, AnimationDirection, AnimationStyle, CenterPosition,
+};
 use waywe_runtime::{
     effects::{Effects, config::EffectsBuilder},
     frame::{FrameError, FrameInfo},
@@ -206,7 +208,7 @@ impl WallpaperTransitionPipeline {
             })
     }
 
-    pub fn new(gpu: &Wgpu, monitor_id: MonitorId) -> Self {
+    pub fn new(gpu: &Wgpu, monitor_id: MonitorId, animation_style: AnimationStyle) -> Self {
         let vertices = gpu.device.create_buffer_init(&BufferInitDescriptor {
             label: Some("fullscreen-triangle"),
             contents: bytemuck::cast_slice(&SCREEN_TRIANGLE),
@@ -272,11 +274,21 @@ impl WallpaperTransitionPipeline {
                 })
         };
 
-        let pipeline = Self::create_pipeline::<
-            FullScreenVertexShader,
-            // TODO: add config
-            TransitionSlideFragmentShader,
-        >(gpu, &pipeline_layout, surface_format, &pipeline_cache);
+        let pipeline = match animation_style {
+            AnimationStyle::Slide => Self::create_pipeline::<
+                FullScreenVertexShader,
+                TransitionSlideFragmentShader,
+            >(
+                gpu, &pipeline_layout, surface_format, &pipeline_cache
+            ),
+
+            AnimationStyle::Circle => Self::create_pipeline::<
+                FullScreenVertexShader,
+                TransitionCircleFragmentShader,
+            >(
+                gpu, &pipeline_layout, surface_format, &pipeline_cache
+            ),
+        };
 
         let sampler = gpu.device.create_sampler(&Default::default());
 
@@ -378,9 +390,21 @@ pub enum OngoingTransition {
 
 impl OngoingTransition {
     pub fn new(aspect_ratio: f32, config: &AnimationConfig) -> Self {
-        match config.animation.style() {
-            AnimationStyle::Circle => Self::Circular(CircularTransition::new(aspect_ratio, config)),
-            AnimationStyle::Slide => Self::Slide(SlideTransition::new(aspect_ratio, config)),
+        let duration = Duration::from_millis(config.duration_milliseconds);
+
+        match config.animation {
+            Animation::Circle {
+                center_position,
+                direction,
+            } => Self::Circular(CircularTransition::new(
+                aspect_ratio,
+                center_position,
+                direction,
+                duration,
+            )),
+            Animation::Slide { angle } => {
+                Self::Slide(SlideTransition::new(aspect_ratio, angle, duration))
+            }
         }
     }
 
@@ -424,12 +448,10 @@ pub struct SlideTransition {
 }
 
 impl SlideTransition {
-    pub fn new(aspect_ratio: f32, config: &AnimationConfig) -> Self {
+    pub fn new(aspect_ratio: f32, angle: Angle, duraition: Duration) -> Self {
         let corners = corners_with_aspect_ratio(aspect_ratio);
-        let angle = match config.animation {
-            Animation::Slide { angle } => angle.get_radians(),
-            _ => panic!("fix this"),
-        }; // deg
+
+        let angle = angle.get_radians();
 
         let normal = Vec2::new(angle.cos(), angle.sin());
 
@@ -442,7 +464,7 @@ impl SlideTransition {
             done_fraction: 0.0,
             scale,
             start_time: Instant::now(),
-            animation_duration: Duration::from_millis(config.duration_milliseconds),
+            animation_duration: duraition,
             normal,
             position,
         }
@@ -481,16 +503,13 @@ pub struct CircularTransition {
 }
 
 impl CircularTransition {
-    pub fn new(aspect_ratio: f32, config: &AnimationConfig) -> Self {
+    pub fn new(
+        aspect_ratio: f32,
+        center_position: CenterPosition,
+        direction: AnimationDirection,
+        duration: Duration,
+    ) -> Self {
         let corners = corners_with_aspect_ratio(aspect_ratio);
-
-        let Animation::Circle {
-            center_position,
-            direction,
-        } = config.animation
-        else {
-            panic!("fix this");
-        };
 
         let stretched_centre = center_position.get();
         let centre = Vec2::new(stretched_centre.x / aspect_ratio, stretched_centre.y);
@@ -505,7 +524,7 @@ impl CircularTransition {
             done_fraction: 0.0,
             scale,
             start_time: Instant::now(),
-            animation_duration: Duration::from_millis(config.duration_milliseconds),
+            animation_duration: duration,
             direction,
             centre,
         }
@@ -586,9 +605,7 @@ pub struct RunningWallpapers {
 }
 
 impl RunningWallpapers {
-    // TODO: return const
-    pub fn new(monitor_id: MonitorId, monitor_size: UVec2, config: AnimationConfig) -> Self {
-        dbg!(&config);
+    pub const fn new(monitor_id: MonitorId, monitor_size: UVec2, config: AnimationConfig) -> Self {
         Self {
             monitor_id,
             aspect_ratio: monitor_size.y as f32 / monitor_size.x as f32,
@@ -630,8 +647,11 @@ impl RunningWallpapers {
 
     pub fn init_transitions(&mut self, gpu: &Wgpu) {
         if self.is_transitioning() && Almost::is_nil(&self.transition_pipeline) {
-            self.transition_pipeline =
-                Value(WallpaperTransitionPipeline::new(gpu, self.monitor_id));
+            self.transition_pipeline = Value(WallpaperTransitionPipeline::new(
+                gpu,
+                self.monitor_id,
+                self.config.animation.style(),
+            ));
             self.textures = Value(WallpaperTransitionState::new(
                 gpu,
                 &self.transition_pipeline,
