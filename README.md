@@ -132,7 +132,7 @@ level_multiplier = 2
 
 And if you want slide animation:
 
-```
+```toml
 [animation]
 duration-milliseconds = 2000
 easing = "ease-out"
@@ -147,7 +147,6 @@ style = "slide"
 type = "random"
 # value from 0 to 360 degrees
 degrees = 0
-
 ```
 
 ## Troubleshooting
