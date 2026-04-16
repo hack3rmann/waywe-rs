@@ -48,7 +48,8 @@ impl Wgpu {
         let features = wgpu::Features::TEXTURE_FORMAT_NV12
             | wgpu::Features::PUSH_CONSTANTS
             | wgpu::Features::BGRA8UNORM_STORAGE
-            | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
+            | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            | wgpu::Features::PIPELINE_CACHE;
         let memory_hints = wgpu::MemoryHints::Performance;
 
         let open_device = unsafe {

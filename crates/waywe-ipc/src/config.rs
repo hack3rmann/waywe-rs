@@ -112,26 +112,64 @@ impl Default for BlurConfig {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum AnimationStyle {
+    Circle,
+    #[default]
+    Slide,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "kebab-case")]
+pub enum Animation {
+    Circle {
+        #[serde(default)]
+        center_position: CenterPosition,
+        #[serde(default)]
+        direction: AnimationDirection,
+    },
+    Slide {
+        #[serde(default, rename = "angle-degrees")]
+        angle: Angle,
+    },
+}
+
+impl Animation {
+    pub fn style(&self) -> AnimationStyle {
+        match self {
+            Self::Circle { .. } => AnimationStyle::Circle,
+            Self::Slide { .. } => AnimationStyle::Slide,
+        }
+    }
+}
+
+impl Default for Animation {
+    fn default() -> Self {
+        Self::Circle {
+            center_position: CenterPosition::default(),
+            direction: AnimationDirection::default(),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct AnimationConfig {
     #[serde(default = "get_default_duration")]
     pub duration_milliseconds: u64,
     #[serde(default)]
-    pub direction: AnimationDirection,
-    #[serde(default)]
     pub easing: Interpolation,
     #[serde(default)]
-    pub center_position: CenterPosition,
+    pub animation: Animation,
 }
 
 impl Default for AnimationConfig {
     fn default() -> Self {
         Self {
             duration_milliseconds: get_default_duration(),
-            direction: AnimationDirection::default(),
             easing: Interpolation::default(),
-            center_position: CenterPosition::default(),
+            animation: Animation::default(),
         }
     }
 }
@@ -207,17 +245,59 @@ impl CenterPosition {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+#[derive(Default)]
+pub enum Angle {
+    Value {
+        angle_degrees: f32,
+    },
+    #[default]
+    Random,
+}
+
+impl Angle {
+    pub fn get_degrees(self) -> f32 {
+        match self {
+            Self::Value { angle_degrees } => angle_degrees,
+            Self::Random => {
+                let distribution = Uniform::new_inclusive(0.0_f32, 360.0).unwrap();
+                let mut rng = rand::rng();
+
+                distribution.sample(&mut rng)
+            }
+        }
+    }
+
+    pub fn get_radians(self) -> f32 {
+        self.get_degrees().to_radians()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    #[ignore = "used for debugging only"]
-    fn print_config() {
+    //#[ignore = "used for debugging only"]
+    fn print_config_circle() {
         let config = Config {
             animation: AnimationConfig {
-                center_position: CenterPosition::Point {
-                    position: Vec2::ZERO,
+                animation: Animation::default(),
+                ..AnimationConfig::default()
+            },
+            effects: vec![],
+        };
+        let string = toml::to_string(&config).unwrap();
+        println!("{string}");
+    }
+    #[test]
+    //#[ignore = "used for debugging only"]
+    fn print_config_slide() {
+        let config = Config {
+            animation: AnimationConfig {
+                animation: Animation::Slide {
+                    angle: Angle::Random,
                 },
                 ..AnimationConfig::default()
             },
