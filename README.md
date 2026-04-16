@@ -94,12 +94,13 @@ Default configuration:
 duration-milliseconds = 2000
 # Animation direction: "in" | "out"
 direction = "out"
-# Interpolation function: "none" | "ease-in" | "ease-out" | "ease-in-out"
+# Interpolation function: "none" | "ease-in" | "ease-out" | "ease-in-out" | "bezier" 
 # 
 # - "none": f(t) = t
 # - "ease-in": f(t) = t**2
 # - "ease-out": f(t) = 1 - (1 - t)**2
 # - "ease-in-out": f(t) = 3 * x**2 - 2 * x**3
+# - "bezeier": [a, b, c, d] where a, b, c, d are floats and a, c are from [0.0, 1.0]
 easing = "ease-out"
 # Animation style: "circle" | "slide"
 style = "circle"

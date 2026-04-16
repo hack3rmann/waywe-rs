@@ -192,9 +192,7 @@ const fn get_default_duration() -> u64 {
     AnimationConfig::DEFAULT_DURATION.as_millis() as u64
 }
 
-#[derive(
-    Clone, Copy, Debug, PartialEq, PartialOrd, Default, Eq, Ord, Hash, Serialize, Deserialize,
-)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Interpolation {
     None,
@@ -202,20 +200,55 @@ pub enum Interpolation {
     #[default]
     EaseOut,
     EaseInOut,
+    Bezier([f32; 4]),
 }
 
 impl Interpolation {
-    pub const fn get(self) -> InterpolationFn {
+    pub fn get(self, x: f32) -> f32 {
         match self {
-            Interpolation::None => |x| x,
-            Interpolation::EaseIn => |x| x * x,
-            Interpolation::EaseOut => |x| 1.0 - (1.0 - x) * (1.0 - x),
-            Interpolation::EaseInOut => |x| 3.0 * x * x - 2.0 * x * x * x,
+            Interpolation::None => x,
+            Interpolation::EaseIn => x * x,
+            Interpolation::EaseOut => 1.0 - (1.0 - x) * (1.0 - x),
+            Interpolation::EaseInOut => 3.0 * x * x - 2.0 * x * x * x,
+            Interpolation::Bezier([a, b, c, d]) => {
+                Self::cubic_bezier(x, a.clamp(0.0, 1.0), b, c.clamp(0.0, 1.0), d)
+            }
         }
     }
-}
 
-pub type InterpolationFn = fn(f32) -> f32;
+    pub fn cubic_bezier(x: f32, a: f32, b: f32, c: f32, d: f32) -> f32 {
+        const N_ITERATIONS: usize = 10;
+        const EPS: f32 = 1e-6;
+
+        let mut t0 = 0.0;
+        let mut t1 = 1.0;
+        let mut t = x;
+
+        for _ in 0..N_ITERATIONS {
+            let x_t = Self::sample_curve(t, a, c);
+
+            if (x_t - x).abs() < EPS {
+                break;
+            }
+
+            if x_t < x {
+                t0 = t;
+            } else {
+                t1 = t;
+            }
+
+            t = (t0 + t1) * 0.5;
+        }
+
+        Self::sample_curve(t, b, d)
+    }
+
+    fn sample_curve(t: f32, a: f32, b: f32) -> f32 {
+        let u = 1.0 - t;
+
+        3.0 * u * u * t * a + 3.0 * u * t * t * b + t * t * t
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
