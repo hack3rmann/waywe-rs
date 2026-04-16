@@ -1,7 +1,8 @@
 use glam::Vec2;
 use rand::distr::{Distribution as _, Uniform};
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use std::{env, fs, io::ErrorKind, path::PathBuf, time::Duration};
+use tracing::{error, info};
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -9,6 +10,64 @@ pub struct Config {
     pub animation: AnimationConfig,
     #[serde(default)]
     pub effects: Vec<Effects>,
+}
+
+impl Config {
+    /// Tries to read config file from HOME paths. If fails, returns the default one.
+    ///
+    /// Waywe does not create the config file for you,
+    /// but it looks for one in the following locations on UNIX systems:
+    ///
+    /// 1. `$XDG_CONFIG_HOME/waywe/config.toml`
+    /// 2. `$HOME/.config/waywe/config.toml`
+    /// 3. `/etc/waywe/config.toml`
+    pub fn read() -> Self {
+        const TRAILING: &str = "waywe/config.toml";
+
+        let xdg_path = env::var_os("XDG_CONFIG_HOME").map(|xdg| {
+            let mut p = PathBuf::from(xdg);
+            p.push(TRAILING);
+            p
+        });
+
+        let home_path = env::home_dir().map(|mut home| {
+            home.push(".config");
+            home.push(TRAILING);
+            home
+        });
+
+        let etc_path = {
+            let mut etc = PathBuf::from("/etc");
+            etc.push(TRAILING);
+            Some(etc)
+        };
+
+        let home_paths = [xdg_path, home_path, etc_path].into_iter().flatten();
+
+        for path in home_paths {
+            match fs::read_to_string(&path) {
+                Ok(contents) => match toml::from_str(&contents) {
+                    Ok(config) => {
+                        info!("loaded config at {}", path.display());
+                        return config;
+                    }
+                    Err(error) => {
+                        error!(?error, "invalid config at {}", path.display());
+                        continue;
+                    }
+                },
+                Err(error) if error.kind() == ErrorKind::NotFound => {
+                    continue;
+                }
+                Err(error) => {
+                    error!(?error, "failed to read config at {}", path.display());
+                    continue;
+                }
+            }
+        }
+
+        Config::default()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -53,26 +112,64 @@ impl Default for BlurConfig {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum AnimationStyle {
+    #[default]
+    Circle,
+    Slide,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "kebab-case", tag = "style")]
+pub enum Animation {
+    Circle {
+        #[serde(default)]
+        center_position: CenterPosition,
+        #[serde(default)]
+        direction: AnimationDirection,
+    },
+    Slide {
+        #[serde(default)]
+        angle: Angle,
+    },
+}
+
+impl Animation {
+    pub fn style(&self) -> AnimationStyle {
+        match self {
+            Self::Circle { .. } => AnimationStyle::Circle,
+            Self::Slide { .. } => AnimationStyle::Slide,
+        }
+    }
+}
+
+impl Default for Animation {
+    fn default() -> Self {
+        Self::Circle {
+            center_position: CenterPosition::default(),
+            direction: AnimationDirection::default(),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct AnimationConfig {
     #[serde(default = "get_default_duration")]
     pub duration_milliseconds: u64,
     #[serde(default)]
-    pub direction: AnimationDirection,
-    #[serde(default)]
     pub easing: Interpolation,
-    #[serde(default)]
-    pub center_position: CenterPosition,
+    #[serde(default, flatten)]
+    pub animation: Animation,
 }
 
 impl Default for AnimationConfig {
     fn default() -> Self {
         Self {
             duration_milliseconds: get_default_duration(),
-            direction: AnimationDirection::default(),
             easing: Interpolation::default(),
-            center_position: CenterPosition::default(),
+            animation: Animation::default(),
         }
     }
 }
@@ -122,8 +219,12 @@ pub type InterpolationFn = fn(f32) -> f32;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
+#[derive(Default)]
 pub enum CenterPosition {
-    Point { position: Vec2 },
+    Point {
+        position: Vec2,
+    },
+    #[default]
     Random,
 }
 
@@ -144,9 +245,33 @@ impl CenterPosition {
     }
 }
 
-impl Default for CenterPosition {
-    fn default() -> Self {
-        Self::Random
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+#[derive(Default)]
+pub enum Angle {
+    Value {
+        #[serde(rename = "degrees")]
+        angle_degrees: f32,
+    },
+    #[default]
+    Random,
+}
+
+impl Angle {
+    pub fn get_degrees(self) -> f32 {
+        match self {
+            Self::Value { angle_degrees } => angle_degrees,
+            Self::Random => {
+                let distribution = Uniform::new_inclusive(0.0_f32, 360.0).unwrap();
+                let mut rng = rand::rng();
+
+                distribution.sample(&mut rng)
+            }
+        }
+    }
+
+    pub fn get_radians(self) -> f32 {
+        self.get_degrees().to_radians()
     }
 }
 
@@ -156,11 +281,25 @@ mod tests {
 
     #[test]
     #[ignore = "used for debugging only"]
-    fn print_config() {
+    fn print_config_circle() {
         let config = Config {
             animation: AnimationConfig {
-                center_position: CenterPosition::Point {
-                    position: Vec2::ZERO,
+                animation: Animation::default(),
+                ..AnimationConfig::default()
+            },
+            effects: vec![],
+        };
+        let string = toml::to_string(&config).unwrap();
+        println!("{string}");
+    }
+
+    #[test]
+    #[ignore = "used for debugging only"]
+    fn print_config_slide() {
+        let config = Config {
+            animation: AnimationConfig {
+                animation: Animation::Slide {
+                    angle: Angle::Random,
                 },
                 ..AnimationConfig::default()
             },

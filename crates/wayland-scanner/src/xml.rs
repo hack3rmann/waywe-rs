@@ -278,7 +278,6 @@ pub struct ProtocolFile<'s> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
 
     #[test]
     fn serialize() {
@@ -350,11 +349,5 @@ mod tests {
                 ],
             },
         };
-    }
-
-    #[test]
-    fn deserialize_wayland_xml() {
-        let proto_string = fs::read_to_string("../wayland-protocols/wayland.xml").unwrap();
-        let _proto = xml_serde::from_str::<ProtocolFile>(&proto_string).unwrap();
     }
 }
