@@ -62,6 +62,7 @@ impl Parse for GenericGroupList {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 enum AttrName {
     Stage,
     Path,
@@ -79,6 +80,7 @@ impl Parse for GenericGroup {
         let punct = input.parse::<Punct>()?;
         let literal = input.parse::<LitStr>()?;
 
+        // TODO(Lorent1): move into AttrName::from_str
         let ident = match ident.to_string().as_str() {
             "stage" => AttrName::Stage,
             "path" => AttrName::Path,
@@ -105,16 +107,12 @@ fn parse_attributes(input: &[Attribute]) -> ShaderAttribute {
     let mut label = None;
 
     for attr in input {
+        // TODO(Lorent1) :rewrite into `if let`
         match &attr.meta {
             Meta::List(list) => {
-                // panic!("{list:#?}");
                 let segments = &list.path.segments;
 
-                if segments.len() != 1 {
-                    continue;
-                }
-
-                if segments[0].ident != "shader" {
+                if segments.len() != 1 || segments[0].ident != "shader" {
                     continue;
                 }
 
@@ -123,6 +121,7 @@ fn parse_attributes(input: &[Attribute]) -> ShaderAttribute {
                 for group in list.generic_groups {
                     match group.ident {
                         AttrName::Stage => {
+                            // TODO(Lorent1): move into Stage::from_str
                             stage = match group.literal.value().as_str() {
                                 "vertex" => Some(Stage::Vertex),
                                 "fragment" => Some(Stage::Fragment),
@@ -175,7 +174,9 @@ pub fn spirv_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             fn shader_descriptor() -> ::wgpu::ShaderModuleDescriptor<'static> {
                 ::wgpu::ShaderModuleDescriptor {
                     label: #label,
-                    source: ::wgpu::ShaderSource::SpirV(::std::borrow::Cow::Borrowed(<#struct_name>::__SPIRV_SOURCE)),
+                    source: ::wgpu::ShaderSource::SpirV(
+                        ::std::borrow::Cow::Borrowed(<#struct_name>::__SPIRV_SOURCE),
+                    ),
                 }
             }
         }

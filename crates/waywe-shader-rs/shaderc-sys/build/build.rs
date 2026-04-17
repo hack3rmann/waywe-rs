@@ -77,10 +77,10 @@ fn build_shaderc_unix(shaderc_dir: &PathBuf, use_ninja: bool, target_os: &str) -
         config.generator("Ninja");
     }
 
-    if target_os == "ios" {
-        if let Some(path) = get_apple_sdk_path() {
-            config.define("CMAKE_OSX_SYSROOT", path);
-        }
+    if target_os == "ios"
+        && let Some(path) = get_apple_sdk_path()
+    {
+        config.define("CMAKE_OSX_SYSROOT", path);
     }
 
     config.build()
@@ -203,6 +203,8 @@ fn host_target() -> String {
 }
 
 fn get_search_dir(target_os: &str, build_from_source: bool) -> Option<String> {
+    // TODO(Lorent1): remove the 'warnings'
+
     // Use explicit shaderc search directory if set.
     if let Ok(lib_dir) = env::var("SHADERC_LIB_DIR") {
         println!("cargo:warning=shaderc: searching native shaderc libraries in '{lib_dir}'");
