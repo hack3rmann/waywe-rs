@@ -1,22 +1,47 @@
-use std::path::Path;
-
 use proc_macro2::{Ident, Literal, Punct};
 use quote::quote;
+use shaderc::{CompileOptions, Compiler, ShaderKind};
+use std::{fs, path::Path};
 use syn::{
     Attribute, DeriveInput, LitStr, Meta, PathArguments, Token, parse::*, punctuated::Punctuated,
     token::Comma,
 };
 
 fn compile_spirv(attr: &ShaderAttribute) -> Vec<u32> {
-    panic!("{attr:#?}");
-    todo!()
+    let source = fs::read_to_string(&attr.path).unwrap();
+
+    let compiler = Compiler::new().unwrap();
+    let mut options = CompileOptions::new().unwrap();
+
+    // TODO(Lorent1): add not main
+    compiler
+        .compile_into_spirv(
+            &source,
+            attr.stage.to_shader_kind(),
+            &attr.path,
+            "main",
+            Some(&options),
+        )
+        .unwrap()
+        .as_binary()
+        .to_vec()
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum Stage {
     Vertex,
     Fragment,
     Compute,
+}
+
+impl Stage {
+    pub fn to_shader_kind(self) -> ShaderKind {
+        match self {
+            Self::Vertex => ShaderKind::Vertex,
+            Self::Fragment => ShaderKind::Fragment,
+            Self::Compute => ShaderKind::Compute,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -124,11 +149,11 @@ pub fn spirv_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let struct_name = &ast.ident;
     let attr = parse_attributes(&ast.attrs);
-    let bytes_vec = compile_spirv(&attr);
+    let u32_vec = compile_spirv(&attr);
 
     quote! {
         impl #struct_name {
-            const __SPRIV_SOURCE: &[u32] = &[ #( #bytes_vec ),* ];
+            const __SPRIV_SOURCE: &[u32] = &[ #( #u32_vec ),* ];
         }
     }
     .into()

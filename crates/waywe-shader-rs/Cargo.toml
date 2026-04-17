@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "shaderc-rs",
+    "shaderc-sys"
+]
