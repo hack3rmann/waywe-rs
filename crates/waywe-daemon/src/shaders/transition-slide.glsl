@@ -1,6 +1,6 @@
 #version 460
 
-layout(push_constant) uniform struct Push {
+layout(push_constant) uniform Push {
     vec2 position;
     vec2 normal;
 } push;

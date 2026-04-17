@@ -1,13 +1,14 @@
 use crate::wallpaper::optimized::image::FullscreenVertex;
 use for_sure::prelude::*;
 use glam::{UVec2, Vec2};
-use std::{borrow::Cow, mem, path::PathBuf};
+use std::{mem, path::PathBuf};
 use video::{BackendError, FrameDuration};
-use waywe_runtime::{frame::FrameInfo, gpu::Wgpu, shaders::ShaderDescriptor, wayland::MonitorId};
+use waywe_runtime::{frame::FrameInfo, gpu::Wgpu, wayland::MonitorId};
 use waywe_scene::{
     time::Time,
     video::{RenderVideo, Video},
 };
+use waywe_spirv_derive::ShaderDescriptor;
 use wgpu::util::DeviceExt;
 
 pub const LABEL: &str = "default-video";
@@ -295,17 +296,8 @@ impl VideoPipeline {
     }
 }
 
+#[derive(ShaderDescriptor)]
+#[shader(path = "crates/waywe-daemon/src/shaders/video.glsl")]
+#[shader(stage = "fragment")]
+#[shader(label = "default-video")]
 pub struct VideoFragment;
-
-impl ShaderDescriptor for VideoFragment {
-    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
-        wgpu::ShaderModuleDescriptor {
-            label: Some(LABEL),
-            source: wgpu::ShaderSource::Glsl {
-                shader: Cow::Borrowed(include_str!("../../shaders/video.glsl")),
-                stage: wgpu::naga::ShaderStage::Fragment,
-                defines: &[],
-            },
-        }
-    }
-}

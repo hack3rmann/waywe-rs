@@ -47,6 +47,7 @@ impl Stage {
 struct ShaderAttribute {
     path: String,
     stage: Stage,
+    label: Option<String>,
 }
 
 struct GenericGroupList {
@@ -64,6 +65,7 @@ impl Parse for GenericGroupList {
 enum AttrName {
     Stage,
     Path,
+    Label,
 }
 
 struct GenericGroup {
@@ -80,7 +82,13 @@ impl Parse for GenericGroup {
         let ident = match ident.to_string().as_str() {
             "stage" => AttrName::Stage,
             "path" => AttrName::Path,
-            _ => return Err(Error::new(ident.span(), "expected 'stage' or 'path'")),
+            "label" => AttrName::Label,
+            _ => {
+                return Err(Error::new(
+                    ident.span(),
+                    "expected 'stage' | 'path' | 'label'",
+                ));
+            }
         };
 
         if punct.as_char() != '=' {
@@ -94,6 +102,7 @@ impl Parse for GenericGroup {
 fn parse_attributes(input: &[Attribute]) -> ShaderAttribute {
     let mut path = None;
     let mut stage = None;
+    let mut label = None;
 
     for attr in input {
         match &attr.meta {
@@ -124,6 +133,9 @@ fn parse_attributes(input: &[Attribute]) -> ShaderAttribute {
                         AttrName::Path => {
                             path = Some(group.literal.value());
                         }
+                        AttrName::Label => {
+                            label = Some(group.literal.value());
+                        }
                     }
                 }
             }
@@ -139,7 +151,7 @@ fn parse_attributes(input: &[Attribute]) -> ShaderAttribute {
         panic!("no stage provided")
     };
 
-    ShaderAttribute { path, stage }
+    ShaderAttribute { path, stage, label }
 }
 
 #[proc_macro_derive(ShaderDescriptor, attributes(shader))]
@@ -149,10 +161,23 @@ pub fn spirv_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let struct_name = &ast.ident;
     let attr = parse_attributes(&ast.attrs);
     let u32_vec = compile_spirv(&attr);
+    let label = match attr.label {
+        Some(label) => quote! { Some(#label) },
+        None => quote! { None },
+    };
 
     quote! {
         impl #struct_name {
-            const __SPRIV_SOURCE: &[u32] = &[ #( #u32_vec ),* ];
+            const __SPIRV_SOURCE: &[u32] = &[ #( #u32_vec ),* ];
+        }
+
+        impl ::waywe_runtime::shaders::ShaderDescriptor for #struct_name {
+            fn shader_descriptor() -> ::wgpu::ShaderModuleDescriptor<'static> {
+                ::wgpu::ShaderModuleDescriptor {
+                    label: #label,
+                    source: ::wgpu::ShaderSource::SpirV(::std::borrow::Cow::Borrowed(<#struct_name>::__SPIRV_SOURCE)),
+                }
+            }
         }
     }
     .into()

@@ -1,9 +1,10 @@
 use bytemuck::{Pod, Zeroable};
 use glam::{UVec2, Vec2};
 use image::{ImageBuffer, ImageError, Rgba};
-use std::{borrow::Cow, io, mem};
+use std::{io, mem};
 use thiserror::Error;
-use waywe_runtime::{gpu::Wgpu, shaders::ShaderDescriptor, wayland::MonitorId};
+use waywe_runtime::{gpu::Wgpu, wayland::MonitorId};
+use waywe_spirv_derive::ShaderDescriptor;
 use wgpu::util::DeviceExt;
 
 pub const LABEL: &str = "default-image";
@@ -233,32 +234,14 @@ pub struct PushConst {
     pub transparency_color: u32,
 }
 
+#[derive(ShaderDescriptor)]
+#[shader(path = "crates/waywe-daemon/src/shaders/fullscreen-vertex.glsl")]
+#[shader(stage = "vertex")]
+#[shader(label = "default-image")]
 pub struct FullscreenVertex;
 
-impl ShaderDescriptor for FullscreenVertex {
-    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
-        wgpu::ShaderModuleDescriptor {
-            label: Some(LABEL),
-            source: wgpu::ShaderSource::Glsl {
-                shader: Cow::Borrowed(include_str!("../../shaders/fullscreen-vertex.glsl")),
-                stage: wgpu::naga::ShaderStage::Vertex,
-                defines: &[],
-            },
-        }
-    }
-}
-
+#[derive(ShaderDescriptor)]
+#[shader(path = "crates/waywe-daemon/src/shaders/image.glsl")]
+#[shader(stage = "fragment")]
+#[shader(label = "default-image")]
 pub struct ImageFragment;
-
-impl ShaderDescriptor for ImageFragment {
-    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
-        wgpu::ShaderModuleDescriptor {
-            label: Some(LABEL),
-            source: wgpu::ShaderSource::Glsl {
-                shader: Cow::Borrowed(include_str!("../../shaders/image.glsl")),
-                stage: wgpu::naga::ShaderStage::Fragment,
-                defines: &[],
-            },
-        }
-    }
-}

@@ -95,48 +95,15 @@ impl WallpaperTransitionState {
 #[shader(stage = "vertex")]
 pub struct FullScreenVertexShader;
 
-impl ShaderDescriptor for FullScreenVertexShader {
-    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
-        wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("../shaders/fullscreen-vertex.glsl").into(),
-                stage: wgpu::naga::ShaderStage::Vertex,
-                defines: Default::default(),
-            },
-        }
-    }
-}
-
+#[derive(ShaderDescriptor)]
+#[shader(path = "crates/waywe-daemon/src/shaders/transition-circle.glsl")]
+#[shader(stage = "fragment")]
 pub struct TransitionCircleFragmentShader;
 
-impl ShaderDescriptor for TransitionCircleFragmentShader {
-    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
-        wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("../shaders/transition-circle.glsl").into(),
-                stage: wgpu::naga::ShaderStage::Fragment,
-                defines: &[],
-            },
-        }
-    }
-}
-
+#[derive(ShaderDescriptor)]
+#[shader(path = "crates/waywe-daemon/src/shaders/transition-slide.glsl")]
+#[shader(stage = "fragment")]
 pub struct TransitionSlideFragmentShader;
-
-impl ShaderDescriptor for TransitionSlideFragmentShader {
-    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
-        wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("../shaders/transition-slide.glsl").into(),
-                stage: wgpu::naga::ShaderStage::Fragment,
-                defines: &[],
-            },
-        }
-    }
-}
 
 pub struct WallpaperTransitionPipeline {
     pub monitor_id: MonitorId,

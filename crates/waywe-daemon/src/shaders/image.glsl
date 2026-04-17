@@ -1,6 +1,6 @@
 #version 460
 
-layout(push_constant) uniform struct PushConst {
+layout(push_constant) uniform PushConst {
     vec2 resolution;
     uint transparency_color;
 } push;

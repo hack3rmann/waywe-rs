@@ -1,6 +1,8 @@
 #version 460
 
-layout(push_constant) uniform vec2 resolution;
+layout(push_constant) uniform Push { 
+  vec2 resolution; 
+} push;
 
 layout(set = 0, binding = 0) uniform texture2D video_y_plane;
 layout(set = 0, binding = 1) uniform texture2D video_uv_plane;
@@ -25,9 +27,9 @@ void main() {
     ivec2 video_size = textureSize(sampler2D(video_y_plane, video_sampler), 0);
 
     float video_aspect_ratio = float(video_size.x) / float(video_size.y);
-    float screen_aspect_ratio = resolution.x / resolution.y;
+    float screen_aspect_ratio = push.resolution.x / push.resolution.y;
 
-    float scale_factor = resolution.x * float(video_size.y) / (resolution.y * float(video_size.x));
+    float scale_factor = push.resolution.x * float(video_size.y) / (push.resolution.y * float(video_size.x));
     vec2 scaled_position = vec2(scale_factor * position.x, position.y);
 
     if (video_aspect_ratio < screen_aspect_ratio) {
