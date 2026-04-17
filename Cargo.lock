@@ -3420,6 +3420,7 @@ dependencies = [
  "waywe-ipc",
  "waywe-runtime",
  "waywe-scene",
+ "waywe-spirv-derive",
  "wgpu",
 ]
 
@@ -3499,6 +3500,15 @@ dependencies = [
  "video",
  "waywe-runtime",
  "wgpu",
+]
+
+[[package]]
+name = "waywe-spirv-derive"
+version = "0.0.13"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

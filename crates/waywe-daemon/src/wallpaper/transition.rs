@@ -20,6 +20,7 @@ use waywe_runtime::{
     shaders::ShaderDescriptor,
     wayland::MonitorId,
 };
+use waywe_spirv_derive::ShaderDescriptor;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
 const SCREEN_TRIANGLE: [Vec2; 3] = [
@@ -89,6 +90,9 @@ impl WallpaperTransitionState {
     }
 }
 
+#[derive(ShaderDescriptor)]
+#[shader(path = "../shaders/fullscreen-vertex.glsl")]
+#[shader(stage = "vertex")]
 pub struct FullScreenVertexShader;
 
 impl ShaderDescriptor for FullScreenVertexShader {
