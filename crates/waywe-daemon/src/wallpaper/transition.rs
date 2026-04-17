@@ -91,7 +91,7 @@ impl WallpaperTransitionState {
 }
 
 #[derive(ShaderDescriptor)]
-#[shader(path = "../shaders/fullscreen-vertex.glsl")]
+#[shader(path = "crates/waywe-daemon/src/shaders/fullscreen-vertex.glsl")]
 #[shader(stage = "vertex")]
 pub struct FullScreenVertexShader;
 

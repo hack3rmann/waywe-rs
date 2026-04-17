@@ -1,17 +1,16 @@
-use proc_macro2::{Ident, Literal, Punct};
+use proc_macro2::{Ident, Punct};
 use quote::quote;
 use shaderc::{CompileOptions, Compiler, ShaderKind};
-use std::{fs, path::Path};
+use std::fs;
 use syn::{
-    Attribute, DeriveInput, LitStr, Meta, PathArguments, Token, parse::*, punctuated::Punctuated,
-    token::Comma,
+    Attribute, DeriveInput, LitStr, Meta, Token, parse::*, punctuated::Punctuated, token::Comma,
 };
 
 fn compile_spirv(attr: &ShaderAttribute) -> Vec<u32> {
     let source = fs::read_to_string(&attr.path).unwrap();
 
     let compiler = Compiler::new().unwrap();
-    let mut options = CompileOptions::new().unwrap();
+    let options = CompileOptions::new().unwrap();
 
     // TODO(Lorent1): add not main
     compiler

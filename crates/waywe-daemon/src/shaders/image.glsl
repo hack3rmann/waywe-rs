@@ -8,8 +8,8 @@ layout(push_constant) uniform struct PushConst {
 layout(set = 0, binding = 0) uniform texture2D image;
 layout(set = 0, binding = 1) uniform sampler image_sampler;
 
-in vec2 position;
-out vec4 surface_color;
+layout (location = 0) in vec2 position;
+layout (location = 0) out vec4 surface_color;
 
 vec4 unpack_color(uint color) {
     return vec4(

@@ -6,8 +6,8 @@ layout(set = 0, binding = 0) uniform texture2D video_y_plane;
 layout(set = 0, binding = 1) uniform texture2D video_uv_plane;
 layout(set = 0, binding = 2) uniform sampler video_sampler;
 
-in vec2 position;
-out vec4 surface_color;
+layout (location = 0) in vec2 position;
+layout (location = 0) out vec4 surface_color;
 
 vec3 yuv_to_rgb(float y, float u, float v) {
     u -= 0.5;
