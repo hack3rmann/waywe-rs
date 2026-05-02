@@ -10,12 +10,10 @@ in vec2 position;
 out vec4 surface_color;
 
 vec3 yuv_to_rgb(float y, float u, float v) {
-    u -= 0.5;
-    v -= 0.5;
     return vec3(
-        y + (1.403 * v),
-        y - (0.344 * u) - (0.714 * v),
-        y + (1.770 * u)
+        y + 1.5748 * v,
+        y - 0.1873 * u - 0.4681 * v,
+        y + 1.8556 * u
     );
 }
 
@@ -39,6 +37,10 @@ void main() {
 
     float y = texture(sampler2D(video_y_plane, video_sampler), texture_coordinates).r;
     vec2 uv = texture(sampler2D(video_uv_plane, video_sampler), texture_coordinates).rg;
+
+    // Expand limited range to full range
+    y = (y - 16.0/255.0) * (255.0 / (235.0 - 16.0));
+    uv = (uv - vec2(128.0/255.0)) * (255.0 / (240.0 - 16.0));
 
     surface_color.rgb = yuv_to_rgb(y, uv.x, uv.y);
     surface_color.a = 1.0;
