@@ -203,36 +203,30 @@ fn host_target() -> String {
 }
 
 fn get_search_dir(target_os: &str, build_from_source: bool) -> Option<String> {
-    // TODO(Lorent1): remove the 'warnings'
-
     // Use explicit shaderc search directory if set.
     if let Ok(lib_dir) = env::var("SHADERC_LIB_DIR") {
-        println!("cargo:warning=shaderc: searching native shaderc libraries in '{lib_dir}'");
+        eprintln!("searching native shaderc libraries in '{lib_dir}'");
         return Some(lib_dir);
     }
 
     // Try to find native shaderc library from Vulkan SDK if possible.
     if let Ok(sdk_dir) = env::var("VULKAN_SDK") {
         check_vulkan_sdk_version(Path::new(&sdk_dir)).unwrap();
-        println!(
-            "cargo:warning=shaderc: searching native shaderc libraries in Vulkan SDK '{sdk_dir}/lib'"
-        );
+        eprintln!("searching native shaderc libraries in Vulkan SDK '{sdk_dir}/lib'");
         return Some(format!("{sdk_dir}/lib/"));
     }
 
     if let Ok(pkg_lib) = pkg_config::Config::new().probe(SHADERC_SHARED_LIB0) {
         let pkg_dir = pkg_lib.link_paths[0].as_path().to_string_lossy();
-        println!(
-            "cargo:warning=shaderc: searching native shaderc libraries in '{pkg_dir}' from pkg-config"
-        );
+        eprintln!("searching native shaderc libraries in '{pkg_dir}' from pkg-config");
         return Some(pkg_dir.to_string());
     }
 
     // If no explicit path is set and no explicit request is made to build from
     // source, check known system locations before falling back to build from source.
     if !build_from_source {
-        println!(
-            "cargo:warning=shaderc: searching for native shaderc libraries on system;  \
+        eprintln!(
+            "searching for native shaderc libraries on system;  \
              use '--features build-from-source' to force building from source code"
         );
 
