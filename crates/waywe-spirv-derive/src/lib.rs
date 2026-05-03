@@ -34,7 +34,6 @@ struct ParseFailed;
 #[derive(Debug)]
 struct ShaderAttribute {
     path: String,
-    #[cfg_attr(not(feature = "spirv"), expect(unused))]
     stage: Stage,
     label: Option<String>,
 }
@@ -211,20 +210,29 @@ mod feature {
 
 #[cfg(not(feature = "spirv"))]
 mod feature {
-    use super::ShaderAttribute;
+    use super::{ShaderAttribute, Stage};
     use proc_macro2::TokenStream;
     use quote::quote;
     use std::fs;
 
     pub fn shader_source(attr: &ShaderAttribute) -> TokenStream {
         let glsl_source = fs::read_to_string(&attr.path).unwrap();
+        let stage = shader_stage(attr.stage);
 
         quote! {
             ::wgpu::ShaderSource::Glsl {
                 shader: ::std::borrow::Cow::Borrowed(#glsl_source),
-                stage: ::wgpu::naga::ShaderStage::Vertex,
+                stage: #stage,
                 defines: ::std::default::Default::default(),
             }
+        }
+    }
+
+    fn shader_stage(stage: Stage) -> TokenStream {
+        match stage {
+            Stage::Vertex => quote! { ::wgpu::naga::ShaderStage::Vertex },
+            Stage::Fragment => quote! { ::wgpu::naga::ShaderStage::Fragment },
+            Stage::Compute => quote! { ::wgpu::naga::ShaderStage::Compute },
         }
     }
 }
