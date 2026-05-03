@@ -1,9 +1,12 @@
 use proc_macro2::{Ident, Punct};
 use quote::quote;
 use shaderc::{CompileOptions, Compiler, ShaderKind};
-use std::fs;
+use std::{fs, result::Result, str::FromStr};
 use syn::{
-    Attribute, DeriveInput, LitStr, Meta, Token, parse::*, punctuated::Punctuated, token::Comma,
+    Attribute, DeriveInput, LitStr, Meta, Token,
+    parse::{Result as ParseResult, *},
+    punctuated::Punctuated,
+    token::Comma,
 };
 
 fn compile_spirv(attr: &ShaderAttribute) -> Vec<u32> {
@@ -43,6 +46,22 @@ impl Stage {
     }
 }
 
+impl FromStr for Stage {
+    type Err = ParseFailed;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "vertex" => Self::Vertex,
+            "fragment" => Self::Fragment,
+            "compute" => Self::Compute,
+            _ => return Err(ParseFailed),
+        })
+    }
+}
+
+#[derive(Debug)]
+struct ParseFailed;
+
 #[derive(Debug)]
 struct ShaderAttribute {
     path: String,
@@ -55,7 +74,7 @@ struct GenericGroupList {
 }
 
 impl Parse for GenericGroupList {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> ParseResult<Self> {
         Ok(Self {
             generic_groups: input.parse_terminated(<GenericGroup as Parse>::parse, Token![,])?,
         })
@@ -69,29 +88,35 @@ enum AttrName {
     Label,
 }
 
+impl FromStr for AttrName {
+    type Err = ParseFailed;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "stage" => Self::Stage,
+            "path" => Self::Path,
+            "label" => Self::Label,
+            _ => return Err(ParseFailed),
+        })
+    }
+}
+
 struct GenericGroup {
     ident: AttrName,
     literal: LitStr,
 }
 
 impl Parse for GenericGroup {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> ParseResult<Self> {
         let ident = input.parse::<Ident>()?;
         let punct = input.parse::<Punct>()?;
         let literal = input.parse::<LitStr>()?;
 
-        // TODO(Lorent1): move into AttrName::from_str
-        let ident = match ident.to_string().as_str() {
-            "stage" => AttrName::Stage,
-            "path" => AttrName::Path,
-            "label" => AttrName::Label,
-            _ => {
-                return Err(Error::new(
-                    ident.span(),
-                    "expected 'stage' | 'path' | 'label'",
-                ));
-            }
-        };
+        let ident = ident
+            .to_string()
+            .as_str()
+            .parse::<AttrName>()
+            .map_err(|_| Error::new(ident.span(), "expected 'stage' | 'path' | 'label'"))?;
 
         if punct.as_char() != '=' {
             return Err(Error::new(punct.span(), "expected '='"));
@@ -107,38 +132,30 @@ fn parse_attributes(input: &[Attribute]) -> ShaderAttribute {
     let mut label = None;
 
     for attr in input {
-        // TODO(Lorent1) :rewrite into `if let`
-        match &attr.meta {
-            Meta::List(list) => {
-                let segments = &list.path.segments;
+        if let Meta::List(list) = &attr.meta {
+            let segments = &list.path.segments;
 
-                if segments.len() != 1 || segments[0].ident != "shader" {
-                    continue;
-                }
+            if segments.len() != 1 || segments[0].ident != "shader" {
+                continue;
+            }
 
-                let list = syn::parse2::<GenericGroupList>(list.tokens.clone()).unwrap();
+            let list = syn::parse2::<GenericGroupList>(list.tokens.clone()).unwrap();
 
-                for group in list.generic_groups {
-                    match group.ident {
-                        AttrName::Stage => {
-                            // TODO(Lorent1): move into Stage::from_str
-                            stage = match group.literal.value().as_str() {
-                                "vertex" => Some(Stage::Vertex),
-                                "fragment" => Some(Stage::Fragment),
-                                "compute" => Some(Stage::Compute),
-                                _ => None,
-                            };
-                        }
-                        AttrName::Path => {
-                            path = Some(group.literal.value());
-                        }
-                        AttrName::Label => {
-                            label = Some(group.literal.value());
-                        }
+            for group in list.generic_groups {
+                match group.ident {
+                    AttrName::Stage => {
+                        stage = group.literal.value().as_str().parse().ok();
+                    }
+                    AttrName::Path => {
+                        path = Some(group.literal.value());
+                    }
+                    AttrName::Label => {
+                        label = Some(group.literal.value());
                     }
                 }
             }
-            _ => continue,
+        } else {
+            continue;
         }
     }
 
