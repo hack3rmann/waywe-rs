@@ -1,7 +1,6 @@
 use proc_macro2::{Ident, Punct};
 use quote::quote;
-use shaderc::{CompileOptions, Compiler, ShaderKind};
-use std::{fs, result::Result, str::FromStr};
+use std::{result::Result, str::FromStr};
 use syn::{
     Attribute, DeriveInput, LitStr, Meta, Token,
     parse::{Result as ParseResult, *},
@@ -9,41 +8,11 @@ use syn::{
     token::Comma,
 };
 
-fn compile_spirv(attr: &ShaderAttribute) -> Vec<u32> {
-    let source = fs::read_to_string(&attr.path).unwrap();
-
-    let compiler = Compiler::new().unwrap();
-    let options = CompileOptions::new().unwrap();
-
-    // TODO(Lorent1): add not main
-    compiler
-        .compile_into_spirv(
-            &source,
-            attr.stage.to_shader_kind(),
-            &attr.path,
-            "main",
-            Some(&options),
-        )
-        .unwrap()
-        .as_binary()
-        .to_vec()
-}
-
 #[derive(Debug, Clone, Copy)]
 enum Stage {
     Vertex,
     Fragment,
     Compute,
-}
-
-impl Stage {
-    pub fn to_shader_kind(self) -> ShaderKind {
-        match self {
-            Self::Vertex => ShaderKind::Vertex,
-            Self::Fragment => ShaderKind::Fragment,
-            Self::Compute => ShaderKind::Compute,
-        }
-    }
 }
 
 impl FromStr for Stage {
@@ -65,6 +34,7 @@ struct ParseFailed;
 #[derive(Debug)]
 struct ShaderAttribute {
     path: String,
+    #[cfg_attr(not(feature = "spirv"), expect(unused))]
     stage: Stage,
     label: Option<String>,
 }
@@ -176,27 +146,85 @@ pub fn spirv_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let struct_name = &ast.ident;
     let attr = parse_attributes(&ast.attrs);
-    let u32_vec = compile_spirv(&attr);
+
+    let shader_source = feature::shader_source(&attr);
+
     let label = match attr.label {
         Some(label) => quote! { Some(#label) },
         None => quote! { None },
     };
 
     quote! {
-        impl #struct_name {
-            const __SPIRV_SOURCE: &[u32] = &[ #( #u32_vec ),* ];
-        }
-
         impl ::waywe_runtime::shaders::ShaderDescriptor for #struct_name {
             fn shader_descriptor() -> ::wgpu::ShaderModuleDescriptor<'static> {
                 ::wgpu::ShaderModuleDescriptor {
                     label: #label,
-                    source: ::wgpu::ShaderSource::SpirV(
-                        ::std::borrow::Cow::Borrowed(<#struct_name>::__SPIRV_SOURCE),
-                    ),
+                    source: #shader_source,
                 }
             }
         }
     }
     .into()
+}
+
+#[cfg(feature = "spirv")]
+mod feature {
+    use super::{ShaderAttribute, Stage};
+    use proc_macro2::TokenStream;
+    use quote::quote;
+    use shaderc::{CompileOptions, Compiler, ShaderKind};
+    use std::fs;
+
+    fn compile_spirv(source: &str, kind: ShaderKind, file_name: &str) -> Vec<u32> {
+        let compiler = Compiler::new().unwrap();
+        let options = CompileOptions::new().unwrap();
+
+        // TODO(Lorent1): add not main
+        compiler
+            .compile_into_spirv(source, kind, file_name, "main", Some(&options))
+            .unwrap()
+            .as_binary()
+            .to_vec()
+    }
+
+    pub fn shader_source(attr: &ShaderAttribute) -> TokenStream {
+        let glsl_source = fs::read_to_string(&attr.path).unwrap();
+        let spirv_words = compile_spirv(&glsl_source, attr.stage.into(), &attr.path);
+
+        quote! {
+            ::wgpu::ShaderSource::SpirV(
+                ::std::borrow::Cow::Borrowed(&[ #( #spirv_words ),* ]),
+            )
+        }
+    }
+
+    impl From<Stage> for ShaderKind {
+        fn from(value: Stage) -> Self {
+            match value {
+                Stage::Vertex => Self::Vertex,
+                Stage::Fragment => Self::Fragment,
+                Stage::Compute => Self::Compute,
+            }
+        }
+    }
+}
+
+#[cfg(not(feature = "spirv"))]
+mod feature {
+    use super::ShaderAttribute;
+    use proc_macro2::TokenStream;
+    use quote::quote;
+    use std::fs;
+
+    pub fn shader_source(attr: &ShaderAttribute) -> TokenStream {
+        let glsl_source = fs::read_to_string(&attr.path).unwrap();
+
+        quote! {
+            ::wgpu::ShaderSource::Glsl {
+                shader: ::std::borrow::Cow::Borrowed(#glsl_source),
+                stage: ::wgpu::naga::ShaderStage::Vertex,
+                defines: ::std::default::Default::default(),
+            }
+        }
+    }
 }

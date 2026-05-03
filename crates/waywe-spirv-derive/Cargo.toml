@@ -18,4 +18,3 @@ shaderc = { path = "../waywe-shader-rs/shaderc-rs", optional = true }
 
 [features]
 spirv = ["dep:shaderc"]
-default = ["spirv"]
