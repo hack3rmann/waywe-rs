@@ -44,7 +44,6 @@ waywe-runtime = { path = "crates/waywe-runtime" }
 waywe-scene = { path = "crates/waywe-scene" }
 waywe-default-wallpapers = { path = "crates/waywe-default-wallpapers" }
 waywe-spirv-derive = { path = "crates/waywe-spirv-derive" }
-shaderc = { path = "crates/waywe-shader-rs/shaderc-rs" }
 transmute-extra = { path = "crates/transmute-extra" }
 video = { path = "crates/video" }
 thiserror = "2.0.11"
