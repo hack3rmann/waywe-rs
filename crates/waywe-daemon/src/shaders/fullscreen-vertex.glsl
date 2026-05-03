@@ -2,7 +2,7 @@
 
 layout(location = 0) in vec2 vertex_position;
 
-out vec2 position;
+layout(location = 0) out vec2 position;
 
 void main() {
     position = vertex_position;
