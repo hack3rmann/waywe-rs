@@ -8,16 +8,7 @@ pub mod time;
 use bitflags::bitflags;
 use ffi::va;
 use ffmpeg_sys_next::{
-    AV_PROFILE_UNKNOWN, AVDiscard, AVFormatContext, AVFrame, AVMediaType, AVPacket,
-    AVPixFmtDescriptor, AVProfile, AVStream, SEEK_SET, SWS_ACCURATE_RND, SWS_AREA, SWS_BICUBIC,
-    SWS_BICUBLIN, SWS_BILINEAR, SWS_BITEXACT, SWS_DIRECT_BGR, SWS_ERROR_DIFFUSION,
-    SWS_FAST_BILINEAR, SWS_FULL_CHR_H_INP, SWS_FULL_CHR_H_INT, SWS_GAUSS, SWS_LANCZOS,
-    SWS_PARAM_DEFAULT, SWS_POINT, SWS_PRINT_INFO, SWS_SINC, SWS_SPLINE, SWS_SRC_V_CHR_DROP_MASK,
-    SWS_SRC_V_CHR_DROP_SHIFT, SWS_X, SwsContext, av_buffer_get_ref_count, av_codec_iterate,
-    av_find_best_stream, av_frame_alloc, av_frame_free, av_frame_get_buffer, av_frame_unref,
-    av_new_packet, av_packet_alloc, av_packet_free, av_packet_ref, av_packet_unref, av_read_frame,
-    avdevice_register_all, avformat_close_input, avformat_find_stream_info, avformat_open_input,
-    avformat_seek_file, avio_seek, sws_getContext, sws_scale,
+    AV_PROFILE_UNKNOWN, AVDiscard, AVFormatContext, AVFrame, AVMediaType, AVPacket, AVPixFmtDescriptor, AVProfile, AVStream, SEEK_SET, SwsContext, SwsFlags::{SWS_ACCURATE_RND, SWS_AREA, SWS_BICUBIC, SWS_BICUBLIN, SWS_BILINEAR, SWS_BITEXACT, SWS_DIRECT_BGR, SWS_ERROR_DIFFUSION, SWS_FAST_BILINEAR, SWS_FULL_CHR_H_INP, SWS_FULL_CHR_H_INT, SWS_GAUSS, SWS_LANCZOS, SWS_POINT, SWS_PRINT_INFO, SWS_SINC, SWS_SPLINE, SWS_X}, av_buffer_get_ref_count, av_codec_iterate, av_find_best_stream, av_frame_alloc, av_frame_free, av_frame_get_buffer, av_frame_unref, av_new_packet, av_packet_alloc, av_packet_free, av_packet_ref, av_packet_unref, av_read_frame, avdevice_register_all, avformat_close_input, avformat_find_stream_info, avformat_open_input, avformat_seek_file, avio_seek, sws_getContext, sws_scale
 };
 use glam::UVec2;
 use std::{
@@ -1078,27 +1069,27 @@ pub struct ScalerFormat {
 bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     pub struct ScalerFlags: i32 {
-        const FAST_BILINEAR = SWS_FAST_BILINEAR;
-        const BILINEAR = SWS_BILINEAR;
-        const BICUBIC = SWS_BICUBIC;
-        const X = SWS_X;
-        const POINT = SWS_POINT;
-        const AREA = SWS_AREA;
-        const BICUBLIN = SWS_BICUBLIN;
-        const GAUSS = SWS_GAUSS;
-        const SINC = SWS_SINC;
-        const LANCZOS = SWS_LANCZOS;
-        const SPLINE = SWS_SPLINE;
-        const SRC_V_CHR_DROP_MASK = SWS_SRC_V_CHR_DROP_MASK;
-        const SRC_V_CHR_DROP_SHIFT = SWS_SRC_V_CHR_DROP_SHIFT;
-        const PARAM_DEFAULT = SWS_PARAM_DEFAULT;
-        const PRINT_INFO = SWS_PRINT_INFO;
-        const FULL_CHR_H_INT = SWS_FULL_CHR_H_INT;
-        const FULL_CHR_H_INP = SWS_FULL_CHR_H_INP;
-        const DIRECT_BGR = SWS_DIRECT_BGR;
-        const ACCURATE_RND = SWS_ACCURATE_RND;
-        const BITEXACT = SWS_BITEXACT;
-        const ERROR_DIFFUSION = SWS_ERROR_DIFFUSION;
+        const FAST_BILINEAR = SWS_FAST_BILINEAR as i32;
+        const BILINEAR = SWS_BILINEAR as i32;
+        const BICUBIC = SWS_BICUBIC as i32;
+        const X = SWS_X as i32;
+        const POINT = SWS_POINT as i32;
+        const AREA = SWS_AREA as i32;
+        const BICUBLIN = SWS_BICUBLIN as i32;
+        const GAUSS = SWS_GAUSS as i32;
+        const SINC = SWS_SINC as i32;
+        const LANCZOS = SWS_LANCZOS as i32;
+        const SPLINE = SWS_SPLINE as i32;
+        // const SRC_V_CHR_DROP_MASK = SWS_SRC_V_CHR_DROP_MASK as i32;
+        // const SRC_V_CHR_DROP_SHIFT = SWS_SRC_V_CHR_DROP_SHIFT as i32;
+        // const PARAM_DEFAULT = SWS_PARAM_DEFAULT as i32;
+        const PRINT_INFO = SWS_PRINT_INFO as i32;
+        const FULL_CHR_H_INT = SWS_FULL_CHR_H_INT as i32;
+        const FULL_CHR_H_INP = SWS_FULL_CHR_H_INP as i32;
+        const DIRECT_BGR = SWS_DIRECT_BGR as i32;
+        const ACCURATE_RND = SWS_ACCURATE_RND as i32;
+        const BITEXACT = SWS_BITEXACT as i32;
+        const ERROR_DIFFUSION = SWS_ERROR_DIFFUSION as i32;
     }
 }
 

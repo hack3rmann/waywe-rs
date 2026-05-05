@@ -17,6 +17,7 @@ use thiserror::Error;
 pub struct Monitor {
     pub wallpaper_type: WallpaperType,
     pub path: PathBuf,
+    pub is_paused: bool,
 }
 
 #[derive(Clone, Default, PartialEq, Debug, Eq, Encode, Decode)]
