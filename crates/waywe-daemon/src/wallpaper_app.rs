@@ -284,7 +284,7 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
             let monitor_profile = Monitor {
                 wallpaper_type: ty,
                 path: path.clone(),
-                is_paused: self.wallpaper_states[&monitor_id].is_paused(),
+                is_paused: self.wallpaper_states.get(&monitor_id).map_or_else(|| false, |s| s.is_paused()),
             };
 
             if let Err(error) = SetupProfile::default()
