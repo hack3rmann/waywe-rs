@@ -9,13 +9,7 @@ use bitflags::bitflags;
 use ffi::va;
 use ffmpeg_sys_next::{
     AV_PROFILE_UNKNOWN, AVDiscard, AVFormatContext, AVFrame, AVMediaType, AVPacket,
-    AVPixFmtDescriptor, AVProfile, AVStream, SEEK_SET, SwsContext,
-    SwsFlags::{
-        SWS_ACCURATE_RND, SWS_AREA, SWS_BICUBIC, SWS_BICUBLIN, SWS_BILINEAR, SWS_BITEXACT,
-        SWS_DIRECT_BGR, SWS_ERROR_DIFFUSION, SWS_FAST_BILINEAR, SWS_FULL_CHR_H_INP,
-        SWS_FULL_CHR_H_INT, SWS_GAUSS, SWS_LANCZOS, SWS_POINT, SWS_PRINT_INFO, SWS_SINC,
-        SWS_SPLINE, SWS_X,
-    },
+    AVPixFmtDescriptor, AVProfile, AVStream, SEEK_SET, SwsContext, SwsFlags,
     av_buffer_get_ref_count, av_codec_iterate, av_find_best_stream, av_frame_alloc, av_frame_free,
     av_frame_get_buffer, av_frame_unref, av_new_packet, av_packet_alloc, av_packet_free,
     av_packet_ref, av_packet_unref, av_read_frame, avdevice_register_all, avformat_close_input,
@@ -1081,27 +1075,46 @@ pub struct ScalerFormat {
 bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     pub struct ScalerFlags: i32 {
-        const FAST_BILINEAR = SWS_FAST_BILINEAR as i32;
-        const BILINEAR = SWS_BILINEAR as i32;
-        const BICUBIC = SWS_BICUBIC as i32;
-        const X = SWS_X as i32;
-        const POINT = SWS_POINT as i32;
-        const AREA = SWS_AREA as i32;
-        const BICUBLIN = SWS_BICUBLIN as i32;
-        const GAUSS = SWS_GAUSS as i32;
-        const SINC = SWS_SINC as i32;
-        const LANCZOS = SWS_LANCZOS as i32;
-        const SPLINE = SWS_SPLINE as i32;
-        // const SRC_V_CHR_DROP_MASK = SWS_SRC_V_CHR_DROP_MASK as i32;
-        // const SRC_V_CHR_DROP_SHIFT = SWS_SRC_V_CHR_DROP_SHIFT as i32;
-        // const PARAM_DEFAULT = SWS_PARAM_DEFAULT as i32;
-        const PRINT_INFO = SWS_PRINT_INFO as i32;
-        const FULL_CHR_H_INT = SWS_FULL_CHR_H_INT as i32;
-        const FULL_CHR_H_INP = SWS_FULL_CHR_H_INP as i32;
-        const DIRECT_BGR = SWS_DIRECT_BGR as i32;
-        const ACCURATE_RND = SWS_ACCURATE_RND as i32;
-        const BITEXACT = SWS_BITEXACT as i32;
-        const ERROR_DIFFUSION = SWS_ERROR_DIFFUSION as i32;
+        /// < fast bilinear filtering
+        const FAST_BILINEAR = SwsFlags::SWS_FAST_BILINEAR as i32;
+        /// < bilinear filtering
+        const BILINEAR = SwsFlags::SWS_BILINEAR as i32;
+        /// < 2-tap cubic B-spline
+        const BICUBIC = SwsFlags::SWS_BICUBIC as i32;
+        /// < experimental
+        const X = SwsFlags::SWS_X as i32;
+        /// < nearest neighbor
+        const POINT = SwsFlags::SWS_POINT as i32;
+        /// < area averaging
+        const AREA = SwsFlags::SWS_AREA as i32;
+        /// < bicubic luma, bilinear chroma
+        const BICUBLIN = SwsFlags::SWS_BICUBLIN as i32;
+        /// < gaussian approximation
+        const GAUSS = SwsFlags::SWS_GAUSS as i32;
+        /// < unwindowed sinc
+        const SINC = SwsFlags::SWS_SINC as i32;
+        /// < 3-tap sinc/sinc
+        const LANCZOS = SwsFlags::SWS_LANCZOS as i32;
+        /// < cubic Keys spline
+        const SPLINE = SwsFlags::SWS_SPLINE as i32;
+        ///  Return an error on underspecified conversions. Without this flag,\n unspecified fields are defaulted to sensible values.
+        const STRICT = SwsFlags::SWS_STRICT as i32;
+        ///  Emit verbose log of scaling parameters.
+        const PRINT_INFO = SwsFlags::SWS_PRINT_INFO as i32;
+        ///  Perform full chroma upsampling when upscaling to RGB.\n\n For example, when converting 50x50 yuv420p to 100x100 rgba, setting this flag\n will scale the chroma plane from 25x25 to 100x100 (4:4:4), and then convert\n the 100x100 yuv444p image to rgba in the final output step.\n\n Without this flag, the chroma plane is instead scaled to 50x100 (4:2:2),\n with a single chroma sample being reused for both of the horizontally\n adjacent RGBA output pixels.
+        const FULL_CHR_H_INT = SwsFlags::SWS_FULL_CHR_H_INT as i32;
+        ///  Perform full chroma interpolation when downscaling RGB sources.\n\n For example, when converting a 100x100 rgba source to 50x50 yuv444p, setting\n this flag will generate a 100x100 (4:4:4) chroma plane, which is then\n downscaled to the required 50x50.\n\n Without this flag, the chroma plane is instead generated at 50x100 (dropping\n every other pixel), before then being downscaled to the required 50x50\n resolution.
+        const FULL_CHR_H_INP = SwsFlags::SWS_FULL_CHR_H_INP as i32;
+        ///  Force bit-exact output. This will prevent the use of platform-specific\n optimizations that may lead to slight difference in rounding, in favor\n of always maintaining exact bit output compatibility with the reference\n C code.\n\n Note: It is recommended to set both of these flags simultaneously.
+        const ACCURATE_RND = SwsFlags::SWS_ACCURATE_RND as i32;
+        ///  Force bit-exact output. This will prevent the use of platform-specific\n optimizations that may lead to slight difference in rounding, in favor\n of always maintaining exact bit output compatibility with the reference\n C code.\n\n Note: It is recommended to set both of these flags simultaneously.
+        const BITEXACT = SwsFlags::SWS_BITEXACT as i32;
+        ///  Allow using experimental new code paths. This may be faster, slower,\n or produce different output, with semantics subject to change at any\n point in time. For testing and debugging purposes only.
+        const UNSTABLE = SwsFlags::SWS_UNSTABLE as i32;
+        /// < This flag has no effect
+        const DIRECT_BGR = SwsFlags::SWS_DIRECT_BGR as i32;
+        /// < Set `SwsContext.dither` instead
+        const ERROR_DIFFUSION = SwsFlags::SWS_ERROR_DIFFUSION as i32;
     }
 }
 
