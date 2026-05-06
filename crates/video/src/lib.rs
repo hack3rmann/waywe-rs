@@ -279,10 +279,11 @@ impl FormatContext {
         })
     }
 
-    /// Seeks to the beginning of the stream and resets decoder state
-    /// 
-    /// Uses the I/O layer (avio) to seek to byte 0, then seeks the format context
-    /// back to the start, and flushes the decoder state.
+    /// Seeks to the beginning of the stream and resets decoder state.
+    ///
+    /// Uses high-level FFmpeg seek API (`av_seek_frame`) to safely reset to the 
+    /// start of the stream. The caller is responsible for clearing their own 
+    /// packet queue/buffer after calling this method.
     ///
     /// # Arguments
     ///
@@ -291,7 +292,8 @@ impl FormatContext {
     ///
     /// # Note
     ///
-    /// The caller should clear their own packet queue/buffer after calling this method.
+    /// This method only uses high-level FFmpeg APIs to avoid state corruption.
+    /// Low-level I/O operations are avoided for safety and stability.
     pub fn repeat_stream(
         &mut self,
         codec_context: *mut AVCodecContext,
@@ -299,42 +301,7 @@ impl FormatContext {
     ) -> Result<(), BackendError> {
         let ctx = self.as_raw().as_ptr();
 
-        // --- 1. Validate context and stream index ---
-        unsafe {
-            if ctx.is_null() {
-                return Err(BackendError::INVALID_DATA);
-            }
-
-            let stream_index = index as i32;
-            if stream_index < 0 || stream_index >= (*ctx).nb_streams as i32 {
-                return Err(BackendError::INVALID_DATA);
-            }
-
-            // --- 2. Verify I/O context exists and is seekable ---
-            let pb = (*ctx).pb;
-            if pb.is_null() {
-                return Err(BackendError::INVALID_DATA);
-            }
-
-            // Check if stream is seekable (seekable field != 0)
-            if (*pb).seekable == 0 {
-                return Err(BackendError::INVALID_DATA);
-            }
-
-            // --- 3. Use avio to seek to byte 0 (start of file) ---
-            // This is the low-level I/O seek operation
-            let seek_result = ffmpeg_sys_next::avio_seek(pb, 0, SEEK_SET);
-            if seek_result < 0 {
-                return Err(BackendError::INVALID_DATA);
-            }
-
-            // --- 4. Flush the I/O write buffers and format context state ---
-            ffmpeg_sys_next::avio_flush(pb);
-            ffmpeg_sys_next::avformat_flush(ctx);
-        }
-
-        // --- 5. Seek the format context to the start of the stream ---
-        // This resets the demuxer state
+        // Seek to timestamp 0 with AVSEEK_FLAG_BACKWARD to land on keyframe
         let ret = unsafe {
             ffmpeg_sys_next::av_seek_frame(
                 ctx,
@@ -344,8 +311,8 @@ impl FormatContext {
             )
         };
 
+        // If stream-specific seek fails, try generic seek
         if ret < 0 {
-            // --- 6. Fallback: try generic seek (any stream) ---
             let ret_fallback = unsafe {
                 ffmpeg_sys_next::av_seek_frame(
                     ctx,
@@ -360,18 +327,14 @@ impl FormatContext {
             }
         }
 
-        // --- 7. CRITICAL: Flush decoder state ---
-        // This clears any pending frames in the decoder buffer
+        // Flush decoder buffers to clear any pending frames
         unsafe {
             if !codec_context.is_null() {
                 ffmpeg_sys_next::avcodec_flush_buffers(codec_context);
             }
         }
 
-        // --- 8. Clear any buffered packets (application responsibility) ---
-        // NOTE: The caller should clear their own packet queue/buffer here
-        // This is crucial to avoid feeding old packets to the decoder
-
+        // Caller must clear their own packet queue/buffer
         Ok(())
     }
 }
