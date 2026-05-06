@@ -285,19 +285,34 @@ impl FormatContext {
         })
     }
 
-    /// Seeks to the start of the input file
     pub fn repeat_stream(&mut self, index: usize) -> Result<(), BackendError> {
-        let io_context_ptr = unsafe { (*self.as_raw().as_ptr()).pb };
-        let _new_pos =
-            BackendError::result_or_u64(unsafe { avio_seek(io_context_ptr, 0, SEEK_SET) })?;
+        let ctx = self.as_raw().as_ptr();
 
-        let stream = &self.streams()[index];
-        let duration = unsafe { (*stream.as_raw().as_ptr()).duration };
+        let ret = unsafe {
+            ffmpeg_sys_next::av_seek_frame(ctx, index as i32, 0, ffmpeg_sys_next::AVSEEK_FLAG_BACKWARD)
+        };
+        BackendError::result_of(ret)?;
 
-        BackendError::result_of(unsafe {
-            avformat_seek_file(self.as_raw().as_ptr(), index as i32, 0, 0, duration, 0)
-        })
+        Ok(())
     }
+
+    // /// Seeks to the start of the input file
+    // pub fn repeat_stream(&mut self, index: usize) -> Result<(), BackendError> {
+    //     let io_context_ptr = unsafe { (*self.as_raw().as_ptr()).pb };
+    //     let _new_pos =
+    //         BackendError::result_or_u64(unsafe { avio_seek(io_context_ptr, 0, SEEK_SET) })?;
+
+    //     dbg!("position", _new_pos);
+
+    //     let stream = &self.streams()[index];
+    //     let duration = unsafe { (*stream.as_raw().as_ptr()).duration };
+
+    //     let c = unsafe {
+    //         avformat_seek_file(self.as_raw().as_ptr(), index as i32, 0, 0, duration, 0)
+    //     };
+    //     dbg!("c ", c, self.as_raw().as_ptr(), index, duration);
+    //     BackendError::result_of(c)
+    // }
 }
 
 impl Drop for FormatContext {
