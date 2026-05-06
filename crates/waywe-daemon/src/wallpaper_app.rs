@@ -228,7 +228,6 @@ impl Handle<WaylandEvent> for WallpaperApp {
                     };
 
                     runtime.task_pool.emitter.emit(event).unwrap();
-                    self.wallpaper_states.insert(monitor_id, if info.is_paused { WallpaperState::Paused } else { WallpaperState::Running });
                 }
 
                 runtime.control_flow.busy();
@@ -284,8 +283,8 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
             let monitor_profile = Monitor {
                 wallpaper_type: ty,
                 path: path.clone(),
-                is_paused: self.wallpaper_states.get(&monitor_id).map_or_else(|| false, |s| s.is_paused()),
             };
+            debug!("monitor prof {monitor_profile:?} {:?}", self.wallpaper_states);
 
             if let Err(error) = SetupProfile::default()
                 .with(monitor_name, monitor_profile)
