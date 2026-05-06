@@ -8,7 +8,7 @@ pub mod time;
 use bitflags::bitflags;
 use ffi::va;
 use ffmpeg_sys_next::{
-    AV_PROFILE_UNKNOWN, AVCodecConfig, AVCodecContext, AVDiscard, AVFormatContext, AVFrame, AVMediaType, AVPacket, AVPixFmtDescriptor, AVProfile, AVStream, SEEK_SET, SwsContext, SwsFlags, av_buffer_get_ref_count, av_codec_iterate, av_find_best_stream, av_frame_alloc, av_frame_free, av_frame_get_buffer, av_frame_unref, av_new_packet, av_packet_alloc, av_packet_free, av_packet_ref, av_packet_unref, av_read_frame, avdevice_register_all, avformat_close_input, avformat_find_stream_info, avformat_open_input, avformat_seek_file, avio_seek, sws_getContext, sws_scale
+    AV_PROFILE_UNKNOWN, AVCodecConfig, AVCodecContext, AVDiscard, AVFormatContext, AVFrame, AVMediaType, AVPacket, AVPixFmtDescriptor, AVProfile, AVStream, SEEK_SET, SwsContext, SwsFlags, av_buffe[...]
 };
 use glam::UVec2;
 use std::{
@@ -279,6 +279,19 @@ impl FormatContext {
         })
     }
 
+    /// Seeks to the beginning of the stream and resets decoder state
+    /// 
+    /// Uses the I/O layer (avio) to seek to byte 0, then seeks the format context
+    /// back to the start, and flushes the decoder state.
+    ///
+    /// # Arguments
+    ///
+    /// * `codec_context` - The codec context to flush after seeking (can be null)
+    /// * `index` - The stream index to seek in
+    ///
+    /// # Note
+    ///
+    /// The caller should clear their own packet queue/buffer after calling this method.
     pub fn repeat_stream(
         &mut self,
         codec_context: *mut AVCodecContext,
@@ -297,7 +310,7 @@ impl FormatContext {
                 return Err(BackendError::INVALID_DATA);
             }
 
-            // --- 2. Verify seekability ---
+            // --- 2. Verify I/O context exists and is seekable ---
             let pb = (*ctx).pb;
             if pb.is_null() {
                 return Err(BackendError::INVALID_DATA);
@@ -307,11 +320,21 @@ impl FormatContext {
             if (*pb).seekable == 0 {
                 return Err(BackendError::INVALID_DATA);
             }
+
+            // --- 3. Use avio to seek to byte 0 (start of file) ---
+            // This is the low-level I/O seek operation
+            let seek_result = ffmpeg_sys_next::avio_seek(pb, 0, SEEK_SET);
+            if seek_result < 0 {
+                return Err(BackendError::INVALID_DATA);
+            }
+
+            // --- 4. Flush the I/O write buffers and format context state ---
+            ffmpeg_sys_next::avio_flush(pb);
+            ffmpeg_sys_next::avformat_flush(ctx);
         }
 
-        // --- 3. Perform the seek operation ---
-        // av_seek_frame is preferred over avformat_seek_file for simplicity
-        // AVSEEK_FLAG_BACKWARD ensures we land on a keyframe
+        // --- 5. Seek the format context to the start of the stream ---
+        // This resets the demuxer state
         let ret = unsafe {
             ffmpeg_sys_next::av_seek_frame(
                 ctx,
@@ -322,7 +345,7 @@ impl FormatContext {
         };
 
         if ret < 0 {
-            // --- 4. Fallback: try generic seek (any stream) ---
+            // --- 6. Fallback: try generic seek (any stream) ---
             let ret_fallback = unsafe {
                 ffmpeg_sys_next::av_seek_frame(
                     ctx,
@@ -337,69 +360,20 @@ impl FormatContext {
             }
         }
 
-        // --- 5. CRITICAL: Flush decoder state ---
-        // This clears any pending frames in the decoder
+        // --- 7. CRITICAL: Flush decoder state ---
+        // This clears any pending frames in the decoder buffer
         unsafe {
             if !codec_context.is_null() {
                 ffmpeg_sys_next::avcodec_flush_buffers(codec_context);
             }
         }
 
-        // --- 6. Clear any buffered packets (application responsibility) ---
+        // --- 8. Clear any buffered packets (application responsibility) ---
         // NOTE: The caller should clear their own packet queue/buffer here
         // This is crucial to avoid feeding old packets to the decoder
 
         Ok(())
     }
-
-// pub fn repeat_stream(&mut self, codec_context: *mut AVCodecContext, index: usize) -> Result<(), BackendError> {
-//     let ctx = self.as_raw().as_ptr();
-
-//     unsafe {
-//         let pb = (*ctx).pb;
-//         if pb.is_null() {
-//             return Err(BackendError::INVALID_DATA);
-//         }
-
-//         BackendError::result_or_u64(avio_seek(pb, 0, SEEK_SET))?;
-
-//         ffmpeg_sys_next::avio_flush(pb);
-//         ffmpeg_sys_next::avformat_flush(ctx);
-
-//         let ret = avformat_seek_file(
-//             ctx,
-//             index as i32,
-//             i64::MIN,
-//             0,
-//             i64::MAX,
-//             ffmpeg_sys_next::AVSEEK_FLAG_BACKWARD,
-//         );
-
-//         BackendError::result_of(ret)?;
-
-//         ffmpeg_sys_next::avcodec_flush_buffers(codec_context);
-//     }
-
-//     Ok(())
-// }
-
-    // /// Seeks to the start of the input file
-    // pub fn repeat_stream(&mut self, index: usize) -> Result<(), BackendError> {
-    //     let io_context_ptr = unsafe { (*self.as_raw().as_ptr()).pb };
-    //     let _new_pos =
-    //         BackendError::result_or_u64(unsafe { avio_seek(io_context_ptr, 0, SEEK_SET) })?;
-
-    //     dbg!("position", _new_pos);
-
-    //     let stream = &self.streams()[index];
-    //     let duration = unsafe { (*stream.as_raw().as_ptr()).duration };
-
-    //     let c = unsafe {
-    //         avformat_seek_file(self.as_raw().as_ptr(), index as i32, 0, 0, duration, 0)
-    //     };
-    //     dbg!("c ", c, self.as_raw().as_ptr(), index, duration);
-    //     BackendError::result_of(c)
-    // }
 }
 
 impl Drop for FormatContext {
@@ -1203,15 +1177,15 @@ bitflags! {
         const STRICT = SwsFlags::SWS_STRICT as i32;
         ///  Emit verbose log of scaling parameters.
         const PRINT_INFO = SwsFlags::SWS_PRINT_INFO as i32;
-        ///  Perform full chroma upsampling when upscaling to RGB.\n\n For example, when converting 50x50 yuv420p to 100x100 rgba, setting this flag\n will scale the chroma plane from 25x25 to 100x100 (4:4:4), and then convert\n the 100x100 yuv444p image to rgba in the final output step.\n\n Without this flag, the chroma plane is instead scaled to 50x100 (4:2:2),\n with a single chroma sample being reused for both of the horizontally\n adjacent RGBA output pixels.
+        ///  Perform full chroma upsampling when upscaling to RGB.\n\n For example, when converting 50x50 yuv420p to 100x100 rgba, setting this flag\n will scale the chroma plane from 25x25 to 100x100[...]
         const FULL_CHR_H_INT = SwsFlags::SWS_FULL_CHR_H_INT as i32;
-        ///  Perform full chroma interpolation when downscaling RGB sources.\n\n For example, when converting a 100x100 rgba source to 50x50 yuv444p, setting\n this flag will generate a 100x100 (4:4:4) chroma plane, which is then\n downscaled to the required 50x50.\n\n Without this flag, the chroma plane is instead generated at 50x100 (dropping\n every other pixel), before then being downscaled to the required 50x50\n resolution.
+        ///  Perform full chroma interpolation when downscaling RGB sources.\n\n For example, when converting a 100x100 rgba source to 50x50 yuv444p, setting\n this flag will generate a 100x100 (4:4:4[...]
         const FULL_CHR_H_INP = SwsFlags::SWS_FULL_CHR_H_INP as i32;
-        ///  Force bit-exact output. This will prevent the use of platform-specific\n optimizations that may lead to slight difference in rounding, in favor\n of always maintaining exact bit output compatibility with the reference\n C code.\n\n Note: It is recommended to set both of these flags simultaneously.
+        ///  Force bit-exact output. This will prevent the use of platform-specific\n optimizations that may lead to slight difference in rounding, in favor\n of always maintaining exact bit output co[...]
         const ACCURATE_RND = SwsFlags::SWS_ACCURATE_RND as i32;
-        ///  Force bit-exact output. This will prevent the use of platform-specific\n optimizations that may lead to slight difference in rounding, in favor\n of always maintaining exact bit output compatibility with the reference\n C code.\n\n Note: It is recommended to set both of these flags simultaneously.
+        ///  Force bit-exact output. This will prevent the use of platform-specific\n optimizations that may lead to slight difference in rounding, in favor\n of always maintaining exact bit output co[...]
         const BITEXACT = SwsFlags::SWS_BITEXACT as i32;
-        ///  Allow using experimental new code paths. This may be faster, slower,\n or produce different output, with semantics subject to change at any\n point in time. For testing and debugging purposes only.
+        ///  Allow using experimental new code paths. This may be faster, slower,\n or produce different output, with semantics subject to change at any\n point in time. For testing and debugging purp[...]
         const UNSTABLE = SwsFlags::SWS_UNSTABLE as i32;
         /// < This flag has no effect
         const DIRECT_BGR = SwsFlags::SWS_DIRECT_BGR as i32;
