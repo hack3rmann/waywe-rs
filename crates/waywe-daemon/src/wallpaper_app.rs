@@ -284,10 +284,6 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
                 wallpaper_type: ty,
                 path: path.clone(),
             };
-            debug!(
-                "monitor prof {monitor_profile:?} {:?}",
-                self.wallpaper_states
-            );
 
             if let Err(error) = SetupProfile::default()
                 .with(monitor_name, monitor_profile)
