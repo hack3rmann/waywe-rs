@@ -279,71 +279,78 @@ impl FormatContext {
         })
     }
 
-pub fn repeat_stream(
-    &mut self,
-    codec_context: *mut AVCodecContext,
-    index: usize,
-) -> Result<(), BackendError> {
-    let ctx = self.as_raw().as_ptr();
+    pub fn repeat_stream(
+        &mut self,
+        codec_context: *mut AVCodecContext,
+        index: usize,
+    ) -> Result<(), BackendError> {
+        let ctx = self.as_raw().as_ptr();
 
-    // --- 1. Validate stream index ---
-    let stream_index = index as i32;
+        // --- 1. Validate context and stream index ---
+        unsafe {
+            if ctx.is_null() {
+                return Err(BackendError::INVALID_DATA);
+            }
 
-    unsafe {
-        if stream_index < 0 || stream_index >= (*ctx).nb_streams as i32 {
-            return Err(BackendError::INVALID_DATA);
+            let stream_index = index as i32;
+            if stream_index < 0 || stream_index >= (*ctx).nb_streams as i32 {
+                return Err(BackendError::INVALID_DATA);
+            }
+
+            // --- 2. Verify seekability ---
+            let pb = (*ctx).pb;
+            if pb.is_null() {
+                return Err(BackendError::INVALID_DATA);
+            }
+
+            // Check if stream is seekable (seekable field != 0)
+            if (*pb).seekable == 0 {
+                return Err(BackendError::INVALID_DATA);
+            }
         }
 
-        // --- 2. Ensure seekability ---
-        let pb = (*ctx).pb;
-        if pb.is_null() || (*pb).seekable == 0 {
-            return Err(BackendError::INVALID_DATA);
-        }
-    }
-
-    // --- 3. Perform seek ---
-    //
-    // Use av_seek_frame:
-    // - simpler and more robust than avformat_seek_file
-    // - AVSEEK_FLAG_BACKWARD ensures landing on a keyframe
-    //
-    let ret = unsafe {
-        ffmpeg_sys_next::av_seek_frame(
-            ctx,
-            stream_index, // you explicitly want this stream
-            0,            // timestamp = start
-            ffmpeg_sys_next::AVSEEK_FLAG_BACKWARD,
-        )
-    };
-
-    if ret < 0 {
-        // --- 4. Fallback: try generic seek ---
-        let ret2 = unsafe {
+        // --- 3. Perform the seek operation ---
+        // av_seek_frame is preferred over avformat_seek_file for simplicity
+        // AVSEEK_FLAG_BACKWARD ensures we land on a keyframe
+        let ret = unsafe {
             ffmpeg_sys_next::av_seek_frame(
                 ctx,
-                -1, // let FFmpeg choose best stream
-                0,
+                index as i32,
+                0,  // timestamp = 0 (start of stream)
                 ffmpeg_sys_next::AVSEEK_FLAG_BACKWARD,
             )
         };
 
-        if ret2 < 0 {
-            return Err(BackendError::INVALID_DATA);
+        if ret < 0 {
+            // --- 4. Fallback: try generic seek (any stream) ---
+            let ret_fallback = unsafe {
+                ffmpeg_sys_next::av_seek_frame(
+                    ctx,
+                    -1,  // let FFmpeg choose the best stream
+                    0,
+                    ffmpeg_sys_next::AVSEEK_FLAG_BACKWARD,
+                )
+            };
+
+            if ret_fallback < 0 {
+                return Err(BackendError::INVALID_DATA);
+            }
         }
-    }
 
-    // --- 5. Flush decoder state (CRITICAL) ---
-    unsafe {
-        if !codec_context.is_null() {
-            ffmpeg_sys_next::avcodec_flush_buffers(codec_context);
+        // --- 5. CRITICAL: Flush decoder state ---
+        // This clears any pending frames in the decoder
+        unsafe {
+            if !codec_context.is_null() {
+                ffmpeg_sys_next::avcodec_flush_buffers(codec_context);
+            }
         }
+
+        // --- 6. Clear any buffered packets (application responsibility) ---
+        // NOTE: The caller should clear their own packet queue/buffer here
+        // This is crucial to avoid feeding old packets to the decoder
+
+        Ok(())
     }
-
-    // --- 6. (Optional but recommended) drop any buffered packets ---
-    // If you maintain your own packet queue, clear it here.
-
-    Ok(())
-}
 
 // pub fn repeat_stream(&mut self, codec_context: *mut AVCodecContext, index: usize) -> Result<(), BackendError> {
 //     let ctx = self.as_raw().as_ptr();
