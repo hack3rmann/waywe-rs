@@ -8,13 +8,7 @@ pub mod time;
 use bitflags::bitflags;
 use ffi::va;
 use ffmpeg_sys_next::{
-    AV_PROFILE_UNKNOWN, AVDiscard, AVFormatContext, AVFrame, AVMediaType, AVPacket,
-    AVPixFmtDescriptor, AVProfile, AVStream, SEEK_SET, SwsContext, SwsFlags,
-    av_buffer_get_ref_count, av_codec_iterate, av_find_best_stream, av_frame_alloc, av_frame_free,
-    av_frame_get_buffer, av_frame_unref, av_new_packet, av_packet_alloc, av_packet_free,
-    av_packet_ref, av_packet_unref, av_read_frame, avdevice_register_all, avformat_close_input,
-    avformat_find_stream_info, avformat_open_input, avformat_seek_file, avio_seek, sws_getContext,
-    sws_scale,
+    AV_PROFILE_UNKNOWN, AVCodecConfig, AVCodecContext, AVDiscard, AVFormatContext, AVFrame, AVMediaType, AVPacket, AVPixFmtDescriptor, AVProfile, AVStream, SEEK_SET, SwsContext, SwsFlags, av_buffer_get_ref_count, av_codec_iterate, av_find_best_stream, av_frame_alloc, av_frame_free, av_frame_get_buffer, av_frame_unref, av_new_packet, av_packet_alloc, av_packet_free, av_packet_ref, av_packet_unref, av_read_frame, avdevice_register_all, avformat_close_input, avformat_find_stream_info, avformat_open_input, avformat_seek_file, avio_seek, sws_getContext, sws_scale
 };
 use glam::UVec2;
 use std::{
@@ -285,16 +279,102 @@ impl FormatContext {
         })
     }
 
-    pub fn repeat_stream(&mut self, index: usize) -> Result<(), BackendError> {
-        let ctx = self.as_raw().as_ptr();
+pub fn repeat_stream(
+    &mut self,
+    codec_context: *mut AVCodecContext,
+    index: usize,
+) -> Result<(), BackendError> {
+    let ctx = self.as_raw().as_ptr();
 
-        let ret = unsafe {
-            ffmpeg_sys_next::av_seek_frame(ctx, index as i32, 0, ffmpeg_sys_next::AVSEEK_FLAG_BACKWARD)
-        };
-        BackendError::result_of(ret)?;
+    // --- 1. Validate stream index ---
+    let stream_index = index as i32;
 
-        Ok(())
+    unsafe {
+        if stream_index < 0 || stream_index >= (*ctx).nb_streams as i32 {
+            return Err(BackendError::INVALID_DATA);
+        }
+
+        // --- 2. Ensure seekability ---
+        let pb = (*ctx).pb;
+        if pb.is_null() || (*pb).seekable == 0 {
+            return Err(BackendError::INVALID_DATA);
+        }
     }
+
+    // --- 3. Perform seek ---
+    //
+    // Use av_seek_frame:
+    // - simpler and more robust than avformat_seek_file
+    // - AVSEEK_FLAG_BACKWARD ensures landing on a keyframe
+    //
+    let ret = unsafe {
+        ffmpeg_sys_next::av_seek_frame(
+            ctx,
+            stream_index, // you explicitly want this stream
+            0,            // timestamp = start
+            ffmpeg_sys_next::AVSEEK_FLAG_BACKWARD,
+        )
+    };
+
+    if ret < 0 {
+        // --- 4. Fallback: try generic seek ---
+        let ret2 = unsafe {
+            ffmpeg_sys_next::av_seek_frame(
+                ctx,
+                -1, // let FFmpeg choose best stream
+                0,
+                ffmpeg_sys_next::AVSEEK_FLAG_BACKWARD,
+            )
+        };
+
+        if ret2 < 0 {
+            return Err(BackendError::INVALID_DATA);
+        }
+    }
+
+    // --- 5. Flush decoder state (CRITICAL) ---
+    unsafe {
+        if !codec_context.is_null() {
+            ffmpeg_sys_next::avcodec_flush_buffers(codec_context);
+        }
+    }
+
+    // --- 6. (Optional but recommended) drop any buffered packets ---
+    // If you maintain your own packet queue, clear it here.
+
+    Ok(())
+}
+
+// pub fn repeat_stream(&mut self, codec_context: *mut AVCodecContext, index: usize) -> Result<(), BackendError> {
+//     let ctx = self.as_raw().as_ptr();
+
+//     unsafe {
+//         let pb = (*ctx).pb;
+//         if pb.is_null() {
+//             return Err(BackendError::INVALID_DATA);
+//         }
+
+//         BackendError::result_or_u64(avio_seek(pb, 0, SEEK_SET))?;
+
+//         ffmpeg_sys_next::avio_flush(pb);
+//         ffmpeg_sys_next::avformat_flush(ctx);
+
+//         let ret = avformat_seek_file(
+//             ctx,
+//             index as i32,
+//             i64::MIN,
+//             0,
+//             i64::MAX,
+//             ffmpeg_sys_next::AVSEEK_FLAG_BACKWARD,
+//         );
+
+//         BackendError::result_of(ret)?;
+
+//         ffmpeg_sys_next::avcodec_flush_buffers(codec_context);
+//     }
+
+//     Ok(())
+// }
 
     // /// Seeks to the start of the input file
     // pub fn repeat_stream(&mut self, index: usize) -> Result<(), BackendError> {
