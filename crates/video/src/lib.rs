@@ -8,7 +8,13 @@ pub mod time;
 use bitflags::bitflags;
 use ffi::va;
 use ffmpeg_sys_next::{
-    AV_PROFILE_UNKNOWN, AVCodecConfig, AVCodecContext, AVDiscard, AVFormatContext, AVFrame, AVMediaType, AVPacket, AVPixFmtDescriptor, AVProfile, AVStream, SEEK_SET, SwsContext, SwsFlags, av_buffe[...]
+    AV_PROFILE_UNKNOWN, AVCodecContext, AVDiscard, AVFormatContext, AVFrame, AVMediaType, AVPacket,
+    AVPixFmtDescriptor, AVProfile, AVSEEK_FLAG_BACKWARD, AVStream, SwsContext, SwsFlags,
+    av_buffer_get_ref_count, av_codec_iterate, av_find_best_stream, av_frame_alloc, av_frame_free,
+    av_frame_get_buffer, av_frame_unref, av_new_packet, av_packet_alloc, av_packet_free,
+    av_packet_ref, av_packet_unref, av_read_frame, av_seek_frame, avcodec_flush_buffers,
+    avdevice_register_all, avformat_close_input, avformat_find_stream_info, avformat_open_input,
+    sws_getContext, sws_scale,
 };
 use glam::UVec2;
 use std::{
@@ -279,63 +285,34 @@ impl FormatContext {
         })
     }
 
-    /// Seeks to the beginning of the stream and resets decoder state.
-    ///
-    /// Uses high-level FFmpeg seek API (`av_seek_frame`) to safely reset to the 
-    /// start of the stream. The caller is responsible for clearing their own 
-    /// packet queue/buffer after calling this method.
-    ///
-    /// # Arguments
-    ///
-    /// * `codec_context` - The codec context to flush after seeking (can be null)
-    /// * `index` - The stream index to seek in
-    ///
-    /// # Note
-    ///
-    /// This method only uses high-level FFmpeg APIs to avoid state corruption.
-    /// Low-level I/O operations are avoided for safety and stability.
     pub fn repeat_stream(
         &mut self,
         codec_context: *mut AVCodecContext,
         index: usize,
     ) -> Result<(), BackendError> {
-        let ctx = self.as_raw().as_ptr();
+        unsafe {
+            let ctx = self.as_raw().as_ptr();
 
-        // Seek to timestamp 0 with AVSEEK_FLAG_BACKWARD to land on keyframe
-        let ret = unsafe {
-            ffmpeg_sys_next::av_seek_frame(
-                ctx,
-                index as i32,
-                0,  // timestamp = 0 (start of stream)
-                ffmpeg_sys_next::AVSEEK_FLAG_BACKWARD,
-            )
-        };
-
-        // If stream-specific seek fails, try generic seek
-        if ret < 0 {
-            let ret_fallback = unsafe {
-                ffmpeg_sys_next::av_seek_frame(
-                    ctx,
-                    -1,  // let FFmpeg choose the best stream
-                    0,
-                    ffmpeg_sys_next::AVSEEK_FLAG_BACKWARD,
-                )
-            };
-
-            if ret_fallback < 0 {
+            if ctx.is_null() || codec_context.is_null() {
                 return Err(BackendError::INVALID_DATA);
             }
-        }
 
-        // Flush decoder buffers to clear any pending frames
-        unsafe {
-            if !codec_context.is_null() {
-                ffmpeg_sys_next::avcodec_flush_buffers(codec_context);
+            // Seek to stream start
+            let mut ret = av_seek_frame(ctx, index as i32, 0, AVSEEK_FLAG_BACKWARD);
+
+            // Fallback for containers that dislike explicit stream seek
+            if ret < 0 {
+                ret = av_seek_frame(ctx, -1, 0, AVSEEK_FLAG_BACKWARD);
             }
-        }
 
-        // Caller must clear their own packet queue/buffer
-        Ok(())
+            if ret < 0 {
+                return BackendError::result_of(ret);
+            }
+
+            // Reset decoder state
+            avcodec_flush_buffers(codec_context);
+            Ok(())
+        }
     }
 }
 

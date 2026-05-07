@@ -217,7 +217,10 @@ impl Video {
 
                         let best_index = self.best_stream_index;
 
-                        if let Err(error) = self.format_context.repeat_stream(self.codec_context.as_raw().as_ptr(), best_index) {
+                        if let Err(error) = self
+                            .format_context
+                            .repeat_stream(self.codec_context.as_raw().as_ptr(), best_index)
+                        {
                             panic!("failed to repeat video stream: {error}");
                         }
 
