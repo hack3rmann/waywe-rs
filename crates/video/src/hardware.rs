@@ -309,7 +309,7 @@ mod tests {
                     let packet = match format_context.read_any_packet() {
                         Ok(packet) => packet,
                         Err(BackendError::EOF) => {
-                            format_context.repeat_stream(best_stream_index).unwrap();
+                            format_context.repeat_stream(codec_context.as_raw().as_ptr(), best_stream_index).unwrap();
                             continue;
                         }
                         result @ Err(..) => result.unwrap(),
