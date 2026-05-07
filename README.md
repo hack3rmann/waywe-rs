@@ -1,5 +1,7 @@
 # Blazingly Fast Video Wallpapers in Rust
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/hack3rmann/waywe-rs)
+
 ## Highly efficient wallpaper software with no overhead
 
 - `waywe` stands for '**Way**land **W**allpaper **E**ngine'
