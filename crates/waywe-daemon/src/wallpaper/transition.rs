@@ -11,6 +11,7 @@ use std::{
 };
 use waywe_ipc::config::{
     Angle, Animation, AnimationConfig, AnimationDirection, AnimationStyle, CenterPosition,
+    Interpolation,
 };
 use waywe_runtime::{
     effects::{Effects, config::EffectsBuilder},
@@ -19,6 +20,7 @@ use waywe_runtime::{
     shaders::ShaderDescriptor,
     wayland::MonitorId,
 };
+use waywe_spirv_derive::ShaderDescriptor;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
 const SCREEN_TRIANGLE: [Vec2; 3] = [
@@ -88,50 +90,20 @@ impl WallpaperTransitionState {
     }
 }
 
+#[derive(ShaderDescriptor)]
+#[shader(path = "crates/waywe-daemon/src/shaders/fullscreen-vertex.glsl")]
+#[shader(stage = "vertex")]
 pub struct FullScreenVertexShader;
 
-impl ShaderDescriptor for FullScreenVertexShader {
-    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
-        wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("../shaders/fullscreen-vertex.glsl").into(),
-                stage: wgpu::naga::ShaderStage::Vertex,
-                defines: Default::default(),
-            },
-        }
-    }
-}
-
+#[derive(ShaderDescriptor)]
+#[shader(path = "crates/waywe-daemon/src/shaders/transition-circle.glsl")]
+#[shader(stage = "fragment")]
 pub struct TransitionCircleFragmentShader;
 
-impl ShaderDescriptor for TransitionCircleFragmentShader {
-    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
-        wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("../shaders/transition-circle.glsl").into(),
-                stage: wgpu::naga::ShaderStage::Fragment,
-                defines: &[],
-            },
-        }
-    }
-}
-
+#[derive(ShaderDescriptor)]
+#[shader(path = "crates/waywe-daemon/src/shaders/transition-slide.glsl")]
+#[shader(stage = "fragment")]
 pub struct TransitionSlideFragmentShader;
-
-impl ShaderDescriptor for TransitionSlideFragmentShader {
-    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
-        wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("../shaders/transition-slide.glsl").into(),
-                stage: wgpu::naga::ShaderStage::Fragment,
-                defines: &[],
-            },
-        }
-    }
-}
 
 pub struct WallpaperTransitionPipeline {
     pub monitor_id: MonitorId,
@@ -431,7 +403,7 @@ impl OngoingTransition {
         }
     }
 
-    pub fn state(&self, ease: impl FnOnce(f32) -> f32) -> AnimationState {
+    pub fn state(&self, ease: Interpolation) -> AnimationState {
         match self {
             Self::Circular(circular) => AnimationState::Circle(circular.state(ease)),
             Self::Slide(slide) => AnimationState::Slide(slide.state(ease)),
@@ -490,11 +462,11 @@ impl SlideTransition {
     }
 
     #[inline]
-    pub fn amount_with_easing(&self, ease: impl FnOnce(f32) -> f32) -> f32 {
-        ease(self.done_fraction) * self.scale
+    pub fn amount_with_easing(&self, ease: Interpolation) -> f32 {
+        ease.get(self.done_fraction) * self.scale
     }
 
-    pub fn state(&self, ease: impl FnOnce(f32) -> f32) -> SlideAnimationState {
+    pub fn state(&self, ease: Interpolation) -> SlideAnimationState {
         SlideAnimationState {
             normal: self.normal,
             position: self.position + self.amount_with_easing(ease) * self.normal,
@@ -555,12 +527,12 @@ impl CircularTransition {
     }
 
     #[inline]
-    pub fn amount_with_easing(&self, ease: impl FnOnce(f32) -> f32) -> f32 {
+    pub fn amount_with_easing(&self, ease: Interpolation) -> f32 {
         let t = match self.direction {
             AnimationDirection::Out => self.done_fraction,
             AnimationDirection::In => 1.0 - self.done_fraction,
         };
-        ease(t) * self.scale
+        ease.get(t) * self.scale
     }
 
     pub fn direction(&self) -> f32 {
@@ -570,7 +542,7 @@ impl CircularTransition {
         }
     }
 
-    pub fn state(&self, ease: impl FnOnce(f32) -> f32) -> CircleAnimationState {
+    pub fn state(&self, ease: Interpolation) -> CircleAnimationState {
         CircleAnimationState {
             centre: self.centre(),
             radius: self.amount_with_easing(ease),
@@ -704,7 +676,7 @@ impl RunningWallpapers {
             let frame_info = wallpaper.frame(gpu, &self.textures.to, encoder);
             frame_result = frame_result.min_or_60_fps(frame_info);
 
-            let state = transition.state(self.config.easing.get());
+            let state = transition.state(self.config.easing);
 
             if transition.animation_style() != self.config.animation.style() {
                 match transition.animation_style() {

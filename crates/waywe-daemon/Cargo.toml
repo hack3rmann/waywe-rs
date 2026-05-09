@@ -31,13 +31,18 @@ toml.workspace = true
 wayland-server.workspace = true
 thiserror.workspace = true
 raw-window-handle = "0.6.2"
-wgpu = { version = "27.0.1", features = ["glsl"] }
+wgpu = { version = "27.0.1", features = ["glsl", "spirv"] }
 daemonize = "0.5.0"
 for-sure = "0.1.1"
 bevy_ecs = "0.17.2"
+waywe-spirv-derive.workspace = true
 
 [dev-dependencies]
 libc = "0.2.171"
 tracing-test.workspace = true
 wayland-sys.workspace = true
 scopeguard = "1.2.0"
+
+[features]
+spirv-shaders = ["waywe-spirv-derive/spirv"]
+default = ["spirv-shaders"]

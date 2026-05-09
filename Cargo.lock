@@ -139,6 +139,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "assert_matches"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b34d609dfbaf33d6889b2b7106d3ca345eacad44200913df5ba02bfd31d2ba9"
+
+[[package]]
 name = "assert_type_match"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -539,9 +545,9 @@ checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
 
 [[package]]
 name = "cc"
-version = "1.2.40"
+version = "1.2.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1d05d92f4b1fd76aad469d46cdd858ca761576082cd37df81416691e50199fb"
+checksum = "43c5703da9466b66a946814e1adf53ea2c90f10063b86290cc9eb67ce3478a20"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -644,6 +650,15 @@ name = "clap_lex"
 version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b94f61472cee1439c0b966b47e3aca9ae07e45d070759512cd390ea2bebc6675"
+
+[[package]]
+name = "cmake"
+version = "0.1.58"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0f78a02292a74a88ac736019ab962ece0bc380e3f977bf72e376c5d78ff0678"
+dependencies = [
+ "cc",
+]
 
 [[package]]
 name = "cmd_lib"
@@ -837,7 +852,7 @@ dependencies = [
 
 [[package]]
 name = "deploy-tool"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "anyhow",
  "clap",
@@ -891,7 +906,7 @@ checksum = "117240f60069e65410b3ae1bb213295bd828f707b5bec6596a1afc8793ce0cbc"
 
 [[package]]
 name = "dxt"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "rayon",
  "safe-transmute",
@@ -1014,7 +1029,7 @@ dependencies = [
 
 [[package]]
 name = "extractor"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "anyhow",
  "bitflags 2.9.4",
@@ -1097,9 +1112,9 @@ checksum = "0eab8aa2fba5f39f494000a22f44bf3c755b7d7f8ffad3f36c6d507893074159"
 
 [[package]]
 name = "find-msvc-tools"
-version = "0.1.3"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0399f9d26e5191ce32c498bebd31e7a3ceabc2745f0ac54af3f335126c3f24b3"
+checksum = "5baebc0774151f905a1a2cc41989300b1e6fbb29aff0ceffa1064fdd3088d582"
 
 [[package]]
 name = "fixedbitset"
@@ -1717,6 +1732,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9fbbcab51052fe104eb5e5d351cf728d30a5be1fe14d9be8a3b097481fb97de"
 
 [[package]]
+name = "link-cplusplus"
+version = "1.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f78c730aaa7d0b9336a299029ea49f9ee53b0ed06e9202e8cb7db9bae7b8c82"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1877,6 +1901,7 @@ dependencies = [
  "log",
  "num-traits",
  "once_cell",
+ "petgraph",
  "pp-rs",
  "rustc-hash",
  "spirv",
@@ -2074,6 +2099,17 @@ name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
+
+[[package]]
+name = "petgraph"
+version = "0.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8701b58ea97060d5e5b155d383a69952a60943f0e6dfe30b04c287beb0b27455"
+dependencies = [
+ "fixedbitset",
+ "hashbrown 0.15.5",
+ "indexmap",
+]
 
 [[package]]
 name = "phf"
@@ -2282,7 +2318,7 @@ dependencies = [
 
 [[package]]
 name = "project-parser"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "chumsky",
  "thiserror 2.0.17",
@@ -2557,6 +2593,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c6a884d2998352bb4daf0183589aec883f16a6da1f4dde84d8e2e9a5409a1ce"
 
 [[package]]
+name = "roxmltree"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
+
+[[package]]
 name = "rustc-demangle"
 version = "0.1.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2655,6 +2697,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf41e0cfaf7226dca15e8197172c295a782857fcb97fad1808a166870dee75a3"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "shaderc"
+version = "0.10.1"
+dependencies = [
+ "assert_matches",
+ "libc",
+ "shaderc-sys",
+]
+
+[[package]]
+name = "shaderc-sys"
+version = "0.10.1"
+dependencies = [
+ "cmake",
+ "libc",
+ "link-cplusplus",
+ "pkg-config",
+ "roxmltree",
 ]
 
 [[package]]
@@ -3082,7 +3144,7 @@ dependencies = [
 
 [[package]]
 name = "transmute-extra"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "thiserror 2.0.17",
 ]
@@ -3119,7 +3181,7 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
 name = "unite-json"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "clap",
  "serde_json",
@@ -3204,7 +3266,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "video"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "bitflags 2.9.4",
  "ffmpeg-sys-next",
@@ -3317,7 +3379,7 @@ dependencies = [
 
 [[package]]
 name = "wayland-client"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "bitflags 2.9.4",
  "fxhash",
@@ -3337,7 +3399,7 @@ dependencies = [
 
 [[package]]
 name = "wayland-scanner"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "convert_case 0.8.0",
  "paste",
@@ -3355,7 +3417,7 @@ dependencies = [
 
 [[package]]
 name = "wayland-server"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "rustix",
  "thiserror 2.0.17",
@@ -3365,7 +3427,7 @@ dependencies = [
 
 [[package]]
 name = "wayland-sys"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "libc",
  "static_assertions",
@@ -3375,7 +3437,7 @@ dependencies = [
 
 [[package]]
 name = "waywe"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "anyhow",
  "clap",
@@ -3392,7 +3454,7 @@ dependencies = [
 
 [[package]]
 name = "waywe-daemon"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "bevy_ecs",
  "bytemuck",
@@ -3420,12 +3482,13 @@ dependencies = [
  "waywe-ipc",
  "waywe-runtime",
  "waywe-scene",
+ "waywe-spirv-derive",
  "wgpu",
 ]
 
 [[package]]
 name = "waywe-default-wallpapers"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "bevy_ecs",
  "derive_more",
@@ -3435,7 +3498,7 @@ dependencies = [
 
 [[package]]
 name = "waywe-ipc"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "bincode",
  "bytemuck",
@@ -3452,7 +3515,7 @@ dependencies = [
 
 [[package]]
 name = "waywe-runtime"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "ash",
  "bitflags 2.9.4",
@@ -3478,7 +3541,7 @@ dependencies = [
 
 [[package]]
 name = "waywe-scene"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "ash",
  "bevy_ecs",
@@ -3499,6 +3562,16 @@ dependencies = [
  "video",
  "waywe-runtime",
  "wgpu",
+]
+
+[[package]]
+name = "waywe-spirv-derive"
+version = "0.0.14"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "shaderc",
+ "syn",
 ]
 
 [[package]]
