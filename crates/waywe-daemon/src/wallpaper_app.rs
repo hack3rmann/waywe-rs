@@ -4,7 +4,11 @@ use crate::{
 };
 use for_sure::prelude::*;
 use smallvec::{SmallVec, smallvec};
-use std::{collections::btree_map::Entry, path::PathBuf, sync::Arc};
+use std::{
+    collections::{BTreeMap, btree_map::Entry},
+    path::PathBuf,
+    sync::Arc,
+};
 use tracing::{debug, error};
 use waywe_ipc::{
     WallpaperType,
@@ -47,7 +51,7 @@ impl WallpaperState {
 #[derive(Default)]
 pub struct WallpaperApp {
     pub wallpapers: MonitorMap<RunningWallpapers>,
-    pub wallpaper_states: MonitorMap<WallpaperState>,
+    pub wallpaper_states: BTreeMap<Arc<str>, WallpaperState>,
     pub config: Config,
     pub do_force_frame: bool,
 }
@@ -87,8 +91,14 @@ impl WallpaperApp {
                 .enqueue_wallpaper(&runtime.wgpu, wallpaper),
         }
 
-        self.wallpaper_states
-            .insert(monitor_id, WallpaperState::Running);
+        let monitor_name = {
+            let monitors = runtime.wayland.client_state.monitors.read().unwrap();
+            monitors[&monitor_id].name.as_ref().map(Arc::clone).unwrap()
+        };
+
+        if let Entry::Vacant(entry) = self.wallpaper_states.entry(monitor_name) {
+            entry.insert(WallpaperState::Running);
+        }
     }
 }
 
@@ -129,7 +139,12 @@ impl App for WallpaperApp {
         let mut result = Err(FrameError::NoWorkToDo);
 
         for (&monitor_id, wallpapers) in self.wallpapers.iter_mut() {
-            if let Some(&state) = self.wallpaper_states.get(&monitor_id)
+            let monitor_name = {
+                let monitors = runtime.wayland.client_state.monitors.read().unwrap();
+                monitors[&monitor_id].name.as_ref().cloned().unwrap()
+            };
+
+            if let Some(&state) = self.wallpaper_states.get(&monitor_name)
                 && state.is_paused()
             {
                 continue;
@@ -167,12 +182,18 @@ impl Handle<WallpaperPauseEvent> for WallpaperApp {
     async fn handle(&mut self, runtime: &mut Runtime, event: WallpaperPauseEvent) {
         let WallpaperPauseEvent { target } = event;
 
-        let monitor_ids: SmallVec<[MonitorId; 4]> = match target {
+        let monitor_ids: SmallVec<[Arc<str>; 4]> = match target {
             WallpaperTarget::ForAll => {
                 let monitors = runtime.wayland.client_state.monitors.read().unwrap();
-                monitors.keys().copied().collect()
+                monitors
+                    .values()
+                    .flat_map(|i| i.name.as_ref().cloned())
+                    .collect()
             }
-            WallpaperTarget::ForMonitor(id) => smallvec![id],
+            WallpaperTarget::ForMonitor(id) => {
+                let monitors = runtime.wayland.client_state.monitors.read().unwrap();
+                smallvec![monitors[&id].name.as_ref().cloned().unwrap()]
+            }
         };
 
         for monitor_id in monitor_ids {
@@ -182,6 +203,8 @@ impl Handle<WallpaperPauseEvent> for WallpaperApp {
 
             *state = state.inverted();
         }
+
+        dbg!(&self.wallpaper_states);
     }
 }
 
@@ -236,7 +259,6 @@ impl Handle<WaylandEvent> for WallpaperApp {
                 debug!(?monitor_id, "unplugged a monitor");
 
                 _ = self.wallpapers.remove(&monitor_id);
-                _ = self.wallpaper_states.remove(&monitor_id);
 
                 runtime.wgpu.unregister_surface(monitor_id);
             }
