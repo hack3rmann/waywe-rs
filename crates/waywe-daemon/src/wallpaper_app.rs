@@ -29,6 +29,7 @@ pub enum WallpaperState {
     #[default]
     Running,
     Paused,
+    NeedsSingleFrame,
 }
 
 impl WallpaperState {
@@ -36,6 +37,7 @@ impl WallpaperState {
         match self {
             Self::Running => Self::Paused,
             Self::Paused => Self::Running,
+            Self::NeedsSingleFrame => Self::NeedsSingleFrame,
         }
     }
 
@@ -150,6 +152,12 @@ impl App for WallpaperApp {
                 continue;
             }
 
+            let is_pause_needed = match self.wallpaper_states.get(&monitor_name) {
+                Some(WallpaperState::Paused) => continue,
+                Some(WallpaperState::NeedsSingleFrame) => true,
+                Some(WallpaperState::Running) | None => false,
+            };
+
             let surface = {
                 let surfaces = runtime.wgpu.surfaces.read().unwrap();
                 surfaces[&monitor_id].surface.get_current_texture().unwrap()
@@ -164,6 +172,11 @@ impl App for WallpaperApp {
 
             runtime.wgpu.queue.submit([encoder.finish()]);
             surface.present();
+
+            if is_pause_needed {
+                self.wallpaper_states
+                    .insert(monitor_name, WallpaperState::Paused);
+            }
         }
 
         if let Err(FrameError::NoWorkToDo) = &result {
@@ -203,8 +216,6 @@ impl Handle<WallpaperPauseEvent> for WallpaperApp {
 
             *state = state.inverted();
         }
-
-        dbg!(&self.wallpaper_states);
     }
 }
 
@@ -255,10 +266,21 @@ impl Handle<WaylandEvent> for WallpaperApp {
 
                 runtime.control_flow.busy();
             }
-            WaylandEvent::MonitorUnplugged { id: monitor_id } => {
+            WaylandEvent::MonitorUnplugged {
+                id: monitor_id,
+                name,
+            } => {
                 debug!(?monitor_id, "unplugged a monitor");
 
                 _ = self.wallpapers.remove(&monitor_id);
+
+                if let Some(state) = self.wallpaper_states.get_mut(&name) {
+                    match state {
+                        WallpaperState::Paused => *state = WallpaperState::NeedsSingleFrame,
+                        WallpaperState::Running => {}
+                        WallpaperState::NeedsSingleFrame => {}
+                    }
+                }
 
                 runtime.wgpu.unregister_surface(monitor_id);
             }

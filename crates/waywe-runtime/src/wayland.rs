@@ -38,11 +38,11 @@ use wayland_client::{
     },
 };
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum WaylandEvent {
     ResizeRequested { monitor_id: MonitorId, size: UVec2 },
     MonitorPlugged { id: MonitorId },
-    MonitorUnplugged { id: MonitorId },
+    MonitorUnplugged { id: MonitorId, name: Arc<str> },
     // TODO(hack3rmann): implement approach from <https://github.com/cjacker/wl-find-cursor/blob/main/main.c>
     CursorMoved { position: UVec2 },
 }
@@ -519,7 +519,7 @@ pub(crate) fn handle_global_remove(
         return;
     };
 
-    if let Some(name) = info.name {
+    if let Some(name) = info.name.as_ref().cloned() {
         let mut names = state.monitor_names.write().unwrap();
         _ = names.remove(&name);
     }
@@ -531,7 +531,10 @@ pub(crate) fn handle_global_remove(
     {
         let mut events = state.events.lock().unwrap();
         events
-            .emit(WaylandEvent::MonitorUnplugged { id: monitor_id })
+            .emit(WaylandEvent::MonitorUnplugged {
+                id: monitor_id,
+                name: info.name.unwrap(),
+            })
             .unwrap();
     }
 }
