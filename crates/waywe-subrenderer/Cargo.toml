@@ -1,0 +1,13 @@
+[package]
+name = "waywe-subrenderer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+wgpu.workspace = true
+ash.workspace = true
+abi_stable.workspace = true

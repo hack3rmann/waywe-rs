@@ -22,6 +22,7 @@ members = [
     "crates/waywe-spirv-derive",
     "crates/waywe-shader-rs/shaderc-rs",
     "crates/waywe-shader-rs/shaderc-sys",
+    "crates/waywe-subrenderer",
 ]
 
 [workspace.package]
@@ -71,3 +72,6 @@ fxhash = "0.2.1"
 box_into_inner = "0.1.0"
 futures-util = { version = "0.3.31", features = ["alloc"] }
 derive_more = { version = "2.0.1", features = ["full"] }
+wgpu = { version = "27.0.1", features = ["glsl"] }
+ash = "0.38.0"
+abi_stable = "0.11.3"
