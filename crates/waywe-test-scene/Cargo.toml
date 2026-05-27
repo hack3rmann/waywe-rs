@@ -1,5 +1,5 @@
 [package]
-name = "waywe-default-wallpapers"
+name = "waywe-test-scene"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,7 +8,13 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
-bevy_ecs.workspace = true
 waywe-scene.workspace = true
-derive_more.workspace = true
+bevy_ecs.workspace = true
+smallvec.workspace = true
 image.workspace = true
+waywe-subrenderer.workspace = true
+wgpu.workspace = true
+pollster = "0.4.0"
+
+[lib]
+crate-type = ["dylib"]

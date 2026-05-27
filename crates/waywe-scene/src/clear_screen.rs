@@ -1,6 +1,7 @@
 use super::wallpaper::Wallpaper;
 use crate::{
     Monitor,
+    gpu::Gpu,
     mesh::{CommandEncoder, SurfaceView},
     plugin::Plugin,
     render::{Render, RenderGpu, RenderSet},
@@ -8,7 +9,7 @@ use crate::{
 use bevy_ecs::prelude::*;
 use derive_more::Deref;
 use glam::Vec3;
-use waywe_runtime::{gpu::Wgpu, shaders::ShaderDescriptor, wayland::MonitorId};
+use waywe_runtime::shaders::ShaderDescriptor;
 
 pub struct ClearScreenPlugin;
 
@@ -70,7 +71,7 @@ impl ShaderDescriptor for NoOpFragmentShader {
 pub struct ClearPipeline(pub wgpu::RenderPipeline);
 
 impl ClearPipeline {
-    pub fn new(gpu: &Wgpu, monitor_id: MonitorId) -> Self {
+    pub fn new(gpu: &Gpu, monitor: Monitor) -> Self {
         gpu.require_shader::<NoOpVertexShader>();
         gpu.require_shader::<NoOpFragmentShader>();
 
@@ -104,7 +105,7 @@ impl ClearPipeline {
                         zero_initialize_workgroup_memory: false,
                     },
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: gpu.surfaces.read().unwrap()[&monitor_id].format,
+                        format: monitor.surface_format,
                         blend: None,
                         write_mask: wgpu::ColorWrites::empty(),
                     })],
@@ -128,7 +129,7 @@ impl FromWorld for ClearPipeline {
     fn from_world(world: &mut World) -> Self {
         let gpu = world.resource::<RenderGpu>();
         let monitor = world.resource::<Monitor>();
-        Self::new(gpu, monitor.id)
+        Self::new(gpu, *monitor)
     }
 }
 

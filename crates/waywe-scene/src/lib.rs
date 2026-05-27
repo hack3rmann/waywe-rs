@@ -90,6 +90,7 @@ pub mod camera;
 pub mod clear_screen;
 pub mod cursor;
 pub mod extract;
+pub mod gpu;
 pub mod image;
 pub mod material;
 pub mod mesh;
@@ -108,7 +109,7 @@ use bitflags::bitflags;
 use derive_more::{Deref, DerefMut};
 use glam::UVec2;
 use std::time::Duration;
-use waywe_runtime::{frame::FrameInfo, wayland::MonitorId};
+use waywe_runtime::frame::FrameInfo;
 
 pub use bevy_ecs as ecs;
 pub use glam;
@@ -196,10 +197,10 @@ pub struct DummyWorld(pub World);
 /// Information about the monitor this wallpaper is rendering to.
 #[derive(Resource, Clone, Copy)]
 pub struct Monitor {
-    /// Unique identifier for the monitor.
-    pub id: MonitorId,
     /// Size of the monitor in pixels.
     pub size: UVec2,
+    /// Surface format
+    pub surface_format: wgpu::TextureFormat,
 }
 
 impl Monitor {

@@ -23,6 +23,7 @@ members = [
     "crates/waywe-shader-rs/shaderc-rs",
     "crates/waywe-shader-rs/shaderc-sys",
     "crates/waywe-subrenderer",
+    "crates/waywe-test-scene",
 ]
 
 [workspace.package]
@@ -45,6 +46,7 @@ waywe-runtime = { path = "crates/waywe-runtime" }
 waywe-scene = { path = "crates/waywe-scene" }
 waywe-default-wallpapers = { path = "crates/waywe-default-wallpapers" }
 waywe-spirv-derive = { path = "crates/waywe-spirv-derive" }
+waywe-subrenderer = { path = "crates/waywe-subrenderer" }
 transmute-extra = { path = "crates/transmute-extra" }
 video = { path = "crates/video" }
 thiserror = "2.0.11"
@@ -75,3 +77,4 @@ derive_more = { version = "2.0.1", features = ["full"] }
 wgpu = { version = "27.0.1", features = ["glsl"] }
 ash = "0.38.0"
 abi_stable = "0.11.3"
+bevy_ecs = "0.17.2"

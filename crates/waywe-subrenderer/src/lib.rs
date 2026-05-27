@@ -1,4 +1,6 @@
+pub mod api;
 pub mod conversions;
+pub mod ffi;
 
 use crate::conversions::{
     map_ffi_label, map_texture_usages_to_vk, map_vk_dimension, map_vk_extent, map_vk_format,
@@ -12,7 +14,7 @@ use std::{
     os::fd::{FromRawFd, IntoRawFd, OwnedFd},
     ptr,
 };
-use wgpu::hal::{self, api};
+use wgpu::{hal, wgc::api::Vulkan};
 
 unsafe fn find_memory_type_index(
     instance: &ash::Instance,
@@ -30,10 +32,10 @@ unsafe fn find_memory_type_index(
 }
 
 fn texture_export_fd(device: &wgpu::Device, texture: &wgpu::Texture) -> OwnedFd {
-    let texture_hal = unsafe { texture.as_hal::<api::Vulkan>().unwrap() };
+    let texture_hal = unsafe { texture.as_hal::<Vulkan>().unwrap() };
     let memory = unsafe { texture_hal.external_memory().unwrap() };
 
-    let device_hal = unsafe { device.as_hal::<api::Vulkan>().unwrap() };
+    let device_hal = unsafe { device.as_hal::<Vulkan>().unwrap() };
     let device_raw = device_hal.raw_device();
     let instance_raw = device_hal.shared_instance().raw_instance();
 
@@ -58,10 +60,11 @@ fn texture_export_fd(device: &wgpu::Device, texture: &wgpu::Texture) -> OwnedFd 
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq, Default)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct FfiTextureDescriptor<'s> {
     pub extent: vk::Extent3D,
     pub format: vk::Format,
+    pub wgpu_format: wgpu::TextureFormat,
     pub mip_level_count: u32,
     pub label: ROption<RStr<'s>>,
     pub dimension: vk::ImageType,
@@ -73,8 +76,8 @@ impl<'s> FfiTextureDescriptor<'s> {
         map_vk_extent(self.extent)
     }
 
-    pub fn wgpu_format(&self) -> Option<wgpu::TextureFormat> {
-        map_vk_format(self.format)
+    pub fn wgpu_format(&self) -> wgpu::TextureFormat {
+        self.wgpu_format
     }
 
     pub fn wgpu_label(&self) -> Option<&'s str> {
@@ -99,6 +102,7 @@ impl<'s> From<wgpu::TextureDescriptor<'s>> for FfiTextureDescriptor<'s> {
         Self {
             extent: map_wgpu_extent(value.size),
             format: map_wgpu_format(value.format).unwrap(),
+            wgpu_format: value.format,
             mip_level_count: value.mip_level_count,
             label: map_wgpu_label(value.label),
             dimension: map_wgpu_dimension(value.dimension),
@@ -113,8 +117,8 @@ fn import_fd_as_texture(
     fd: OwnedFd,
     desc: FfiTextureDescriptor,
 ) -> wgpu::Texture {
-    let device_hal = unsafe { device.as_hal::<api::Vulkan>().unwrap() };
-    let adapter_hal = unsafe { adapter.as_hal::<api::Vulkan>().unwrap() };
+    let device_hal = unsafe { device.as_hal::<Vulkan>().unwrap() };
+    let adapter_hal = unsafe { adapter.as_hal::<Vulkan>().unwrap() };
 
     let vk_device = device_hal.raw_device();
     let vk_instance = device_hal.shared_instance().raw_instance();
@@ -192,13 +196,13 @@ fn import_fd_as_texture(
         mip_level_count: desc.mip_level_count,
         sample_count: 1,
         dimension: desc.wgpu_dimension(),
-        format: desc.wgpu_format().unwrap(),
+        format: desc.wgpu_format(),
         usage: desc.wgpu_uses(),
         memory_flags: hal::MemoryFlags::empty(),
         view_formats: vec![],
     };
 
-    let device_hal = unsafe { device.as_hal::<api::Vulkan>().unwrap() };
+    let device_hal = unsafe { device.as_hal::<Vulkan>().unwrap() };
     let texture_hal = unsafe { device_hal.texture_from_raw(vk_image, &hal_desc, None) };
 
     let wgpu_desc = wgpu::TextureDescriptor {
@@ -207,7 +211,7 @@ fn import_fd_as_texture(
         mip_level_count: desc.mip_level_count,
         sample_count: 1,
         dimension: desc.wgpu_dimension(),
-        format: desc.wgpu_format().unwrap(),
+        format: desc.wgpu_format(),
         usage: desc.wgpu_usages(),
         view_formats: &[],
     };

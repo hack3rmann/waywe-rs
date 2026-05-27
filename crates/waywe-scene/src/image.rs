@@ -21,6 +21,7 @@ use crate::{
         RenderAsset, RenderAssetExtractError, RenderAssets, RenderAssetsPlugin,
     },
     extract::Extract,
+    gpu::Gpu,
     material::{AsBindGroup, Material, MaterialSet, RenderMaterial, VertexFragmentShader},
     plugin::Plugin,
     render::{RenderGpu, SceneExtract},
@@ -31,7 +32,7 @@ use bevy_ecs::{
 };
 use derive_more::{Deref, DerefMut};
 use std::path::Path;
-use waywe_runtime::{gpu::Wgpu, shaders::ShaderDescriptor};
+use waywe_runtime::shaders::ShaderDescriptor;
 use wgpu::util::DeviceExt;
 
 /// Plugin for image functionality.
@@ -140,7 +141,7 @@ pub struct ImagePipeline {
 
 impl ImagePipeline {
     /// Create a new image pipeline.
-    pub fn new(gpu: &Wgpu) -> Self {
+    pub fn new(gpu: &Gpu) -> Self {
         let sampler = gpu.device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("image-material"),
             min_filter: wgpu::FilterMode::Linear,
@@ -214,7 +215,7 @@ pub struct RenderImage {
 
 impl RenderImage {
     /// Create a new render image from image data.
-    pub fn new(image: &Image, gpu: &Wgpu) -> Self {
+    pub fn new(image: &Image, gpu: &Gpu) -> Self {
         let texture = gpu.device.create_texture_with_data(
             &gpu.queue,
             &wgpu::TextureDescriptor {

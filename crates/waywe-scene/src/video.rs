@@ -21,6 +21,7 @@ use crate::{
         RenderAsset, RenderAssetExtractError, RenderAssets, RenderAssetsPlugin,
     },
     extract::Extract,
+    gpu::Gpu,
     image::SceneImageVertexShader,
     material::{AsBindGroup, Material, MaterialSet, RenderMaterial, VertexFragmentShader},
     plugin::Plugin,
@@ -45,7 +46,7 @@ use video::{
     BackendError, Codec, CodecContext, FormatContext, Frame, MediaType, Packet, RatioI32,
     VideoPixelFormat, acceleration::VaSurfaceHandle,
 };
-use waywe_runtime::{gpu::Wgpu, shaders::ShaderDescriptor};
+use waywe_runtime::shaders::ShaderDescriptor;
 use wgpu::wgc::api;
 
 /// Plugin for video functionality.
@@ -321,7 +322,7 @@ impl RenderVideo {
     }
 
     /// Create a GPU texture from a VA surface.
-    pub fn create_texture(gpu: &Wgpu, surface: VaSurfaceHandle) -> wgpu::Texture {
+    pub fn create_texture(gpu: &Gpu, surface: VaSurfaceHandle) -> wgpu::Texture {
         let dma_desc = *surface.desc();
         let dma_buf_fd = surface.into_fd().into_raw_fd();
 
@@ -493,7 +494,7 @@ impl RenderVideo {
     }
 
     /// Export a video frame as a GPU texture.
-    pub fn export_from(video: &Video, gpu: &Wgpu) -> Self {
+    pub fn export_from(video: &Video, gpu: &Gpu) -> Self {
         let Some(va_display) = video.codec_context.va_display() else {
             panic!("failed to retrieve libva display");
         };
@@ -559,7 +560,7 @@ pub struct VideoPipeline {
 
 impl VideoPipeline {
     /// Create a new video pipeline.
-    pub fn new(gpu: &Wgpu) -> Self {
+    pub fn new(gpu: &Gpu) -> Self {
         let sampler = gpu.device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("image-material"),
             min_filter: wgpu::FilterMode::Linear,

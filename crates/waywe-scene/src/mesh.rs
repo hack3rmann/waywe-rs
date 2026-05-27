@@ -28,6 +28,7 @@ use crate::{
         RenderAssetsPlugin,
     },
     extract::Extract,
+    gpu::Gpu,
     image::ImageMaterial,
     material::{Material, MaterialSet, RenderMaterial, RenderMaterialId},
     plugin::Plugin,
@@ -52,7 +53,6 @@ use std::{
     ptr::NonNull,
     result::Result,
 };
-use waywe_runtime::{gpu::Wgpu, wayland::MonitorId};
 
 /// Plugin for mesh rendering functionality.
 ///
@@ -117,7 +117,7 @@ impl Asset for MeshPipeline {}
 
 impl MeshPipeline {
     /// Create a new mesh pipeline for a specific material and monitor.
-    pub fn new(gpu: &Wgpu, monitor_id: MonitorId, material: &RenderMaterial) -> Self {
+    pub fn new(gpu: &Gpu, monitor: Monitor, material: &RenderMaterial) -> Self {
         let layout = gpu
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -159,7 +159,7 @@ impl MeshPipeline {
                         zero_initialize_workgroup_memory: false,
                     },
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: gpu.surfaces.read().unwrap()[&monitor_id].format,
+                        format: monitor.surface_format,
                         blend: None,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
@@ -252,7 +252,7 @@ impl RenderAsset for RenderMesh {
 
 impl RenderMesh {
     /// Create a new render mesh from mesh data.
-    pub fn new(mesh: &Mesh, gpu: &Wgpu) -> Self {
+    pub fn new(mesh: &Mesh, gpu: &Gpu) -> Self {
         use wgpu::util::DeviceExt as _;
 
         let vertices = gpu
@@ -269,7 +269,7 @@ impl RenderMesh {
         }
     }
 
-    pub fn update_buffer(&mut self, mesh: &Mesh, gpu: &Wgpu) {
+    pub fn update_buffer(&mut self, mesh: &Mesh, gpu: &Gpu) {
         // Not enough capacity
         if self.vertices.size() < mem::size_of_val(mesh.vertices.as_slice()) as u64 {
             *self = Self::new(mesh, gpu);
@@ -325,7 +325,7 @@ pub fn extract_objects<M: Material>(
         let render_material = materials.get(material.id()).unwrap();
 
         pipelines.insert_with(material.id(), || {
-            MeshPipeline::new(&gpu, monitor.id, render_material)
+            MeshPipeline::new(&gpu, *monitor, render_material)
         });
 
         entity_map.insert(id, render_id);

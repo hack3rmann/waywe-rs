@@ -15,7 +15,9 @@
 
 use crate::{
     DummyWorld, FrameRateSetting, MainWorld, Monitor, PostExtract, PostStartup, PostUpdate,
-    PreUpdate, Startup, Time, Update, WallpaperConfig, WallpaperFlags, guess_framerate,
+    PreUpdate, Startup, Time, Update, WallpaperConfig, WallpaperFlags,
+    gpu::Gpu,
+    guess_framerate,
     mesh::{CommandEncoder, SurfaceView},
     plugin::PluginGroup,
     render::{EntityMap, Render, RenderGpu, RenderSet, SceneExtract},
@@ -24,11 +26,7 @@ use crate::{
 };
 use bevy_ecs::prelude::*;
 use std::{mem, sync::Arc, thread};
-use waywe_runtime::{
-    frame::FrameInfo,
-    gpu::Wgpu,
-    wayland::{MonitorId, Wayland},
-};
+use waywe_runtime::{frame::FrameInfo, wayland::MonitorId};
 
 /// Main wallpaper controller.
 ///
@@ -42,7 +40,7 @@ pub struct Wallpaper {
 
 impl Wallpaper {
     /// Create the render world with appropriate systems and resources.
-    fn make_render(gpu: Arc<Wgpu>, monitor: Monitor) -> EcsApp {
+    fn make_render(gpu: Arc<Gpu>, monitor: Monitor) -> EcsApp {
         let mut render = EcsApp::default();
 
         let mut render_schedule = Schedule::new(Render);
@@ -98,13 +96,7 @@ impl Wallpaper {
     }
 
     /// Create a new wallpaper for a specific monitor.
-    pub fn new(gpu: Arc<Wgpu>, wayland: &Wayland, monitor_id: MonitorId) -> Self {
-        let monitor_size = wayland.client_state.monitor_size(monitor_id).unwrap();
-        let monitor = Monitor {
-            id: monitor_id,
-            size: monitor_size,
-        };
-
+    pub fn new(gpu: Arc<Gpu>, monitor: Monitor) -> Self {
         Self {
             render: Self::make_render(gpu, monitor),
             // TODO(hack3rmann): allow custom config

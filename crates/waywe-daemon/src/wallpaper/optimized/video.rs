@@ -297,7 +297,9 @@ impl VideoPipeline {
 }
 
 #[derive(ShaderDescriptor)]
-#[shader(path = "crates/waywe-daemon/src/shaders/video.glsl")]
-#[shader(stage = "fragment")]
-#[shader(label = "default-video")]
+#[shader(
+    path = "crates/waywe-daemon/src/shaders/video.glsl",
+    stage = "fragment",
+    label = "default-video"
+)]
 pub struct VideoFragment;

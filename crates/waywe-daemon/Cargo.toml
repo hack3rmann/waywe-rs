@@ -34,7 +34,7 @@ raw-window-handle = "0.6.2"
 wgpu.workspace = true
 daemonize = "0.5.0"
 for-sure = "0.1.1"
-bevy_ecs = "0.17.2"
+bevy_ecs.workspace = true
 waywe-spirv-derive.workspace = true
 
 [dev-dependencies]
