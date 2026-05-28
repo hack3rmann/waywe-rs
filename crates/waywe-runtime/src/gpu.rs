@@ -162,10 +162,7 @@ impl Wgpu {
             return;
         };
 
-        let surface_config = surface
-            .surface
-            .get_default_config(&self.adapter, size.x, size.y)
-            .unwrap();
+        let surface_config = get_surface_config(&surface.surface, &self.adapter, size);
 
         surface.surface.configure(&self.device, &surface_config);
     }
@@ -229,22 +226,7 @@ fn create_surface(
         panic!("no surface format supported");
     };
 
-    let config = surface
-        .get_default_config(adapter, screen_size.x, screen_size.y)
-        .unwrap();
-
-    // TODO(hack3rmann): configure surface with
-    // `usage |= wgt::TextureUsages::STORAGE_BINDING`
-    // to render to it using compute shaders
-    let config = wgpu::SurfaceConfiguration {
-        // NOTE(hack3rmann): `COPY_SRC` used to allow transitions between wallpapers
-        usage: config.usage
-            | wgpu::TextureUsages::COPY_SRC
-            | wgpu::TextureUsages::COPY_DST
-            | wgpu::TextureUsages::TEXTURE_BINDING,
-        view_formats: vec![format.remove_srgb_suffix()],
-        ..config
-    };
+    let config = get_surface_config(&surface, adapter, screen_size);
 
     surface.configure(device, &config);
 
@@ -252,5 +234,32 @@ fn create_surface(
         surface,
         format,
         config,
+    }
+}
+
+fn get_surface_config(
+    surface: &wgpu::Surface,
+    adapter: &wgpu::Adapter,
+    screen_size: UVec2,
+) -> wgpu::SurfaceConfiguration {
+    let Some(format) = surface.get_capabilities(adapter).formats.first().copied() else {
+        panic!("no surface format supported");
+    };
+
+    let config = surface
+        .get_default_config(adapter, screen_size.x, screen_size.y)
+        .unwrap();
+
+    // TODO(hack3rmann): configure surface with
+    // `usage |= wgt::TextureUsages::STORAGE_BINDING`
+    // to render to it using compute shaders
+    wgpu::SurfaceConfiguration {
+        // NOTE(hack3rmann): `COPY_SRC` used to allow transitions between wallpapers
+        usage: config.usage
+            | wgpu::TextureUsages::COPY_SRC
+            | wgpu::TextureUsages::COPY_DST
+            | wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: vec![format.remove_srgb_suffix()],
+        ..config
     }
 }
