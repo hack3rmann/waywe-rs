@@ -55,7 +55,6 @@ pub struct WallpaperApp {
     pub wallpapers: MonitorMap<RunningWallpapers>,
     pub wallpaper_states: BTreeMap<Arc<str>, WallpaperState>,
     pub config: Config,
-    pub do_force_frame: bool,
 }
 
 impl WallpaperApp {
@@ -185,8 +184,6 @@ impl App for WallpaperApp {
             runtime.control_flow.busy();
         }
 
-        self.do_force_frame = false;
-
         result
     }
 }
@@ -239,7 +236,16 @@ impl Handle<WaylandEvent> for WallpaperApp {
                     runtime.wgpu.resize_surface(monitor_id, size);
                 }
 
-                self.do_force_frame = true;
+                let Some(monitor_name) = runtime.wayland.client_state.monitor_name(monitor_id)
+                else {
+                    return;
+                };
+
+                if let Some(state @ WallpaperState::Paused) =
+                    self.wallpaper_states.get_mut(&monitor_name)
+                {
+                    *state = WallpaperState::NeedsSingleFrame;
+                }
             }
             WaylandEvent::MonitorPlugged { id: monitor_id } => {
                 if Almost::is_value(&runtime.wgpu) {
@@ -274,12 +280,8 @@ impl Handle<WaylandEvent> for WallpaperApp {
 
                 _ = self.wallpapers.remove(&monitor_id);
 
-                if let Some(state) = self.wallpaper_states.get_mut(&name) {
-                    match state {
-                        WallpaperState::Paused => *state = WallpaperState::NeedsSingleFrame,
-                        WallpaperState::Running => {}
-                        WallpaperState::NeedsSingleFrame => {}
-                    }
+                if let Some(state @ WallpaperState::Paused) = self.wallpaper_states.get_mut(&name) {
+                    *state = WallpaperState::NeedsSingleFrame;
                 }
 
                 runtime.wgpu.unregister_surface(monitor_id);
