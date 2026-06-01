@@ -66,15 +66,9 @@ impl WallpaperState {
     }
 
     pub const fn redraw_completed(mut self) -> Self {
-        self.kind = match self.kind {
-            WallpaperStateKind::Paused { needs_redraw: true } => WallpaperStateKind::Paused {
-                needs_redraw: false,
-            },
-            WallpaperStateKind::Running
-            | WallpaperStateKind::Paused {
-                needs_redraw: false,
-            } => self.kind,
-        };
+        if let WallpaperStateKind::Paused { needs_redraw } = &mut self.kind {
+            *needs_redraw = false;
+        }
 
         self
     }
