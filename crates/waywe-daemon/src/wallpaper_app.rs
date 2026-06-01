@@ -192,26 +192,23 @@ impl Handle<WallpaperPauseEvent> for WallpaperApp {
     async fn handle(&mut self, runtime: &mut Runtime, event: WallpaperPauseEvent) {
         let WallpaperPauseEvent { target } = event;
 
-        let monitor_ids: SmallVec<[Arc<str>; 4]> = match target {
-            WallpaperTarget::ForAll => {
-                let monitors = runtime.wayland.client_state.monitors.read().unwrap();
-                monitors
-                    .values()
-                    .flat_map(|i| i.name.as_ref().cloned())
-                    .collect()
-            }
-            WallpaperTarget::ForMonitor(id) => {
-                let monitors = runtime.wayland.client_state.monitors.read().unwrap();
-                smallvec![monitors[&id].name.as_ref().cloned().unwrap()]
-            }
+        let toggled = |state: WallpaperState| match state {
+            WallpaperState::Running => WallpaperState::Paused,
+            WallpaperState::Paused | WallpaperState::NeedsSingleFrame => WallpaperState::Running,
         };
 
-        for monitor_id in monitor_ids {
-            let Some(state) = self.wallpaper_states.get_mut(&monitor_id) else {
-                continue;
-            };
+        match target {
+            WallpaperTarget::ForAll => {
+                for state in self.wallpaper_states.values_mut() {
+                    *state = toggled(*state);
+                }
+            }
+            WallpaperTarget::ForMonitor(id) => {
+                let name = runtime.wayland.client_state.monitor_name(id).unwrap();
+                let state = self.wallpaper_states.get_mut(&name).unwrap();
 
-            *state = state.inverted();
+                *state = toggled(*state);
+            }
         }
     }
 }
