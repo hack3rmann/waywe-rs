@@ -156,15 +156,14 @@ impl Wgpu {
     }
 
     pub fn resize_surface(&self, monitor_id: MonitorId, size: UVec2) {
-        let surfaces = self.surfaces.read().unwrap();
+        let mut surfaces = self.surfaces.write().unwrap();
 
-        let Some(surface) = surfaces.get(&monitor_id) else {
+        let Some(info) = surfaces.get_mut(&monitor_id) else {
             return;
         };
 
-        let surface_config = get_surface_config(&surface.surface, &self.adapter, size);
-
-        surface.surface.configure(&self.device, &surface_config);
+        info.config = get_surface_config(&info.surface, &self.adapter, size);
+        info.surface.configure(&self.device, &info.config);
     }
 
     pub fn unregister_surface(&self, monitor_id: MonitorId) {
