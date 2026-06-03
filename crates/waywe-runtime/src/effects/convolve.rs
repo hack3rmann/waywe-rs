@@ -184,7 +184,7 @@ impl Effect for Convolve {
 
             const WORKGROUP_SIZE: u32 = 8;
             let width = input.texture().size().width / WORKGROUP_SIZE;
-            let height = input.texture().size().width / WORKGROUP_SIZE;
+            let height = input.texture().size().height / WORKGROUP_SIZE;
 
             pass.dispatch_workgroups(width, height, 1);
         }
