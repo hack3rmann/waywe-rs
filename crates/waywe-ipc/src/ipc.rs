@@ -124,6 +124,7 @@ impl<S: SocketSide, T> IpcSocket<S, T> {
             Err(other) => return Err(RecvError::Os(other)),
         };
 
+        const MAX_LENGTH: u32 = 4096;
         let mut length = 0_u32;
 
         match net::recv(
@@ -135,6 +136,8 @@ impl<S: SocketSide, T> IpcSocket<S, T> {
             Err(Errno::WOULDBLOCK) => return Err(RecvError::Empty),
             Err(error) => return Err(RecvError::Os(error)),
         }
+
+        assert!(length <= MAX_LENGTH, "too large message, unbelivable");
 
         let mut buf: SmallVec<[u8; BUFFER_SIZE]> = smallvec![0; length as usize];
         net::recv(&fd, &mut buf, RecvFlags::WAITALL)?;
