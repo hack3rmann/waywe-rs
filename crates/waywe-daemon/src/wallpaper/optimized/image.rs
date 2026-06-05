@@ -246,12 +246,12 @@ impl ImageWallpaper {
 
 impl Wallpaper for ImageWallpaper {
     fn configure(&mut self, gpu: &Wgpu, config: WallpaperConfig) {
-        if self.config == config {
-            return;
+        if self.config.surface_format != config.surface_format {
+            self.pipeline =
+                Self::create_pipeline(gpu, &self.pipeline_layout, config.surface_format);
         }
 
         self.config = config;
-        self.pipeline = Self::create_pipeline(gpu, &self.pipeline_layout, config.surface_format);
     }
 
     fn frame(

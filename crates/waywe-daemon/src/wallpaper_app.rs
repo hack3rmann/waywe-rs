@@ -1,7 +1,8 @@
 use crate::{
     event_loop::WallpaperTarget,
     wallpaper::{
-        self, WallpaperConfig, optimized::OptimizedWallpaper, transition::RunningWallpapers,
+        self, Wallpaper, WallpaperConfig, optimized::OptimizedWallpaper,
+        transition::RunningWallpapers,
     },
 };
 use for_sure::prelude::*;
@@ -99,21 +100,10 @@ impl WallpaperApp {
     ) {
         match self.wallpapers.entry(monitor_id) {
             Entry::Vacant(entry) => {
-                let surface_size = {
-                    let monitors = runtime.wayland.client_state.monitors.read().unwrap();
-                    monitors[&monitor_id].size.unwrap()
-                };
-                let surface_format = {
-                    let surfaces = runtime.wgpu.surfaces.read().unwrap();
-                    surfaces[&monitor_id].format
-                };
-
-                let config = WallpaperConfig {
-                    surface_size,
-                    surface_format,
-                };
-
-                let mut wallpapers = RunningWallpapers::new(config, self.config.animation.clone());
+                let mut wallpapers = RunningWallpapers::new(
+                    runtime.wallpaper_config(monitor_id),
+                    self.config.animation.clone(),
+                );
 
                 wallpapers
                     .effects_builder
@@ -239,9 +229,13 @@ impl Handle<WallpaperPauseEvent> for WallpaperApp {
 impl Handle<WallpaperPreparedEvent> for WallpaperApp {
     async fn handle(&mut self, runtime: &mut Runtime, event: WallpaperPreparedEvent) {
         let WallpaperPreparedEvent {
-            wallpaper,
+            mut wallpaper,
             monitor_id,
         } = event;
+
+        // NOTE(hack3rmann): we may get outdated wallpaper configuration if resize event comes
+        // before WallpaperPreparedEvent and after NewWallpaperEvent
+        wallpaper.configure(&runtime.wgpu, runtime.wallpaper_config(monitor_id));
 
         runtime.control_flow.busy();
         self.set_wallpaper(runtime, wallpaper, monitor_id);
@@ -267,6 +261,20 @@ impl Handle<WaylandEvent> for WallpaperApp {
                 }) = self.wallpaper_states.get_mut(&monitor_name)
                 {
                     *needs_redraw = true;
+                }
+
+                for wall in self.wallpapers.values_mut() {
+                    let surface_format = {
+                        let surfaces = runtime.wgpu.surfaces.read().unwrap();
+                        surfaces[&monitor_id].format
+                    };
+
+                    let config = WallpaperConfig {
+                        surface_size: size,
+                        surface_format,
+                    };
+
+                    wall.configure(&runtime.wgpu, config);
                 }
             }
             WaylandEvent::MonitorPlugged { id: monitor_id } => {
@@ -367,13 +375,7 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
                 error!(?error, "failed to save setup profile");
             }
 
-            let surface_size = monitor.size.unwrap();
-            let surface_format = runtime.wgpu.surfaces.read().unwrap()[&monitor_id].format;
-
-            let config = WallpaperConfig {
-                surface_size,
-                surface_format,
-            };
+            let config = runtime.wallpaper_config(monitor_id);
 
             runtime.task_pool.spawn(move |mut emitter| {
                 let event = WallpaperPreparedEvent {

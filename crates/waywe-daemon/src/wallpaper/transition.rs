@@ -281,19 +281,17 @@ impl WallpaperTransitionPipeline {
     }
 
     pub fn configure(&mut self, gpu: &Wgpu, config: WallpaperConfig) {
-        if self.config == config {
-            return;
+        if self.config.surface_format != config.surface_format {
+            self.pipeline = Self::create_pipeline(
+                gpu,
+                self.animation_style,
+                &self.pipeline_layout,
+                config.surface_format,
+                &self.pipeline_cache,
+            );
         }
 
         self.config = config;
-
-        self.pipeline = Self::create_pipeline(
-            gpu,
-            self.animation_style,
-            &self.pipeline_layout,
-            config.surface_format,
-            &self.pipeline_cache,
-        );
     }
 
     pub fn switch_shader(&mut self, gpu: &Wgpu, animation_style: AnimationStyle) {
@@ -730,15 +728,17 @@ impl Wallpaper for RunningWallpapers {
             return;
         }
 
-        self.wallpaper_config = config;
-
-        self.transition_pipeline.configure(gpu, config);
-        *self.textures = WallpaperTransitionState::new(gpu, &self.transition_pipeline);
+        if let Value(pipeline) = &mut self.transition_pipeline {
+            pipeline.configure(gpu, config);
+            *self.textures = WallpaperTransitionState::new(gpu, pipeline);
+        }
 
         for effect in &mut self.executing {
             effect.wallpaper.configure(gpu, config);
             effect.effects = self.effects_builder.build(gpu, config);
         }
+
+        self.wallpaper_config = config;
     }
 
     fn frame(

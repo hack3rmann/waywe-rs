@@ -9,6 +9,8 @@ use video::Video;
 use wayland::Wayland;
 use waywe_ipc::{DaemonCommand, IpcSocket, ipc::Server};
 
+use crate::wayland::MonitorId;
+
 pub mod app;
 pub mod effects;
 pub mod event;
@@ -74,6 +76,22 @@ impl Runtime {
             },
             control_flow,
             task_pool,
+        }
+    }
+
+    pub fn wallpaper_config(&self, monitor_id: MonitorId) -> WallpaperConfig {
+        let surface_size = {
+            let monitors = self.wayland.client_state.monitors.read().unwrap();
+            monitors[&monitor_id].size.unwrap()
+        };
+        let surface_format = {
+            let surfaces = self.wgpu.surfaces.read().unwrap();
+            surfaces[&monitor_id].format
+        };
+
+        WallpaperConfig {
+            surface_size,
+            surface_format,
         }
     }
 
