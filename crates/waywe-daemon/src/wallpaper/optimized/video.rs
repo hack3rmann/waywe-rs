@@ -1,9 +1,9 @@
-use crate::wallpaper::optimized::image::FullscreenVertex;
+use crate::wallpaper::{Wallpaper, WallpaperConfig, optimized::image::FullscreenVertex};
 use for_sure::prelude::*;
-use glam::{UVec2, Vec2};
+use glam::Vec2;
 use std::{mem, path::PathBuf};
 use video::{BackendError, FrameDuration};
-use waywe_runtime::{frame::FrameInfo, gpu::Wgpu, wayland::MonitorId};
+use waywe_runtime::{frame::FrameInfo, gpu::Wgpu};
 use waywe_scene::{
     time::Time,
     video::{RenderVideo, Video},
@@ -17,25 +17,22 @@ pub struct VideoWallpaper {
     pub video: Video,
     pub rendered_video: Almost<RenderVideo>,
     pub pipeline: VideoPipeline,
-    pub monitor_id: MonitorId,
+    pub config: WallpaperConfig,
     pub time: Time,
-    pub size: UVec2,
 }
 
 impl VideoWallpaper {
     pub fn new(
         path: impl Into<PathBuf>,
         gpu: &Wgpu,
-        size: UVec2,
-        monitor_id: MonitorId,
+        config: WallpaperConfig,
     ) -> Result<Self, BackendError> {
         Ok(Self {
             video: Video::new(path)?,
             rendered_video: Nil,
-            pipeline: VideoPipeline::new(gpu, size, monitor_id),
+            pipeline: VideoPipeline::new(gpu, config),
             time: Time::default(),
-            monitor_id,
-            size,
+            config,
         })
     }
 
@@ -63,8 +60,22 @@ impl VideoWallpaper {
             ],
         })
     }
+}
 
-    pub fn frame(
+impl Wallpaper for VideoWallpaper {
+    fn configure(&mut self, gpu: &Wgpu, config: WallpaperConfig) {
+        if self.config == config {
+            return;
+        }
+
+        self.pipeline.pipeline = VideoPipeline::create_pipeline(
+            gpu,
+            &self.pipeline.pipeline_layout,
+            config.surface_format,
+        );
+    }
+
+    fn frame(
         &mut self,
         gpu: &Wgpu,
         surface: &wgpu::TextureView,
@@ -95,14 +106,16 @@ impl VideoWallpaper {
             occlusion_query_set: None,
         });
 
+        let size = Vec2::new(
+            self.config.surface_size.x as f32,
+            self.config.surface_size.y as f32,
+        );
+
         pass.set_pipeline(&self.pipeline.pipeline);
         pass.set_vertex_buffer(0, self.pipeline.vertex_buffer.slice(..));
-        pass.set_push_constants(
-            wgpu::ShaderStages::FRAGMENT,
-            0,
-            bytemuck::bytes_of(&Vec2::new(self.size.x as f32, self.size.y as f32)),
-        );
+        pass.set_push_constants(wgpu::ShaderStages::FRAGMENT, 0, bytemuck::bytes_of(&size));
         pass.set_bind_group(0, &bind_group, &[]);
+
         pass.draw(0..SCREEN_TRIANGLE.len() as u32, 0..1);
 
         let duration = self
@@ -125,15 +138,16 @@ const SCREEN_TRIANGLE: [Vec2; 3] = [
 ];
 
 pub struct VideoPipeline {
-    pub screen_size: UVec2,
+    pub config: WallpaperConfig,
     pub vertex_buffer: wgpu::Buffer,
     pub pipeline: wgpu::RenderPipeline,
+    pub pipeline_layout: wgpu::PipelineLayout,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub sampler: wgpu::Sampler,
 }
 
 impl VideoPipeline {
-    pub fn new(gpu: &Wgpu, screen_size: UVec2, monitor_id: MonitorId) -> Self {
+    pub fn new(gpu: &Wgpu, config: WallpaperConfig) -> Self {
         gpu.require_shader::<FullscreenVertex>();
         gpu.require_shader::<VideoFragment>();
 
@@ -196,11 +210,30 @@ impl VideoPipeline {
                 }],
             });
 
-        let pipeline = gpu
-            .device
+        let pipeline = Self::create_pipeline(gpu, &pipeline_layout, config.surface_format);
+
+        Self {
+            sampler,
+            config,
+            vertex_buffer,
+            pipeline,
+            pipeline_layout,
+            bind_group_layout,
+        }
+    }
+
+    fn create_pipeline(
+        gpu: &Wgpu,
+        layout: &wgpu::PipelineLayout,
+        format: wgpu::TextureFormat,
+    ) -> wgpu::RenderPipeline {
+        gpu.require_shader::<FullscreenVertex>();
+        gpu.require_shader::<VideoFragment>();
+
+        gpu.device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: None,
-                layout: Some(&pipeline_layout),
+                layout: Some(layout),
                 vertex: wgpu::VertexState {
                     module: &gpu.shader_cache.get::<FullscreenVertex>().unwrap(),
                     entry_point: Some("main"),
@@ -226,7 +259,7 @@ impl VideoPipeline {
                         zero_initialize_workgroup_memory: false,
                     },
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: gpu.surfaces.read().unwrap()[&monitor_id].format,
+                        format,
                         blend: None,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
@@ -248,51 +281,7 @@ impl VideoPipeline {
                 },
                 multiview: None,
                 cache: None,
-            });
-
-        Self {
-            sampler,
-            screen_size,
-            vertex_buffer,
-            pipeline,
-            bind_group_layout,
-        }
-    }
-
-    pub fn render(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
-        surface_view: &wgpu::TextureView,
-        bind_group: &wgpu::BindGroup,
-    ) {
-        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: None,
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: surface_view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                },
-                depth_slice: None,
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
-
-        pass.set_pipeline(&self.pipeline);
-        pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        pass.set_push_constants(
-            wgpu::ShaderStages::FRAGMENT,
-            0,
-            bytemuck::bytes_of(&Vec2::new(
-                self.screen_size.x as f32,
-                self.screen_size.y as f32,
-            )),
-        );
-        pass.set_bind_group(0, bind_group, &[]);
-        pass.draw(0..SCREEN_TRIANGLE.len() as u32, 0..1);
+            })
     }
 }
 
