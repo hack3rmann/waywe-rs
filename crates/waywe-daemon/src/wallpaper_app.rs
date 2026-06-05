@@ -1,6 +1,8 @@
 use crate::{
     event_loop::WallpaperTarget,
-    wallpaper::{self, optimized::OptimizedWallpaper, transition::RunningWallpapers},
+    wallpaper::{
+        self, WallpaperConfig, optimized::OptimizedWallpaper, transition::RunningWallpapers,
+    },
 };
 use for_sure::prelude::*;
 use smallvec::{SmallVec, smallvec};
@@ -340,7 +342,6 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
         for monitor_id in monitor_ids {
             let path = path.clone();
             let gpu = Arc::clone(&runtime.wgpu);
-            let wayland = Arc::clone(&runtime.wayland);
 
             let monitors = runtime.wayland.client_state.monitors.read().unwrap();
             let monitor = &monitors[&monitor_id];
@@ -357,9 +358,17 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
                 error!(?error, "failed to save setup profile");
             }
 
+            let surface_size = monitor.size.unwrap();
+            let surface_format = runtime.wgpu.surfaces.read().unwrap()[&monitor_id].format;
+
+            let config = WallpaperConfig {
+                surface_size,
+                surface_format,
+            };
+
             runtime.task_pool.spawn(move |mut emitter| {
                 let event = WallpaperPreparedEvent {
-                    wallpaper: wallpaper::create(gpu, wayland, &path, ty, monitor_id),
+                    wallpaper: wallpaper::create(gpu, &path, ty, config),
                     monitor_id,
                 };
 

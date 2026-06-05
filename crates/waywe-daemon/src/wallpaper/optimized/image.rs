@@ -242,8 +242,23 @@ impl ImageWallpaper {
                 cache: None,
             })
     }
+}
 
-    pub fn frame(&self, surface: &wgpu::TextureView, encoder: &mut wgpu::CommandEncoder) {
+impl Wallpaper for ImageWallpaper {
+    fn configure(&mut self, gpu: &Wgpu, config: WallpaperConfig) {
+        if self.config == config {
+            return;
+        }
+
+        self.pipeline = Self::create_pipeline(gpu, &self.pipeline_layout, config.surface_format);
+    }
+
+    fn frame(
+        &mut self,
+        _: &Wgpu,
+        surface: &wgpu::TextureView,
+        encoder: &mut wgpu::CommandEncoder,
+    ) -> FrameInfo {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -272,25 +287,6 @@ impl ImageWallpaper {
         );
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.draw(0..SCREEN_TRIANGLE.len() as u32, 0..1);
-    }
-}
-
-impl Wallpaper for ImageWallpaper {
-    fn configure(&mut self, gpu: &Wgpu, config: WallpaperConfig) {
-        if self.config == config {
-            return;
-        }
-
-        self.pipeline = Self::create_pipeline(gpu, &self.pipeline_layout, config.surface_format);
-    }
-
-    fn frame(
-        &mut self,
-        _: &Wgpu,
-        surface: &wgpu::TextureView,
-        encoder: &mut wgpu::CommandEncoder,
-    ) -> FrameInfo {
-        Self::frame(self, surface, encoder);
 
         FrameInfo {
             target_frame_time: None,
@@ -329,13 +325,17 @@ pub struct PushConst {
 }
 
 #[derive(ShaderDescriptor)]
-#[shader(path = "crates/waywe-daemon/src/shaders/fullscreen-vertex.glsl")]
-#[shader(stage = "vertex")]
-#[shader(label = "default-image")]
+#[shader(
+    path = "crates/waywe-daemon/src/shaders/fullscreen-vertex.glsl",
+    stage = "vertex",
+    label = "default-image"
+)]
 pub struct FullscreenVertex;
 
 #[derive(ShaderDescriptor)]
-#[shader(path = "crates/waywe-daemon/src/shaders/image.glsl")]
-#[shader(stage = "fragment")]
-#[shader(label = "default-image")]
+#[shader(
+    path = "crates/waywe-daemon/src/shaders/image.glsl",
+    stage = "fragment",
+    label = "default-image"
+)]
 pub struct ImageFragment;
