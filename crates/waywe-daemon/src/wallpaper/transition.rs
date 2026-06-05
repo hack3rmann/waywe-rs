@@ -114,6 +114,7 @@ pub struct WallpaperTransitionPipeline {
     pub pipeline_cache: wgpu::PipelineCache,
     pub pipeline_layout: wgpu::PipelineLayout,
     pub config: WallpaperConfig,
+    pub animation_style: AnimationStyle,
 }
 
 impl WallpaperTransitionPipeline {
@@ -121,7 +122,7 @@ impl WallpaperTransitionPipeline {
         gpu: &Wgpu,
         animation_style: AnimationStyle,
         layout: &wgpu::PipelineLayout,
-        surface_format: wgpu::TextureFormat,
+        format: wgpu::TextureFormat,
         pipeline_cache: &wgpu::PipelineCache,
     ) -> wgpu::RenderPipeline {
         gpu.require_shader::<FullScreenVertexShader>();
@@ -170,7 +171,7 @@ impl WallpaperTransitionPipeline {
                         zero_initialize_workgroup_memory: false,
                     },
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: surface_format,
+                        format,
                         blend: None,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
@@ -273,9 +274,26 @@ impl WallpaperTransitionPipeline {
             pipeline_layout,
             bind_group_layout,
             config,
+            animation_style,
             sampler,
             vertices,
         }
+    }
+
+    pub fn configure(&mut self, gpu: &Wgpu, config: WallpaperConfig) {
+        if self.config == config {
+            return;
+        }
+
+        self.config = config;
+
+        self.pipeline = Self::create_pipeline(
+            gpu,
+            self.animation_style,
+            &self.pipeline_layout,
+            config.surface_format,
+            &self.pipeline_cache,
+        );
     }
 
     pub fn switch_shader(&mut self, gpu: &Wgpu, animation_style: AnimationStyle) {
@@ -579,7 +597,6 @@ impl EffectWallpaper {
 }
 
 pub struct RunningWallpapers {
-    pub aspect_ratio: f32,
     pub executing: VecDeque<EffectWallpaper>,
     pub ongoing_transitions: SmallVec<[OngoingTransition; 8]>,
     pub transition_pipeline: Almost<WallpaperTransitionPipeline>,
@@ -591,11 +608,7 @@ pub struct RunningWallpapers {
 
 impl RunningWallpapers {
     pub const fn new(wallpaper_config: WallpaperConfig, config: AnimationConfig) -> Self {
-        let aspect_ratio =
-            wallpaper_config.surface_size.y as f32 / wallpaper_config.surface_size.x as f32;
-
         Self {
-            aspect_ratio,
             executing: VecDeque::new(),
             ongoing_transitions: SmallVec::new_const(),
             transition_pipeline: Nil,
@@ -613,8 +626,10 @@ impl RunningWallpapers {
         });
 
         if self.executing.len() >= 2 {
-            self.ongoing_transitions
-                .push(OngoingTransition::new(self.aspect_ratio, &self.config));
+            self.ongoing_transitions.push(OngoingTransition::new(
+                self.wallpaper_config.aspect_ratio(),
+                &self.config,
+            ));
         }
     }
 
@@ -711,8 +726,18 @@ impl RunningWallpapers {
 
 impl Wallpaper for RunningWallpapers {
     fn configure(&mut self, gpu: &Wgpu, config: WallpaperConfig) {
+        if self.wallpaper_config == config {
+            return;
+        }
+
+        self.wallpaper_config = config;
+
+        self.transition_pipeline.configure(gpu, config);
+        *self.textures = WallpaperTransitionState::new(gpu, &self.transition_pipeline);
+
         for effect in &mut self.executing {
             effect.wallpaper.configure(gpu, config);
+            effect.effects = self.effects_builder.build(gpu, config);
         }
     }
 

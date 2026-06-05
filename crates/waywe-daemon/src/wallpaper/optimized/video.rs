@@ -68,6 +68,8 @@ impl Wallpaper for VideoWallpaper {
             return;
         }
 
+        self.config = config;
+
         self.pipeline.pipeline = VideoPipeline::create_pipeline(
             gpu,
             &self.pipeline.pipeline_layout,

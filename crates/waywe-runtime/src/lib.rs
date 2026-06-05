@@ -105,3 +105,9 @@ pub struct WallpaperConfig {
     pub surface_size: UVec2,
     pub surface_format: wgpu::TextureFormat,
 }
+
+impl WallpaperConfig {
+    pub const fn aspect_ratio(self) -> f32 {
+        self.surface_size.y as f32 / self.surface_size.x as f32
+    }
+}

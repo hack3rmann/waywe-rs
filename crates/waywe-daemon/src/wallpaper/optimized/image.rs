@@ -250,6 +250,7 @@ impl Wallpaper for ImageWallpaper {
             return;
         }
 
+        self.config = config;
         self.pipeline = Self::create_pipeline(gpu, &self.pipeline_layout, config.surface_format);
     }
 
