@@ -176,9 +176,24 @@ impl App for WallpaperApp {
                 continue;
             }
 
-            let surface = {
+            let surface_result = {
                 let surfaces = runtime.wgpu.surfaces.read().unwrap();
-                surfaces[&monitor_id].surface.get_current_texture().unwrap()
+                surfaces[&monitor_id].surface.get_current_texture()
+            };
+
+            let surface = match surface_result {
+                // TODO(hack3rmann): reconfigure on Suboptimal
+                wgpu::CurrentSurfaceTexture::Success(surface)
+                | wgpu::CurrentSurfaceTexture::Suboptimal(surface) => surface,
+                wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => {
+                    continue;
+                }
+                wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
+                    todo!("reconfigure")
+                }
+                wgpu::CurrentSurfaceTexture::Validation => {
+                    panic!("validation error on .get_current_texture")
+                }
             };
 
             let mut encoder = runtime

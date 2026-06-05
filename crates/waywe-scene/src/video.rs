@@ -46,7 +46,7 @@ use video::{
     VideoPixelFormat, acceleration::VaSurfaceHandle,
 };
 use waywe_runtime::{gpu::Wgpu, shaders::ShaderDescriptor};
-use wgpu::wgc::api;
+use wgpu::{hal::vulkan, wgc::api};
 
 /// Plugin for video functionality.
 ///
@@ -469,8 +469,14 @@ impl RenderVideo {
             vk_free_memory(vk_device_raw, device_memory, ptr::null());
         });
 
-        let texture_hal =
-            unsafe { device.texture_from_raw(vk_image, &texture_desc, Some(destructor)) };
+        let texture_hal = unsafe {
+            device.texture_from_raw(
+                vk_image,
+                &texture_desc,
+                Some(destructor),
+                vulkan::TextureMemory::External,
+            )
+        };
 
         unsafe {
             gpu.device.create_texture_from_hal::<api::Vulkan>(

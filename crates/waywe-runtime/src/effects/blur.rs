@@ -78,8 +78,8 @@ impl DownsamplePipeline {
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some(LABEL),
-                bind_group_layouts: &[&bind_group_layout],
-                push_constant_ranges: &[],
+                bind_group_layouts: &[Some(&bind_group_layout)],
+                immediate_size: 0,
             });
 
         gpu.require_shader::<DownsampleShader>();
@@ -220,11 +220,8 @@ impl BlurPipeline {
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some(LABEL),
-                bind_group_layouts: &[&bind_group_layout],
-                push_constant_ranges: &[wgpu::PushConstantRange {
-                    stages: wgpu::ShaderStages::COMPUTE,
-                    range: 0..mem::size_of::<u32>() as u32,
-                }],
+                bind_group_layouts: &[Some(&bind_group_layout)],
+                immediate_size: mem::size_of::<u32>() as u32,
             });
 
         gpu.require_shader::<BlurShader>();
@@ -275,7 +272,7 @@ impl BlurPipeline {
 
             pass.set_bind_group(0, &bind_group, &[]);
             pass.set_pipeline(&self.pipeline);
-            pass.set_push_constants(0, bytemuck::bytes_of(&0_u32));
+            pass.set_immediates(0, bytemuck::bytes_of(&0_u32));
 
             pass.dispatch_workgroups(width, height, 1);
         }
@@ -301,7 +298,7 @@ impl BlurPipeline {
 
             pass.set_bind_group(0, &bind_group, &[]);
             pass.set_pipeline(&self.pipeline);
-            pass.set_push_constants(0, bytemuck::bytes_of(&1_u32));
+            pass.set_immediates(0, bytemuck::bytes_of(&1_u32));
 
             pass.dispatch_workgroups(width, height, 1);
         }
@@ -381,8 +378,8 @@ impl UpsamplePipeline {
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some(LABEL),
-                bind_group_layouts: &[&bind_group_layout],
-                push_constant_ranges: &[],
+                bind_group_layouts: &[Some(&bind_group_layout)],
+                immediate_size: 0,
             });
 
         gpu.require_shader::<UpsampleShader>();

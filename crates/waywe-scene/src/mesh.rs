@@ -122,11 +122,8 @@ impl MeshPipeline {
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("image-pipeline-layout"),
-                bind_group_layouts: &[&material.bind_group_layout],
-                push_constant_ranges: &[wgpu::PushConstantRange {
-                    stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                    range: 0..mem::size_of::<PushConst>() as u32,
-                }],
+                bind_group_layouts: &[Some(&material.bind_group_layout)],
+                immediate_size: mem::size_of::<PushConst>() as u32,
             });
 
         let pipeline = gpu
@@ -179,7 +176,7 @@ impl MeshPipeline {
                     mask: !0,
                     alpha_to_coverage_enabled: false,
                 },
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             });
 
@@ -397,6 +394,7 @@ pub fn render_meshes(
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         pass.set_pipeline(&pipeline.pipeline);
@@ -407,8 +405,7 @@ pub fn render_meshes(
             pass.set_vertex_buffer(0, mesh.buffer_slice());
 
             for &(_, ModelMatrix(model)) in model_matrices {
-                pass.set_push_constants(
-                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                pass.set_immediates(
                     0,
                     bytemuck::bytes_of(&PushConst {
                         time: time.elapsed.as_secs_f32(),

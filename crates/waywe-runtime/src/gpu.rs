@@ -22,14 +22,17 @@ pub struct Wgpu {
 
 impl Wgpu {
     pub async fn new(wayland: &Wayland) -> Self {
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::VULKAN,
             flags: if cfg!(debug_assertions) {
                 wgpu::InstanceFlags::DEBUG | wgpu::InstanceFlags::VALIDATION
             } else {
                 wgpu::InstanceFlags::empty()
             },
-            ..Default::default()
+            memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
+            backend_options: wgpu::BackendOptions::from_env_or_default(),
+            // NOTE(hack3rmann): on Vulkan this handle is unused
+            display: None,
         });
 
         let adapter = match instance
@@ -45,8 +48,10 @@ impl Wgpu {
             Err(error) => panic!("failed to request adapter: {error:?}"),
         };
 
+        let limits = adapter.limits();
+
         let features = wgpu::Features::TEXTURE_FORMAT_NV12
-            | wgpu::Features::PUSH_CONSTANTS
+            | wgpu::Features::IMMEDIATES
             | wgpu::Features::BGRA8UNORM_STORAGE
             | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgpu::Features::PIPELINE_CACHE;
@@ -107,6 +112,7 @@ impl Wgpu {
                     None,
                     &enabled_extensions,
                     features,
+                    &limits,
                     &memory_hints,
                     family_info.queue_family_index,
                     0,
@@ -213,7 +219,7 @@ fn create_surface(
     let surface = unsafe {
         instance
             .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
-                raw_display_handle: wayland.raw_display_handle(),
+                raw_display_handle: Some(wayland.raw_display_handle()),
                 raw_window_handle: handle,
             })
             .unwrap()
