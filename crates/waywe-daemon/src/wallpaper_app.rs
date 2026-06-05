@@ -99,12 +99,21 @@ impl WallpaperApp {
     ) {
         match self.wallpapers.entry(monitor_id) {
             Entry::Vacant(entry) => {
-                let size = {
+                let surface_size = {
                     let monitors = runtime.wayland.client_state.monitors.read().unwrap();
                     monitors[&monitor_id].size.unwrap()
                 };
-                let mut wallpapers =
-                    RunningWallpapers::new(monitor_id, size, self.config.animation.clone());
+                let surface_format = {
+                    let surfaces = runtime.wgpu.surfaces.read().unwrap();
+                    surfaces[&monitor_id].format
+                };
+
+                let config = WallpaperConfig {
+                    surface_size,
+                    surface_format,
+                };
+
+                let mut wallpapers = RunningWallpapers::new(config, self.config.animation.clone());
 
                 wallpapers
                     .effects_builder

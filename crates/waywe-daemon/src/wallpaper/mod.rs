@@ -7,10 +7,11 @@ use crate::wallpaper::optimized::{
     image::{Color, ImageWallpaper},
     video::VideoWallpaper,
 };
-use glam::UVec2;
 use std::{path::Path, sync::Arc};
 use waywe_ipc::WallpaperType;
 use waywe_runtime::{frame::FrameInfo, gpu::Wgpu};
+
+pub use waywe_runtime::WallpaperConfig;
 
 pub fn create(
     gpu: Arc<Wgpu>,
@@ -34,12 +35,6 @@ pub fn create(
         }
         WallpaperType::Scene => unimplemented!(),
     }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct WallpaperConfig {
-    pub surface_size: UVec2,
-    pub surface_format: wgpu::TextureFormat,
 }
 
 pub trait Wallpaper {

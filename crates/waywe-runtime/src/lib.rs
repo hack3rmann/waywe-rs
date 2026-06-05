@@ -1,5 +1,6 @@
 use bitflags::bitflags;
 use for_sure::prelude::*;
+use glam::UVec2;
 use gpu::Wgpu;
 use std::sync::Arc;
 use task_pool::TaskPool;
@@ -97,4 +98,10 @@ impl Runtime {
             self.init_wgpu().await;
         }
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct WallpaperConfig {
+    pub surface_size: UVec2,
+    pub surface_format: wgpu::TextureFormat,
 }
