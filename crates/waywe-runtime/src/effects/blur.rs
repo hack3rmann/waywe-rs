@@ -1,23 +1,17 @@
-use waywe_ipc::config::BlurConfig;
-
 use crate::{
+    WallpaperConfig,
     effects::{AppliedEffect, Effect, config::EffectConfig},
     gpu::Wgpu,
     shaders::ShaderDescriptor,
-    wayland::MonitorId,
 };
 use std::mem;
+use waywe_ipc::config::BlurConfig;
 
 const LABEL: &str = "blur";
 
 impl EffectConfig for BlurConfig {
-    fn build_effect(&self, gpu: &Wgpu, monitor_id: MonitorId) -> Box<dyn Effect> {
-        Box::new(Blur::new(
-            gpu,
-            monitor_id,
-            self.n_levels,
-            self.level_multiplier,
-        ))
+    fn build_effect(&self, gpu: &Wgpu, config: WallpaperConfig) -> Box<dyn Effect> {
+        Box::new(Blur::new(gpu, config, self.n_levels, self.level_multiplier))
     }
 }
 
@@ -28,32 +22,18 @@ pub struct DownsamplePipeline {
 }
 
 impl DownsamplePipeline {
-    pub fn new(gpu: &Wgpu, monitor_id: MonitorId, n_levels: u32) -> Self {
-        let (size, format) = {
-            let surfaces = gpu.surfaces.read().unwrap();
-            let surface = &surfaces[&monitor_id];
-
-            (
-                wgpu::Extent3d {
-                    width: surface.config.width,
-                    height: surface.config.height,
-                    depth_or_array_layers: 1,
-                },
-                surface.format.remove_srgb_suffix(),
-            )
-        };
-
+    pub fn new(gpu: &Wgpu, config: WallpaperConfig, n_levels: u32) -> Self {
         let downsampled_texture = gpu.device.create_texture(&wgpu::TextureDescriptor {
             label: Some(LABEL),
             size: wgpu::Extent3d {
-                width: size.width / 2,
-                height: size.height / 2,
+                width: config.surface_size.x / 2,
+                height: config.surface_size.y / 2,
                 depth_or_array_layers: 1,
             },
             mip_level_count: n_levels + 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format,
+            format: config.surface_format,
             usage: wgpu::TextureUsages::STORAGE_BINDING
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_SRC
@@ -86,7 +66,7 @@ impl DownsamplePipeline {
                             visibility: wgpu::ShaderStages::COMPUTE,
                             ty: wgpu::BindingType::StorageTexture {
                                 access: wgpu::StorageTextureAccess::WriteOnly,
-                                format,
+                                format: config.surface_format,
                                 view_dimension: wgpu::TextureViewDimension::D2,
                             },
                             count: None,
@@ -188,32 +168,18 @@ pub struct BlurPipeline {
 }
 
 impl BlurPipeline {
-    pub fn new(gpu: &Wgpu, monitor_id: MonitorId) -> Self {
-        let (size, format) = {
-            let surfaces = gpu.surfaces.read().unwrap();
-            let surface = &surfaces[&monitor_id];
-
-            (
-                wgpu::Extent3d {
-                    width: surface.config.width,
-                    height: surface.config.height,
-                    depth_or_array_layers: 1,
-                },
-                surface.format.remove_srgb_suffix(),
-            )
-        };
-
+    pub fn new(gpu: &Wgpu, config: WallpaperConfig) -> Self {
         let blurred_texture = gpu.device.create_texture(&wgpu::TextureDescriptor {
             label: Some(LABEL),
             size: wgpu::Extent3d {
-                width: size.width / 2,
-                height: size.height / 2,
+                width: config.surface_size.x / 2,
+                height: config.surface_size.y / 2,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format,
+            format: config.surface_format,
             usage: wgpu::TextureUsages::STORAGE_BINDING
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_SRC
@@ -242,7 +208,7 @@ impl BlurPipeline {
                             visibility: wgpu::ShaderStages::COMPUTE,
                             ty: wgpu::BindingType::StorageTexture {
                                 access: wgpu::StorageTextureAccess::WriteOnly,
-                                format,
+                                format: config.surface_format,
                                 view_dimension: wgpu::TextureViewDimension::D2,
                             },
                             count: None,
@@ -350,21 +316,7 @@ pub struct UpsamplePipeline {
 }
 
 impl UpsamplePipeline {
-    pub fn new(gpu: &Wgpu, monitor_id: MonitorId) -> Self {
-        let (size, format) = {
-            let surfaces = gpu.surfaces.read().unwrap();
-            let surface = &surfaces[&monitor_id];
-
-            (
-                wgpu::Extent3d {
-                    width: surface.config.width,
-                    height: surface.config.height,
-                    depth_or_array_layers: 1,
-                },
-                surface.format.remove_srgb_suffix(),
-            )
-        };
-
+    pub fn new(gpu: &Wgpu, config: WallpaperConfig) -> Self {
         let sampler = gpu.device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some(LABEL),
             mag_filter: wgpu::FilterMode::Linear,
@@ -374,11 +326,15 @@ impl UpsamplePipeline {
 
         let result_texture = gpu.device.create_texture(&wgpu::TextureDescriptor {
             label: Some(LABEL),
-            size,
+            size: wgpu::Extent3d {
+                width: config.surface_size.x,
+                height: config.surface_size.y,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format,
+            format: config.surface_format,
             usage: wgpu::TextureUsages::STORAGE_BINDING
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_SRC
@@ -413,7 +369,7 @@ impl UpsamplePipeline {
                             visibility: wgpu::ShaderStages::COMPUTE,
                             ty: wgpu::BindingType::StorageTexture {
                                 access: wgpu::StorageTextureAccess::WriteOnly,
-                                format,
+                                format: config.surface_format,
                                 view_dimension: wgpu::TextureViewDimension::D2,
                             },
                             count: None,
@@ -496,14 +452,14 @@ pub struct Blur {
 impl Blur {
     pub fn new(
         gpu: &Wgpu,
-        monitor_id: MonitorId,
+        config: WallpaperConfig,
         n_levels: u32,
         blur_level_multiplier: u32,
     ) -> Self {
         Self {
-            downsample: DownsamplePipeline::new(gpu, monitor_id, n_levels),
-            blur: BlurPipeline::new(gpu, monitor_id),
-            upsample: UpsamplePipeline::new(gpu, monitor_id),
+            downsample: DownsamplePipeline::new(gpu, config, n_levels),
+            blur: BlurPipeline::new(gpu, config),
+            upsample: UpsamplePipeline::new(gpu, config),
             n_levels,
             blur_level_multiplier,
         }

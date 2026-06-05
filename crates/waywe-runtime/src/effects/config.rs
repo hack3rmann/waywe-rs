@@ -1,7 +1,7 @@
 use crate::{
+    WallpaperConfig,
     effects::{Effect, Effects},
     gpu::Wgpu,
-    wayland::MonitorId,
 };
 use smallvec::SmallVec;
 use static_assertions::assert_obj_safe;
@@ -11,14 +11,12 @@ use waywe_ipc::config::Effects as BuiltinEffects;
 #[derive(Default)]
 pub struct EffectsBuilder {
     pub configs: SmallVec<[DynEffectConfig; 2]>,
-    pub monitor_id: MonitorId,
 }
 
 impl EffectsBuilder {
-    pub const fn new(monitor_id: MonitorId) -> Self {
+    pub const fn new() -> Self {
         Self {
             configs: SmallVec::new_const(),
-            monitor_id,
         }
     }
 
@@ -41,18 +39,18 @@ impl EffectsBuilder {
         self
     }
 
-    pub fn build(&self, gpu: &Wgpu) -> Effects {
+    pub fn build(&self, gpu: &Wgpu, wallpaper_config: WallpaperConfig) -> Effects {
         Effects(
             self.configs
                 .iter()
-                .map(|config| config.build_effect(gpu, self.monitor_id))
+                .map(|config| config.build_effect(gpu, wallpaper_config))
                 .collect(),
         )
     }
 }
 
 pub trait EffectConfig: Send + Sync + 'static {
-    fn build_effect(&self, gpu: &Wgpu, monitor_id: MonitorId) -> Box<dyn Effect>;
+    fn build_effect(&self, gpu: &Wgpu, config: WallpaperConfig) -> Box<dyn Effect>;
 }
 assert_obj_safe!(EffectConfig);
 

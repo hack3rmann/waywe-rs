@@ -173,6 +173,7 @@ impl Video {
 
     /// Advance this video by `delta` time
     pub fn advance_by(&mut self, delta: Duration) {
+        // FIXME(hack3rmann): doesn't work for `delta > frame_time`
         let Some(duration) = self.frame.duration_in(self.time_base) else {
             self.next_frame();
             self.n_frames_since_update = 0;

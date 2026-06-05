@@ -1,7 +1,6 @@
 use std::{
     any::TypeId,
     collections::HashMap,
-    marker::PhantomData,
     ops::Deref,
     sync::{RwLock, RwLockReadGuard},
 };
@@ -34,7 +33,7 @@ impl ShaderCache {
         _ = map.insert(TypeId::of::<S>(), shader);
     }
 
-    pub fn get<S: ShaderDescriptor>(&self) -> Option<RwLockShaderReadGuard<'_, S>> {
+    pub fn get<S: ShaderDescriptor>(&self) -> Option<RwLockShaderReadGuard<'_>> {
         let shaders = self.shaders.read().unwrap();
 
         if !shaders.contains_key(&TypeId::of::<S>()) {
@@ -43,20 +42,20 @@ impl ShaderCache {
 
         Some(RwLockShaderReadGuard {
             shaders,
-            _p: PhantomData,
+            id: TypeId::of::<S>(),
         })
     }
 }
 
-pub struct RwLockShaderReadGuard<'s, S> {
+pub struct RwLockShaderReadGuard<'s> {
     shaders: RwLockReadGuard<'s, HashMap<TypeId, wgpu::ShaderModule>>,
-    _p: PhantomData<&'s S>,
+    id: TypeId,
 }
 
-impl<S: 'static> Deref for RwLockShaderReadGuard<'_, S> {
+impl Deref for RwLockShaderReadGuard<'_> {
     type Target = wgpu::ShaderModule;
 
     fn deref(&self) -> &Self::Target {
-        &self.shaders[&TypeId::of::<S>()]
+        &self.shaders[&self.id]
     }
 }
