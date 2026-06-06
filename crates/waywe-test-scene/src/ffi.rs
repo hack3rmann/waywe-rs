@@ -1,7 +1,7 @@
 #![allow(unused)]
 
 use crate::SceneTestWallpaper;
-use std::sync::Arc;
+use std::{mem::MaybeUninit, panic, sync::Arc};
 use waywe_scene::{
     Monitor,
     glam::UVec2,
@@ -9,26 +9,37 @@ use waywe_scene::{
     prelude::{Wallpaper, WallpaperBuilder},
     wallpaper::PreparedWallpaper,
 };
-use waywe_subrenderer::api::{OpaqueRenderer, OpaqueRendererDesc, RenderSurfaceFd, Renderer};
+use waywe_subrenderer::{
+    api::{OpaqueRenderer, OpaqueRendererDesc, RenderSurfaceFd, Renderer},
+    ffi::PanicPayload,
+};
 
 #[unsafe(no_mangle)]
-pub extern "C" fn waywe_ffi_create_opaque_renderer(desc: &OpaqueRendererDesc) -> OpaqueRenderer {
-    // FIXME(hack3rmann): catch the panic here
-    let gpu = Arc::new(pollster::block_on(Gpu::new()));
-    let monitor = Monitor {
-        size: UVec2::new(
-            desc.surface_desc.extent.width,
-            desc.surface_desc.extent.height,
-        ),
-        surface_format: desc.surface_desc.wgpu_format,
-    };
+pub extern "C" fn waywe_ffi_create_opaque_renderer(
+    desc: &OpaqueRendererDesc,
+    out_renderer: &mut MaybeUninit<OpaqueRenderer>,
+) -> PanicPayload {
+    let result = panic::catch_unwind(move || {
+        let gpu = Arc::new(pollster::block_on(Gpu::new()));
+        let monitor = Monitor {
+            size: UVec2::new(
+                desc.surface_desc.extent.width,
+                desc.surface_desc.extent.height,
+            ),
+            surface_format: desc.surface_desc.wgpu_format,
+        };
 
-    let mut wallpaper = Wallpaper::new(Arc::clone(&gpu), monitor);
-    SceneTestWallpaper.build(&mut wallpaper);
+        let mut wallpaper = Wallpaper::new(Arc::clone(&gpu), monitor);
+        SceneTestWallpaper.build(&mut wallpaper);
 
-    OpaqueRenderer::new(SceneRenderer {
-        gpu,
-        scene: PreparedWallpaper::prepare(wallpaper),
+        OpaqueRenderer::new(SceneRenderer {
+            gpu,
+            scene: PreparedWallpaper::prepare(wallpaper),
+        })
+    });
+
+    PanicPayload::map(result, |renderer| {
+        out_renderer.write(renderer);
     })
 }
 

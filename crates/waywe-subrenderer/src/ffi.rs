@@ -11,7 +11,7 @@ pub(crate) type DropFn = unsafe extern "C" fn(renderer: *mut c_void) -> PanicPay
 
 #[repr(transparent)]
 #[derive(Clone, Debug)]
-pub(crate) struct PanicPayload(pub ROption<RString>);
+pub struct PanicPayload(pub ROption<RString>);
 
 impl PanicPayload {
     pub const EMPTY: Self = Self(ROption::RNone);
@@ -22,54 +22,72 @@ impl PanicPayload {
             panic::resume_unwind(Box::new(s))
         }
     }
+
+    pub fn map<T>(payload: Result<T, Box<dyn Any + Send>>, f: impl FnOnce(T)) -> Self {
+        match payload {
+            Ok(value) => {
+                f(value);
+                Self::EMPTY
+            }
+            Err(payload) => payload.into(),
+        }
+    }
 }
 
-fn map_panic_payload(payload: Box<dyn Any + Send>) -> PanicPayload {
-    let payload_string = if let Some(&s) = payload.downcast_ref::<&str>() {
-        RString::from(s)
-    } else if let Some(s) = payload.downcast_ref::<String>() {
-        RString::from(s.as_str())
-    } else {
-        RString::from("non-string panic")
-    };
+impl From<Box<dyn Any + Send>> for PanicPayload {
+    fn from(payload: Box<dyn Any + Send>) -> Self {
+        let payload_string = if let Some(&s) = payload.downcast_ref::<&str>() {
+            RString::from(s)
+        } else if let Some(s) = payload.downcast_ref::<String>() {
+            RString::from(s.as_str())
+        } else {
+            RString::from("non-string panic")
+        };
 
-    PanicPayload(ROption::RSome(payload_string))
+        PanicPayload(ROption::RSome(payload_string))
+    }
+}
+
+impl From<Result<(), Box<dyn Any + Send>>> for PanicPayload {
+    fn from(value: Result<(), Box<dyn Any + Send>>) -> Self {
+        match value {
+            Ok(()) => Self::EMPTY,
+            Err(payload) => payload.into(),
+        }
+    }
+}
+
+impl From<Option<Box<dyn Any + Send>>> for PanicPayload {
+    fn from(value: Option<Box<dyn Any + Send>>) -> Self {
+        match value {
+            None => Self::EMPTY,
+            Some(payload) => payload.into(),
+        }
+    }
 }
 
 pub(crate) unsafe extern "C" fn render<T: Renderer>(renderer: *mut c_void) -> PanicPayload {
-    let unwind = panic::catch_unwind(move || {
+    panic::catch_unwind(move || {
         let this = unsafe { renderer.cast::<T>().as_mut().unwrap_unchecked() };
         this.render()
-    });
-
-    match unwind {
-        Ok(()) => PanicPayload::EMPTY,
-        Err(payload) => map_panic_payload(payload),
-    }
+    })
+    .into()
 }
 
 pub(crate) unsafe extern "C" fn set_surface<T: Renderer>(
     renderer: *mut c_void,
     surface: RenderSurfaceFd,
 ) -> PanicPayload {
-    let unwind = panic::catch_unwind(move || {
+    panic::catch_unwind(move || {
         let this = unsafe { renderer.cast::<T>().as_mut().unwrap_unchecked() };
         this.set_surface(surface);
-    });
-
-    match unwind {
-        Ok(()) => PanicPayload::EMPTY,
-        Err(payload) => map_panic_payload(payload),
-    }
+    })
+    .into()
 }
 
 pub(crate) unsafe extern "C" fn drop<T>(renderer: *mut c_void) -> PanicPayload {
-    let unwind = panic::catch_unwind(move || {
+    panic::catch_unwind(move || {
         unsafe { ptr::drop_in_place(renderer.cast::<T>()) };
-    });
-
-    match unwind {
-        Ok(()) => PanicPayload::EMPTY,
-        Err(payload) => map_panic_payload(payload),
-    }
+    })
+    .into()
 }
