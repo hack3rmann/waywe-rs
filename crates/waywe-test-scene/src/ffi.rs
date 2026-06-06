@@ -9,7 +9,7 @@ use waywe_scene::{
     prelude::{Wallpaper, WallpaperBuilder},
     wallpaper::PreparedWallpaper,
 };
-use waywe_subrenderer::api::{FrameImage, OpaqueRenderer, OpaqueRendererDesc, Renderer};
+use waywe_subrenderer::api::{OpaqueRenderer, OpaqueRendererDesc, RenderSurfaceFd, Renderer};
 
 #[unsafe(no_mangle)]
 pub extern "C" fn waywe_ffi_create_opaque_renderer(desc: &OpaqueRendererDesc) -> OpaqueRenderer {
@@ -26,11 +26,10 @@ pub extern "C" fn waywe_ffi_create_opaque_renderer(desc: &OpaqueRendererDesc) ->
     let mut wallpaper = Wallpaper::new(Arc::clone(&gpu), monitor);
     SceneTestWallpaper.build(&mut wallpaper);
 
-    SceneRenderer {
+    OpaqueRenderer::new(SceneRenderer {
         gpu,
         scene: PreparedWallpaper::prepare(wallpaper),
-    }
-    .into()
+    })
 }
 
 struct SceneRenderer {
@@ -39,9 +38,11 @@ struct SceneRenderer {
 }
 
 impl Renderer for SceneRenderer {
-    fn frame(&mut self) -> FrameImage {
-        let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
+    fn render(&mut self) {
+        todo!()
+    }
 
+    fn set_surface(&mut self, surface: RenderSurfaceFd) {
         todo!()
     }
 }

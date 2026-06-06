@@ -1,11 +1,8 @@
 use crate::{
     FfiTextureDescriptor,
-    ffi::{self, DropFn, FrameFn, PanicPayload},
+    ffi::{self, DropFn, RenderFn, SetSurfaceFn},
 };
-use std::{
-    mem::MaybeUninit,
-    os::{fd::OwnedFd, raw::c_void},
-};
+use std::os::{fd::OwnedFd, raw::c_void};
 
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq)]
@@ -18,38 +15,39 @@ pub type CreateOpaqueRendererFn = extern "C" fn(desc: &OpaqueRendererDesc) -> Op
 pub const CREATE_OPAQUE_RENDERER_NAME: &str = "waywe_ffi_create_opaque_renderer";
 
 #[repr(C)]
-pub struct FrameImage {
+pub struct RenderSurfaceFd {
     fd: OwnedFd,
     desc: FfiTextureDescriptor<'static>,
 }
 
 #[repr(C)]
 pub struct OpaqueRenderer {
-    frame: FrameFn,
+    render: RenderFn,
+    set_surface: SetSurfaceFn,
     drop: DropFn,
     renderer: *mut c_void,
-    panic_payload: PanicPayload,
 }
 
 impl OpaqueRenderer {
-    pub fn frame(&mut self) -> FrameImage {
-        let mut image = MaybeUninit::<FrameImage>::uninit();
-
-        let panic = unsafe { (self.frame)(self.renderer, &mut image) };
-        panic.propagate_if_any();
-
-        unsafe { image.assume_init() }
+    pub fn new<T: Renderer>(renderer: T) -> Self {
+        Self {
+            render: ffi::render::<T>,
+            set_surface: ffi::set_surface::<T>,
+            drop: ffi::drop::<T>,
+            renderer: Box::into_raw(Box::new(renderer)).cast(),
+        }
     }
 }
 
-impl<T: Renderer> From<T> for OpaqueRenderer {
-    fn from(value: T) -> Self {
-        Self {
-            frame: ffi::frame::<T>,
-            drop: ffi::drop::<T>,
-            renderer: Box::into_raw(Box::new(value)).cast(),
-            panic_payload: PanicPayload::EMPTY,
-        }
+impl Renderer for OpaqueRenderer {
+    fn render(&mut self) {
+        let panic = unsafe { (self.render)(self.renderer) };
+        panic.propagate_if_any();
+    }
+
+    fn set_surface(&mut self, surface: RenderSurfaceFd) {
+        let panic = unsafe { (self.set_surface)(self.renderer, surface) };
+        panic.propagate_if_any();
     }
 }
 
@@ -61,5 +59,6 @@ impl Drop for OpaqueRenderer {
 }
 
 pub trait Renderer {
-    fn frame(&mut self) -> FrameImage;
+    fn render(&mut self);
+    fn set_surface(&mut self, surface: RenderSurfaceFd);
 }
