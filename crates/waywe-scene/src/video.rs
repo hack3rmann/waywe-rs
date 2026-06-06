@@ -46,7 +46,7 @@ use video::{
     VideoPixelFormat, acceleration::VaSurfaceHandle,
 };
 use waywe_runtime::{gpu::Wgpu, shaders::ShaderDescriptor};
-use wgpu::wgc::api;
+use wgpu::{hal::vulkan, wgc::api};
 
 /// Plugin for video functionality.
 ///
@@ -337,9 +337,6 @@ impl RenderVideo {
 
         let ext_info = vk::ExternalMemoryImageCreateInfo {
             s_type: vk::StructureType::EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-            // TODO(hack3rmann): use `DMA_BUF_EXT` whenever it is possible
-            // The reason is it has no restrictions on the device that was
-            // used to decode a video
             handle_types: vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD,
             p_next: ptr::null(),
             _marker: std::marker::PhantomData,
@@ -469,8 +466,14 @@ impl RenderVideo {
             vk_free_memory(vk_device_raw, device_memory, ptr::null());
         });
 
-        let texture_hal =
-            unsafe { device.texture_from_raw(vk_image, &texture_desc, Some(destructor)) };
+        let texture_hal = unsafe {
+            device.texture_from_raw(
+                vk_image,
+                &texture_desc,
+                Some(destructor),
+                vulkan::TextureMemory::External,
+            )
+        };
 
         unsafe {
             gpu.device.create_texture_from_hal::<api::Vulkan>(

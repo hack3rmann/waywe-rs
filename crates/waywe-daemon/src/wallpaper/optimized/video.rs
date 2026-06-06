@@ -104,6 +104,7 @@ impl Wallpaper for VideoWallpaper {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         let size = Vec2::new(
@@ -113,7 +114,7 @@ impl Wallpaper for VideoWallpaper {
 
         pass.set_pipeline(&self.pipeline.pipeline);
         pass.set_vertex_buffer(0, self.pipeline.vertex_buffer.slice(..));
-        pass.set_push_constants(wgpu::ShaderStages::FRAGMENT, 0, bytemuck::bytes_of(&size));
+        pass.set_immediates(0, bytemuck::bytes_of(&size));
         pass.set_bind_group(0, &bind_group, &[]);
 
         pass.draw(0..SCREEN_TRIANGLE.len() as u32, 0..1);
@@ -203,11 +204,8 @@ impl VideoPipeline {
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
-                bind_group_layouts: &[&bind_group_layout],
-                push_constant_ranges: &[wgpu::PushConstantRange {
-                    stages: wgpu::ShaderStages::FRAGMENT,
-                    range: 0..mem::size_of::<Vec2>() as u32,
-                }],
+                bind_group_layouts: &[Some(&bind_group_layout)],
+                immediate_size: mem::size_of::<Vec2>() as u32,
             });
 
         let pipeline = Self::create_pipeline(gpu, &pipeline_layout, config.surface_format);
@@ -279,7 +277,7 @@ impl VideoPipeline {
                     mask: !0,
                     alpha_to_coverage_enabled: false,
                 },
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             })
     }

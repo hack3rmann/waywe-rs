@@ -101,11 +101,8 @@ impl Convolve {
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some(LABEL),
-                bind_group_layouts: &[&bind_group_layout],
-                push_constant_ranges: &[wgpu::PushConstantRange {
-                    stages: wgpu::ShaderStages::COMPUTE,
-                    range: 0..mem::size_of::<PushConst>() as u32,
-                }],
+                bind_group_layouts: &[Some(&bind_group_layout)],
+                immediate_size: mem::size_of::<PushConst>() as u32,
             });
 
         gpu.require_shader::<ConvolveShader>();
@@ -165,7 +162,7 @@ impl Effect for Convolve {
 
             pass.set_bind_group(0, &bind_group, &[]);
             pass.set_pipeline(&self.pipeline);
-            pass.set_push_constants(
+            pass.set_immediates(
                 0,
                 bytemuck::bytes_of(&PushConst {
                     kernel_size: self.kernel_size,

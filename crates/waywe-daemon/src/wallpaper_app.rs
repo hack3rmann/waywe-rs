@@ -23,6 +23,7 @@ use waywe_runtime::{
     app::App,
     event::{EventHandler, Handle, TryReplicate},
     frame::{FrameError, FrameInfo},
+    gpu::SurfaceResult,
     wayland::{MonitorId, MonitorMap, WaylandEvent},
 };
 use waywe_scene::cursor::CursorMoved;
@@ -176,9 +177,16 @@ impl App for WallpaperApp {
                 continue;
             }
 
-            let surface = {
-                let surfaces = runtime.wgpu.surfaces.read().unwrap();
-                surfaces[&monitor_id].surface.get_current_texture().unwrap()
+            let (needs_reconfigure, surface) = match runtime
+                .wgpu
+                .get_current_surface(&runtime.wayland, monitor_id)
+            {
+                SurfaceResult::Ok(texture) => (false, texture),
+                SurfaceResult::Reconfigure(texture) => (true, texture),
+                SurfaceResult::Skip => continue,
+                SurfaceResult::Err => {
+                    panic!("failed to get_current_texture on surface on monitor_id={monitor_id:?}")
+                }
             };
 
             let mut encoder = runtime
@@ -193,6 +201,10 @@ impl App for WallpaperApp {
 
             if let Some(state) = self.wallpaper_states.get_mut(&monitor_name) {
                 *state = state.redraw_completed();
+            }
+
+            if needs_reconfigure {
+                runtime.wgpu.reconfigure_surface(monitor_id);
             }
         }
 

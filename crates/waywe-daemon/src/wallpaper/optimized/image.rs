@@ -109,11 +109,8 @@ impl ImageWallpaper {
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("image-pipeline-layout"),
-                bind_group_layouts: &[&bind_group_layout],
-                push_constant_ranges: &[wgpu::PushConstantRange {
-                    stages: wgpu::ShaderStages::FRAGMENT,
-                    range: 0..mem::size_of::<PushConst>() as u32,
-                }],
+                bind_group_layouts: &[Some(&bind_group_layout)],
+                immediate_size: mem::size_of::<PushConst>() as u32,
             });
 
         let pipeline = gpu
@@ -166,7 +163,7 @@ impl ImageWallpaper {
                     mask: !0,
                     alpha_to_coverage_enabled: false,
                 },
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             });
 
@@ -238,7 +235,7 @@ impl ImageWallpaper {
                     mask: !0,
                     alpha_to_coverage_enabled: false,
                 },
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             })
     }
@@ -274,12 +271,12 @@ impl Wallpaper for ImageWallpaper {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         pass.set_pipeline(&self.pipeline);
         pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        pass.set_push_constants(
-            wgpu::ShaderStages::FRAGMENT,
+        pass.set_immediates(
             0,
             bytemuck::bytes_of(&PushConst {
                 resolution: Vec2::new(self.screen_size.x as f32, self.screen_size.y as f32),
@@ -287,6 +284,7 @@ impl Wallpaper for ImageWallpaper {
             }),
         );
         pass.set_bind_group(0, &self.bind_group, &[]);
+
         pass.draw(0..SCREEN_TRIANGLE.len() as u32, 0..1);
 
         FrameInfo {

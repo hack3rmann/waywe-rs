@@ -70,10 +70,12 @@ async fn use_wgpu_to_draw_anything() {
         WlCompositorCreateSurfaceRequest,
     );
 
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::Backends::VULKAN,
         flags: wgpu::InstanceFlags::DEBUG | wgpu::InstanceFlags::VALIDATION,
-        ..Default::default()
+        memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
+        backend_options: wgpu::BackendOptions::from_env_or_default(),
+        display: None,
     });
 
     let raw_display_handle = display.display_handle().unwrap().as_raw();
@@ -89,7 +91,7 @@ async fn use_wgpu_to_draw_anything() {
     let wgpu_surface = unsafe {
         instance
             .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
-                raw_display_handle,
+                raw_display_handle: Some(raw_display_handle),
                 raw_window_handle,
             })
             .unwrap()
@@ -156,7 +158,7 @@ async fn use_wgpu_to_draw_anything() {
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
-        push_constant_ranges: &[],
+        immediate_size: 0,
     });
 
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -207,7 +209,7 @@ async fn use_wgpu_to_draw_anything() {
             mask: !0,
             alpha_to_coverage_enabled: false,
         },
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     });
 
@@ -218,7 +220,20 @@ async fn use_wgpu_to_draw_anything() {
             break;
         }
 
-        let surface_texture = wgpu_surface.get_current_texture().unwrap();
+        let surface_result = wgpu_surface.get_current_texture();
+        let surface_texture = match surface_result {
+            wgpu::CurrentSurfaceTexture::Success(surface)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(surface) => surface,
+            wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => {
+                continue;
+            }
+            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
+                todo!("reconfigure")
+            }
+            wgpu::CurrentSurfaceTexture::Validation => {
+                panic!("validation error on .get_current_texture")
+            }
+        };
         let surface_view = surface_texture.texture.create_view(&Default::default());
 
         let mut encoder = device.create_command_encoder(&Default::default());
@@ -238,6 +253,7 @@ async fn use_wgpu_to_draw_anything() {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             pass.set_pipeline(&pipeline);

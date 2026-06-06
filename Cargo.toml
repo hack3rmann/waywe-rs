@@ -71,3 +71,5 @@ fxhash = "0.2.1"
 box_into_inner = "0.1.0"
 futures-util = { version = "0.3.31", features = ["alloc"] }
 derive_more = { version = "2.0.1", features = ["full"] }
+wgpu = { version = "29.0.3", features = ["glsl", "spirv"] }
+ash = "0.38.0"
