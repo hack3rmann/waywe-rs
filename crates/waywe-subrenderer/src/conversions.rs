@@ -147,7 +147,7 @@ pub(crate) fn map_vk_image_usage_to_texture_usages(
     u
 }
 
-pub(crate) fn map_vk_format(format: vk::Format) -> Option<wgpu::TextureFormat> {
+pub(crate) fn _map_vk_format(format: vk::Format) -> Option<wgpu::TextureFormat> {
     use ash::vk::Format as F;
     use wgpu::TextureFormat as Tf;
 

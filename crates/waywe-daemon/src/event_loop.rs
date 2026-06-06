@@ -203,6 +203,7 @@ impl EventQueue {
             Err(error) => return Err(error),
         };
 
+        // TODO(hack3rmann): do actions for the monitors that are not plugged yet
         let get_target = |monitor_name: Option<&str>| {
             let Some(name) = monitor_name else {
                 return Some(WallpaperTarget::ForAll);

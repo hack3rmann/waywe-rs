@@ -1,7 +1,7 @@
-use crate::wallpaper::optimized::OptimizedWallpaper;
+use crate::wallpaper::{Wallpaper, WallpaperConfig, optimized::OptimizedWallpaper};
 use bytemuck::{Pod, Zeroable};
 use for_sure::prelude::*;
-use glam::{UVec2, Vec2};
+use glam::Vec2;
 use smallvec::SmallVec;
 use std::{
     collections::VecDeque,
@@ -17,8 +17,6 @@ use waywe_runtime::{
     effects::{Effects, config::EffectsBuilder},
     frame::{FrameError, FrameInfo},
     gpu::Wgpu,
-    shaders::ShaderDescriptor,
-    wayland::MonitorId,
 };
 use waywe_spirv_derive::ShaderDescriptor;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
@@ -37,24 +35,21 @@ pub struct WallpaperTransitionState {
 
 impl WallpaperTransitionState {
     pub fn new(gpu: &Wgpu, pipeline: &WallpaperTransitionPipeline) -> Self {
-        let surfaces = gpu.surfaces.read().unwrap();
-        let surface_config = &surfaces[&pipeline.monitor_id].config;
-
         let texture_desc = wgpu::TextureDescriptor {
             label: Some("transition"),
             size: wgpu::Extent3d {
-                width: surface_config.width,
-                height: surface_config.height,
+                width: pipeline.config.surface_size.x,
+                height: pipeline.config.surface_size.y,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: surface_config.format,
+            format: pipeline.config.surface_format,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[surface_config.format.remove_srgb_suffix()],
+            view_formats: &[pipeline.config.surface_format.remove_srgb_suffix()],
         };
 
         let from_texture = gpu.device.create_texture(&texture_desc);
@@ -91,47 +86,68 @@ impl WallpaperTransitionState {
 }
 
 #[derive(ShaderDescriptor)]
-#[shader(path = "crates/waywe-daemon/src/shaders/fullscreen-vertex.glsl")]
-#[shader(stage = "vertex")]
+#[shader(
+    path = "crates/waywe-daemon/src/shaders/fullscreen-vertex.glsl",
+    stage = "vertex"
+)]
 pub struct FullScreenVertexShader;
 
 #[derive(ShaderDescriptor)]
-#[shader(path = "crates/waywe-daemon/src/shaders/transition-circle.glsl")]
-#[shader(stage = "fragment")]
+#[shader(
+    path = "crates/waywe-daemon/src/shaders/transition-circle.glsl",
+    stage = "fragment"
+)]
 pub struct TransitionCircleFragmentShader;
 
 #[derive(ShaderDescriptor)]
-#[shader(path = "crates/waywe-daemon/src/shaders/transition-slide.glsl")]
-#[shader(stage = "fragment")]
+#[shader(
+    path = "crates/waywe-daemon/src/shaders/transition-slide.glsl",
+    stage = "fragment"
+)]
 pub struct TransitionSlideFragmentShader;
 
 pub struct WallpaperTransitionPipeline {
-    pub monitor_id: MonitorId,
     pub pipeline: wgpu::RenderPipeline,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub sampler: wgpu::Sampler,
     pub vertices: wgpu::Buffer,
     pub pipeline_cache: wgpu::PipelineCache,
     pub pipeline_layout: wgpu::PipelineLayout,
-    pub surface_format: wgpu::TextureFormat,
+    pub config: WallpaperConfig,
+    pub animation_style: AnimationStyle,
 }
 
 impl WallpaperTransitionPipeline {
-    pub fn create_pipeline<V: ShaderDescriptor, F: ShaderDescriptor>(
+    pub fn create_pipeline(
         gpu: &Wgpu,
+        animation_style: AnimationStyle,
         layout: &wgpu::PipelineLayout,
-        surface_format: wgpu::TextureFormat,
+        format: wgpu::TextureFormat,
         pipeline_cache: &wgpu::PipelineCache,
     ) -> wgpu::RenderPipeline {
-        gpu.require_shader::<V>();
-        gpu.require_shader::<F>();
+        gpu.require_shader::<FullScreenVertexShader>();
+
+        let fragment_shader = match animation_style {
+            AnimationStyle::Circle => {
+                gpu.require_shader::<TransitionCircleFragmentShader>();
+                gpu.shader_cache
+                    .get::<TransitionCircleFragmentShader>()
+                    .unwrap()
+            }
+            AnimationStyle::Slide => {
+                gpu.require_shader::<TransitionSlideFragmentShader>();
+                gpu.shader_cache
+                    .get::<TransitionSlideFragmentShader>()
+                    .unwrap()
+            }
+        };
 
         gpu.device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("image-pipeline"),
                 layout: Some(layout),
                 vertex: wgpu::VertexState {
-                    module: &gpu.shader_cache.get::<V>().unwrap(),
+                    module: &gpu.shader_cache.get::<FullScreenVertexShader>().unwrap(),
                     entry_point: Some("main"),
                     compilation_options: wgpu::PipelineCompilationOptions {
                         constants: &[],
@@ -148,14 +164,14 @@ impl WallpaperTransitionPipeline {
                     }],
                 },
                 fragment: Some(wgpu::FragmentState {
-                    module: &gpu.shader_cache.get::<F>().unwrap(),
+                    module: &fragment_shader,
                     entry_point: Some("main"),
                     compilation_options: wgpu::PipelineCompilationOptions {
                         constants: &[],
                         zero_initialize_workgroup_memory: false,
                     },
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: surface_format,
+                        format,
                         blend: None,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
@@ -175,12 +191,12 @@ impl WallpaperTransitionPipeline {
                     mask: !0,
                     alpha_to_coverage_enabled: false,
                 },
-                multiview: None,
+                multiview_mask: None,
                 cache: Some(pipeline_cache),
             })
     }
 
-    pub fn new(gpu: &Wgpu, monitor_id: MonitorId, animation_style: AnimationStyle) -> Self {
+    pub fn new(gpu: &Wgpu, config: WallpaperConfig, animation_style: AnimationStyle) -> Self {
         let vertices = gpu.device.create_buffer_init(&BufferInitDescriptor {
             label: Some("fullscreen-triangle"),
             contents: bytemuck::cast_slice(&SCREEN_TRIANGLE),
@@ -225,17 +241,9 @@ impl WallpaperTransitionPipeline {
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("waywe-transition"),
-                bind_group_layouts: &[&bind_group_layout],
-                push_constant_ranges: &[wgpu::PushConstantRange {
-                    stages: wgpu::ShaderStages::FRAGMENT,
-                    range: 0..mem::size_of::<AnimationState>() as u32,
-                }],
+                bind_group_layouts: &[Some(&bind_group_layout)],
+                immediate_size: mem::size_of::<AnimationState>() as u32,
             });
-
-        let surface_format = {
-            let surfaces = gpu.surfaces.read().unwrap();
-            surfaces[&monitor_id].format
-        };
 
         // Safety: data is None
         let pipeline_cache = unsafe {
@@ -247,41 +255,48 @@ impl WallpaperTransitionPipeline {
                 })
         };
 
-        let pipeline = match animation_style {
-            AnimationStyle::Slide => Self::create_pipeline::<
-                FullScreenVertexShader,
-                TransitionSlideFragmentShader,
-            >(
-                gpu, &pipeline_layout, surface_format, &pipeline_cache
-            ),
-
-            AnimationStyle::Circle => Self::create_pipeline::<
-                FullScreenVertexShader,
-                TransitionCircleFragmentShader,
-            >(
-                gpu, &pipeline_layout, surface_format, &pipeline_cache
-            ),
-        };
+        let pipeline = Self::create_pipeline(
+            gpu,
+            animation_style,
+            &pipeline_layout,
+            config.surface_format,
+            &pipeline_cache,
+        );
 
         let sampler = gpu.device.create_sampler(&Default::default());
 
         Self {
-            monitor_id,
             pipeline_cache,
             pipeline,
             pipeline_layout,
             bind_group_layout,
-            surface_format,
+            config,
+            animation_style,
             sampler,
             vertices,
         }
     }
 
-    pub fn switch_shader<F: ShaderDescriptor>(&mut self, gpu: &Wgpu) {
-        self.pipeline = Self::create_pipeline::<FullScreenVertexShader, F>(
+    pub fn configure(&mut self, gpu: &Wgpu, config: WallpaperConfig) {
+        if self.config.surface_format != config.surface_format {
+            self.pipeline = Self::create_pipeline(
+                gpu,
+                self.animation_style,
+                &self.pipeline_layout,
+                config.surface_format,
+                &self.pipeline_cache,
+            );
+        }
+
+        self.config = config;
+    }
+
+    pub fn switch_shader(&mut self, gpu: &Wgpu, animation_style: AnimationStyle) {
+        self.pipeline = Self::create_pipeline(
             gpu,
+            animation_style,
             &self.pipeline_layout,
-            self.surface_format,
+            self.config.surface_format,
             &self.pipeline_cache,
         );
     }
@@ -307,12 +322,13 @@ impl WallpaperTransitionPipeline {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &state.bind_group, &[]);
         pass.set_vertex_buffer(0, self.vertices.slice(..));
-        pass.set_push_constants(wgpu::ShaderStages::FRAGMENT, 0, animation_state.bytes());
+        pass.set_immediates(0, animation_state.bytes());
 
         pass.draw(0..SCREEN_TRIANGLE.len() as u32, 0..1);
     }
@@ -577,39 +593,39 @@ impl EffectWallpaper {
 }
 
 pub struct RunningWallpapers {
-    pub monitor_id: MonitorId,
-    pub aspect_ratio: f32,
     pub executing: VecDeque<EffectWallpaper>,
     pub ongoing_transitions: SmallVec<[OngoingTransition; 8]>,
     pub transition_pipeline: Almost<WallpaperTransitionPipeline>,
     pub textures: Almost<WallpaperTransitionState>,
     pub config: AnimationConfig,
     pub effects_builder: EffectsBuilder,
+    pub wallpaper_config: WallpaperConfig,
 }
 
 impl RunningWallpapers {
-    pub const fn new(monitor_id: MonitorId, monitor_size: UVec2, config: AnimationConfig) -> Self {
+    pub const fn new(wallpaper_config: WallpaperConfig, config: AnimationConfig) -> Self {
         Self {
-            monitor_id,
-            aspect_ratio: monitor_size.y as f32 / monitor_size.x as f32,
             executing: VecDeque::new(),
             ongoing_transitions: SmallVec::new_const(),
             transition_pipeline: Nil,
             textures: Nil,
             config,
-            effects_builder: EffectsBuilder::new(monitor_id),
+            effects_builder: EffectsBuilder::new(),
+            wallpaper_config,
         }
     }
 
     pub fn enqueue_wallpaper(&mut self, gpu: &Wgpu, wallpaper: OptimizedWallpaper) {
         self.executing.push_back(EffectWallpaper {
             wallpaper,
-            effects: self.effects_builder.build(gpu),
+            effects: self.effects_builder.build(gpu, self.wallpaper_config),
         });
 
         if self.executing.len() >= 2 {
-            self.ongoing_transitions
-                .push(OngoingTransition::new(self.aspect_ratio, &self.config));
+            self.ongoing_transitions.push(OngoingTransition::new(
+                self.wallpaper_config.aspect_ratio(),
+                &self.config,
+            ));
         }
     }
 
@@ -630,15 +646,14 @@ impl RunningWallpapers {
 
     pub fn init_transitions(&mut self, gpu: &Wgpu) {
         if self.is_transitioning() && Almost::is_nil(&self.transition_pipeline) {
-            self.transition_pipeline = Value(WallpaperTransitionPipeline::new(
+            let pipeline = WallpaperTransitionPipeline::new(
                 gpu,
-                self.monitor_id,
+                self.wallpaper_config,
                 self.config.animation.style(),
-            ));
-            self.textures = Value(WallpaperTransitionState::new(
-                gpu,
-                &self.transition_pipeline,
-            ));
+            );
+
+            self.textures = Value(WallpaperTransitionState::new(gpu, &pipeline));
+            self.transition_pipeline = Value(pipeline);
         }
     }
 
@@ -679,14 +694,8 @@ impl RunningWallpapers {
             let state = transition.state(self.config.easing);
 
             if transition.animation_style() != self.config.animation.style() {
-                match transition.animation_style() {
-                    AnimationStyle::Circle => self
-                        .transition_pipeline
-                        .switch_shader::<TransitionCircleFragmentShader>(gpu),
-                    AnimationStyle::Slide => self
-                        .transition_pipeline
-                        .switch_shader::<TransitionSlideFragmentShader>(gpu),
-                }
+                self.transition_pipeline
+                    .switch_shader(gpu, transition.animation_style());
             }
 
             self.transition_pipeline
@@ -708,5 +717,34 @@ impl RunningWallpapers {
 
     pub fn wallpapers_mut(&mut self) -> &mut [EffectWallpaper] {
         self.executing.make_contiguous()
+    }
+}
+
+impl Wallpaper for RunningWallpapers {
+    fn configure(&mut self, gpu: &Wgpu, config: WallpaperConfig) {
+        if self.wallpaper_config == config {
+            return;
+        }
+
+        if let Value(pipeline) = &mut self.transition_pipeline {
+            pipeline.configure(gpu, config);
+            *self.textures = WallpaperTransitionState::new(gpu, pipeline);
+        }
+
+        for effect in &mut self.executing {
+            effect.wallpaper.configure(gpu, config);
+            effect.effects = self.effects_builder.build(gpu, config);
+        }
+
+        self.wallpaper_config = config;
+    }
+
+    fn frame(
+        &mut self,
+        gpu: &Wgpu,
+        surface: &wgpu::TextureView,
+        encoder: &mut wgpu::CommandEncoder,
+    ) -> FrameInfo {
+        self.render(gpu, surface.texture(), encoder).unwrap()
     }
 }

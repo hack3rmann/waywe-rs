@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use crate::SceneTestWallpaper;
 use std::sync::Arc;
 use waywe_scene::{

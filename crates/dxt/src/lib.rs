@@ -50,9 +50,15 @@ pub fn decompress_image(width: usize, height: usize, data: &[u32], format: DxtFo
     let mut res = vec![0; width * height];
     let res_ptr = SendableU32MutPointer(res.as_mut_ptr());
 
+    let decompress_block = match format {
+        DxtFormat::Dxt1 => decompress_dxt1_block,
+        DxtFormat::Dxt3 => decompress_dxt3_block,
+        DxtFormat::Dxt5 => decompress_dxt5_block,
+    };
+
     (0..num_blocks_height * num_blocks_width)
         .into_par_iter()
-        .for_each(|block_idx| {
+        .for_each(move |block_idx| {
             let block_y = block_idx / num_blocks_width;
             let block_x = block_idx % num_blocks_width;
 
@@ -62,17 +68,7 @@ pub fn decompress_image(width: usize, height: usize, data: &[u32], format: DxtFo
             let x = block_x * 4;
             let y = block_y * 4;
 
-            match format {
-                DxtFormat::Dxt1 => unsafe {
-                    decompress_dxt1_block(data, res_ptr, x, y, width, height)
-                },
-                DxtFormat::Dxt3 => unsafe {
-                    decompress_dxt3_block(data, res_ptr, x, y, width, height)
-                },
-                DxtFormat::Dxt5 => unsafe {
-                    decompress_dxt5_block(data, res_ptr, x, y, width, height)
-                },
-            }
+            unsafe { decompress_block(data, res_ptr, x, y, width, height) };
         });
 
     res

@@ -3,9 +3,9 @@ pub mod conversions;
 pub mod ffi;
 
 use crate::conversions::{
-    map_ffi_label, map_texture_usages_to_vk, map_vk_dimension, map_vk_extent, map_vk_format,
-    map_vk_image_usage, map_vk_image_usage_to_texture_usages, map_wgpu_dimension, map_wgpu_extent,
-    map_wgpu_format, map_wgpu_label,
+    map_ffi_label, map_texture_usages_to_vk, map_vk_dimension, map_vk_extent, map_vk_image_usage,
+    map_vk_image_usage_to_texture_usages, map_wgpu_dimension, map_wgpu_extent, map_wgpu_format,
+    map_wgpu_label,
 };
 use abi_stable::std_types::{ROption, RStr};
 use ash::{khr::external_memory_fd::Device as FdDevice, vk};
@@ -14,8 +14,12 @@ use std::{
     os::fd::{FromRawFd, IntoRawFd, OwnedFd},
     ptr,
 };
-use wgpu::{hal, wgc::api::Vulkan};
+use wgpu::{
+    hal::{self, vulkan::TextureMemory},
+    wgc::api::Vulkan,
+};
 
+#[allow(unused)]
 unsafe fn find_memory_type_index(
     instance: &ash::Instance,
     phys_device: vk::PhysicalDevice,
@@ -33,7 +37,9 @@ unsafe fn find_memory_type_index(
 
 fn texture_export_fd(device: &wgpu::Device, texture: &wgpu::Texture) -> OwnedFd {
     let texture_hal = unsafe { texture.as_hal::<Vulkan>().unwrap() };
-    let memory = unsafe { texture_hal.external_memory().unwrap() };
+    let &TextureMemory::Dedicated(memory) = (unsafe { texture_hal.memory() }) else {
+        panic!();
+    };
 
     let device_hal = unsafe { device.as_hal::<Vulkan>().unwrap() };
     let device_raw = device_hal.raw_device();
@@ -111,6 +117,7 @@ impl<'s> From<wgpu::TextureDescriptor<'s>> for FfiTextureDescriptor<'s> {
     }
 }
 
+#[allow(unused)]
 fn import_fd_as_texture(
     device: &wgpu::Device,
     adapter: &wgpu::Adapter,
@@ -203,7 +210,8 @@ fn import_fd_as_texture(
     };
 
     let device_hal = unsafe { device.as_hal::<Vulkan>().unwrap() };
-    let texture_hal = unsafe { device_hal.texture_from_raw(vk_image, &hal_desc, None) };
+    let texture_hal =
+        unsafe { device_hal.texture_from_raw(vk_image, &hal_desc, None, TextureMemory::External) };
 
     let wgpu_desc = wgpu::TextureDescriptor {
         label: desc.wgpu_label(),

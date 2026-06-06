@@ -47,7 +47,7 @@ use video::{
     VideoPixelFormat, acceleration::VaSurfaceHandle,
 };
 use waywe_runtime::shaders::ShaderDescriptor;
-use wgpu::wgc::api;
+use wgpu::{hal::vulkan, wgc::api};
 
 /// Plugin for video functionality.
 ///
@@ -174,6 +174,7 @@ impl Video {
 
     /// Advance this video by `delta` time
     pub fn advance_by(&mut self, delta: Duration) {
+        // FIXME(hack3rmann): doesn't work for `delta > frame_time`
         let Some(duration) = self.frame.duration_in(self.time_base) else {
             self.next_frame();
             self.n_frames_since_update = 0;
@@ -322,14 +323,18 @@ impl RenderVideo {
     }
 
     /// Create a GPU texture from a VA surface.
-    pub fn create_texture(gpu: &Gpu, surface: VaSurfaceHandle) -> wgpu::Texture {
+    pub fn create_texture(
+        adapter: &wgpu::Adapter,
+        device: &wgpu::Device,
+        surface: VaSurfaceHandle,
+    ) -> wgpu::Texture {
         let dma_desc = *surface.desc();
         let dma_buf_fd = surface.into_fd().into_raw_fd();
 
-        let memory_properties = Self::get_memory_properties(&gpu.adapter);
+        let memory_properties = Self::get_memory_properties(adapter);
 
-        let device = unsafe { gpu.device.as_hal::<api::Vulkan>().unwrap() };
-        let vk_device = device.raw_device();
+        let device_hal = unsafe { device.as_hal::<api::Vulkan>().unwrap() };
+        let vk_device = device_hal.raw_device();
 
         let vk_free_memory = vk_device.fp_v1_0().free_memory;
         let vk_destroy_image = vk_device.fp_v1_0().destroy_image;
@@ -337,9 +342,6 @@ impl RenderVideo {
 
         let ext_info = vk::ExternalMemoryImageCreateInfo {
             s_type: vk::StructureType::EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-            // TODO(hack3rmann): use `DMA_BUF_EXT` whenever it is possible
-            // The reason is it has no restrictions on the device that was
-            // used to decode a video
             handle_types: vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD,
             p_next: ptr::null(),
             _marker: std::marker::PhantomData,
@@ -469,11 +471,17 @@ impl RenderVideo {
             vk_free_memory(vk_device_raw, device_memory, ptr::null());
         });
 
-        let texture_hal =
-            unsafe { device.texture_from_raw(vk_image, &texture_desc, Some(destructor)) };
+        let texture_hal = unsafe {
+            device_hal.texture_from_raw(
+                vk_image,
+                &texture_desc,
+                Some(destructor),
+                vulkan::TextureMemory::External,
+            )
+        };
 
         unsafe {
-            gpu.device.create_texture_from_hal::<api::Vulkan>(
+            device.create_texture_from_hal::<api::Vulkan>(
                 texture_hal,
                 &wgpu::TextureDescriptor {
                     label: Some("video-texture"),
@@ -494,7 +502,7 @@ impl RenderVideo {
     }
 
     /// Export a video frame as a GPU texture.
-    pub fn export_from(video: &Video, gpu: &Gpu) -> Self {
+    pub fn export_from(video: &Video, adapter: &wgpu::Adapter, device: &wgpu::Device) -> Self {
         let Some(va_display) = video.codec_context.va_display() else {
             panic!("failed to retrieve libva display");
         };
@@ -510,7 +518,7 @@ impl RenderVideo {
             Err(error) => panic!("failed to export surface handle: {error:?}"),
         };
 
-        let texture = Self::create_texture(gpu, surface_handle);
+        let texture = Self::create_texture(adapter, device, surface_handle);
 
         let texture_y_plane = texture.create_view(&wgpu::TextureViewDescriptor {
             aspect: wgpu::TextureAspect::Plane0,
@@ -542,7 +550,7 @@ impl RenderAsset for RenderVideo {
         Self: Sized,
     {
         if video.n_frames_since_update == 0 {
-            Ok(Self::export_from(video, gpu))
+            Ok(Self::export_from(video, &gpu.adapter, &gpu.device))
         } else {
             Err(RenderAssetExtractError::Skip)
         }

@@ -1,9 +1,10 @@
+use crate::wallpaper::{Wallpaper, WallpaperConfig};
 use bytemuck::{Pod, Zeroable};
 use glam::{UVec2, Vec2};
 use image::{ImageBuffer, ImageError, Rgba};
 use std::{io, mem};
 use thiserror::Error;
-use waywe_runtime::{gpu::Wgpu, wayland::MonitorId};
+use waywe_runtime::{frame::FrameInfo, gpu::Wgpu};
 use waywe_spirv_derive::ShaderDescriptor;
 use wgpu::util::DeviceExt;
 
@@ -13,6 +14,8 @@ pub struct ImageWallpaper {
     vertex_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     pipeline: wgpu::RenderPipeline,
+    pipeline_layout: wgpu::PipelineLayout,
+    config: WallpaperConfig,
     screen_size: UVec2,
     transparency_color: Color,
 }
@@ -22,8 +25,7 @@ impl ImageWallpaper {
         gpu: &Wgpu,
         image: &ImageBuffer<Rgba<u8>, Vec<u8>>,
         transparency_color: Color,
-        monitor_size: UVec2,
-        monitor_id: MonitorId,
+        config: WallpaperConfig,
     ) -> Self {
         let vertex_buffer = gpu
             .device
@@ -107,11 +109,8 @@ impl ImageWallpaper {
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("image-pipeline-layout"),
-                bind_group_layouts: &[&bind_group_layout],
-                push_constant_ranges: &[wgpu::PushConstantRange {
-                    stages: wgpu::ShaderStages::FRAGMENT,
-                    range: 0..mem::size_of::<PushConst>() as u32,
-                }],
+                bind_group_layouts: &[Some(&bind_group_layout)],
+                immediate_size: mem::size_of::<PushConst>() as u32,
             });
 
         let pipeline = gpu
@@ -144,7 +143,7 @@ impl ImageWallpaper {
                         zero_initialize_workgroup_memory: false,
                     },
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: gpu.surfaces.read().unwrap()[&monitor_id].format,
+                        format: config.surface_format,
                         blend: None,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
@@ -164,7 +163,7 @@ impl ImageWallpaper {
                     mask: !0,
                     alpha_to_coverage_enabled: false,
                 },
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             });
 
@@ -172,19 +171,99 @@ impl ImageWallpaper {
             vertex_buffer,
             bind_group,
             pipeline,
-            screen_size: monitor_size,
+            pipeline_layout,
+            screen_size: config.surface_size,
             transparency_color,
+            config,
         }
     }
 
-    pub fn frame(&self, surface: &wgpu::TextureView, encoder: &mut wgpu::CommandEncoder) {
+    fn create_pipeline(
+        gpu: &Wgpu,
+        layout: &wgpu::PipelineLayout,
+        format: wgpu::TextureFormat,
+    ) -> wgpu::RenderPipeline {
+        gpu.require_shader::<FullscreenVertex>();
+        gpu.require_shader::<ImageFragment>();
+
+        gpu.device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("image-pipeline"),
+                layout: Some(layout),
+                vertex: wgpu::VertexState {
+                    module: &gpu.shader_cache.get::<FullscreenVertex>().unwrap(),
+                    entry_point: Some("main"),
+                    compilation_options: wgpu::PipelineCompilationOptions {
+                        constants: &[],
+                        zero_initialize_workgroup_memory: false,
+                    },
+                    buffers: &[wgpu::VertexBufferLayout {
+                        array_stride: mem::size_of_val(&SCREEN_TRIANGLE[0]) as u64,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &[wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Float32x2,
+                            offset: 0,
+                            shader_location: 0,
+                        }],
+                    }],
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &gpu.shader_cache.get::<ImageFragment>().unwrap(),
+                    entry_point: Some("main"),
+                    compilation_options: wgpu::PipelineCompilationOptions {
+                        constants: &[],
+                        zero_initialize_workgroup_memory: false,
+                    },
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    strip_index_format: None,
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: None,
+                    unclipped_depth: false,
+                    polygon_mode: wgpu::PolygonMode::Fill,
+                    conservative: false,
+                },
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState {
+                    count: 1,
+                    mask: !0,
+                    alpha_to_coverage_enabled: false,
+                },
+                multiview_mask: None,
+                cache: None,
+            })
+    }
+}
+
+impl Wallpaper for ImageWallpaper {
+    fn configure(&mut self, gpu: &Wgpu, config: WallpaperConfig) {
+        if self.config.surface_format != config.surface_format {
+            self.pipeline =
+                Self::create_pipeline(gpu, &self.pipeline_layout, config.surface_format);
+        }
+
+        self.config = config;
+    }
+
+    fn frame(
+        &mut self,
+        _: &Wgpu,
+        surface: &wgpu::TextureView,
+        encoder: &mut wgpu::CommandEncoder,
+    ) -> FrameInfo {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: surface,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                     store: wgpu::StoreOp::Store,
                 },
                 depth_slice: None,
@@ -192,12 +271,12 @@ impl ImageWallpaper {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         pass.set_pipeline(&self.pipeline);
         pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        pass.set_push_constants(
-            wgpu::ShaderStages::FRAGMENT,
+        pass.set_immediates(
             0,
             bytemuck::bytes_of(&PushConst {
                 resolution: Vec2::new(self.screen_size.x as f32, self.screen_size.y as f32),
@@ -205,7 +284,12 @@ impl ImageWallpaper {
             }),
         );
         pass.set_bind_group(0, &self.bind_group, &[]);
+
         pass.draw(0..SCREEN_TRIANGLE.len() as u32, 0..1);
+
+        FrameInfo {
+            target_frame_time: None,
+        }
     }
 }
 
@@ -223,25 +307,34 @@ const SCREEN_TRIANGLE: [Vec2; 3] = [
     Vec2::new(-1.0, 3.0),
 ];
 
-pub type Color = u32;
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Default, PartialOrd, Ord, Eq, Hash, Pod, Zeroable)]
+pub struct Color(pub u32);
 
-pub const COLOR_WHITE: Color = u32::MAX;
+impl Color {
+    pub const WHITE: Self = Self(u32::MAX);
+    pub const BLACK: Self = Self(0);
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 pub struct PushConst {
     pub resolution: Vec2,
-    pub transparency_color: u32,
+    pub transparency_color: Color,
 }
 
 #[derive(ShaderDescriptor)]
-#[shader(path = "crates/waywe-daemon/src/shaders/fullscreen-vertex.glsl")]
-#[shader(stage = "vertex")]
-#[shader(label = "default-image")]
+#[shader(
+    path = "crates/waywe-daemon/src/shaders/fullscreen-vertex.glsl",
+    stage = "vertex",
+    label = "default-image"
+)]
 pub struct FullscreenVertex;
 
 #[derive(ShaderDescriptor)]
-#[shader(path = "crates/waywe-daemon/src/shaders/image.glsl")]
-#[shader(stage = "fragment")]
-#[shader(label = "default-image")]
+#[shader(
+    path = "crates/waywe-daemon/src/shaders/image.glsl",
+    stage = "fragment",
+    label = "default-image"
+)]
 pub struct ImageFragment;
