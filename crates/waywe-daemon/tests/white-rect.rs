@@ -222,7 +222,6 @@ async fn use_wgpu_to_draw_anything() {
 
         let surface_result = wgpu_surface.get_current_texture();
         let surface_texture = match surface_result {
-            // TODO(hack3rmann): reconfigure on Suboptimal
             wgpu::CurrentSurfaceTexture::Success(surface)
             | wgpu::CurrentSurfaceTexture::Suboptimal(surface) => surface,
             wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => {

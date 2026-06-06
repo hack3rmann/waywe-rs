@@ -337,9 +337,6 @@ impl RenderVideo {
 
         let ext_info = vk::ExternalMemoryImageCreateInfo {
             s_type: vk::StructureType::EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-            // TODO(hack3rmann): use `DMA_BUF_EXT` whenever it is possible
-            // The reason is it has no restrictions on the device that was
-            // used to decode a video
             handle_types: vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD,
             p_next: ptr::null(),
             _marker: std::marker::PhantomData,

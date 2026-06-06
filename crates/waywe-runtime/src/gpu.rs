@@ -197,6 +197,72 @@ impl Wgpu {
     pub fn require_shader<S: ShaderDescriptor>(&self) {
         self.shader_cache.initialize::<S>(&self.device);
     }
+
+    pub fn reconfigure_surface(&self, monitor_id: MonitorId) {
+        let surfaces = self.surfaces.read().unwrap();
+        let Some(info) = surfaces.get(&monitor_id) else {
+            return;
+        };
+        info.surface.configure(&self.device, &info.config);
+    }
+
+    /// # Note
+    ///
+    /// Returns `None` if this frame should be skipped
+    pub fn get_current_surface(&self, wayland: &Wayland, monitor_id: MonitorId) -> SurfaceResult {
+        const N_TRIES: usize = 4;
+
+        let mut surfaces = self.surfaces.write().unwrap();
+        let Some(info) = surfaces.get_mut(&monitor_id) else {
+            return SurfaceResult::Err;
+        };
+
+        for _ in 0..N_TRIES {
+            let surface_result = info.surface.get_current_texture();
+
+            match surface_result {
+                wgpu::CurrentSurfaceTexture::Success(texture) => return SurfaceResult::Ok(texture),
+                wgpu::CurrentSurfaceTexture::Suboptimal(texture) => {
+                    return SurfaceResult::Reconfigure(texture);
+                }
+                wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => {
+                    return SurfaceResult::Skip;
+                }
+                wgpu::CurrentSurfaceTexture::Outdated => {
+                    info.surface.configure(&self.device, &info.config);
+                    continue;
+                }
+                wgpu::CurrentSurfaceTexture::Lost => {
+                    let monitors = wayland.client_state.monitors.read().unwrap();
+                    let monitor_info = &monitors[&monitor_id];
+
+                    let new_info = create_surface(
+                        &self.instance,
+                        &self.adapter,
+                        &self.device,
+                        wayland,
+                        monitor_info,
+                        monitor_id,
+                    );
+
+                    *info = new_info;
+
+                    continue;
+                }
+                wgpu::CurrentSurfaceTexture::Validation => return SurfaceResult::Err,
+            }
+        }
+
+        SurfaceResult::Err
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum SurfaceResult {
+    Ok(wgpu::SurfaceTexture),
+    Reconfigure(wgpu::SurfaceTexture),
+    Skip,
+    Err,
 }
 
 fn create_surface(
