@@ -190,6 +190,8 @@ impl Wallpaper for RenderWallpaper {
             fd: unsafe { texture_export_fd(&gpu.device, &self.surface) },
             desc: FfiTextureDescriptor::from(desc),
         });
+
+        self.config = config;
     }
 
     fn frame(
@@ -198,6 +200,14 @@ impl Wallpaper for RenderWallpaper {
         surface: &wgpu::TextureView,
         encoder: &mut wgpu::CommandEncoder,
     ) -> FrameInfo {
+        let dst_size = surface.texture().size();
+        let src_size = self.surface.size();
+
+        // Swapchain and export surface can be out of sync for a frame during resize.
+        if src_size != dst_size {
+            return FrameInfo::new_60_fps();
+        }
+
         let info = self.renderer.render();
 
         encoder.copy_texture_to_texture(

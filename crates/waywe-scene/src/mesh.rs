@@ -434,8 +434,19 @@ pub fn resize_mesh_pipelines(
     mut pipelines: ResMut<RefAssets<MeshPipeline>>,
     materials: Res<RefAssets<RenderMaterial>>,
 ) {
-    for (id, pipeline) in pipelines.iter_mut() {
-        let material = materials.get(id).unwrap();
+    let ids = pipelines.iter_mut().map(|(id, _)| id).collect::<Vec<_>>();
+
+    for id in ids {
+        let Some(material) = materials.get(id) else {
+            // Material was flushed earlier in the frame; drop the stale pipeline.
+            pipelines.remove(id);
+            continue;
+        };
+
+        let Some(pipeline) = pipelines.get_mut(id) else {
+            continue;
+        };
+
         *pipeline = MeshPipeline::new(&gpu, *monitor, material);
     }
 }

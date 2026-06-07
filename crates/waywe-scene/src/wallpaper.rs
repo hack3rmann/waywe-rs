@@ -52,6 +52,7 @@ impl Wallpaper {
                 RenderSet::ClearPass,
                 RenderSet::Render,
                 RenderSet::ApplyEffects,
+                RenderSet::Cleanup,
             )
                 .chain(),
         );

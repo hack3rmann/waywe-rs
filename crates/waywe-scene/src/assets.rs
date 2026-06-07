@@ -263,7 +263,7 @@ impl<A: Asset> Plugin for RefAssetsPlugin<A> {
         wallpaper
             .render
             .init_resource::<RefAssets<A>>()
-            .add_systems(Render, flush_ref_assets::<A>);
+            .add_systems(Render, flush_ref_assets::<A>.in_set(RenderSet::Cleanup));
     }
 }
 

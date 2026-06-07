@@ -40,6 +40,8 @@ pub enum RenderSet {
     Render,
     /// Apply post-proccess effects
     ApplyEffects,
+    /// Flush removed ref-assets after all rendering work is done.
+    Cleanup,
 }
 
 /// GPU resources available to the render world.
