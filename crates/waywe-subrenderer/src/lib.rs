@@ -56,7 +56,7 @@ pub unsafe fn texture_export_fd(device: &wgpu::Device, texture: &wgpu::Texture) 
     let info = vk::MemoryGetFdInfoKHR {
         s_type: vk::StructureType::MEMORY_GET_FD_INFO_KHR,
         p_next: ptr::null(),
-        handle_type: vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT,
+        handle_type: vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD,
         memory,
         _marker: PhantomData,
     };
@@ -142,7 +142,7 @@ pub unsafe fn import_fd_as_texture(
     let image_info_ext = vk::ExternalMemoryImageCreateInfo {
         s_type: vk::StructureType::EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
         p_next: ptr::null(),
-        handle_types: vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT,
+        handle_types: vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD,
         _marker: PhantomData,
     };
 
@@ -179,7 +179,7 @@ pub unsafe fn import_fd_as_texture(
     let import_info = vk::ImportMemoryFdInfoKHR {
         s_type: vk::StructureType::IMPORT_MEMORY_FD_INFO_KHR,
         p_next: (&raw const dedicated_info).cast(),
-        handle_type: vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT,
+        handle_type: vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD,
         fd: fd.into_raw_fd(),
         _marker: PhantomData,
     };

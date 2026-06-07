@@ -81,7 +81,7 @@ pub(crate) fn map_vk_image_usage(usage: vk::ImageUsageFlags) -> wgpu::TextureUse
     bits
 }
 
-pub(crate) fn map_texture_usages_to_vk(
+pub fn map_texture_usages_to_vk(
     usage: wgpu::TextureUsages,
     format: wgpu::TextureFormat,
 ) -> vk::ImageUsageFlags {
@@ -246,7 +246,7 @@ pub(crate) fn _map_vk_format(format: vk::Format) -> Option<wgpu::TextureFormat> 
     })
 }
 
-pub(crate) fn map_wgpu_format(format: wgpu::TextureFormat) -> Option<vk::Format> {
+pub fn map_wgpu_format(format: wgpu::TextureFormat) -> Option<vk::Format> {
     use ash::vk::Format as F;
     use wgpu::wgt::{AstcBlock, AstcChannel, TextureFormat as Tf};
 

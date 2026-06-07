@@ -147,7 +147,11 @@ pub fn run_clear_pass(
             resolve_target: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Clear(color.to_wgpu()),
-                store: wgpu::StoreOp::Discard,
+                // NOTE(hack3rmann): must be `Store` so wgpu marks the surface
+                // initialized. `Discard` leaves HAL-imported textures in an
+                // uninitialized state, and the next `Load` pass panics with
+                // `NoValidTextureClearMode`.
+                store: wgpu::StoreOp::Store,
             },
         })],
         depth_stencil_attachment: None,
