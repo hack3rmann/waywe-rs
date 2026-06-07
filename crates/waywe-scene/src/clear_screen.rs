@@ -19,7 +19,15 @@ impl Plugin for ClearScreenPlugin {
             .render
             .init_resource::<ClearColor>()
             .init_resource::<ClearPipeline>()
-            .add_systems(Render, run_clear_pass.in_set(RenderSet::ClearPass));
+            .add_systems(
+                Render,
+                (
+                    run_clear_pass.in_set(RenderSet::ClearPass),
+                    resize_clear_pass
+                        .in_set(RenderSet::Reconfigure)
+                        .run_if(resource_changed::<Monitor>),
+                ),
+            );
     }
 }
 
@@ -37,6 +45,7 @@ impl ClearColor {
     }
 }
 
+// TODO(hack3rmann): use derive(ShaderDescriptor)
 pub struct NoOpVertexShader;
 
 impl ShaderDescriptor for NoOpVertexShader {
@@ -162,4 +171,12 @@ pub fn run_clear_pass(
 
     pass.set_pipeline(&pipeline);
     pass.draw(0..0, 0..0);
+}
+
+pub fn resize_clear_pass(
+    gpu: Res<RenderGpu>,
+    monitor: Res<Monitor>,
+    mut pipeline: ResMut<ClearPipeline>,
+) {
+    *pipeline = ClearPipeline::new(&gpu, *monitor);
 }

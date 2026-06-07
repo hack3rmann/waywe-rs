@@ -83,7 +83,15 @@ impl Plugin for MeshPlugin {
                     despawn_removed_entities,
                 ),
             )
-            .add_systems(Render, render_meshes.in_set(RenderSet::Render));
+            .add_systems(
+                Render,
+                (
+                    render_meshes.in_set(RenderSet::Render),
+                    resize_mesh_pipelines
+                        .in_set(RenderSet::Reconfigure)
+                        .run_if(resource_changed::<Monitor>),
+                ),
+            );
     }
 }
 
@@ -417,6 +425,18 @@ pub fn render_meshes(
                 pass.draw(0..mesh.n_vertices as u32, 0..1);
             }
         }
+    }
+}
+
+pub fn resize_mesh_pipelines(
+    gpu: Res<RenderGpu>,
+    monitor: Res<Monitor>,
+    mut pipelines: ResMut<RefAssets<MeshPipeline>>,
+    materials: Res<RefAssets<RenderMaterial>>,
+) {
+    for (id, pipeline) in pipelines.iter_mut() {
+        let material = materials.get(id).unwrap();
+        *pipeline = MeshPipeline::new(&gpu, *monitor, material);
     }
 }
 

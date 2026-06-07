@@ -78,6 +78,13 @@ impl Renderer for SceneRenderer {
             )
         };
 
+        let monitor = Monitor {
+            size: UVec2::new(surface.size().width, surface.size().height),
+            surface_format: surface.format(),
+        };
+        *self.scene.wallpaper.main.resource_mut::<Monitor>() = monitor;
+        *self.scene.wallpaper.render.resource_mut::<Monitor>() = monitor;
+
         self.surface = Some(surface);
     }
 }

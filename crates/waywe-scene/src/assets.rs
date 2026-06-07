@@ -208,6 +208,10 @@ impl<A: Asset> RefAssets<A> {
             }
         }
     }
+
+    pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (AssetId, &mut A)> + '_ {
+        self.map.iter_mut().map(|(&id, asset)| (id, asset))
+    }
 }
 
 impl<A: Asset> Default for RefAssets<A> {

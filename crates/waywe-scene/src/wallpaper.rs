@@ -46,6 +46,7 @@ impl Wallpaper {
         let mut render_schedule = Schedule::new(Render);
         render_schedule.configure_sets(
             (
+                RenderSet::Reconfigure,
                 RenderSet::Update,
                 RenderSet::PrepareRender,
                 RenderSet::ClearPass,

@@ -27,6 +27,8 @@ pub struct Render;
 /// System sets for organizing the render schedule.
 #[derive(SystemSet, Debug, PartialEq, Eq, Default, Clone, Copy, Hash)]
 pub enum RenderSet {
+    /// Reconfigure rendering resources
+    Reconfigure,
     /// Update render systems.
     #[default]
     Update,
