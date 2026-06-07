@@ -40,8 +40,11 @@ unsafe fn find_memory_type_index(
 /// TODO(hack3rmann): safety
 pub unsafe fn texture_export_fd(device: &wgpu::Device, texture: &wgpu::Texture) -> OwnedFd {
     let texture_hal = unsafe { texture.as_hal::<Vulkan>().unwrap() };
-    let &TextureMemory::Dedicated(memory) = (unsafe { texture_hal.memory() }) else {
-        panic!();
+
+    let memory = match unsafe { texture_hal.memory() } {
+        TextureMemory::Allocation(allocation) => unsafe { allocation.memory() },
+        TextureMemory::Dedicated(device_memory) => *device_memory,
+        TextureMemory::External => panic!("cannot export Fd from external memory"),
     };
 
     let device_hal = unsafe { device.as_hal::<Vulkan>().unwrap() };
