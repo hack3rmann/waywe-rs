@@ -1,5 +1,4 @@
 pub mod optimized;
-pub mod test_scene;
 pub mod transition;
 
 use crate::wallpaper::optimized::{

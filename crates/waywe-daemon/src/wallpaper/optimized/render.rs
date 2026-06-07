@@ -85,7 +85,7 @@ impl RenderWallpaper {
         let raw_phys = hal_device.raw_physical_device();
         let instance = hal_device.shared_instance().raw_instance();
 
-        // OPAQUE_FD + OPTIMAL: same-process sharing between the daemon device and the
+        // OPAQUE_FD + OPTIMAL same-process sharing between the daemon device and the
         // scene plugin device on the same physical GPU. The import side must recreate
         // an identical VkImage (see import_fd_as_texture).
         let mut ext_mem_info = vk::ExternalMemoryImageCreateInfo::default()
