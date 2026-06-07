@@ -1,23 +1,59 @@
 use crate::{
     FfiTextureDescriptor,
-    ffi::{self, DropFn, RenderFn, SetSurfaceFn},
+    ffi::{self, DropFn, PanicPayload, RenderFn, SetSurfaceFn},
 };
-use std::os::{fd::OwnedFd, raw::c_void};
+use abi_stable::std_types::{RDuration, ROption};
+use std::{
+    mem::MaybeUninit,
+    os::{fd::OwnedFd, raw::c_void},
+};
+use waywe_runtime::{WallpaperConfig, frame::FrameInfo};
 
-#[repr(C)]
-#[derive(Clone, Debug, PartialEq)]
-pub struct OpaqueRendererDesc {
-    pub surface_desc: FfiTextureDescriptor<'static>,
-}
-
-pub type CreateOpaqueRendererFn = extern "C" fn(desc: &OpaqueRendererDesc) -> OpaqueRenderer;
+pub type CreateOpaqueRendererFn = extern "C" fn(
+    desc: &OpaqueRendererDesc,
+    out_renderer: &mut MaybeUninit<OpaqueRenderer>,
+) -> PanicPayload;
 
 pub const CREATE_OPAQUE_RENDERER_NAME: &str = "waywe_ffi_create_opaque_renderer";
 
 #[repr(C)]
+#[derive(Clone, Copy, Default, PartialEq)]
+pub struct FfiFrameInfo {
+    pub target_frame_time: ROption<RDuration>,
+}
+
+impl From<FrameInfo> for FfiFrameInfo {
+    fn from(value: FrameInfo) -> Self {
+        let target_frame_time = match value.target_frame_time {
+            Some(duration) => ROption::RSome(duration.into()),
+            None => ROption::RNone,
+        };
+
+        Self { target_frame_time }
+    }
+}
+
+impl From<FfiFrameInfo> for FrameInfo {
+    fn from(value: FfiFrameInfo) -> Self {
+        let target_frame_time = match value.target_frame_time {
+            ROption::RSome(duration) => Some(duration.into()),
+            ROption::RNone => None,
+        };
+
+        Self { target_frame_time }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq)]
+pub struct OpaqueRendererDesc {
+    pub config: WallpaperConfig,
+}
+
+#[repr(C)]
 pub struct RenderSurfaceFd {
-    fd: OwnedFd,
-    desc: FfiTextureDescriptor<'static>,
+    pub fd: OwnedFd,
+    pub desc: FfiTextureDescriptor<'static>,
 }
 
 #[repr(C)]
@@ -40,9 +76,13 @@ impl OpaqueRenderer {
 }
 
 impl Renderer for OpaqueRenderer {
-    fn render(&mut self) {
-        let panic = unsafe { (self.render)(self.renderer) };
+    fn render(&mut self) -> FrameInfo {
+        let mut frame_info = MaybeUninit::uninit();
+
+        let panic = unsafe { (self.render)(self.renderer, &mut frame_info) };
         panic.propagate_if_any();
+
+        unsafe { frame_info.assume_init() }.into()
     }
 
     fn set_surface(&mut self, surface: RenderSurfaceFd) {
@@ -59,6 +99,6 @@ impl Drop for OpaqueRenderer {
 }
 
 pub trait Renderer {
-    fn render(&mut self);
+    fn render(&mut self) -> FrameInfo;
     fn set_surface(&mut self, surface: RenderSurfaceFd);
 }

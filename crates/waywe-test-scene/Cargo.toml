@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 waywe-scene.workspace = true
+waywe-runtime.workspace = true
 bevy_ecs.workspace = true
 smallvec.workspace = true
 image.workspace = true

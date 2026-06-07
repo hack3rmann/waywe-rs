@@ -118,7 +118,8 @@ impl Runtime {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct WallpaperConfig {
     pub surface_size: UVec2,
     pub surface_format: wgpu::TextureFormat,

@@ -109,7 +109,7 @@ use bitflags::bitflags;
 use derive_more::{Deref, DerefMut};
 use glam::UVec2;
 use std::time::Duration;
-use waywe_runtime::frame::FrameInfo;
+use waywe_runtime::{WallpaperConfig as RuntimeWallpaperConfig, frame::FrameInfo};
 
 pub use bevy_ecs as ecs;
 pub use glam;
@@ -207,6 +207,15 @@ impl Monitor {
     /// Calculate the aspect ratio of the monitor (height/width).
     pub const fn aspect_ratio(self) -> f32 {
         self.size.y as f32 / self.size.x as f32
+    }
+}
+
+impl From<RuntimeWallpaperConfig> for Monitor {
+    fn from(value: RuntimeWallpaperConfig) -> Self {
+        Self {
+            size: value.surface_size,
+            surface_format: value.surface_format,
+        }
     }
 }
 

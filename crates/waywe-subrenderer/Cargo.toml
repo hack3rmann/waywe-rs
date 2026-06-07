@@ -11,3 +11,4 @@ repository.workspace = true
 wgpu.workspace = true
 ash.workspace = true
 abi_stable.workspace = true
+waywe-runtime.workspace = true

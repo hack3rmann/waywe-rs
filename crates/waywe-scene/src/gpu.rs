@@ -33,7 +33,7 @@ impl Gpu {
         let Ok((device, queue)) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("waywe-scene-device"),
-                required_features: wgpu::Features::empty(),
+                required_features: wgpu::Features::IMMEDIATES,
                 required_limits: adapter.limits(),
                 experimental_features: wgpu::ExperimentalFeatures::disabled(),
                 memory_hints: wgpu::MemoryHints::Performance,

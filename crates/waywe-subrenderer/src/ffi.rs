@@ -1,8 +1,11 @@
-use crate::api::{RenderSurfaceFd, Renderer};
+use crate::api::{FfiFrameInfo, RenderSurfaceFd, Renderer};
 use abi_stable::std_types::{ROption, RString};
-use std::{any::Any, ffi::c_void, panic, ptr};
+use std::{any::Any, ffi::c_void, mem::MaybeUninit, panic, ptr};
 
-pub(crate) type RenderFn = unsafe extern "C" fn(renderer: *mut c_void) -> PanicPayload;
+pub(crate) type RenderFn = unsafe extern "C" fn(
+    renderer: *mut c_void,
+    frame_info: &mut MaybeUninit<FfiFrameInfo>,
+) -> PanicPayload;
 
 pub(crate) type SetSurfaceFn =
     unsafe extern "C" fn(renderer: *mut c_void, surface: RenderSurfaceFd) -> PanicPayload;
@@ -66,12 +69,18 @@ impl From<Option<Box<dyn Any + Send>>> for PanicPayload {
     }
 }
 
-pub(crate) unsafe extern "C" fn render<T: Renderer>(renderer: *mut c_void) -> PanicPayload {
-    panic::catch_unwind(move || {
+pub(crate) unsafe extern "C" fn render<T: Renderer>(
+    renderer: *mut c_void,
+    frame_info: &mut MaybeUninit<FfiFrameInfo>,
+) -> PanicPayload {
+    let result = panic::catch_unwind(move || {
         let this = unsafe { renderer.cast::<T>().as_mut().unwrap_unchecked() };
         this.render()
+    });
+
+    PanicPayload::map(result, |info| {
+        frame_info.write(info.into());
     })
-    .into()
 }
 
 pub(crate) unsafe extern "C" fn set_surface<T: Renderer>(

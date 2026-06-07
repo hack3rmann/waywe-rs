@@ -26,7 +26,6 @@ use waywe_runtime::{
     gpu::SurfaceResult,
     wayland::{MonitorId, MonitorMap, WaylandEvent},
 };
-use waywe_scene::cursor::CursorMoved;
 
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum WallpaperStateKind {
@@ -336,19 +335,7 @@ impl Handle<WaylandEvent> for WallpaperApp {
 
                 runtime.wgpu.unregister_surface(monitor_id);
             }
-            WaylandEvent::CursorMoved { position } => {
-                let event = CursorMoved { position };
-
-                for wallpaper in self
-                    .wallpapers
-                    .values_mut()
-                    .flat_map(RunningWallpapers::wallpapers_mut)
-                {
-                    if let OptimizedWallpaper::Scene(scene) = &mut wallpaper.wallpaper {
-                        scene.wallpaper.main.world.trigger(event);
-                    }
-                }
-            }
+            WaylandEvent::CursorMoved { position: _ } => {}
         }
     }
 }

@@ -176,7 +176,14 @@ pub fn execute_show(
                 monitor: monitor_name,
             }
         }
-        _ => return Err(ExecuteError::UnsupportedFileFormat(file_kind)),
+        _ => {
+            let absolute_path = path.canonicalize()?;
+
+            DaemonCommand::SetScene {
+                path: absolute_path,
+                monitor: monitor_name,
+            }
+        }
     })
 }
 

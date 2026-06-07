@@ -35,7 +35,10 @@ unsafe fn find_memory_type_index(
     })
 }
 
-fn texture_export_fd(device: &wgpu::Device, texture: &wgpu::Texture) -> OwnedFd {
+/// # Safety
+///
+/// TODO(hack3rmann): safety
+pub unsafe fn texture_export_fd(device: &wgpu::Device, texture: &wgpu::Texture) -> OwnedFd {
     let texture_hal = unsafe { texture.as_hal::<Vulkan>().unwrap() };
     let &TextureMemory::Dedicated(memory) = (unsafe { texture_hal.memory() }) else {
         panic!();
@@ -117,8 +120,10 @@ impl<'s> From<wgpu::TextureDescriptor<'s>> for FfiTextureDescriptor<'s> {
     }
 }
 
-#[allow(unused)]
-fn import_fd_as_texture(
+/// # Safety
+///
+/// TODO(hack3rmann): safety
+pub unsafe fn import_fd_as_texture(
     device: &wgpu::Device,
     adapter: &wgpu::Adapter,
     fd: OwnedFd,
@@ -210,8 +215,14 @@ fn import_fd_as_texture(
     };
 
     let device_hal = unsafe { device.as_hal::<Vulkan>().unwrap() };
-    let texture_hal =
-        unsafe { device_hal.texture_from_raw(vk_image, &hal_desc, None, TextureMemory::External) };
+    let texture_hal = unsafe {
+        device_hal.texture_from_raw(
+            vk_image,
+            &hal_desc,
+            Some(Box::new(|| {})),
+            TextureMemory::External,
+        )
+    };
 
     let wgpu_desc = wgpu::TextureDescriptor {
         label: desc.wgpu_label(),
@@ -236,6 +247,6 @@ pub trait DeviceExt: Sealed {
 
 impl DeviceExt for wgpu::Device {
     fn export_fd(&self, texture: &wgpu::Texture) -> OwnedFd {
-        texture_export_fd(self, texture)
+        unsafe { texture_export_fd(self, texture) }
     }
 }

@@ -1805,6 +1805,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "libloading"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "754ca22de805bb5744484a5b151a9e1a8e837d5dc232c2d7d8c2e3492edc8b60"
+dependencies = [
+ "cfg-if",
+ "windows-link",
+]
+
+[[package]]
 name = "libm"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3637,6 +3647,7 @@ dependencies = [
 name = "waywe-daemon"
 version = "0.0.14"
 dependencies = [
+ "ash",
  "bevy_ecs",
  "bytemuck",
  "clap",
@@ -3645,6 +3656,7 @@ dependencies = [
  "glam",
  "image",
  "libc",
+ "libloading 0.9.0",
  "raw-window-handle",
  "rustix",
  "scopeguard",
@@ -3664,6 +3676,7 @@ dependencies = [
  "waywe-runtime",
  "waywe-scene",
  "waywe-spirv-derive",
+ "waywe-subrenderer",
  "wgpu",
 ]
 
@@ -3761,6 +3774,7 @@ version = "0.0.14"
 dependencies = [
  "abi_stable",
  "ash",
+ "waywe-runtime",
  "wgpu",
 ]
 
@@ -3772,6 +3786,7 @@ dependencies = [
  "image",
  "pollster",
  "smallvec",
+ "waywe-runtime",
  "waywe-scene",
  "waywe-subrenderer",
  "wgpu",
