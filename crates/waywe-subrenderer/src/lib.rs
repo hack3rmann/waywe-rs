@@ -223,7 +223,7 @@ pub unsafe fn import_fd_as_texture(
             vk_image,
             &hal_desc,
             Some(Box::new(|| {})),
-            TextureMemory::External,
+            TextureMemory::Dedicated(memory),
         )
     };
 
