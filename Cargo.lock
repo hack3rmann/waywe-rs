@@ -3757,6 +3757,7 @@ dependencies = [
  "glam",
  "image",
  "itertools 0.14.0",
+ "pollster",
  "smallvec",
  "static_assertions",
  "thiserror",
@@ -3764,6 +3765,7 @@ dependencies = [
  "transmute-extra",
  "variadics_please",
  "video",
+ "waywe-rendering-api",
  "waywe-runtime",
  "wgpu",
 ]

@@ -2,6 +2,7 @@ use ash::vk;
 use waywe_runtime::shaders::{ShaderCache, ShaderDescriptor};
 use wgpu::hal::{DeviceError, api};
 
+#[derive(Debug)]
 pub struct Gpu {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
@@ -137,5 +138,11 @@ impl Gpu {
 
     pub fn require_shader<S: ShaderDescriptor>(&self) {
         self.shader_cache.initialize::<S>(&self.device);
+    }
+}
+
+impl Default for Gpu {
+    fn default() -> Self {
+        pollster::block_on(Self::new())
     }
 }

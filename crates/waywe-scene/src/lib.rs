@@ -90,6 +90,7 @@ pub mod camera;
 pub mod clear_screen;
 pub mod cursor;
 pub mod extract;
+pub mod ffi;
 pub mod gpu;
 pub mod image;
 pub mod material;

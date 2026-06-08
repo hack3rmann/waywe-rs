@@ -31,6 +31,7 @@ use waywe_runtime::{frame::FrameInfo, wayland::MonitorId};
 /// Main wallpaper controller.
 ///
 /// Manages the dual ECS world architecture and coordinates rendering.
+#[derive(Default, Debug)]
 pub struct Wallpaper {
     /// Main world for logic updates.
     pub main: EcsApp,
@@ -165,6 +166,7 @@ fn run_update(main: &mut EcsApp) {
 ///
 /// This wrapper handles the frame loop and synchronization between
 /// the main and render worlds.
+#[derive(Default, Debug)]
 pub struct PreparedWallpaper {
     first_time: bool,
     /// The wallpaper being managed.
