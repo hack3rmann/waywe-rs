@@ -2,8 +2,7 @@ use crate::wallpaper::Wallpaper;
 use ash::vk;
 use libloading::Library;
 use std::{mem::MaybeUninit, path::Path};
-use waywe_runtime::{WallpaperConfig, frame::FrameInfo, gpu::Wgpu};
-use waywe_subrenderer::{
+use waywe_rendering_api::{
     FfiTextureDescriptor,
     api::{
         CREATE_OPAQUE_RENDERER_NAME, CreateOpaqueRendererFn, OpaqueRenderer, OpaqueRendererDesc,
@@ -12,6 +11,7 @@ use waywe_subrenderer::{
     conversions::{map_texture_usages_to_vk, map_wgpu_format},
     texture_export_fd,
 };
+use waywe_runtime::{WallpaperConfig, frame::FrameInfo, gpu::Wgpu};
 use wgpu::wgc::api::Vulkan;
 
 pub struct RenderWallpaper {
@@ -59,7 +59,7 @@ impl RenderWallpaper {
 
     fn surface_desc(config: WallpaperConfig) -> wgpu::TextureDescriptor<'static> {
         wgpu::TextureDescriptor {
-            label: Some("waywe-subrenderer-surface"),
+            label: Some("waywe-rendering-api-surface"),
             size: wgpu::Extent3d {
                 width: config.surface_size.x,
                 height: config.surface_size.y,

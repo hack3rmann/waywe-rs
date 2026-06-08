@@ -22,7 +22,7 @@ members = [
     "crates/waywe-spirv-derive",
     "crates/waywe-shader-rs/shaderc-rs",
     "crates/waywe-shader-rs/shaderc-sys",
-    "crates/waywe-subrenderer",
+    "crates/waywe-rendering-api",
     "crates/waywe-test-scene",
 ]
 
@@ -46,7 +46,7 @@ waywe-runtime = { path = "crates/waywe-runtime" }
 waywe-scene = { path = "crates/waywe-scene" }
 waywe-default-wallpapers = { path = "crates/waywe-default-wallpapers" }
 waywe-spirv-derive = { path = "crates/waywe-spirv-derive" }
-waywe-subrenderer = { path = "crates/waywe-subrenderer" }
+waywe-rendering-api = { path = "crates/waywe-rendering-api" }
 transmute-extra = { path = "crates/transmute-extra" }
 video = { path = "crates/video" }
 thiserror = "2.0.11"

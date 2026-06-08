@@ -13,7 +13,7 @@ waywe-runtime.workspace = true
 bevy_ecs.workspace = true
 smallvec.workspace = true
 image.workspace = true
-waywe-subrenderer.workspace = true
+waywe-rendering-api.workspace = true
 wgpu.workspace = true
 pollster = "0.4.0"
 

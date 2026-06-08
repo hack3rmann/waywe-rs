@@ -2,6 +2,11 @@
 
 use crate::SceneTestWallpaper;
 use std::{mem::MaybeUninit, panic, sync::Arc};
+use waywe_rendering_api::{
+    api::{OpaqueRenderer, OpaqueRendererDesc, RenderSurfaceFd, Renderer},
+    ffi::PanicPayload,
+    import_fd_as_texture,
+};
 use waywe_runtime::frame::FrameInfo;
 use waywe_scene::{
     Monitor,
@@ -9,11 +14,6 @@ use waywe_scene::{
     gpu::Gpu,
     prelude::{Wallpaper, WallpaperBuilder},
     wallpaper::PreparedWallpaper,
-};
-use waywe_subrenderer::{
-    api::{OpaqueRenderer, OpaqueRendererDesc, RenderSurfaceFd, Renderer},
-    ffi::PanicPayload,
-    import_fd_as_texture,
 };
 
 fn create_opaque_renderer(desc: &OpaqueRendererDesc) -> OpaqueRenderer {

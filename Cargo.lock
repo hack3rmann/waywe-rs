@@ -3673,10 +3673,10 @@ dependencies = [
  "wayland-sys 0.0.14",
  "waywe-default-wallpapers",
  "waywe-ipc",
+ "waywe-rendering-api",
  "waywe-runtime",
  "waywe-scene",
  "waywe-spirv-derive",
- "waywe-subrenderer",
  "wgpu",
 ]
 
@@ -3705,6 +3705,16 @@ dependencies = [
  "thiserror",
  "toml",
  "tracing",
+]
+
+[[package]]
+name = "waywe-rendering-api"
+version = "0.0.14"
+dependencies = [
+ "abi_stable",
+ "ash",
+ "waywe-runtime",
+ "wgpu",
 ]
 
 [[package]]
@@ -3769,16 +3779,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "waywe-subrenderer"
-version = "0.0.14"
-dependencies = [
- "abi_stable",
- "ash",
- "waywe-runtime",
- "wgpu",
-]
-
-[[package]]
 name = "waywe-test-scene"
 version = "0.0.14"
 dependencies = [
@@ -3786,9 +3786,9 @@ dependencies = [
  "image",
  "pollster",
  "smallvec",
+ "waywe-rendering-api",
  "waywe-runtime",
  "waywe-scene",
- "waywe-subrenderer",
  "wgpu",
 ]
 
