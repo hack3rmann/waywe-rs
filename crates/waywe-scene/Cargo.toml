@@ -29,4 +29,4 @@ smallvec.workspace = true
 glam.workspace = true
 image.workspace = true
 thiserror.workspace = true
-pollster = "0.4.0"
+pollster.workspace = true

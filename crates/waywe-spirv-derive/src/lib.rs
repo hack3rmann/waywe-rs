@@ -174,16 +174,32 @@ mod feature {
     use shaderc::{CompileOptions, Compiler, ShaderKind};
     use std::fs;
 
+    fn spirv_compile_error(error: shaderc::Error) -> ! {
+        match error {
+            shaderc::Error::CompilationError(count, info) => {
+                panic!("{count} compile errors:\n{info}")
+            }
+            shaderc::Error::InternalError(info) => panic!("internal error: {info}"),
+            shaderc::Error::InvalidStage(info) => panic!("invalid stage: {info}"),
+            shaderc::Error::InvalidAssembly(info) => panic!("invalid assembly: {info}"),
+            shaderc::Error::NullResultObject(info) => panic!("null result object: {info}"),
+            shaderc::Error::InitializationError(info) => panic!("initialization error: {info}"),
+            shaderc::Error::ParseError(info) => panic!("parse error: {info}"),
+        }
+    }
+
     fn compile_spirv(source: &str, kind: ShaderKind, file_name: &str) -> Vec<u32> {
         let compiler = Compiler::new().unwrap();
         let options = CompileOptions::new().unwrap();
 
         // TODO(Lorent1): add not main
-        compiler
-            .compile_into_spirv(source, kind, file_name, "main", Some(&options))
-            .unwrap()
-            .as_binary()
-            .to_vec()
+        let artifact =
+            match compiler.compile_into_spirv(source, kind, file_name, "main", Some(&options)) {
+                Ok(artifact) => artifact,
+                Err(error) => spirv_compile_error(error),
+            };
+
+        artifact.as_binary().to_vec()
     }
 
     pub fn shader_source(attr: &ShaderAttribute) -> TokenStream {

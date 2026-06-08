@@ -23,8 +23,9 @@ members = [
     "crates/waywe-shader-rs/shaderc-rs",
     "crates/waywe-shader-rs/shaderc-sys",
     "crates/waywe-rendering-api",
-    "crates/waywe-test-scene",
     "crates/waywe-scene-macros",
+    "crates/examples/waywe-test-scene",
+    "crates/examples/shadertoy-computer-were-made-for-cubes",
 ]
 
 [workspace.package]
@@ -79,3 +80,4 @@ abi_stable = "0.11.3"
 bevy_ecs = "0.17.2"
 wgpu = { version = "29.0.3", features = ["glsl", "spirv"] }
 ash = "0.38.0"
+pollster = "0.4.0"

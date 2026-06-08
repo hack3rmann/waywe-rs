@@ -2885,6 +2885,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "shadertoy-computer-were-made-for-cubes"
+version = "0.0.14"
+dependencies = [
+ "bytemuck",
+ "glam",
+ "pollster",
+ "waywe-rendering-api",
+ "waywe-runtime",
+ "wgpu",
+]
+
+[[package]]
 name = "sharded-slab"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3740,6 +3752,7 @@ dependencies = [
  "video",
  "wayland-client",
  "waywe-ipc",
+ "waywe-spirv-derive",
  "wgpu",
 ]
 

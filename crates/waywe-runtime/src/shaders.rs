@@ -6,6 +6,8 @@ use std::{
     sync::{RwLock, RwLockReadGuard},
 };
 
+pub use waywe_spirv_derive::ShaderDescriptor;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ShaderId(pub TypeId);
 

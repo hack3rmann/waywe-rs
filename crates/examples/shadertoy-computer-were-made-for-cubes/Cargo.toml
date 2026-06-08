@@ -1,0 +1,19 @@
+[package]
+name = "shadertoy-computer-were-made-for-cubes"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+waywe-rendering-api.workspace = true
+waywe-runtime.workspace = true
+wgpu.workspace = true
+pollster.workspace = true
+glam.workspace = true
+bytemuck.workspace = true
+
+[lib]
+crate-type = ["dylib"]
