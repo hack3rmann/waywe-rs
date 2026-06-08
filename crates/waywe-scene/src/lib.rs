@@ -114,10 +114,11 @@ use waywe_runtime::{WallpaperConfig as RuntimeWallpaperConfig, frame::FrameInfo}
 
 pub use bevy_ecs as ecs;
 pub use glam;
+pub use waywe_scene_macros::Scene;
 
 pub mod prelude {
     pub use crate::{
-        FrameRateSetting, Monitor, Startup, Update,
+        FrameRateSetting, Monitor, Scene, Startup, Update,
         asset_server::{AssetHandle, AssetServer},
         assets::Assets,
         cursor::Cursor,

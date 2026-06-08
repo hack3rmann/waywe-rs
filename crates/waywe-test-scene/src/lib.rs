@@ -18,8 +18,6 @@
 //! //! - Animation systems that respond to time and cursor position
 //! ```
 
-pub mod ffi;
-
 use bevy_ecs::prelude::*;
 use smallvec::{SmallVec, smallvec};
 use std::time::Duration;
@@ -30,7 +28,7 @@ use waywe_scene::prelude::*;
 /// This wallpaper implementation is designed for testing the scene system.
 /// It includes multiple meshes with both images and videos, and animation
 /// systems that respond to time and cursor position.
-#[derive(Default)]
+#[derive(Default, Scene)]
 pub struct SceneTestWallpaper;
 
 impl WallpaperBuilder for SceneTestWallpaper {

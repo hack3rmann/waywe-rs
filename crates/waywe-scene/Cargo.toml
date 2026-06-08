@@ -8,6 +8,9 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
+waywe-runtime.workspace = true
+waywe-rendering-api.workspace = true
+waywe-scene-macros.workspace = true
 bevy_ecs.workspace = true
 derive_more = { version = "2.0.1", features = ["full"] }
 wgpu.workspace = true
@@ -23,8 +26,6 @@ transmute-extra.workspace = true
 video.workspace = true
 tracing.workspace = true
 smallvec.workspace = true
-waywe-runtime.workspace = true
-waywe-rendering-api.workspace = true
 glam.workspace = true
 image.workspace = true
 thiserror.workspace = true

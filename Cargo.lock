@@ -3767,7 +3767,17 @@ dependencies = [
  "video",
  "waywe-rendering-api",
  "waywe-runtime",
+ "waywe-scene-macros",
  "wgpu",
+]
+
+[[package]]
+name = "waywe-scene-macros"
+version = "0.0.14"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
