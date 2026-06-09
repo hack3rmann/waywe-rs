@@ -8,43 +8,41 @@ use std::{
 const USER_AGENT: &str =
     "waywe-test-scene/0.0.15 (https://github.com/hack3rmann/waywe-rs; build-script)";
 
-const ASSETS: &[(&str, &str, &str)] = &[
+const ASSETS: &[(&str, &str)] = &[
     (
-        "WAYWE_TEST_SCENE_IMAGE",
         "test-image.jpg",
         "https://upload.wikimedia.org/wikipedia/commons/1/11/003_Ringed_kingfisher_flying_with_a_fish_in_Encontro_das_%C3%81guas_State_Park_Photo_by_Giles_Laurent.jpg",
     ),
     (
-        "WAYWE_TEST_SCENE_IMAGE2",
         "test-image2.jpg",
         "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a9/KAP_Jasa-High_Plateau.jpg/3840px-KAP_Jasa-High_Plateau.jpg",
     ),
     (
-        "WAYWE_TEST_SCENE_VIDEO",
         "test-video.mp4",
         "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
     ),
     (
-        "WAYWE_TEST_SCENE_VIDEO2",
         "test-video2.mp4",
         "https://download.samplelib.com/mp4/sample-5s.mp4",
     ),
     (
-        "WAYWE_TEST_SCENE_VIDEO3",
         "test-video3.mp4",
         "https://download.samplelib.com/mp4/sample-10s.mp4",
     ),
 ];
 
 fn main() {
-    let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR is not set"));
-    let assets_dir = out_dir.join("assets");
-    fs::create_dir_all(&assets_dir).expect("failed to create assets directory");
+    let manifest_dir =
+        PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is not set"));
+    let assets_dir = manifest_dir.join("assets");
 
-    for &(env_var, filename, url) in ASSETS {
+    if !assets_dir.exists() {
+        fs::create_dir_all(&assets_dir).expect("failed to create assets directory");
+    }
+
+    for &(filename, url) in ASSETS {
         let dest = assets_dir.join(filename);
         download_if_missing(url, &dest);
-        println!("cargo:rustc-env={env_var}={}", dest.display());
     }
 
     println!("cargo:rerun-if-changed=build.rs");

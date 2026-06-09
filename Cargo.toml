@@ -82,3 +82,6 @@ wgpu = { version = "29.0.3", features = ["glsl", "spirv"] }
 ash = "0.38.0"
 pollster = "0.4.0"
 uuid = { version = "1.23.3", features = ["v7"] }
+flate2 = "1.1.9"
+tar = "0.4.46"
+tap = "1.0.1"

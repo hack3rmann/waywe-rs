@@ -41,9 +41,9 @@ waywe-rendering-api.workspace = true
 libloading = "0.9.0"
 abi_stable.workspace = true
 uuid.workspace = true
-flate2 = "1.1.9"
-tar = "0.4.46"
-tap = "1.0.1"
+flate2.workspace = true
+tar.workspace = true
+tap.workspace = true
 
 [dev-dependencies]
 libc = "0.2.171"

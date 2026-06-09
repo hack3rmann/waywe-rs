@@ -25,11 +25,11 @@ use std::time::Duration;
 use waywe_scene::prelude::*;
 
 mod assets {
-    pub const IMAGE: &str = env!("WAYWE_TEST_SCENE_IMAGE");
-    pub const IMAGE2: &str = env!("WAYWE_TEST_SCENE_IMAGE2");
-    pub const VIDEO: &str = env!("WAYWE_TEST_SCENE_VIDEO");
-    pub const VIDEO2: &str = env!("WAYWE_TEST_SCENE_VIDEO2");
-    pub const VIDEO3: &str = env!("WAYWE_TEST_SCENE_VIDEO3");
+    pub const IMAGE: &str = "test-image.jpg";
+    pub const IMAGE2: &str = "test-image2.jpg";
+    pub const VIDEO: &str = "test-video.mp4";
+    pub const VIDEO2: &str = "test-video2.mp4";
+    pub const VIDEO3: &str = "test-video3.mp4";
 }
 
 /// A test wallpaper with multiple meshes and animations.
