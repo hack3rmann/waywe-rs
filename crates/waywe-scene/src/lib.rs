@@ -200,6 +200,10 @@ pub struct MainWorld(pub World);
 #[derive(Resource, Default)]
 pub struct DummyWorld(pub World);
 
+/// Working directory of the wallpaper
+#[derive(Resource, Clone)]
+pub struct WorkingDir(pub String);
+
 /// Information about the monitor this wallpaper is rendering to.
 #[derive(Resource, Clone, Copy)]
 pub struct Monitor {

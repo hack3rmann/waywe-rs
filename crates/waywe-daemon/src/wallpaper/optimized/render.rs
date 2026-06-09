@@ -1,4 +1,5 @@
 use crate::wallpaper::Wallpaper;
+use abi_stable::std_types::RString;
 use ash::vk;
 use libloading::Library;
 use std::{mem::MaybeUninit, path::Path};
@@ -36,7 +37,13 @@ impl RenderWallpaper {
 
         let mut renderer = MaybeUninit::uninit();
 
-        let panic = create_opaque_renderer(&OpaqueRendererDesc { config }, &mut renderer);
+        let panic = create_opaque_renderer(
+            &OpaqueRendererDesc {
+                config,
+                working_directory: RString::from("/whatever"),
+            },
+            &mut renderer,
+        );
         panic.propagate_if_any();
 
         let mut renderer = unsafe { renderer.assume_init() };

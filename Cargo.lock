@@ -3936,6 +3936,7 @@ dependencies = [
 name = "waywe-daemon"
 version = "0.0.15"
 dependencies = [
+ "abi_stable",
  "ash",
  "bevy_ecs",
  "bytemuck",
