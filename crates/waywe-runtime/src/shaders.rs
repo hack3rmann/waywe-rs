@@ -1,9 +1,12 @@
 use std::{
     any::TypeId,
     collections::HashMap,
+    fmt::{self, Debug},
     ops::Deref,
     sync::{RwLock, RwLockReadGuard},
 };
+
+pub use waywe_spirv_derive::ShaderDescriptor;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ShaderId(pub TypeId);
@@ -44,6 +47,12 @@ impl ShaderCache {
             shaders,
             id: TypeId::of::<S>(),
         })
+    }
+}
+
+impl Debug for ShaderCache {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ShaderCache").finish_non_exhaustive()
     }
 }
 

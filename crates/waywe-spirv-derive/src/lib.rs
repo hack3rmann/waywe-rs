@@ -1,8 +1,10 @@
-use proc_macro2::{Ident, Punct};
+#![allow(unused)]
+
+use proc_macro2::{Ident, Punct, Span};
 use quote::quote;
-use std::{result::Result, str::FromStr};
+use std::{env, path::Path, result::Result, str::FromStr};
 use syn::{
-    Attribute, DeriveInput, LitStr, Meta, Token,
+    Attribute, DeriveInput, Error, LitStr, Meta, Token,
     parse::{Result as ParseResult, *},
     punctuated::Punctuated,
     token::Comma,
@@ -34,8 +36,11 @@ struct ParseFailed;
 #[derive(Debug)]
 struct ShaderAttribute {
     path: String,
+    path_span: Span,
     stage: Stage,
+    stage_span: Span,
     label: Option<String>,
+    label_span: Option<Span>,
 }
 
 struct GenericGroupList {
@@ -101,42 +106,59 @@ fn parse_attributes(input: &[Attribute]) -> ShaderAttribute {
     let mut label = None;
 
     for attr in input {
-        if let Meta::List(list) = &attr.meta {
-            let segments = &list.path.segments;
+        let Meta::List(list) = &attr.meta else {
+            continue;
+        };
+        let segments = &list.path.segments;
 
-            if segments.len() != 1 || segments[0].ident != "shader" {
-                continue;
-            }
+        if segments.len() != 1 || segments[0].ident != "shader" {
+            continue;
+        }
 
-            let list = syn::parse2::<GenericGroupList>(list.tokens.clone()).unwrap();
+        let list = syn::parse2::<GenericGroupList>(list.tokens.clone()).unwrap();
 
-            for group in list.generic_groups {
-                match group.ident {
-                    AttrName::Stage => {
-                        stage = group.literal.value().as_str().parse().ok();
-                    }
-                    AttrName::Path => {
-                        path = Some(group.literal.value());
-                    }
-                    AttrName::Label => {
-                        label = Some(group.literal.value());
-                    }
+        for group in list.generic_groups {
+            match group.ident {
+                AttrName::Stage => {
+                    stage = group
+                        .literal
+                        .value()
+                        .as_str()
+                        .parse::<Stage>()
+                        .ok()
+                        .map(|stage| (stage, group.literal.span()));
+                }
+                AttrName::Path => {
+                    path = Some((group.literal.value(), group.literal.span()));
+                }
+                AttrName::Label => {
+                    label = Some((group.literal.value(), group.literal.span()));
                 }
             }
-        } else {
-            continue;
         }
     }
 
-    let Some(path) = path else {
+    let Some((path, path_span)) = path else {
         panic!("no path provided")
     };
 
-    let Some(stage) = stage else {
+    let Some((stage, stage_span)) = stage else {
         panic!("no stage provided")
     };
 
-    ShaderAttribute { path, stage, label }
+    let (label, label_span) = match label {
+        Some((label, label_span)) => (Some(label), Some(label_span)),
+        None => (None, None),
+    };
+
+    ShaderAttribute {
+        path,
+        path_span,
+        stage,
+        stage_span,
+        label,
+        label_span,
+    }
 }
 
 #[proc_macro_derive(ShaderDescriptor, attributes(shader))]
@@ -146,7 +168,43 @@ pub fn spirv_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let struct_name = &ast.ident;
     let attr = parse_attributes(&ast.attrs);
 
-    let shader_source = feature::shader_source(&attr);
+    if !Path::new(&attr.path).exists() {
+        let working_dir = env::current_dir().unwrap();
+
+        return Error::new(
+            attr.path_span,
+            format!(
+                "'{}' does not exist relative to '{}'",
+                attr.path,
+                working_dir.display()
+            ),
+        )
+        .into_compile_error()
+        .into();
+    }
+
+    let absolute_shader_path = {
+        let path = Path::new(&attr.path).canonicalize().unwrap();
+        path.to_string_lossy().into_owned()
+    };
+
+    let shader_source_const = quote! {
+        // NOTE(hack3rmann): Rust will rebuild the current file when the GLSL source is changed
+        const _: &str = include_str!( #absolute_shader_path )
+    };
+
+    let shader_source = match feature::shader_source(&attr) {
+        Ok(source) => source,
+        Err(err) => {
+            let error = err.into_compile_error();
+
+            return quote! {
+                #shader_source_const ;
+                #error
+            }
+            .into();
+        }
+    };
 
     let label = match attr.label {
         Some(label) => quote! { Some(#label) },
@@ -154,6 +212,8 @@ pub fn spirv_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     };
 
     quote! {
+        #shader_source_const ;
+
         impl ::waywe_runtime::shaders::ShaderDescriptor for #struct_name {
             fn shader_descriptor() -> ::wgpu::ShaderModuleDescriptor<'static> {
                 ::wgpu::ShaderModuleDescriptor {
@@ -168,33 +228,57 @@ pub fn spirv_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 #[cfg(feature = "spirv")]
 mod feature {
-    use super::{ShaderAttribute, Stage};
-    use proc_macro2::TokenStream;
+    use super::{Error, ShaderAttribute, Stage};
+    use proc_macro2::{Span, TokenStream};
     use quote::quote;
     use shaderc::{CompileOptions, Compiler, ShaderKind};
     use std::fs;
 
-    fn compile_spirv(source: &str, kind: ShaderKind, file_name: &str) -> Vec<u32> {
+    fn spirv_compile_error(span: Span, error: shaderc::Error) -> Error {
+        let message = match error {
+            shaderc::Error::CompilationError(count, info) => {
+                format!("{count} compile errors:\n{info}")
+            }
+            shaderc::Error::InternalError(info) => format!("internal error: {info}"),
+            shaderc::Error::InvalidStage(info) => format!("invalid stage: {info}"),
+            shaderc::Error::InvalidAssembly(info) => format!("invalid assembly: {info}"),
+            shaderc::Error::NullResultObject(info) => format!("null result object: {info}"),
+            shaderc::Error::InitializationError(info) => format!("initialization error: {info}"),
+            shaderc::Error::ParseError(info) => format!("parse error: {info}"),
+        };
+
+        Error::new(span, message)
+    }
+
+    fn compile_spirv(
+        span: Span,
+        source: &str,
+        kind: ShaderKind,
+        file_name: &str,
+    ) -> Result<Vec<u32>, Error> {
         let compiler = Compiler::new().unwrap();
         let options = CompileOptions::new().unwrap();
 
         // TODO(Lorent1): add not main
-        compiler
-            .compile_into_spirv(source, kind, file_name, "main", Some(&options))
-            .unwrap()
-            .as_binary()
-            .to_vec()
+        let artifact =
+            match compiler.compile_into_spirv(source, kind, file_name, "main", Some(&options)) {
+                Ok(artifact) => artifact,
+                Err(error) => return Err(spirv_compile_error(span, error)),
+            };
+
+        Ok(artifact.as_binary().to_vec())
     }
 
-    pub fn shader_source(attr: &ShaderAttribute) -> TokenStream {
+    pub fn shader_source(attr: &ShaderAttribute) -> Result<TokenStream, Error> {
         let glsl_source = fs::read_to_string(&attr.path).unwrap();
-        let spirv_words = compile_spirv(&glsl_source, attr.stage.into(), &attr.path);
+        let spirv_words =
+            compile_spirv(attr.path_span, &glsl_source, attr.stage.into(), &attr.path)?;
 
-        quote! {
+        Ok(quote! {
             ::wgpu::ShaderSource::SpirV(
                 ::std::borrow::Cow::Borrowed(&[ #( #spirv_words ),* ]),
             )
-        }
+        })
     }
 
     impl From<Stage> for ShaderKind {
@@ -210,22 +294,22 @@ mod feature {
 
 #[cfg(not(feature = "spirv"))]
 mod feature {
-    use super::{ShaderAttribute, Stage};
+    use super::{Error, ShaderAttribute, Stage};
     use proc_macro2::TokenStream;
     use quote::quote;
     use std::fs;
 
-    pub fn shader_source(attr: &ShaderAttribute) -> TokenStream {
+    pub fn shader_source(attr: &ShaderAttribute) -> Result<TokenStream, Error> {
         let glsl_source = fs::read_to_string(&attr.path).unwrap();
         let stage = shader_stage(attr.stage);
 
-        quote! {
+        Ok(quote! {
             ::wgpu::ShaderSource::Glsl {
                 shader: ::std::borrow::Cow::Borrowed(#glsl_source),
                 stage: #stage,
                 defines: ::std::default::Default::default(),
             }
-        }
+        })
     }
 
     fn shader_stage(stage: Stage) -> TokenStream {

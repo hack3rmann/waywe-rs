@@ -20,6 +20,7 @@ https://github.com/user-attachments/assets/48a8b135-bbf2-4055-8453-19292a923939
 1. Image wallpapers in various formats.
 2. Video wallpapers in .mp4 (h.264 and h.265 -encoded formats)
 3. Configurable transition animations.
+4. Custom scene wallpapers loaded from dynamic libraries (`.so`).
 
 ## Dependencies
 
@@ -70,7 +71,12 @@ Then use the `waywe` cli tool to control daemon's behavior:
 ```shell
 waywe show path/to/your/video.mp4
 waywe show path/to/your/picture.jpg
+waywe show path/to/your/scene.so
 ```
+
+Scene wallpapers are shared libraries built with [`waywe-scene`](crates/waywe-scene) or
+[`waywe-rendering-api`](crates/waywe-rendering-api) (experimental). You implement
+rendering yourself; see the crate READMEs for how to author and build them.
 
 Note that it will set the same wallpaper for all currently plugged monitors.
 You can also specify on which monitor to set wallpaper to with `--monitor <NAME>` key.
@@ -82,6 +88,26 @@ waywe preview preview.png
 ```
 
 For other handy commands run `waywe help`.
+
+### Scene wallpapers
+
+With [`waywe-scene`](crates/waywe-scene), put `#[derive(Scene)]` on your wallpaper type —
+the FFI entry point is generated for you. With [`waywe-rendering-api`](crates/waywe-rendering-api)
+directly, you write `waywe_ffi_create_opaque_renderer` yourself and implement all rendering.
+
+Build an example scene and set it as wallpaper:
+
+```shell
+cargo build --release -p waywe-test-scene
+waywe show target/release/libwaywe_test_scene.so
+```
+
+ShaderToy example:
+
+```shell
+cargo build --release -p shadertoy-computer-were-made-for-cubes
+waywe show target/release/libshadertoy_computer_were_made_for_cubes.so
+```
 
 ## Configuration
 
@@ -183,4 +209,4 @@ Special thanks to [`swww`](https://github.com/LGFae/swww). `waywe` project is he
 
 ## Future directions
 
-- Using [Wallpaper Engine](https://www.wallpaperengine.io/en) assets for the future use with `waywe`.
+- Using [Wallpaper Engine](https://www.wallpaperengine.io/en) assets with `waywe`.

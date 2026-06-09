@@ -10,12 +10,12 @@ pub struct Args {
 
 #[derive(Subcommand, Debug)]
 pub enum Command {
-    /// Set s image/video as a wallpaper
+    /// Set an image, video, or scene (.so) as a wallpaper
     Show {
         /// Monitor to set wallpaper on
         #[arg(short, long)]
         monitor: Option<String>,
-        /// Path to an image or a video
+        /// Path to an image, video, or scene shared library
         path: PathBuf,
     },
     /// Start the daemon process

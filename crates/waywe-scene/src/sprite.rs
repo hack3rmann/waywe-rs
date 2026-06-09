@@ -128,7 +128,7 @@ pub fn extract_sprites(
         let render_material = materials.get(material_id).unwrap();
 
         pipelines.insert_with(material_id, || {
-            MeshPipeline::new(&gpu, monitor.id, render_material)
+            MeshPipeline::new(&gpu, *monitor, render_material)
         });
 
         entity_map.insert(id, render_id);

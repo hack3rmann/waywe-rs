@@ -1,10 +1,10 @@
 pub mod optimized;
-pub mod test_scene;
 pub mod transition;
 
 use crate::wallpaper::optimized::{
     OptimizedWallpaper,
     image::{Color, ImageWallpaper},
+    render::RenderWallpaper,
     video::VideoWallpaper,
 };
 use std::{path::Path, sync::Arc};
@@ -33,7 +33,10 @@ pub fn create(
             let wallpaper = VideoWallpaper::new(path, &gpu, config).unwrap();
             OptimizedWallpaper::Video(wallpaper)
         }
-        WallpaperType::Scene => unimplemented!(),
+        WallpaperType::Scene => {
+            let wallpaper = RenderWallpaper::load(path, &gpu, config);
+            OptimizedWallpaper::Scene(wallpaper)
+        }
     }
 }
 

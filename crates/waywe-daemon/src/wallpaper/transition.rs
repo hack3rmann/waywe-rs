@@ -638,6 +638,11 @@ impl RunningWallpapers {
 
         _ = self.ongoing_transitions.drain(..n_unfinished);
         _ = self.executing.drain(..n_unfinished);
+
+        if self.executing.len() <= 1 {
+            self.transition_pipeline = Nil;
+            self.textures = Nil;
+        }
     }
 
     pub fn is_transitioning(&self) -> bool {

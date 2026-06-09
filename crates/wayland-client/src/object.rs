@@ -6,6 +6,7 @@ use thiserror::Error;
 pub use crate::interface::generated::WlObjectType;
 
 /// Ids and names for Wayland objects
+#[repr(transparent)]
 #[derive(Clone, Debug, PartialEq, Eq, Copy, PartialOrd, Ord, Hash)]
 pub struct WlObjectId(pub NonZeroU32);
 

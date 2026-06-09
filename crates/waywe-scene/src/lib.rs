@@ -1,4 +1,8 @@
-//! Entity-Component-System (ECS) framework for creating dynamic wallpapers.
+//! **Unstable and experimental** ECS framework for creating dynamic wallpapers.
+//!
+//! Scene wallpapers require `#[derive(Scene)]` on your `WallpaperBuilder` type to
+//! generate the FFI entry point. See the [crate README](../README.md) for a
+//! getting-started guide.
 //!
 //! This module provides a complete ECS-based scene system for creating and rendering
 //! dynamic wallpapers. It's built on top of Bevy's ECS architecture and provides
@@ -90,6 +94,8 @@ pub mod camera;
 pub mod clear_screen;
 pub mod cursor;
 pub mod extract;
+pub mod ffi;
+pub mod gpu;
 pub mod image;
 pub mod material;
 pub mod mesh;
@@ -108,14 +114,15 @@ use bitflags::bitflags;
 use derive_more::{Deref, DerefMut};
 use glam::UVec2;
 use std::time::Duration;
-use waywe_runtime::{frame::FrameInfo, wayland::MonitorId};
+use waywe_runtime::{WallpaperConfig as RuntimeWallpaperConfig, frame::FrameInfo};
 
 pub use bevy_ecs as ecs;
 pub use glam;
+pub use waywe_scene_macros::Scene;
 
 pub mod prelude {
     pub use crate::{
-        FrameRateSetting, Monitor, Startup, Update,
+        FrameRateSetting, Monitor, Scene, Startup, Update,
         asset_server::{AssetHandle, AssetServer},
         assets::Assets,
         cursor::Cursor,
@@ -196,16 +203,25 @@ pub struct DummyWorld(pub World);
 /// Information about the monitor this wallpaper is rendering to.
 #[derive(Resource, Clone, Copy)]
 pub struct Monitor {
-    /// Unique identifier for the monitor.
-    pub id: MonitorId,
     /// Size of the monitor in pixels.
     pub size: UVec2,
+    /// Surface format
+    pub surface_format: wgpu::TextureFormat,
 }
 
 impl Monitor {
     /// Calculate the aspect ratio of the monitor (height/width).
     pub const fn aspect_ratio(self) -> f32 {
         self.size.y as f32 / self.size.x as f32
+    }
+}
+
+impl From<RuntimeWallpaperConfig> for Monitor {
+    fn from(value: RuntimeWallpaperConfig) -> Self {
+        Self {
+            size: value.surface_size,
+            surface_format: value.surface_format,
+        }
     }
 }
 

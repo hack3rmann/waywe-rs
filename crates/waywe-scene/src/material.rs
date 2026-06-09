@@ -17,6 +17,7 @@
 use crate::{
     asset_server::AssetId,
     assets::{Asset, RefAssetsPlugin},
+    gpu::Gpu,
     plugin::Plugin,
     wallpaper::Wallpaper,
 };
@@ -24,7 +25,7 @@ use bevy_ecs::{
     prelude::*,
     system::{SystemParam, SystemParamItem},
 };
-use waywe_runtime::{gpu::Wgpu, shaders::ShaderDescriptor};
+use waywe_runtime::shaders::ShaderDescriptor;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, PartialOrd, Ord, Hash, SystemSet)]
 pub enum MaterialSet {
@@ -62,7 +63,7 @@ pub trait Material: Asset + AsBindGroup {
     type VertexShader: ShaderDescriptor;
     type FragmentShader: ShaderDescriptor;
 
-    fn create_shader(gpu: &Wgpu) -> VertexFragmentShader {
+    fn create_shader(gpu: &Gpu) -> VertexFragmentShader {
         gpu.require_shader::<Self::VertexShader>();
         gpu.require_shader::<Self::FragmentShader>();
 

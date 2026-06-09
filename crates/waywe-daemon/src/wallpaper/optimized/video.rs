@@ -85,7 +85,11 @@ impl Wallpaper for VideoWallpaper {
         self.video.advance_by(self.time.delta);
 
         if self.video.n_frames_since_update == 0 || Almost::is_nil(&self.rendered_video) {
-            self.rendered_video = Value(RenderVideo::export_from(&self.video, gpu));
+            self.rendered_video = Value(RenderVideo::export_from(
+                &self.video,
+                &gpu.adapter,
+                &gpu.device,
+            ));
         }
 
         let bind_group = self.create_bind_group(&gpu.device);
@@ -284,7 +288,9 @@ impl VideoPipeline {
 }
 
 #[derive(ShaderDescriptor)]
-#[shader(path = "crates/waywe-daemon/src/shaders/video.glsl")]
-#[shader(stage = "fragment")]
-#[shader(label = "default-video")]
+#[shader(
+    path = "crates/waywe-daemon/src/shaders/video.glsl",
+    stage = "fragment",
+    label = "default-video"
+)]
 pub struct VideoFragment;
