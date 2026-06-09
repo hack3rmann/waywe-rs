@@ -176,7 +176,7 @@ pub fn execute_show(
                 monitor: monitor_name,
             }
         }
-        Kind::Executable => {
+        Kind::Compressed => {
             let absolute_path = path.canonicalize()?;
 
             DaemonCommand::SetScene {

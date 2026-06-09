@@ -81,3 +81,4 @@ bevy_ecs = "0.17.2"
 wgpu = { version = "29.0.3", features = ["glsl", "spirv"] }
 ash = "0.38.0"
 pollster = "0.4.0"
+uuid = { version = "1.23.3", features = ["v7"] }
