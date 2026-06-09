@@ -8,12 +8,12 @@ layout (location = 0) in vec2 fragCoord;
 layout (location = 0) out vec4 fragColor;
 
 layout(push_constant) uniform PushConst {
-    vec2 resolution;
-    float time;
-} push;
+    vec2 iResolution;
+    float iTime;
+};
 
-#define TIME            push.time
-#define RESOLUTION      push.resolution
+#define TIME            iTime
+#define RESOLUTION      iResolution
 
 #define PI              3.141592654
 #define TAU             (2.0*PI)
