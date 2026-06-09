@@ -1,6 +1,6 @@
 use proc_macro2::{Ident, Punct};
 use quote::quote;
-use std::{result::Result, str::FromStr};
+use std::{path::Path, result::Result, str::FromStr};
 use syn::{
     Attribute, DeriveInput, LitStr, Meta, Token,
     parse::{Result as ParseResult, *},
@@ -146,6 +146,10 @@ pub fn spirv_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let struct_name = &ast.ident;
     let attr = parse_attributes(&ast.attrs);
 
+    let absolute_shader_path = {
+        let path = Path::new(&attr.path).canonicalize().unwrap();
+        path.to_string_lossy().into_owned()
+    };
     let shader_source = feature::shader_source(&attr);
 
     let label = match attr.label {
@@ -154,6 +158,9 @@ pub fn spirv_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     };
 
     quote! {
+        // NOTE(hack3rmann): Rust will rebuild the current file when the GLSL source is changed
+        const _: &str = include_str!( #absolute_shader_path );
+
         impl ::waywe_runtime::shaders::ShaderDescriptor for #struct_name {
             fn shader_descriptor() -> ::wgpu::ShaderModuleDescriptor<'static> {
                 ::wgpu::ShaderModuleDescriptor {
