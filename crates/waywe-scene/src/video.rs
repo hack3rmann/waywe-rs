@@ -36,7 +36,7 @@ use bevy_ecs::{
 use glam::UVec2;
 use std::{
     ffi::CString,
-    os::fd::IntoRawFd as _,
+    os::fd::{FromRawFd, IntoRawFd as _, OwnedFd},
     path::{Path, PathBuf},
     ptr,
     time::Duration,
@@ -329,16 +329,12 @@ impl RenderVideo {
         surface: VaSurfaceHandle,
     ) -> wgpu::Texture {
         let dma_desc = *surface.desc();
-        let dma_buf_fd = surface.into_fd().into_raw_fd();
+        let dma_buf_fd = surface.into_fd();
 
         let memory_properties = Self::get_memory_properties(adapter);
 
         let device_hal = unsafe { device.as_hal::<api::Vulkan>().unwrap() };
         let vk_device = device_hal.raw_device();
-
-        let vk_free_memory = vk_device.fp_v1_0().free_memory;
-        let vk_destroy_image = vk_device.fp_v1_0().destroy_image;
-        let vk_device_raw = vk_device.handle();
 
         let ext_info = vk::ExternalMemoryImageCreateInfo {
             s_type: vk::StructureType::EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
@@ -422,11 +418,13 @@ impl RenderVideo {
             .map(|(i, _)| i as u32)
             .unwrap();
 
+        let fd = dma_buf_fd.into_raw_fd();
+
         let import_info = vk::ImportMemoryFdInfoKHR {
             s_type: vk::StructureType::IMPORT_MEMORY_FD_INFO_KHR,
             p_next: ptr::null(),
             handle_type: vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD,
-            fd: dma_buf_fd,
+            fd,
             _marker: std::marker::PhantomData,
         };
 
@@ -438,7 +436,14 @@ impl RenderVideo {
             _marker: std::marker::PhantomData,
         };
 
-        let device_memory = unsafe { vk_device.allocate_memory(&alloc_info, None).unwrap() };
+        let device_memory = match unsafe { vk_device.allocate_memory(&alloc_info, None) } {
+            Ok(mem) => mem,
+            Err(err) => {
+                // Close the Fd on failure
+                _ = unsafe { OwnedFd::from_raw_fd(fd) };
+                panic!("{err}");
+            }
+        };
 
         unsafe {
             vk_device
@@ -462,21 +467,14 @@ impl RenderVideo {
             view_formats: vec![],
         };
 
-        let destructor = Box::new(move || unsafe {
-            // NOTE(hack3rmann): we have to manually destroy the image
-            // because wgpu does not do this due creation of drop callback
-            vk_destroy_image(vk_device_raw, vk_image, ptr::null());
-            // NOTE(hack3rmann): we have to manually deallocate the memory
-            // because wgpu does not do this due to call to `texture_from_raw`
-            vk_free_memory(vk_device_raw, device_memory, ptr::null());
-        });
-
         let texture_hal = unsafe {
             device_hal.texture_from_raw(
                 vk_image,
                 &texture_desc,
-                Some(destructor),
-                vulkan::TextureMemory::External,
+                // NOTE(hack3rmann): when memory is `TextureMemory::Dedicated` wgpu will call vk::free_memory,
+                // when the drop callback is None wgpu will call vk::destry_image
+                None,
+                vulkan::TextureMemory::Dedicated(device_memory),
             )
         };
 
