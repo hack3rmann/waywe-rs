@@ -6,7 +6,7 @@ use std::{
 };
 
 const USER_AGENT: &str =
-    "waywe-test-scene/0.0.14 (https://github.com/hack3rmann/waywe-rs; build-script)";
+    "waywe-test-scene/0.0.15 (https://github.com/hack3rmann/waywe-rs; build-script)";
 
 const ASSETS: &[(&str, &str, &str)] = &[
     (
