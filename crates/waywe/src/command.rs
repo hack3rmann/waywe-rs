@@ -52,14 +52,14 @@ pub fn execute_current(monitor_name: Option<&str>) -> Result<(), ExecuteError> {
 }
 
 pub fn execute_start() {
-    // NOTE(hack3rmann): waywe-daemon process will daemonize itself
-    #[allow(clippy::zombie_processes)]
-    let _child = process::Command::new("waywe-daemon")
+    let mut child = process::Command::new("waywe-daemon")
         .arg("--run-in-background")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .unwrap();
+
+    child.wait().unwrap();
 }
 
 pub fn execute_preview(result_path: &Path, monitor_name: Option<&str>) -> Result<(), ExecuteError> {
@@ -172,6 +172,14 @@ pub fn execute_show(
             }
 
             DaemonCommand::SetVideo {
+                path: absolute_path,
+                monitor: monitor_name,
+            }
+        }
+        Kind::Executable => {
+            let absolute_path = path.canonicalize()?;
+
+            DaemonCommand::SetScene {
                 path: absolute_path,
                 monitor: monitor_name,
             }

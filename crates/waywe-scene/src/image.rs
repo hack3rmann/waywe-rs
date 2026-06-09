@@ -21,6 +21,7 @@ use crate::{
         RenderAsset, RenderAssetExtractError, RenderAssets, RenderAssetsPlugin,
     },
     extract::Extract,
+    gpu::Gpu,
     material::{AsBindGroup, Material, MaterialSet, RenderMaterial, VertexFragmentShader},
     plugin::Plugin,
     render::{RenderGpu, SceneExtract},
@@ -31,7 +32,7 @@ use bevy_ecs::{
 };
 use derive_more::{Deref, DerefMut};
 use std::path::Path;
-use waywe_runtime::{gpu::Wgpu, shaders::ShaderDescriptor};
+use waywe_runtime::shaders::ShaderDescriptor;
 use wgpu::util::DeviceExt;
 
 /// Plugin for image functionality.
@@ -140,7 +141,7 @@ pub struct ImagePipeline {
 
 impl ImagePipeline {
     /// Create a new image pipeline.
-    pub fn new(gpu: &Wgpu) -> Self {
+    pub fn new(gpu: &Gpu) -> Self {
         let sampler = gpu.device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("image-material"),
             min_filter: wgpu::FilterMode::Linear,
@@ -161,35 +162,19 @@ impl FromWorld for ImagePipeline {
     }
 }
 
+#[derive(ShaderDescriptor)]
+#[shader(
+    path = "crates/waywe-scene/src/shaders/scene-image-vertex.glsl",
+    stage = "vertex"
+)]
 pub struct SceneImageVertexShader;
 
-impl ShaderDescriptor for SceneImageVertexShader {
-    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
-        wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("shaders/scene-image-vertex.glsl").into(),
-                stage: wgpu::naga::ShaderStage::Vertex,
-                defines: Default::default(),
-            },
-        }
-    }
-}
-
+#[derive(ShaderDescriptor)]
+#[shader(
+    path = "crates/waywe-scene/src/shaders/scene-image-fragment.glsl",
+    stage = "fragment"
+)]
 pub struct SceneImageFragmentShader;
-
-impl ShaderDescriptor for SceneImageFragmentShader {
-    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
-        wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("shaders/scene-image-fragment.glsl").into(),
-                stage: wgpu::naga::ShaderStage::Fragment,
-                defines: Default::default(),
-            },
-        }
-    }
-}
 
 /// Material that displays an image.
 pub struct ImageMaterial {
@@ -214,7 +199,7 @@ pub struct RenderImage {
 
 impl RenderImage {
     /// Create a new render image from image data.
-    pub fn new(image: &Image, gpu: &Wgpu) -> Self {
+    pub fn new(image: &Image, gpu: &Gpu) -> Self {
         let texture = gpu.device.create_texture_with_data(
             &gpu.queue,
             &wgpu::TextureDescriptor {

@@ -1,33 +1,40 @@
 pub mod image;
+pub mod render;
 pub mod video;
 
-use crate::wallpaper::optimized::{image::ImageWallpaper, video::VideoWallpaper};
+use super::WallpaperConfig;
+use crate::wallpaper::{
+    Wallpaper,
+    optimized::{image::ImageWallpaper, render::RenderWallpaper, video::VideoWallpaper},
+};
 use waywe_runtime::{frame::FrameInfo, gpu::Wgpu};
-use waywe_scene::wallpaper::PreparedWallpaper;
 
 #[expect(clippy::large_enum_variant)]
 pub enum OptimizedWallpaper {
     Image(ImageWallpaper),
     Video(VideoWallpaper),
-    Scene(PreparedWallpaper),
+    Scene(RenderWallpaper),
 }
 
-impl OptimizedWallpaper {
-    pub fn frame(
+impl Wallpaper for OptimizedWallpaper {
+    fn configure(&mut self, gpu: &Wgpu, config: WallpaperConfig) {
+        match self {
+            OptimizedWallpaper::Image(wall) => wall.configure(gpu, config),
+            OptimizedWallpaper::Video(wall) => wall.configure(gpu, config),
+            OptimizedWallpaper::Scene(wall) => wall.configure(gpu, config),
+        }
+    }
+
+    fn frame(
         &mut self,
         gpu: &Wgpu,
         surface: &wgpu::TextureView,
         encoder: &mut wgpu::CommandEncoder,
     ) -> FrameInfo {
         match self {
-            OptimizedWallpaper::Image(wallpaper) => {
-                wallpaper.frame(surface, encoder);
-                FrameInfo {
-                    target_frame_time: None,
-                }
-            }
-            OptimizedWallpaper::Video(wallpaper) => wallpaper.frame(gpu, surface, encoder),
-            OptimizedWallpaper::Scene(wallpaper) => wallpaper.frame(surface.clone(), encoder),
+            OptimizedWallpaper::Image(wall) => wall.frame(gpu, surface, encoder),
+            OptimizedWallpaper::Video(wall) => wall.frame(gpu, surface, encoder),
+            OptimizedWallpaper::Scene(wall) => wall.frame(gpu, surface, encoder),
         }
     }
 }

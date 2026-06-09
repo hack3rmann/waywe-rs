@@ -22,14 +22,17 @@ pub struct Wgpu {
 
 impl Wgpu {
     pub async fn new(wayland: &Wayland) -> Self {
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::VULKAN,
             flags: if cfg!(debug_assertions) {
                 wgpu::InstanceFlags::DEBUG | wgpu::InstanceFlags::VALIDATION
             } else {
                 wgpu::InstanceFlags::empty()
             },
-            ..Default::default()
+            memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
+            backend_options: wgpu::BackendOptions::from_env_or_default(),
+            // NOTE(hack3rmann): on Vulkan this handle is unused
+            display: None,
         });
 
         let adapter = match instance
@@ -45,8 +48,10 @@ impl Wgpu {
             Err(error) => panic!("failed to request adapter: {error:?}"),
         };
 
+        let limits = adapter.limits();
+
         let features = wgpu::Features::TEXTURE_FORMAT_NV12
-            | wgpu::Features::PUSH_CONSTANTS
+            | wgpu::Features::IMMEDIATES
             | wgpu::Features::BGRA8UNORM_STORAGE
             | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgpu::Features::PIPELINE_CACHE;
@@ -107,6 +112,7 @@ impl Wgpu {
                     None,
                     &enabled_extensions,
                     features,
+                    &limits,
                     &memory_hints,
                     family_info.queue_family_index,
                     0,
@@ -156,18 +162,14 @@ impl Wgpu {
     }
 
     pub fn resize_surface(&self, monitor_id: MonitorId, size: UVec2) {
-        let surfaces = self.surfaces.read().unwrap();
+        let mut surfaces = self.surfaces.write().unwrap();
 
-        let Some(surface) = surfaces.get(&monitor_id) else {
+        let Some(info) = surfaces.get_mut(&monitor_id) else {
             return;
         };
 
-        let surface_config = surface
-            .surface
-            .get_default_config(&self.adapter, size.x, size.y)
-            .unwrap();
-
-        surface.surface.configure(&self.device, &surface_config);
+        info.config = get_surface_config(&info.surface, &self.adapter, size);
+        info.surface.configure(&self.device, &info.config);
     }
 
     pub fn unregister_surface(&self, monitor_id: MonitorId) {
@@ -195,6 +197,72 @@ impl Wgpu {
     pub fn require_shader<S: ShaderDescriptor>(&self) {
         self.shader_cache.initialize::<S>(&self.device);
     }
+
+    pub fn reconfigure_surface(&self, monitor_id: MonitorId) {
+        let surfaces = self.surfaces.read().unwrap();
+        let Some(info) = surfaces.get(&monitor_id) else {
+            return;
+        };
+        info.surface.configure(&self.device, &info.config);
+    }
+
+    /// # Note
+    ///
+    /// Returns `None` if this frame should be skipped
+    pub fn get_current_surface(&self, wayland: &Wayland, monitor_id: MonitorId) -> SurfaceResult {
+        const N_TRIES: usize = 4;
+
+        let mut surfaces = self.surfaces.write().unwrap();
+        let Some(info) = surfaces.get_mut(&monitor_id) else {
+            return SurfaceResult::Err;
+        };
+
+        for _ in 0..N_TRIES {
+            let surface_result = info.surface.get_current_texture();
+
+            match surface_result {
+                wgpu::CurrentSurfaceTexture::Success(texture) => return SurfaceResult::Ok(texture),
+                wgpu::CurrentSurfaceTexture::Suboptimal(texture) => {
+                    return SurfaceResult::Reconfigure(texture);
+                }
+                wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => {
+                    return SurfaceResult::Skip;
+                }
+                wgpu::CurrentSurfaceTexture::Outdated => {
+                    info.surface.configure(&self.device, &info.config);
+                    continue;
+                }
+                wgpu::CurrentSurfaceTexture::Lost => {
+                    let monitors = wayland.client_state.monitors.read().unwrap();
+                    let monitor_info = &monitors[&monitor_id];
+
+                    let new_info = create_surface(
+                        &self.instance,
+                        &self.adapter,
+                        &self.device,
+                        wayland,
+                        monitor_info,
+                        monitor_id,
+                    );
+
+                    *info = new_info;
+
+                    continue;
+                }
+                wgpu::CurrentSurfaceTexture::Validation => return SurfaceResult::Err,
+            }
+        }
+
+        SurfaceResult::Err
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum SurfaceResult {
+    Ok(wgpu::SurfaceTexture),
+    Reconfigure(wgpu::SurfaceTexture),
+    Skip,
+    Err,
 }
 
 fn create_surface(
@@ -217,7 +285,7 @@ fn create_surface(
     let surface = unsafe {
         instance
             .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
-                raw_display_handle: wayland.raw_display_handle(),
+                raw_display_handle: Some(wayland.raw_display_handle()),
                 raw_window_handle: handle,
             })
             .unwrap()
@@ -229,22 +297,7 @@ fn create_surface(
         panic!("no surface format supported");
     };
 
-    let config = surface
-        .get_default_config(adapter, screen_size.x, screen_size.y)
-        .unwrap();
-
-    // TODO(hack3rmann): configure surface with
-    // `usage |= wgt::TextureUsages::STORAGE_BINDING`
-    // to render to it using compute shaders
-    let config = wgpu::SurfaceConfiguration {
-        // NOTE(hack3rmann): `COPY_SRC` used to allow transitions between wallpapers
-        usage: config.usage
-            | wgpu::TextureUsages::COPY_SRC
-            | wgpu::TextureUsages::COPY_DST
-            | wgpu::TextureUsages::TEXTURE_BINDING,
-        view_formats: vec![format.remove_srgb_suffix()],
-        ..config
-    };
+    let config = get_surface_config(&surface, adapter, screen_size);
 
     surface.configure(device, &config);
 
@@ -252,5 +305,32 @@ fn create_surface(
         surface,
         format,
         config,
+    }
+}
+
+fn get_surface_config(
+    surface: &wgpu::Surface,
+    adapter: &wgpu::Adapter,
+    screen_size: UVec2,
+) -> wgpu::SurfaceConfiguration {
+    let Some(format) = surface.get_capabilities(adapter).formats.first().copied() else {
+        panic!("no surface format supported");
+    };
+
+    let config = surface
+        .get_default_config(adapter, screen_size.x, screen_size.y)
+        .unwrap();
+
+    // TODO(hack3rmann): configure surface with
+    // `usage |= wgt::TextureUsages::STORAGE_BINDING`
+    // to render to it using compute shaders
+    wgpu::SurfaceConfiguration {
+        // NOTE(hack3rmann): `COPY_SRC` used to allow transitions between wallpapers
+        usage: config.usage
+            | wgpu::TextureUsages::COPY_SRC
+            | wgpu::TextureUsages::COPY_DST
+            | wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: vec![format.remove_srgb_suffix()],
+        ..config
     }
 }

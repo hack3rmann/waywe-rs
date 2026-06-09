@@ -28,6 +28,7 @@ use crate::{
         RenderAssetsPlugin,
     },
     extract::Extract,
+    gpu::Gpu,
     image::ImageMaterial,
     material::{Material, MaterialSet, RenderMaterial, RenderMaterialId},
     plugin::Plugin,
@@ -52,7 +53,6 @@ use std::{
     ptr::NonNull,
     result::Result,
 };
-use waywe_runtime::{gpu::Wgpu, wayland::MonitorId};
 
 /// Plugin for mesh rendering functionality.
 ///
@@ -83,7 +83,15 @@ impl Plugin for MeshPlugin {
                     despawn_removed_entities,
                 ),
             )
-            .add_systems(Render, render_meshes.in_set(RenderSet::Render));
+            .add_systems(
+                Render,
+                (
+                    render_meshes.in_set(RenderSet::Render),
+                    resize_mesh_pipelines
+                        .in_set(RenderSet::Reconfigure)
+                        .run_if(resource_changed::<Monitor>),
+                ),
+            );
     }
 }
 
@@ -117,16 +125,13 @@ impl Asset for MeshPipeline {}
 
 impl MeshPipeline {
     /// Create a new mesh pipeline for a specific material and monitor.
-    pub fn new(gpu: &Wgpu, monitor_id: MonitorId, material: &RenderMaterial) -> Self {
+    pub fn new(gpu: &Gpu, monitor: Monitor, material: &RenderMaterial) -> Self {
         let layout = gpu
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("image-pipeline-layout"),
-                bind_group_layouts: &[&material.bind_group_layout],
-                push_constant_ranges: &[wgpu::PushConstantRange {
-                    stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                    range: 0..mem::size_of::<PushConst>() as u32,
-                }],
+                bind_group_layouts: &[Some(&material.bind_group_layout)],
+                immediate_size: mem::size_of::<PushConst>() as u32,
             });
 
         let pipeline = gpu
@@ -159,7 +164,7 @@ impl MeshPipeline {
                         zero_initialize_workgroup_memory: false,
                     },
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: gpu.surfaces.read().unwrap()[&monitor_id].format,
+                        format: monitor.surface_format,
                         blend: None,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
@@ -179,7 +184,7 @@ impl MeshPipeline {
                     mask: !0,
                     alpha_to_coverage_enabled: false,
                 },
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             });
 
@@ -252,7 +257,7 @@ impl RenderAsset for RenderMesh {
 
 impl RenderMesh {
     /// Create a new render mesh from mesh data.
-    pub fn new(mesh: &Mesh, gpu: &Wgpu) -> Self {
+    pub fn new(mesh: &Mesh, gpu: &Gpu) -> Self {
         use wgpu::util::DeviceExt as _;
 
         let vertices = gpu
@@ -269,7 +274,7 @@ impl RenderMesh {
         }
     }
 
-    pub fn update_buffer(&mut self, mesh: &Mesh, gpu: &Wgpu) {
+    pub fn update_buffer(&mut self, mesh: &Mesh, gpu: &Gpu) {
         // Not enough capacity
         if self.vertices.size() < mem::size_of_val(mesh.vertices.as_slice()) as u64 {
             *self = Self::new(mesh, gpu);
@@ -325,7 +330,7 @@ pub fn extract_objects<M: Material>(
         let render_material = materials.get(material.id()).unwrap();
 
         pipelines.insert_with(material.id(), || {
-            MeshPipeline::new(&gpu, monitor.id, render_material)
+            MeshPipeline::new(&gpu, *monitor, render_material)
         });
 
         entity_map.insert(id, render_id);
@@ -397,6 +402,7 @@ pub fn render_meshes(
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         pass.set_pipeline(&pipeline.pipeline);
@@ -407,8 +413,7 @@ pub fn render_meshes(
             pass.set_vertex_buffer(0, mesh.buffer_slice());
 
             for &(_, ModelMatrix(model)) in model_matrices {
-                pass.set_push_constants(
-                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                pass.set_immediates(
                     0,
                     bytemuck::bytes_of(&PushConst {
                         time: time.elapsed.as_secs_f32(),
@@ -420,6 +425,29 @@ pub fn render_meshes(
                 pass.draw(0..mesh.n_vertices as u32, 0..1);
             }
         }
+    }
+}
+
+pub fn resize_mesh_pipelines(
+    gpu: Res<RenderGpu>,
+    monitor: Res<Monitor>,
+    mut pipelines: ResMut<RefAssets<MeshPipeline>>,
+    materials: Res<RefAssets<RenderMaterial>>,
+) {
+    let ids = pipelines.iter_mut().map(|(id, _)| id).collect::<Vec<_>>();
+
+    for id in ids {
+        let Some(material) = materials.get(id) else {
+            // Material was flushed earlier in the frame; drop the stale pipeline.
+            pipelines.remove(id);
+            continue;
+        };
+
+        let Some(pipeline) = pipelines.get_mut(id) else {
+            continue;
+        };
+
+        *pipeline = MeshPipeline::new(&gpu, *monitor, material);
     }
 }
 

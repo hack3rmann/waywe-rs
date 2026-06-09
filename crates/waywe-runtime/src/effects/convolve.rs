@@ -1,8 +1,8 @@
 use crate::{
+    WallpaperConfig,
     effects::{AppliedEffect, EFFECTS_TEXTURE_DESC, Effect, config::EffectConfig},
     gpu::Wgpu,
     shaders::ShaderDescriptor,
-    wayland::MonitorId,
 };
 use bytemuck::{Pod, Zeroable};
 use std::{mem, num::NonZeroU64};
@@ -12,8 +12,8 @@ use wgpu::util::{BufferInitDescriptor, DeviceExt};
 const LABEL: &str = "convolve";
 
 impl EffectConfig for ConvolveConfig {
-    fn build_effect(&self, gpu: &Wgpu, monitor_id: MonitorId) -> Box<dyn Effect> {
-        Box::new(Convolve::new(gpu, monitor_id, &self.kernel))
+    fn build_effect(&self, gpu: &Wgpu, config: WallpaperConfig) -> Box<dyn Effect> {
+        Box::new(Convolve::new(gpu, config, &self.kernel))
     }
 }
 
@@ -32,31 +32,21 @@ pub struct Convolve {
 }
 
 impl Convolve {
-    pub fn new(gpu: &Wgpu, monitor_id: MonitorId, kernel_data: &[f32]) -> Self {
+    pub fn new(gpu: &Wgpu, config: WallpaperConfig, kernel_data: &[f32]) -> Self {
         let kernel_size = kernel_data.len().isqrt() as u32;
         assert_eq!(
             kernel_size as u64 * kernel_size as u64,
             kernel_data.len() as u64
         );
 
-        let (size, format) = {
-            let surfaces = gpu.surfaces.read().unwrap();
-            let surface = &surfaces[&monitor_id];
-
-            (
-                wgpu::Extent3d {
-                    width: surface.config.width,
-                    height: surface.config.height,
-                    depth_or_array_layers: 1,
-                },
-                surface.format.remove_srgb_suffix(),
-            )
-        };
-
         let output_texture = gpu.device.create_texture(&wgpu::TextureDescriptor {
             label: Some(LABEL),
-            size,
-            format,
+            size: wgpu::Extent3d {
+                width: config.surface_size.x,
+                height: config.surface_size.y,
+                depth_or_array_layers: 1,
+            },
+            format: config.surface_format,
             ..EFFECTS_TEXTURE_DESC
         });
         let output = output_texture.create_view(&Default::default());
@@ -99,7 +89,7 @@ impl Convolve {
                             visibility: wgpu::ShaderStages::COMPUTE,
                             ty: wgpu::BindingType::StorageTexture {
                                 access: wgpu::StorageTextureAccess::WriteOnly,
-                                format,
+                                format: config.surface_format,
                                 view_dimension: wgpu::TextureViewDimension::D2,
                             },
                             count: None,
@@ -111,11 +101,8 @@ impl Convolve {
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some(LABEL),
-                bind_group_layouts: &[&bind_group_layout],
-                push_constant_ranges: &[wgpu::PushConstantRange {
-                    stages: wgpu::ShaderStages::COMPUTE,
-                    range: 0..mem::size_of::<PushConst>() as u32,
-                }],
+                bind_group_layouts: &[Some(&bind_group_layout)],
+                immediate_size: mem::size_of::<PushConst>() as u32,
             });
 
         gpu.require_shader::<ConvolveShader>();
@@ -175,7 +162,7 @@ impl Effect for Convolve {
 
             pass.set_bind_group(0, &bind_group, &[]);
             pass.set_pipeline(&self.pipeline);
-            pass.set_push_constants(
+            pass.set_immediates(
                 0,
                 bytemuck::bytes_of(&PushConst {
                     kernel_size: self.kernel_size,
@@ -184,7 +171,7 @@ impl Effect for Convolve {
 
             const WORKGROUP_SIZE: u32 = 8;
             let width = input.texture().size().width / WORKGROUP_SIZE;
-            let height = input.texture().size().width / WORKGROUP_SIZE;
+            let height = input.texture().size().height / WORKGROUP_SIZE;
 
             pass.dispatch_workgroups(width, height, 1);
         }

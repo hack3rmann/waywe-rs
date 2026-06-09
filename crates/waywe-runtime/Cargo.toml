@@ -8,10 +8,11 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
-wgpu = { version = "27.0.1", features = ["glsl"] }
-ash = "0.38.0"
+wgpu.workspace = true
+ash.workspace = true
 glam.workspace = true
 waywe-ipc.workspace = true
+waywe-spirv-derive.workspace = true
 for-sure = "0.1.1"
 raw-window-handle = "0.6.2"
 bitflags.workspace = true

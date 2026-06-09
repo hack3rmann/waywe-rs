@@ -1,5 +1,6 @@
 use bitflags::bitflags;
 use for_sure::prelude::*;
+use glam::UVec2;
 use gpu::Wgpu;
 use std::sync::Arc;
 use task_pool::TaskPool;
@@ -7,6 +8,8 @@ use timer::Timer;
 use video::Video;
 use wayland::Wayland;
 use waywe_ipc::{DaemonCommand, IpcSocket, ipc::Server};
+
+use crate::wayland::MonitorId;
 
 pub mod app;
 pub mod effects;
@@ -76,6 +79,22 @@ impl Runtime {
         }
     }
 
+    pub fn wallpaper_config(&self, monitor_id: MonitorId) -> WallpaperConfig {
+        let surface_size = {
+            let monitors = self.wayland.client_state.monitors.read().unwrap();
+            monitors[&monitor_id].size.unwrap()
+        };
+        let surface_format = {
+            let surfaces = self.wgpu.surfaces.read().unwrap();
+            surfaces[&monitor_id].format
+        };
+
+        WallpaperConfig {
+            surface_size,
+            surface_format,
+        }
+    }
+
     pub fn init_video(&mut self) {
         if Almost::is_nil(&self.video) {
             self.video = Value(Video::default());
@@ -96,5 +115,18 @@ impl Runtime {
         if features.contains(RuntimeFeatures::GPU) {
             self.init_wgpu().await;
         }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct WallpaperConfig {
+    pub surface_size: UVec2,
+    pub surface_format: wgpu::TextureFormat,
+}
+
+impl WallpaperConfig {
+    pub const fn aspect_ratio(self) -> f32 {
+        self.surface_size.y as f32 / self.surface_size.x as f32
     }
 }

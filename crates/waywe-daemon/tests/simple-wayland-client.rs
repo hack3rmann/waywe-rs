@@ -256,7 +256,7 @@ impl Swapchain {
                     mask: !0,
                     alpha_to_coverage_enabled: false,
                 },
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             }),
         }
@@ -325,10 +325,12 @@ fn simple_wayland_client() {
     display.roundtrip(queue.as_mut(), client_state.as_ref());
     surface.request(&mut buf, &queue.as_ref().storage(), WlSurfaceCommitRequest);
 
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::Backends::VULKAN,
         flags: wgpu::InstanceFlags::DEBUG | wgpu::InstanceFlags::VALIDATION,
-        ..Default::default()
+        memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
+        backend_options: wgpu::BackendOptions::from_env_or_default(),
+        display: None,
     });
 
     let raw_display_handle = display.display_handle().unwrap().as_raw();
@@ -338,7 +340,7 @@ fn simple_wayland_client() {
     let wgpu_surface = unsafe {
         instance
             .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
-                raw_display_handle,
+                raw_display_handle: Some(raw_display_handle),
                 raw_window_handle,
             })
             .unwrap()
@@ -419,7 +421,7 @@ fn simple_wayland_client() {
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
-        push_constant_ranges: &[],
+        immediate_size: 0,
     });
 
     let mut swapchain = Swapchain::new(
@@ -468,7 +470,20 @@ fn simple_wayland_client() {
             );
         }
 
-        let surface_texture = wgpu_surface.get_current_texture().unwrap();
+        let surface_result = wgpu_surface.get_current_texture();
+        let surface_texture = match surface_result {
+            wgpu::CurrentSurfaceTexture::Success(surface)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(surface) => surface,
+            wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => {
+                continue;
+            }
+            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
+                todo!("reconfigure")
+            }
+            wgpu::CurrentSurfaceTexture::Validation => {
+                panic!("validation error on .get_current_texture")
+            }
+        };
         let surface_view = surface_texture.texture.create_view(&Default::default());
 
         let mut encoder = device.create_command_encoder(&Default::default());
@@ -488,6 +503,7 @@ fn simple_wayland_client() {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             pass.set_pipeline(&swapchain.pipeline);

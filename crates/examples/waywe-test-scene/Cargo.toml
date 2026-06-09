@@ -1,0 +1,24 @@
+[package]
+name = "waywe-test-scene"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+waywe-scene.workspace = true
+waywe-runtime.workspace = true
+bevy_ecs.workspace = true
+smallvec.workspace = true
+image.workspace = true
+waywe-rendering-api.workspace = true
+wgpu.workspace = true
+pollster = "0.4.0"
+
+[build-dependencies]
+ureq = "2"
+
+[lib]
+crate-type = ["dylib"]

@@ -1,7 +1,27 @@
 use crate::event::EventEmitter;
 use smallvec::{SmallVec, smallvec};
-use std::thread::JoinHandle;
+use std::{
+    any::Any,
+    fmt::{self, Display},
+    thread::{self, JoinHandle},
+};
 use tracing::error;
+
+struct PrettyPanicPayload<'s>(pub &'s (dyn Any + Send + 'static));
+
+impl Display for PrettyPanicPayload<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = if let Some(s) = self.0.downcast_ref::<&str>() {
+            s
+        } else if let Some(s) = self.0.downcast_ref::<&String>() {
+            s
+        } else {
+            "unknown panic payload"
+        };
+
+        f.write_str(s)
+    }
+}
 
 pub struct TaskPool {
     pub handles: SmallVec<[JoinHandle<()>; 1]>,
@@ -17,20 +37,21 @@ impl TaskPool {
     }
 
     pub fn erase_finished(&mut self) -> usize {
-        let n_finished = 0;
+        let mut n_finished = 0;
+        let mut i = 0;
 
-        for i in 0..self.handles.len() {
-            if i + n_finished >= self.handles.len() {
-                break;
-            }
-
-            if self.handles[i].is_finished() {
+        while i < self.handles.len() {
+            while i < self.handles.len() && self.handles[i].is_finished() {
                 let handle = self.handles.swap_remove(i);
 
-                if let Err(_panic_payload) = handle.join() {
-                    error!("task failed");
+                if let Err(panic_payload) = handle.join() {
+                    error!("task failed: {}", PrettyPanicPayload(&panic_payload));
                 }
+
+                n_finished += 1;
             }
+
+            i += 1;
         }
 
         n_finished
@@ -40,7 +61,7 @@ impl TaskPool {
         self.erase_finished();
 
         let emitter = self.emitter.clone();
-        let handle = std::thread::spawn(move || f(emitter));
+        let handle = thread::spawn(move || f(emitter));
 
         self.handles.push(handle);
     }

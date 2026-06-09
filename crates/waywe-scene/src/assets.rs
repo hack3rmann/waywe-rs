@@ -208,6 +208,10 @@ impl<A: Asset> RefAssets<A> {
             }
         }
     }
+
+    pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (AssetId, &mut A)> + '_ {
+        self.map.iter_mut().map(|(&id, asset)| (id, asset))
+    }
 }
 
 impl<A: Asset> Default for RefAssets<A> {
@@ -259,7 +263,7 @@ impl<A: Asset> Plugin for RefAssetsPlugin<A> {
         wallpaper
             .render
             .init_resource::<RefAssets<A>>()
-            .add_systems(Render, flush_ref_assets::<A>);
+            .add_systems(Render, flush_ref_assets::<A>.in_set(RenderSet::Cleanup));
     }
 }
 

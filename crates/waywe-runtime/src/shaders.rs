@@ -1,10 +1,12 @@
 use std::{
     any::TypeId,
     collections::HashMap,
-    marker::PhantomData,
+    fmt::{self, Debug},
     ops::Deref,
     sync::{RwLock, RwLockReadGuard},
 };
+
+pub use waywe_spirv_derive::ShaderDescriptor;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ShaderId(pub TypeId);
@@ -34,7 +36,7 @@ impl ShaderCache {
         _ = map.insert(TypeId::of::<S>(), shader);
     }
 
-    pub fn get<S: ShaderDescriptor>(&self) -> Option<RwLockShaderReadGuard<'_, S>> {
+    pub fn get<S: ShaderDescriptor>(&self) -> Option<RwLockShaderReadGuard<'_>> {
         let shaders = self.shaders.read().unwrap();
 
         if !shaders.contains_key(&TypeId::of::<S>()) {
@@ -43,20 +45,26 @@ impl ShaderCache {
 
         Some(RwLockShaderReadGuard {
             shaders,
-            _p: PhantomData,
+            id: TypeId::of::<S>(),
         })
     }
 }
 
-pub struct RwLockShaderReadGuard<'s, S> {
-    shaders: RwLockReadGuard<'s, HashMap<TypeId, wgpu::ShaderModule>>,
-    _p: PhantomData<&'s S>,
+impl Debug for ShaderCache {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ShaderCache").finish_non_exhaustive()
+    }
 }
 
-impl<S: 'static> Deref for RwLockShaderReadGuard<'_, S> {
+pub struct RwLockShaderReadGuard<'s> {
+    shaders: RwLockReadGuard<'s, HashMap<TypeId, wgpu::ShaderModule>>,
+    id: TypeId,
+}
+
+impl Deref for RwLockShaderReadGuard<'_> {
     type Target = wgpu::ShaderModule;
 
     fn deref(&self) -> &Self::Target {
-        &self.shaders[&TypeId::of::<S>()]
+        &self.shaders[&self.id]
     }
 }

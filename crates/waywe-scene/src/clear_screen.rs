@@ -1,6 +1,7 @@
 use super::wallpaper::Wallpaper;
 use crate::{
     Monitor,
+    gpu::Gpu,
     mesh::{CommandEncoder, SurfaceView},
     plugin::Plugin,
     render::{Render, RenderGpu, RenderSet},
@@ -8,7 +9,7 @@ use crate::{
 use bevy_ecs::prelude::*;
 use derive_more::Deref;
 use glam::Vec3;
-use waywe_runtime::{gpu::Wgpu, shaders::ShaderDescriptor, wayland::MonitorId};
+use waywe_runtime::shaders::ShaderDescriptor;
 
 pub struct ClearScreenPlugin;
 
@@ -18,7 +19,15 @@ impl Plugin for ClearScreenPlugin {
             .render
             .init_resource::<ClearColor>()
             .init_resource::<ClearPipeline>()
-            .add_systems(Render, run_clear_pass.in_set(RenderSet::ClearPass));
+            .add_systems(
+                Render,
+                (
+                    run_clear_pass.in_set(RenderSet::ClearPass),
+                    resize_clear_pass
+                        .in_set(RenderSet::Reconfigure)
+                        .run_if(resource_changed::<Monitor>),
+                ),
+            );
     }
 }
 
@@ -36,41 +45,25 @@ impl ClearColor {
     }
 }
 
+#[derive(ShaderDescriptor)]
+#[shader(
+    path = "crates/waywe-scene/src/shaders/noop-vertex.glsl",
+    stage = "vertex"
+)]
 pub struct NoOpVertexShader;
 
-impl ShaderDescriptor for NoOpVertexShader {
-    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
-        wgpu::ShaderModuleDescriptor {
-            label: Some("noop-vertex"),
-            source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("shaders/noop-vertex.glsl").into(),
-                stage: wgpu::naga::ShaderStage::Vertex,
-                defines: Default::default(),
-            },
-        }
-    }
-}
-
+#[derive(ShaderDescriptor)]
+#[shader(
+    path = "crates/waywe-scene/src/shaders/noop-fragment.glsl",
+    stage = "fragment"
+)]
 pub struct NoOpFragmentShader;
-
-impl ShaderDescriptor for NoOpFragmentShader {
-    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
-        wgpu::ShaderModuleDescriptor {
-            label: Some("noop-fragment"),
-            source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("shaders/noop-fragment.glsl").into(),
-                stage: wgpu::naga::ShaderStage::Fragment,
-                defines: Default::default(),
-            },
-        }
-    }
-}
 
 #[derive(Resource, Deref)]
 pub struct ClearPipeline(pub wgpu::RenderPipeline);
 
 impl ClearPipeline {
-    pub fn new(gpu: &Wgpu, monitor_id: MonitorId) -> Self {
+    pub fn new(gpu: &Gpu, monitor: Monitor) -> Self {
         gpu.require_shader::<NoOpVertexShader>();
         gpu.require_shader::<NoOpFragmentShader>();
 
@@ -79,7 +72,7 @@ impl ClearPipeline {
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
                 bind_group_layouts: &[],
-                push_constant_ranges: &[],
+                immediate_size: 0,
             });
 
         let pipeline = gpu
@@ -104,7 +97,7 @@ impl ClearPipeline {
                         zero_initialize_workgroup_memory: false,
                     },
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: gpu.surfaces.read().unwrap()[&monitor_id].format,
+                        format: monitor.surface_format,
                         blend: None,
                         write_mask: wgpu::ColorWrites::empty(),
                     })],
@@ -116,7 +109,7 @@ impl ClearPipeline {
                     mask: !0,
                     alpha_to_coverage_enabled: false,
                 },
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             });
 
@@ -128,7 +121,7 @@ impl FromWorld for ClearPipeline {
     fn from_world(world: &mut World) -> Self {
         let gpu = world.resource::<RenderGpu>();
         let monitor = world.resource::<Monitor>();
-        Self::new(gpu, monitor.id)
+        Self::new(gpu, *monitor)
     }
 }
 
@@ -146,14 +139,27 @@ pub fn run_clear_pass(
             resolve_target: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Clear(color.to_wgpu()),
-                store: wgpu::StoreOp::Discard,
+                // NOTE(hack3rmann): must be `Store` so wgpu marks the surface
+                // initialized. `Discard` leaves HAL-imported textures in an
+                // uninitialized state, and the next `Load` pass panics with
+                // `NoValidTextureClearMode`.
+                store: wgpu::StoreOp::Store,
             },
         })],
         depth_stencil_attachment: None,
         timestamp_writes: None,
         occlusion_query_set: None,
+        multiview_mask: None,
     });
 
     pass.set_pipeline(&pipeline);
     pass.draw(0..0, 0..0);
+}
+
+pub fn resize_clear_pass(
+    gpu: Res<RenderGpu>,
+    monitor: Res<Monitor>,
+    mut pipeline: ResMut<ClearPipeline>,
+) {
+    *pipeline = ClearPipeline::new(&gpu, *monitor);
 }

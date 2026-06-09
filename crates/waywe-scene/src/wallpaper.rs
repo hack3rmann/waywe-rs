@@ -15,7 +15,9 @@
 
 use crate::{
     DummyWorld, FrameRateSetting, MainWorld, Monitor, PostExtract, PostStartup, PostUpdate,
-    PreUpdate, Startup, Time, Update, WallpaperConfig, WallpaperFlags, guess_framerate,
+    PreUpdate, Startup, Time, Update, WallpaperConfig, WallpaperFlags,
+    gpu::Gpu,
+    guess_framerate,
     mesh::{CommandEncoder, SurfaceView},
     plugin::PluginGroup,
     render::{EntityMap, Render, RenderGpu, RenderSet, SceneExtract},
@@ -24,15 +26,12 @@ use crate::{
 };
 use bevy_ecs::prelude::*;
 use std::{mem, sync::Arc, thread};
-use waywe_runtime::{
-    frame::FrameInfo,
-    gpu::Wgpu,
-    wayland::{MonitorId, Wayland},
-};
+use waywe_runtime::{frame::FrameInfo, wayland::MonitorId};
 
 /// Main wallpaper controller.
 ///
 /// Manages the dual ECS world architecture and coordinates rendering.
+#[derive(Default, Debug)]
 pub struct Wallpaper {
     /// Main world for logic updates.
     pub main: EcsApp,
@@ -42,17 +41,19 @@ pub struct Wallpaper {
 
 impl Wallpaper {
     /// Create the render world with appropriate systems and resources.
-    fn make_render(gpu: Arc<Wgpu>, monitor: Monitor) -> EcsApp {
+    fn make_render(gpu: Arc<Gpu>, monitor: Monitor) -> EcsApp {
         let mut render = EcsApp::default();
 
         let mut render_schedule = Schedule::new(Render);
         render_schedule.configure_sets(
             (
+                RenderSet::Reconfigure,
                 RenderSet::Update,
                 RenderSet::PrepareRender,
                 RenderSet::ClearPass,
                 RenderSet::Render,
                 RenderSet::ApplyEffects,
+                RenderSet::Cleanup,
             )
                 .chain(),
         );
@@ -98,13 +99,7 @@ impl Wallpaper {
     }
 
     /// Create a new wallpaper for a specific monitor.
-    pub fn new(gpu: Arc<Wgpu>, wayland: &Wayland, monitor_id: MonitorId) -> Self {
-        let monitor_size = wayland.client_state.monitor_size(monitor_id).unwrap();
-        let monitor = Monitor {
-            id: monitor_id,
-            size: monitor_size,
-        };
-
+    pub fn new(gpu: Arc<Gpu>, monitor: Monitor) -> Self {
         Self {
             render: Self::make_render(gpu, monitor),
             // TODO(hack3rmann): allow custom config
@@ -171,6 +166,7 @@ fn run_update(main: &mut EcsApp) {
 ///
 /// This wrapper handles the frame loop and synchronization between
 /// the main and render worlds.
+#[derive(Default, Debug)]
 pub struct PreparedWallpaper {
     first_time: bool,
     /// The wallpaper being managed.
