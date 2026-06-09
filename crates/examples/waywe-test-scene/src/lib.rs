@@ -23,6 +23,14 @@ use smallvec::{SmallVec, smallvec};
 use std::time::Duration;
 use waywe_scene::prelude::*;
 
+mod assets {
+    pub const IMAGE: &str = env!("WAYWE_TEST_SCENE_IMAGE");
+    pub const IMAGE2: &str = env!("WAYWE_TEST_SCENE_IMAGE2");
+    pub const VIDEO: &str = env!("WAYWE_TEST_SCENE_VIDEO");
+    pub const VIDEO2: &str = env!("WAYWE_TEST_SCENE_VIDEO2");
+    pub const VIDEO3: &str = env!("WAYWE_TEST_SCENE_VIDEO3");
+}
+
 /// A test wallpaper with multiple meshes and animations.
 ///
 /// This wallpaper implementation is designed for testing the scene system.
@@ -95,19 +103,17 @@ impl FromWorld for TestAssets {
 
         let mut videos = world.resource_mut::<Assets<Video>>();
 
-        let video1 = Video::new("target/test-video.mp4").unwrap();
+        let video1 = Video::new(assets::VIDEO).unwrap();
         let video1_aspect_ratio = video1.frame_aspect_ratio();
         let video1_handle = videos.add(video1);
 
-        let video2 = Video::new("target/test-video2.mp4").unwrap();
+        let video2 = Video::new(assets::VIDEO2).unwrap();
         let video2_aspect_ratio = video2.frame_aspect_ratio();
         let video2_handle = videos.add(video2);
 
         let mut images = world.resource_mut::<Assets<Image>>();
 
-        // FIXME(hack3rmann): use local image
-        const PATH: &str = "target/test-image.png";
-        let image = ::image::ImageReader::open(PATH)
+        let image = ::image::ImageReader::open(assets::IMAGE)
             .unwrap()
             .decode()
             .unwrap()
@@ -175,11 +181,11 @@ pub fn spawn_with_asset_server(
     mut video_materials: ResMut<Assets<VideoMaterial>>,
 ) {
     let image_material = image_materials.add(ImageMaterial {
-        image: asset_server.load("target/test-image2.png"),
+        image: asset_server.load(assets::IMAGE2),
     });
 
     let video_material = video_materials.add(VideoMaterial {
-        video: asset_server.load("target/test-video3.mp4"),
+        video: asset_server.load(assets::VIDEO3),
     });
 
     commands.spawn((
