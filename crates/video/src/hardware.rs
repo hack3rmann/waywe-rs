@@ -25,6 +25,8 @@ pub enum HardwareDeviceType {
     MediaCodec = 10,
     Vulkan = 11,
     D3D12Va = 12,
+    Amf = 13,
+    Ohcodec = 14,
 }
 
 impl HardwareDeviceType {
@@ -43,6 +45,8 @@ impl HardwareDeviceType {
             Self::MediaCodec => AVHWDeviceType::AV_HWDEVICE_TYPE_MEDIACODEC,
             Self::Vulkan => AVHWDeviceType::AV_HWDEVICE_TYPE_VULKAN,
             Self::D3D12Va => AVHWDeviceType::AV_HWDEVICE_TYPE_D3D12VA,
+            Self::Amf => AVHWDeviceType::AV_HWDEVICE_TYPE_AMF,
+            Self::Ohcodec => AVHWDeviceType::AV_HWDEVICE_TYPE_OHCODEC,
         }
     }
 
@@ -66,6 +70,8 @@ impl HardwareDeviceType {
             AVHWDeviceType::AV_HWDEVICE_TYPE_MEDIACODEC => Self::MediaCodec,
             AVHWDeviceType::AV_HWDEVICE_TYPE_VULKAN => Self::Vulkan,
             AVHWDeviceType::AV_HWDEVICE_TYPE_D3D12VA => Self::D3D12Va,
+            AVHWDeviceType::AV_HWDEVICE_TYPE_AMF => Self::Amf,
+            AVHWDeviceType::AV_HWDEVICE_TYPE_OHCODEC => Self::Ohcodec,
         })
     }
 
@@ -303,7 +309,7 @@ mod tests {
                     let packet = match format_context.read_any_packet() {
                         Ok(packet) => packet,
                         Err(BackendError::EOF) => {
-                            format_context.repeat_stream(best_stream_index).unwrap();
+                            format_context.repeat_stream(codec_context.as_raw().as_ptr(), best_stream_index).unwrap();
                             continue;
                         }
                         result @ Err(..) => result.unwrap(),
