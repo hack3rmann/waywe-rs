@@ -137,9 +137,6 @@ pub unsafe fn import_fd_as_texture(
 
     let vk_device = device_hal.raw_device();
 
-    let vk_destroy_image = vk_device.fp_v1_0().destroy_image;
-    let vk_device_raw = vk_device.handle();
-
     let vk_instance = device_hal.shared_instance().raw_instance();
     let phd = adapter_hal.raw_physical_device();
 
@@ -223,17 +220,7 @@ pub unsafe fn import_fd_as_texture(
 
     let device_hal = unsafe { device.as_hal::<Vulkan>().unwrap() };
     let texture_hal = unsafe {
-        device_hal.texture_from_raw(
-            vk_image,
-            &hal_desc,
-            Some(Box::new(move || {
-                // FIXME(hack3rmann): free the resources correctly
-                // NOTE(hack3rmann): we have to manually destroy the image
-                // because wgpu does not do this due creation of drop callback
-                vk_destroy_image(vk_device_raw, vk_image, ptr::null());
-            })),
-            TextureMemory::Dedicated(memory),
-        )
+        device_hal.texture_from_raw(vk_image, &hal_desc, None, TextureMemory::Dedicated(memory))
     };
 
     let wgpu_desc = wgpu::TextureDescriptor {
