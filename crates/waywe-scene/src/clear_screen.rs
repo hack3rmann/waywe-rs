@@ -45,36 +45,19 @@ impl ClearColor {
     }
 }
 
-// TODO(hack3rmann): use derive(ShaderDescriptor)
+#[derive(ShaderDescriptor)]
+#[shader(
+    path = "crates/waywe-scene/src/shaders/noop-vertex.glsl",
+    stage = "vertex"
+)]
 pub struct NoOpVertexShader;
 
-impl ShaderDescriptor for NoOpVertexShader {
-    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
-        wgpu::ShaderModuleDescriptor {
-            label: Some("noop-vertex"),
-            source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("shaders/noop-vertex.glsl").into(),
-                stage: wgpu::naga::ShaderStage::Vertex,
-                defines: Default::default(),
-            },
-        }
-    }
-}
-
+#[derive(ShaderDescriptor)]
+#[shader(
+    path = "crates/waywe-scene/src/shaders/noop-fragment.glsl",
+    stage = "fragment"
+)]
 pub struct NoOpFragmentShader;
-
-impl ShaderDescriptor for NoOpFragmentShader {
-    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
-        wgpu::ShaderModuleDescriptor {
-            label: Some("noop-fragment"),
-            source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("shaders/noop-fragment.glsl").into(),
-                stage: wgpu::naga::ShaderStage::Fragment,
-                defines: Default::default(),
-            },
-        }
-    }
-}
 
 #[derive(Resource, Deref)]
 pub struct ClearPipeline(pub wgpu::RenderPipeline);

@@ -1,13 +1,12 @@
 #version 460
 
-layout(push_constant) uniform struct PushConst {
+layout(push_constant) uniform PushConst {
     mat4 mvp;
     float time;
 } push;
 
 layout(location = 0) in vec3 vertex_position;
-
-out vec2 uv;
+layout(location = 0) out vec2 uv;
 
 void main() {
     gl_Position = push.mvp * vec4(vertex_position, 1.0);

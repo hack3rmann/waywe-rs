@@ -589,20 +589,12 @@ impl FromWorld for VideoPipeline {
     }
 }
 
+#[derive(ShaderDescriptor)]
+#[shader(
+    path = "crates/waywe-scene/src/shaders/scene-video-fragment.glsl",
+    stage = "fragment"
+)]
 pub struct SceneVideoFramgentShader;
-
-impl ShaderDescriptor for SceneVideoFramgentShader {
-    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
-        wgpu::ShaderModuleDescriptor {
-            label: Some("scene-video"),
-            source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("shaders/scene-video-fragment.glsl").into(),
-                stage: wgpu::naga::ShaderStage::Fragment,
-                defines: Default::default(),
-            },
-        }
-    }
-}
 
 /// Material that displays a video.
 pub struct VideoMaterial {

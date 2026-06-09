@@ -162,35 +162,19 @@ impl FromWorld for ImagePipeline {
     }
 }
 
+#[derive(ShaderDescriptor)]
+#[shader(
+    path = "crates/waywe-scene/src/shaders/scene-image-vertex.glsl",
+    stage = "vertex"
+)]
 pub struct SceneImageVertexShader;
 
-impl ShaderDescriptor for SceneImageVertexShader {
-    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
-        wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("shaders/scene-image-vertex.glsl").into(),
-                stage: wgpu::naga::ShaderStage::Vertex,
-                defines: Default::default(),
-            },
-        }
-    }
-}
-
+#[derive(ShaderDescriptor)]
+#[shader(
+    path = "crates/waywe-scene/src/shaders/scene-image-fragment.glsl",
+    stage = "fragment"
+)]
 pub struct SceneImageFragmentShader;
-
-impl ShaderDescriptor for SceneImageFragmentShader {
-    fn shader_descriptor() -> wgpu::ShaderModuleDescriptor<'static> {
-        wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Glsl {
-                shader: include_str!("shaders/scene-image-fragment.glsl").into(),
-                stage: wgpu::naga::ShaderStage::Fragment,
-                defines: Default::default(),
-            },
-        }
-    }
-}
 
 /// Material that displays an image.
 pub struct ImageMaterial {

@@ -1,16 +1,15 @@
 #version 460
 
-layout(push_constant) uniform struct PushConst {
+layout(push_constant) uniform PushConst {
     mat4 model;
     float time;
-    uint _padding[3];
 } push;
 
 layout(set = 0, binding = 0) uniform texture2D image;
 layout(set = 0, binding = 1) uniform sampler image_sampler;
 
-in vec2 uv;
-out vec4 surface_color;
+layout(location = 0) in vec2 uv;
+layout(location = 0) out vec4 surface_color;
 
 void main() {
     vec4 sample_color = texture(sampler2D(image, image_sampler), uv);

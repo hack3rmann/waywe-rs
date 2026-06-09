@@ -1,17 +1,16 @@
 #version 460
 
-layout(push_constant) uniform struct PushConst {
+layout(push_constant) uniform PushConst {
     mat4 model;
     float time;
-    uint _padding[3];
 } push;
 
 layout(set = 0, binding = 0) uniform texture2D video_y_plane;
 layout(set = 0, binding = 1) uniform texture2D video_uv_plane;
 layout(set = 0, binding = 2) uniform sampler video_sampler;
 
-in vec2 uv;
-out vec4 surface_color;
+layout(location = 0) in vec2 uv;
+layout(location = 0) out vec4 surface_color;
 
 vec3 yuv_to_rgb(vec3 yuv) {
     yuv.y -= 0.5;
