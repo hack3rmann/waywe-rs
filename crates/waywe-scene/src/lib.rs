@@ -1,4 +1,8 @@
-//! Entity-Component-System (ECS) framework for creating dynamic wallpapers.
+//! **Unstable and experimental** ECS framework for creating dynamic wallpapers.
+//!
+//! Scene wallpapers require `#[derive(Scene)]` on your `WallpaperBuilder` type to
+//! generate the FFI entry point. See the [crate README](../README.md) for a
+//! getting-started guide.
 //!
 //! This module provides a complete ECS-based scene system for creating and rendering
 //! dynamic wallpapers. It's built on top of Bevy's ECS architecture and provides

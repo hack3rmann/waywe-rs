@@ -1,3 +1,12 @@
+//! **Unstable and experimental** C ABI for custom `waywe` wallpaper renderers.
+//!
+//! Renderer libraries implement [`api::Renderer`] and export
+//! `waywe_ffi_create_opaque_renderer`. You are responsible for all GPU rendering;
+//! the daemon shares a Vulkan render target via file descriptors
+//! (`VK_KHR_external_memory_fd`).
+//!
+//! See the [crate README](../README.md) for a full guide.
+
 pub mod api;
 pub mod conversions;
 pub mod ffi;

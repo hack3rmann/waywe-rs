@@ -6,17 +6,18 @@
 //!
 //! # Usage
 //!
-//! ```rust
-//! use waywe_daemon::wallpaper::default::test::SceneTestWallpaper;
-//! use waywe_daemon::wallpaper::scene::wallpaper::Wallpaper;
+//! Build and load as a scene wallpaper:
 //!
-//! let test_wallpaper = SceneTestWallpaper;
-//!
-//! // The wallpaper will be built with:
-//! //! - DefaultPlugins for basic functionality
-//! //! - Multiple meshes with images and videos
-//! //! - Animation systems that respond to time and cursor position
+//! ```shell
+//! cargo build --release -p waywe-test-scene
+//! waywe show target/release/libwaywe_test_scene.so
 //! ```
+//!
+//! The scene includes:
+//!
+//! - `DefaultPlugins` for basic functionality
+//! - Multiple meshes with images and videos
+//! - Animation systems that respond to time and cursor position
 
 use bevy_ecs::prelude::*;
 use smallvec::{SmallVec, smallvec};
