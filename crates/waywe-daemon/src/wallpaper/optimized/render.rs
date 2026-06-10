@@ -300,22 +300,12 @@ impl Wallpaper for RenderWallpaper {
         surface: &wgpu::TextureView,
         encoder: &mut wgpu::CommandEncoder,
     ) -> FrameInfo {
-        let dst_size = surface.texture().size();
-        let src_size = self.surface.size();
-
-        // NOTE(hack3rmann): Swapchain and export surface can be out of sync for a frame during resize.
-        let min_size = wgpu::Extent3d {
-            width: src_size.width.min(dst_size.width),
-            height: src_size.height.min(dst_size.height),
-            depth_or_array_layers: 1,
-        };
-
         let info = self.renderer.render();
 
         encoder.copy_texture_to_texture(
             self.surface.as_image_copy(),
             surface.texture().as_image_copy(),
-            min_size,
+            surface.texture().size(),
         );
 
         info

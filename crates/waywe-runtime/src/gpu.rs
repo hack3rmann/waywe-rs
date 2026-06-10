@@ -230,7 +230,6 @@ impl Wgpu {
                 }
                 wgpu::CurrentSurfaceTexture::Outdated => {
                     info.surface.configure(&self.device, &info.config);
-                    continue;
                 }
                 wgpu::CurrentSurfaceTexture::Lost => {
                     let monitors = wayland.client_state.monitors.read().unwrap();
@@ -246,8 +245,6 @@ impl Wgpu {
                     );
 
                     *info = new_info;
-
-                    continue;
                 }
                 wgpu::CurrentSurfaceTexture::Validation => return SurfaceResult::Err,
             }
