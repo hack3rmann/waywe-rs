@@ -25,11 +25,12 @@ See [`src/lib.rs`](src/lib.rs) for the full implementation.
 
 ```shell
 cargo build --release -p shadertoy-computer-were-made-for-cubes
+waywe package build --path crates/examples/shadertoy-computer-were-made-for-cubes
 ```
 
 ## Run
 
 ```shell
 waywe start
-waywe show target/release/libshadertoy_computer_were_made_for_cubes.so
+waywe show target/release/shadertoy-computer-were-made-for-cubes.ww
 ```

@@ -108,12 +108,18 @@ pub fn execute_package_build(kind: BuildKind, path: PathBuf) -> Result<(), Execu
 
     let mut archive = File::create(&output_path)?
         .pipe(|file| GzEncoder::new(file, Compression::default()))
-        .pipe(Builder::new);
+        .pipe(|encoder| {
+            let mut builder = Builder::new(encoder);
+            // Large .so files are detected as sparse on Linux; GNU sparse entries
+            // (typeflag 'S') are not extracted by tools like ouch.
+            builder.sparse(false);
+            builder
+        });
 
     let wallpaper_entry = format!("{}/wallpaper.so", package.name);
     archive.append_path_with_name(&dylib_path, &wallpaper_entry)?;
 
-    let assets_dir = path.join("src").join("assets");
+    let assets_dir = path.join("assets");
     if assets_dir.is_dir() {
         append_assets_dir(&mut archive, &assets_dir, &package.name)?;
     }

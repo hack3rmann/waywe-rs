@@ -245,9 +245,9 @@ impl AssetServerInner {
         Assets::new(self.id_generator.clone())
     }
 
-    pub fn load<A: Asset + Load>(&self, rel_path: impl AsRef<Path>) -> AssetHandle<A> {
+    pub fn load<A: Asset + Load>(&self, asset_path: impl AsRef<Path>) -> AssetHandle<A> {
         let mut path = self.package_root.join("assets");
-        path.push(rel_path);
+        path.push(asset_path);
 
         let id = self.id_generator.next_id();
 

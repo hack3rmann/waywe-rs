@@ -20,15 +20,16 @@ impl WallpaperBuilder for SceneTestWallpaper { /* ... */ }
 
 ## Build
 
-Test assets are downloaded automatically by `build.rs`.
+Test assets are downloaded automatically by `build.rs` into `assets/`.
 
 ```shell
 cargo build --release -p waywe-test-scene
+waywe package build --path crates/examples/waywe-test-scene
 ```
 
 ## Run
 
 ```shell
 waywe start
-waywe show target/release/libwaywe_test_scene.so
+waywe show target/release/waywe-test-scene.ww
 ```
