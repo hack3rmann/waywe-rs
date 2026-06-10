@@ -1,6 +1,7 @@
 use crate::{
     args::PackageCommand,
     command::ExecuteError,
+    progress::Progress,
     status::{format_elapsed, status},
 };
 use flate2::{Compression, write::GzEncoder};
@@ -12,6 +13,12 @@ use std::{
 };
 use tap::Pipe;
 use tar::Builder;
+
+struct ArchiveEntry {
+    source: PathBuf,
+    archive_path: String,
+    log_name: String,
+}
 
 pub fn execute_package(command: PackageCommand) -> Result<(), ExecuteError> {
     match command {
@@ -126,6 +133,18 @@ pub fn execute_package_build(kind: BuildKind, path: PathBuf) -> Result<(), Execu
         ),
     );
 
+    let wallpaper_entry = format!("{}/wallpaper.so", package.name);
+    let mut entries = vec![ArchiveEntry {
+        source: dylib_path.into(),
+        archive_path: wallpaper_entry.clone(),
+        log_name: wallpaper_entry,
+    }];
+
+    let assets_dir = path.join("assets");
+    if assets_dir.is_dir() {
+        collect_asset_entries(&assets_dir, &package.name, &mut entries)?;
+    }
+
     let mut archive = File::create(&output_path)?
         .pipe(|file| GzEncoder::new(file, Compression::default()))
         .pipe(|encoder| {
@@ -136,13 +155,15 @@ pub fn execute_package_build(kind: BuildKind, path: PathBuf) -> Result<(), Execu
             builder
         });
 
-    let wallpaper_entry = format!("{}/wallpaper.so", package.name);
-    status("Adding", &wallpaper_entry);
-    archive.append_path_with_name(&dylib_path, &wallpaper_entry)?;
+    {
+        let total = entries.len();
+        let mut progress = Progress::new("Compressing");
 
-    let assets_dir = path.join("assets");
-    if assets_dir.is_dir() {
-        append_assets_dir(&mut archive, &assets_dir, &package.name)?;
+        for (index, entry) in entries.iter().enumerate() {
+            status("Adding", &entry.log_name);
+            progress.tick(index + 1, total, &entry.log_name);
+            archive.append_path_with_name(&entry.source, &entry.archive_path)?;
+        }
     }
 
     let encoder = archive.into_inner()?;
@@ -161,21 +182,21 @@ pub fn execute_package_build(kind: BuildKind, path: PathBuf) -> Result<(), Execu
     Ok(())
 }
 
-fn append_assets_dir(
-    archive: &mut Builder<GzEncoder<File>>,
+fn collect_asset_entries(
     assets_dir: &Path,
     package_name: &str,
+    entries: &mut Vec<ArchiveEntry>,
 ) -> Result<(), ExecuteError> {
-    let mut entries = vec![assets_dir.to_path_buf()];
+    let mut dirs = vec![assets_dir.to_path_buf()];
 
-    while let Some(dir) = entries.pop() {
+    while let Some(dir) = dirs.pop() {
         for entry in fs::read_dir(&dir)? {
             let entry = entry?;
             let file_type = entry.file_type()?;
             let file_path = entry.path();
 
             if file_type.is_dir() {
-                entries.push(file_path);
+                dirs.push(file_path);
                 continue;
             }
 
@@ -186,14 +207,16 @@ fn append_assets_dir(
             let relative = file_path
                 .strip_prefix(assets_dir)
                 .expect("asset path must be under assets directory");
-            status("Adding", relative.display());
+            let log_name = relative
+                .to_str()
+                .map(str::to_owned)
+                .unwrap_or_else(|| relative.display().to_string());
 
-            let archive_path = format!(
-                "{package_name}/assets/{relative}",
-                relative = relative.display()
-            );
-
-            archive.append_path_with_name(&file_path, &archive_path)?;
+            entries.push(ArchiveEntry {
+                source: file_path,
+                archive_path: format!("{package_name}/assets/{log_name}"),
+                log_name,
+            });
         }
     }
 

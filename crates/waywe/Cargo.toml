@@ -29,3 +29,6 @@ tap.workspace = true
 cargo_metadata = "0.19"
 anstream = "1.0"
 anstyle = "1.0"
+anstyle-progress = "0.1"
+unicode-width = "0.2"
+libc.workspace = true
