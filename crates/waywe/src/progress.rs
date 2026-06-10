@@ -1,8 +1,8 @@
 use crate::status::{clear_progress_line, stderr_is_tty, transient_status, write_progress_line};
 use anstyle_progress::TermProgress;
 use std::{
-    cmp, env,
-    fmt::{self, Display},
+    env,
+    fmt::{self, Display, Write},
     time::{Duration, Instant},
 };
 use unicode_width::UnicodeWidthChar;
@@ -12,29 +12,27 @@ pub struct Progress {
 }
 
 impl Progress {
-    pub fn new(name: &str) -> Self {
-        if !progress_enabled() {
+    pub fn new(name: impl Into<String>) -> Self {
+        if !stderr_is_tty() || env::var_os("CI").is_some() {
             return Self { state: None };
         }
 
-        let width = stderr_width().progress_max_width();
-        Self {
-            state: width.map(|max_width| State {
-                format: Format {
-                    max_width,
-                    max_print: 50,
-                    term_integration: TerminalIntegration::new(),
-                    unicode: supports_unicode(),
-                },
-                name: name.to_string(),
-                done: false,
-                throttle: Throttle::new(),
-                last_line: None,
-            }),
-        }
+        let state = stderr_width().map(|max_width| State {
+            format: Format {
+                max_width,
+                max_print: 50,
+                term_integration: TerminalIntegration::new(),
+            },
+            name: name.into(),
+            done: false,
+            throttle: Throttle::new(),
+            last_line: None,
+        });
+
+        Self { state }
     }
 
-    pub fn tick(&mut self, cur: usize, max: usize, msg: &str) {
+    pub fn update(&mut self, cur: usize, max: usize, msg: &str) {
         let Some(state) = &mut self.state else {
             return;
         };
@@ -47,8 +45,8 @@ impl Progress {
             state.done = true;
         }
 
-        if let Some(pbar) = state.format.progress(cur, max) {
-            state.print(pbar, msg);
+        if let Some(output) = state.format.progress(cur, max) {
+            state.print(output, msg);
         }
     }
 }
@@ -61,71 +59,55 @@ impl Drop for Progress {
 
 impl Progress {
     pub fn clear(&mut self) {
-        if let Some(state) = &mut self.state {
-            if state.format.term_integration.enabled {
-                write_progress_line(&StatusValue::Remove.to_string());
-            }
-            if state.last_line.is_some() {
-                clear_progress_line();
-                state.last_line = None;
-            }
+        let Some(state) = &mut self.state else { return };
+
+        if state.format.term_integration.is_enabled {
+            write_progress_line(&StatusValue::Remove);
         }
-    }
-}
 
-fn progress_enabled() -> bool {
-    if !stderr_is_tty() {
-        return false;
-    }
-
-    !env::var_os("CI").is_some()
-}
-
-enum TtyWidth {
-    NoTty,
-    Known(usize),
-}
-
-impl TtyWidth {
-    fn progress_max_width(self) -> Option<usize> {
-        match self {
-            TtyWidth::NoTty => None,
-            TtyWidth::Known(width) => Some(width),
+        if state.last_line.is_some() {
+            clear_progress_line();
+            state.last_line = None;
         }
     }
 }
 
 const DEFAULT_PROGRESS_WIDTH: usize = 80;
 
-fn stderr_width() -> TtyWidth {
+#[cfg(unix)]
+fn stderr_width_unix() -> Option<usize> {
+    use std::mem::MaybeUninit;
+
+    let mut winsize: MaybeUninit<libc::winsize> = MaybeUninit::uninit();
+
+    if unsafe { libc::ioctl(libc::STDERR_FILENO, libc::TIOCGWINSZ, winsize.as_mut_ptr()) } < 0 {
+        return None;
+    }
+
+    // Safety: ioctl returned success, therefore winsize is initialized
+    let winsize = unsafe { winsize.assume_init() };
+
+    (winsize.ws_col > 0).then_some(winsize.ws_col as usize)
+}
+
+fn stderr_width() -> Option<usize> {
     if !stderr_is_tty() {
-        return TtyWidth::NoTty;
+        return None;
     }
 
     #[cfg(unix)]
-    {
-        unsafe {
-            let mut winsize: libc::winsize = std::mem::zeroed();
-            if libc::ioctl(libc::STDERR_FILENO, libc::TIOCGWINSZ, &mut winsize) >= 0
-                && winsize.ws_col > 0
-            {
-                return TtyWidth::Known(winsize.ws_col as usize);
-            }
-        }
+    if let Some(size) = stderr_width_unix() {
+        return Some(size);
     }
 
     if let Ok(columns) = env::var("COLUMNS")
         && let Ok(width) = columns.parse::<usize>()
         && width > 0
     {
-        return TtyWidth::Known(width);
+        return Some(width);
     }
 
-    TtyWidth::Known(DEFAULT_PROGRESS_WIDTH)
-}
-
-fn supports_unicode() -> bool {
-    true
+    Some(DEFAULT_PROGRESS_WIDTH)
 }
 
 struct State {
@@ -140,18 +122,19 @@ impl State {
     fn print(&mut self, progress: ProgressOutput, msg: &str) {
         self.throttle.update();
 
-        let (mut line, report) = match progress {
-            ProgressOutput::TextAndReport(prefix, report) => (prefix, Some(report)),
-        };
+        let mut line = progress.text;
+        let report = Some(progress.report);
 
         if self.format.max_width < 15 {
             if let Some(report) = report {
-                write_progress_line(&report.to_string());
+                write_progress_line(&report);
             }
+
             return;
         }
 
         self.format.render(&mut line, msg);
+
         while line.len() < self.format.max_width.saturating_sub(15) {
             line.push(' ');
         }
@@ -170,42 +153,48 @@ impl State {
     }
 }
 
+const fn calculate_done_fraction(cur: usize, max: usize) -> f32 {
+    let done_fraction = if max == 0 {
+        0.0
+    } else {
+        (cur as f32) / (max as f32)
+    };
+
+    if !done_fraction.is_finite() {
+        0.0
+    } else {
+        done_fraction
+    }
+}
+
 struct Format {
     max_width: usize,
     max_print: usize,
     term_integration: TerminalIntegration,
-    unicode: bool,
 }
 
 impl Format {
     fn progress(&self, cur: usize, max: usize) -> Option<ProgressOutput> {
         assert!(cur <= max);
 
-        let pct = if max == 0 {
-            0.0
-        } else {
-            (cur as f64) / (max as f64)
-        };
-        let pct = if !pct.is_finite() { 0.0 } else { pct };
+        let done_fraction = calculate_done_fraction(cur, max);
+
+        let percentage = (done_fraction * 100.0).clamp(0.0, 100.0) as u8;
+        let report = self.term_integration.value(percentage);
 
         let stats = format!(" {cur}/{max}");
-        let report = {
-            let pct = (pct * 100.0) as u8;
-            let pct = pct.clamp(0, 100);
-            self.term_integration.value(pct)
-        };
-
         let extra_len = stats.len() + 2 + 15;
         let display_width = self.width().checked_sub(extra_len)?;
 
         let mut string = String::with_capacity(self.max_width);
         string.push('[');
-        let hashes = (display_width as f64 * pct) as usize;
+        let hashes = (display_width as f32 * done_fraction) as usize;
 
         if hashes > 0 {
             for _ in 0..hashes.saturating_sub(1) {
                 string.push('=');
             }
+
             if cur == max {
                 string.push('=');
             } else {
@@ -213,48 +202,53 @@ impl Format {
             }
         }
 
-        for _ in 0..display_width.saturating_sub(hashes) {
-            string.push(' ');
-        }
-        string.push(']');
-        string.push_str(&stats);
+        let spaces = (0..display_width.saturating_sub(hashes)).map(|_| ' ');
+        string.extend(spaces);
 
-        Some(ProgressOutput::TextAndReport(string, report))
+        write!(&mut string, "]{stats}").unwrap();
+
+        Some(ProgressOutput {
+            text: string,
+            report,
+        })
     }
 
-    fn render(&self, string: &mut String, msg: &str) {
+    fn render(&self, result: &mut String, msg: &str) {
         if msg.is_empty() {
             return;
         }
 
-        string.push_str(": ");
-        let mut avail_msg_len = self.max_width.saturating_sub(string.len() + 15);
+        result.push_str(": ");
+
+        let mut avail_msg_len = self.max_width.saturating_sub(result.len() + 15);
         let mut ellipsis_pos = 0;
 
-        let (ellipsis, ellipsis_width) = if self.unicode { ("…", 1) } else { ("...", 3) };
+        const ELLIPSIS: &str = "…";
 
-        if avail_msg_len <= ellipsis_width {
+        if avail_msg_len <= ELLIPSIS.len() {
             return;
         }
 
         for c in msg.chars() {
             let display_width = c.width().unwrap_or(0);
-            if avail_msg_len >= display_width {
-                avail_msg_len -= display_width;
-                string.push(c);
-                if avail_msg_len >= ellipsis_width {
-                    ellipsis_pos = string.len();
-                }
-            } else {
-                string.truncate(ellipsis_pos);
-                string.push_str(ellipsis);
+
+            if avail_msg_len < display_width {
+                result.truncate(ellipsis_pos);
+                result.push_str(ELLIPSIS);
                 break;
+            }
+
+            avail_msg_len -= display_width;
+            result.push(c);
+
+            if avail_msg_len >= ELLIPSIS.len() {
+                ellipsis_pos = result.len();
             }
         }
     }
 
     fn width(&self) -> usize {
-        cmp::min(self.max_width, self.max_print)
+        self.max_width.min(self.max_print)
     }
 }
 
@@ -292,18 +286,18 @@ impl Throttle {
 }
 
 struct TerminalIntegration {
-    enabled: bool,
+    is_enabled: bool,
 }
 
 impl TerminalIntegration {
     fn new() -> Self {
         Self {
-            enabled: anstyle_progress::supports_term_progress(stderr_is_tty()),
+            is_enabled: anstyle_progress::supports_term_progress(stderr_is_tty()),
         }
     }
 
     fn value(&self, percent: u8) -> StatusValue {
-        if self.enabled {
+        if self.is_enabled {
             StatusValue::Value(percent)
         } else {
             StatusValue::None
@@ -311,11 +305,15 @@ impl TerminalIntegration {
     }
 }
 
-enum ProgressOutput {
-    TextAndReport(String, StatusValue),
+#[derive(Clone, Debug, PartialEq, Default)]
+struct ProgressOutput {
+    pub text: String,
+    pub report: StatusValue,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum StatusValue {
+    #[default]
     None,
     Remove,
     Value(u8),

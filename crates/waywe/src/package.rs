@@ -1,9 +1,4 @@
-use crate::{
-    args::PackageCommand,
-    command::ExecuteError,
-    progress::Progress,
-    status::{format_elapsed, status},
-};
+use crate::{args::PackageCommand, command::ExecuteError, progress::Progress, status};
 use flate2::{Compression, write::GzEncoder};
 use std::{
     fs::{self, File},
@@ -123,9 +118,9 @@ pub fn execute_package_build(kind: BuildKind, path: PathBuf) -> Result<(), Execu
     let crate_path = manifest_path.parent().expect("manifest path has a parent");
     let started = Instant::now();
 
-    status(
+    status::display(
         "Packaging",
-        format_args!(
+        &format_args!(
             "{} v{} ({})",
             package.name,
             package.version,
@@ -160,8 +155,8 @@ pub fn execute_package_build(kind: BuildKind, path: PathBuf) -> Result<(), Execu
         let mut progress = Progress::new("Compressing");
 
         for (index, entry) in entries.iter().enumerate() {
-            status("Adding", &entry.log_name);
-            progress.tick(index + 1, total, &entry.log_name);
+            status::display("Adding", &entry.log_name);
+            progress.update(index + 1, total, &entry.log_name);
             archive.append_path_with_name(&entry.source, &entry.archive_path)?;
         }
     }
@@ -169,13 +164,13 @@ pub fn execute_package_build(kind: BuildKind, path: PathBuf) -> Result<(), Execu
     let encoder = archive.into_inner()?;
     encoder.finish()?;
 
-    status(
+    status::display(
         "Finished",
-        format_args!(
-            "package [{}] at `{}` in {}",
+        &format_args!(
+            "package [{}] at `{}` in {:.2}s",
             kind.profile_dir(),
             output_path.as_str(),
-            format_elapsed(started.elapsed())
+            started.elapsed().as_secs_f32(),
         ),
     );
 

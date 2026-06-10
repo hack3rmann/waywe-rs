@@ -1,66 +1,69 @@
 use anstream::AutoStream;
 use anstyle::{AnsiColor, Effects, Style};
 use std::{
-    cell::Cell,
     fmt::Display,
-    io::{IsTerminal, Write},
-    time::Duration,
+    io::{self, IsTerminal, Write},
 };
 
-const HEADER: Style = AnsiColor::BrightGreen.on_default().effects(Effects::BOLD);
-pub(crate) const TRANSIENT: Style = AnsiColor::BrightCyan.on_default().effects(Effects::BOLD);
+const HEADER_STYLE: Style = AnsiColor::BrightGreen.on_default().effects(Effects::BOLD);
+const TRANSIENT_STYLE: Style = AnsiColor::BrightCyan.on_default().effects(Effects::BOLD);
 
-thread_local! {
-    static NEEDS_CLEAR: Cell<bool> = const { Cell::new(false) };
+mod needs_clear {
+    use anstream::AutoStream;
+    use std::{
+        io::{self, Write},
+        sync::atomic::{AtomicBool, Ordering::*},
+    };
+
+    static NEEDS_CLEAR: AtomicBool = AtomicBool::new(false);
+
+    pub fn set(needs_clear: bool) {
+        NEEDS_CLEAR.store(needs_clear, Relaxed);
+    }
+
+    pub fn value() -> bool {
+        NEEDS_CLEAR.load(Relaxed)
+    }
+
+    pub fn erase_line_if_needed(stderr: &mut AutoStream<io::Stderr>) {
+        _ = NEEDS_CLEAR.fetch_update(SeqCst, SeqCst, |needs_clear| {
+            if needs_clear {
+                _ = stderr.write_all(b"\x1B[K");
+            }
+            Some(false)
+        });
+    }
 }
 
-pub fn set_needs_clear(needs_clear: bool) {
-    NEEDS_CLEAR.with(|flag| flag.set(needs_clear));
-}
-
-pub fn is_cleared() -> bool {
-    NEEDS_CLEAR.with(|flag| !flag.get())
-}
-
-fn erase_line_if_needed(stderr: &mut AutoStream<std::io::Stderr>) {
-    NEEDS_CLEAR.with(|flag| {
-        if flag.get() {
-            let _ = stderr.write_all(b"\x1B[K");
-            flag.set(false);
-        }
-    });
-}
-
-pub fn status(label: &str, message: impl Display) {
-    let mut stderr = AutoStream::auto(std::io::stderr());
-    erase_line_if_needed(&mut stderr);
-    let _ = write!(stderr, "{HEADER}{label:>12}{HEADER:#} {message}\n");
+pub fn display(label: &str, message: &impl Display) {
+    let mut stderr = AutoStream::auto(io::stderr());
+    needs_clear::erase_line_if_needed(&mut stderr);
+    let _ = writeln!(
+        stderr,
+        "{HEADER_STYLE}{label:>12}{HEADER_STYLE:#} {message}"
+    );
 }
 
 pub fn transient_status(label: &str) {
-    let mut stderr = AutoStream::auto(std::io::stderr());
-    erase_line_if_needed(&mut stderr);
-    let _ = write!(stderr, "{TRANSIENT}{label:>12}{TRANSIENT:#} ");
+    let mut stderr = AutoStream::auto(io::stderr());
+    needs_clear::erase_line_if_needed(&mut stderr);
+    let _ = write!(stderr, "{TRANSIENT_STYLE}{label:>12}{TRANSIENT_STYLE:#} ");
 }
 
-pub fn write_progress_line(line: &str) {
-    let mut stderr = AutoStream::auto(std::io::stderr());
+pub fn write_progress_line(line: &impl Display) {
+    let mut stderr = AutoStream::auto(io::stderr());
     let _ = write!(stderr, "{line}\r");
-    set_needs_clear(true);
+    needs_clear::set(true);
 }
 
 pub fn clear_progress_line() {
-    if !is_cleared() {
-        let mut stderr = AutoStream::auto(std::io::stderr());
+    if !needs_clear::value() {
+        let mut stderr = AutoStream::auto(io::stderr());
         let _ = stderr.write_all(b"\x1B[K");
-        set_needs_clear(false);
+        needs_clear::set(false);
     }
 }
 
 pub fn stderr_is_tty() -> bool {
-    std::io::stderr().is_terminal()
-}
-
-pub fn format_elapsed(duration: Duration) -> String {
-    format!("{:.2}s", duration.as_secs_f64())
+    io::stderr().is_terminal()
 }
