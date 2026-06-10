@@ -266,6 +266,7 @@ impl Dispatch for LayerSurface {
             let mut monitors = state.monitors.write().unwrap();
             let monitor = monitors.get_mut(&self.monitor_id).unwrap();
 
+            // TODO(hack3rmann): skip the first configure-resize
             // this is resize if and only if monitor is ininialized
             // and size is changed indeed
             match monitor.size {

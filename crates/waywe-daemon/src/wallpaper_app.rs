@@ -274,19 +274,18 @@ impl Handle<WaylandEvent> for WallpaperApp {
                     *needs_redraw = true;
                 }
 
-                for wall in self.wallpapers.values_mut() {
-                    let surface_format = {
-                        let surfaces = runtime.wgpu.surfaces.read().unwrap();
-                        surfaces[&monitor_id].format
-                    };
+                let wall = self.wallpapers.get_mut(&monitor_id).unwrap();
+                let surface_format = {
+                    let surfaces = runtime.wgpu.surfaces.read().unwrap();
+                    surfaces[&monitor_id].format
+                };
 
-                    let config = WallpaperConfig {
-                        surface_size: size,
-                        surface_format,
-                    };
+                let config = WallpaperConfig {
+                    surface_size: size,
+                    surface_format,
+                };
 
-                    wall.configure(&runtime.wgpu, config);
-                }
+                wall.configure(&runtime.wgpu, config);
             }
             WaylandEvent::MonitorPlugged { id: monitor_id } => {
                 if Almost::is_value(&runtime.wgpu) {
