@@ -4,7 +4,7 @@ use std::{
     ffi::CStr,
     io,
     path::{Path, PathBuf},
-    process::{self, Stdio},
+    process::{self, ExitStatus, Stdio},
 };
 use thiserror::Error;
 use tracing::error;
@@ -34,6 +34,16 @@ pub enum ExecuteError {
     Image(#[from] ImageError),
     #[error("video '{path}' is invalid")]
     InvalidVideo { path: PathBuf },
+    #[error("cargo build failed with status {status}")]
+    CargoBuild { status: ExitStatus },
+    #[error("'{path}' is not a valid wallpaper crate (no Cargo.toml)")]
+    InvalidPackageRoot { path: PathBuf },
+    #[error("'{manifest}' is not a dylib wallpaper crate")]
+    NotADylibCrate { manifest: PathBuf },
+    #[error("built dylib not found at '{path}'")]
+    DylibNotFound { path: PathBuf },
+    #[error(transparent)]
+    CargoMetadata(#[from] cargo_metadata::Error),
 }
 
 pub fn execute_current(monitor_name: Option<&str>) -> Result<(), ExecuteError> {

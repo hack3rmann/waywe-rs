@@ -1,9 +1,11 @@
 pub mod args;
 pub mod command;
+pub mod package;
 
 use crate::{
     args::{Args, Command},
     command::{execute_current, execute_pause, execute_preview, execute_show, execute_start},
+    package::execute_package,
 };
 use anyhow::{Context as _, bail};
 use clap::Parser as _;
@@ -29,6 +31,10 @@ fn main() -> anyhow::Result<()> {
         }
         Command::Show { path, monitor } => execute_show(&path, monitor)?,
         Command::Pause { monitor } => execute_pause(monitor)?,
+        Command::Package { command } => {
+            execute_package(command)?;
+            return Ok(());
+        }
     };
 
     let socket = match IpcSocket::<Client, DaemonCommand>::connect() {

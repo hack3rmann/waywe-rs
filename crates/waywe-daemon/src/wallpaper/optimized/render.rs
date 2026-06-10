@@ -132,7 +132,7 @@ impl RenderWallpaper {
         let panic = create_opaque_renderer(
             &OpaqueRendererDesc {
                 config,
-                working_directory: RString::from(package.unpacked_path.to_string_lossy().as_ref()),
+                working_directory: RString::from(package.package_path.to_string_lossy().as_ref()),
             },
             &mut renderer,
         );
