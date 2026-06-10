@@ -27,3 +27,5 @@ tar.workspace = true
 flate2.workspace = true
 tap.workspace = true
 cargo_metadata = "0.19"
+anstream = "1.0"
+anstyle = "1.0"

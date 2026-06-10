@@ -1,6 +1,7 @@
 pub mod args;
 pub mod command;
 pub mod package;
+pub mod status;
 
 use crate::{
     args::{Args, Command},

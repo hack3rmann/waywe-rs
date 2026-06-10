@@ -4001,6 +4001,8 @@ dependencies = [
 name = "waywe"
 version = "0.0.15"
 dependencies = [
+ "anstream",
+ "anstyle",
  "anyhow",
  "cargo_metadata",
  "clap",

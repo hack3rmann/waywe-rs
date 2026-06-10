@@ -1,9 +1,14 @@
-use crate::{args::PackageCommand, command::ExecuteError};
+use crate::{
+    args::PackageCommand,
+    command::ExecuteError,
+    status::{format_elapsed, status},
+};
 use flate2::{Compression, write::GzEncoder};
 use std::{
     fs::{self, File},
     path::{Path, PathBuf},
     process::Command,
+    time::Instant,
 };
 use tap::Pipe;
 use tar::Builder;
@@ -54,14 +59,16 @@ pub fn execute_package_build(kind: BuildKind, path: PathBuf) -> Result<(), Execu
 
     let manifest_path = fs::canonicalize(&manifest_path)?;
 
-    let status = Command::new("cargo")
+    let build_status = Command::new("cargo")
         .current_dir(&path)
         .arg("build")
         .args(kind.flag())
         .status()?;
 
-    if !status.success() {
-        return Err(ExecuteError::CargoBuild { status });
+    if !build_status.success() {
+        return Err(ExecuteError::CargoBuild {
+            status: build_status,
+        });
     }
 
     let metadata = cargo_metadata::MetadataCommand::new()
@@ -106,6 +113,19 @@ pub fn execute_package_build(kind: BuildKind, path: PathBuf) -> Result<(), Execu
         .join(kind.profile_dir())
         .join(format!("{}.ww", package.name));
 
+    let crate_path = manifest_path.parent().expect("manifest path has a parent");
+    let started = Instant::now();
+
+    status(
+        "Packaging",
+        format_args!(
+            "{} v{} ({})",
+            package.name,
+            package.version,
+            crate_path.display()
+        ),
+    );
+
     let mut archive = File::create(&output_path)?
         .pipe(|file| GzEncoder::new(file, Compression::default()))
         .pipe(|encoder| {
@@ -117,6 +137,7 @@ pub fn execute_package_build(kind: BuildKind, path: PathBuf) -> Result<(), Execu
         });
 
     let wallpaper_entry = format!("{}/wallpaper.so", package.name);
+    status("Adding", &wallpaper_entry);
     archive.append_path_with_name(&dylib_path, &wallpaper_entry)?;
 
     let assets_dir = path.join("assets");
@@ -127,7 +148,15 @@ pub fn execute_package_build(kind: BuildKind, path: PathBuf) -> Result<(), Execu
     let encoder = archive.into_inner()?;
     encoder.finish()?;
 
-    println!("{}", output_path.as_str());
+    status(
+        "Finished",
+        format_args!(
+            "package [{}] at `{}` in {}",
+            kind.profile_dir(),
+            output_path.as_str(),
+            format_elapsed(started.elapsed())
+        ),
+    );
 
     Ok(())
 }
@@ -157,6 +186,8 @@ fn append_assets_dir(
             let relative = file_path
                 .strip_prefix(assets_dir)
                 .expect("asset path must be under assets directory");
+            status("Adding", relative.display());
+
             let archive_path = format!(
                 "{package_name}/assets/{relative}",
                 relative = relative.display()
