@@ -19,7 +19,11 @@ pub enum Command {
         path: PathBuf,
     },
     /// Start the daemon process
-    Start,
+    Start {
+        /// Don't wait the daemon to start
+        #[arg(long)]
+        dont_wait: bool,
+    },
     /// Get path to the current wallpaper
     Current {
         /// Monitor to set wallpaper on

@@ -6,7 +6,9 @@ pub mod status;
 
 use crate::{
     args::{Args, Command},
-    command::{execute_current, execute_pause, execute_preview, execute_show, execute_start},
+    command::{
+        StartWaitMode, execute_current, execute_pause, execute_preview, execute_show, execute_start,
+    },
     package::execute_package,
 };
 use anyhow::{Context as _, bail};
@@ -27,8 +29,14 @@ fn main() -> anyhow::Result<()> {
             execute_current(monitor.as_deref())?;
             return Ok(());
         }
-        Command::Start => {
-            execute_start();
+        Command::Start { dont_wait } => {
+            let mode = if dont_wait {
+                StartWaitMode::DontWait
+            } else {
+                StartWaitMode::Wait
+            };
+
+            execute_start(mode);
             return Ok(());
         }
         Command::Show { path, monitor } => execute_show(&path, monitor)?,

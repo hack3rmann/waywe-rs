@@ -61,7 +61,7 @@ paste = "1.0.15"
 smallvec = { version = "1.14.0", features = ["union", "serde", "const_generics", "const_new", "write"] }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 glam = { version = "0.30.3", features = ["bytemuck", "serde"] }
-rustix = { version = "0.38.44", features = ["fs", "net", "process", "mm", "shm", "event"] }
+rustix = { version = "0.38.44", features = ["fs", "net", "process", "mm", "shm", "event", "pipe"] }
 bytemuck = { version = "1.21.0", features = ["extern_crate_alloc", "derive"] }
 libc = "0.2.170"
 image = "0.25.6"
