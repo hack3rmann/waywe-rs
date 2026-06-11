@@ -52,14 +52,14 @@ impl<T> IpcServer<T> {
         let mut length = 0_u32;
 
         match net::recv(&fd, bytemuck::bytes_of_mut(&mut length), RecvFlags::WAITALL) {
-            Ok(n_bytes) => assert_eq!(n_bytes, mem::size_of_val(&length)),
+            Ok((_, n_bytes)) => assert_eq!(n_bytes, mem::size_of_val(&length)),
             Err(error) => return Err(RecvError::Os(error)),
         }
 
         assert!(length <= MAX_LENGTH, "too large message, unbelivable");
 
         let mut buf: SmallVec<[u8; ipc::BUFFER_SIZE]> = smallvec![0; length as usize];
-        net::recv(&fd, &mut buf, RecvFlags::WAITALL)?;
+        net::recv(&fd, &mut buf[..], RecvFlags::WAITALL)?;
 
         let (value, _n_bytes) = bincode::decode_from_slice(&buf, bincode::config::standard())?;
 
@@ -106,7 +106,7 @@ impl<T> IpcServer<T> {
         )?;
 
         loop {
-            match net::bind_unix(&socket, &addr) {
+            match net::bind(&socket, &addr) {
                 Ok(()) => break,
                 Err(Errno::ADDRINUSE) => {
                     warn!(

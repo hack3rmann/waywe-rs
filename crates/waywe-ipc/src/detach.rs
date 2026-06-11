@@ -1,5 +1,15 @@
 use bincode::{Decode, Encode};
+use rustix::{
+    fs::{self, Mode},
+    io::Errno,
+};
+use std::{
+    fs::File,
+    os::{fd::AsFd, unix::prelude::BorrowedFd},
+    path::{Path, PathBuf},
+};
 use thiserror::Error;
+use uuid::Uuid;
 
 pub const BINCODE_CONFIG: bincode::config::Configuration = bincode::config::standard();
 
@@ -7,8 +17,6 @@ pub const BINCODE_CONFIG: bincode::config::Configuration = bincode::config::stan
 pub enum DaemonSetupError {
     #[error("waywe-daemon panicked")]
     Panicked { message: String },
-    #[error("failed to daemonize waywe-daemon process")]
-    DaemonizeFailed,
     #[error("failed to acquire daemon file lock")]
     DaemonFileLock,
     #[error("failed to acquire daemon pid file lock")]
@@ -17,5 +25,45 @@ pub enum DaemonSetupError {
 
 pub type DaemonSetupResult = Result<(), DaemonSetupError>;
 
-pub const EXIT_CODE_PANIC: i32 = 101;
-pub const EXIT_CODE_DAEMON_SETUP: i32 = 169;
+pub struct SetupPipe {
+    pub path: PathBuf,
+}
+
+impl SetupPipe {
+    pub fn new(base_dir: impl AsRef<Path>) -> Self {
+        let base_dir = base_dir.as_ref();
+        let mut path = PathBuf::new();
+
+        loop {
+            let uuid = Uuid::now_v7();
+
+            path.clear();
+            path.push(base_dir);
+            path.push(format!("fifo-{}", uuid.hyphenated()));
+
+            match fs::mkfifoat(AtFdCwd, &path, Mode::RUSR | Mode::WUSR) {
+                Ok(()) => return Self { path },
+                Err(Errno::EXIST) => continue,
+                Err(error) => panic!("failed to create fifo: {error}"),
+            }
+        }
+    }
+
+    pub fn write(&self) -> File {
+        File::options().write(true).open(&self.path).unwrap()
+    }
+}
+
+impl Drop for SetupPipe {
+    fn drop(&mut self) {
+        _ = std::fs::remove_file(&self.path);
+    }
+}
+
+struct AtFdCwd;
+
+impl AsFd for AtFdCwd {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        unsafe { BorrowedFd::borrow_raw(libc::AT_FDCWD) }
+    }
+}

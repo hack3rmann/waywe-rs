@@ -2019,12 +2019,6 @@ dependencies = [
 
 [[package]]
 name = "linux-raw-sys"
-version = "0.4.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d26c52dbd32dccf2d10cac7725f8eae5296885fb5703b261f7d0a0739ec807ab"
-
-[[package]]
-name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
@@ -3006,19 +3000,6 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.38.44"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdb5bc1ae2baa591800df16c9ca78619bf65c0488b41b96ccec5d11220d8c154"
-dependencies = [
- "bitflags 2.13.0",
- "errno",
- "libc",
- "linux-raw-sys 0.4.15",
- "windows-sys 0.59.0",
-]
-
-[[package]]
-name = "rustix"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6fe4565b9518b83ef4f91bb47ce29620ca828bd32cb7e408f0062e9930ba190"
@@ -3026,7 +3007,7 @@ dependencies = [
  "bitflags 2.13.0",
  "errno",
  "libc",
- "linux-raw-sys 0.12.1",
+ "linux-raw-sys",
  "windows-sys 0.61.2",
 ]
 
@@ -3941,7 +3922,7 @@ dependencies = [
  "fxhash",
  "phf",
  "raw-window-handle",
- "rustix 0.38.44",
+ "rustix",
  "smallvec",
  "static_assertions",
  "thiserror",
@@ -3975,7 +3956,7 @@ dependencies = [
 name = "wayland-server"
 version = "0.0.15"
 dependencies = [
- "rustix 0.38.44",
+ "rustix",
  "thiserror",
  "tracing",
  "wayland-sys 0.0.15",
@@ -4018,7 +3999,7 @@ dependencies = [
  "flate2",
  "image",
  "libc",
- "rustix 0.38.44",
+ "rustix",
  "tap",
  "tar",
  "thiserror",
@@ -4048,7 +4029,7 @@ dependencies = [
  "libc",
  "libloading 0.9.0",
  "raw-window-handle",
- "rustix 0.38.44",
+ "rustix",
  "scopeguard",
  "smallvec",
  "tap",
@@ -4081,12 +4062,13 @@ dependencies = [
  "glam",
  "libc",
  "rand 0.9.4",
- "rustix 0.38.44",
+ "rustix",
  "serde",
  "smallvec",
  "thiserror",
  "toml",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
@@ -4114,7 +4096,7 @@ dependencies = [
  "glam",
  "raw-window-handle",
  "reusable-box",
- "rustix 0.38.44",
+ "rustix",
  "smallvec",
  "static_assertions",
  "thiserror",
@@ -4548,15 +4530,6 @@ dependencies = [
 
 [[package]]
 name = "windows-sys"
-version = "0.59.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
-dependencies = [
- "windows-targets",
-]
-
-[[package]]
-name = "windows-sys"
 version = "0.61.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc"
@@ -4759,7 +4732,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32e45ad4206f6d2479085147f02bc2ef834ac85886624a23575ae137c8aa8156"
 dependencies = [
  "libc",
- "rustix 1.1.4",
+ "rustix",
 ]
 
 [[package]]

@@ -15,10 +15,7 @@ use anyhow::{Context as _, bail};
 use clap::Parser as _;
 use rustix::io::Errno;
 use std::io::{self, Write};
-use waywe_ipc::{
-    DaemonCommand, DaemonSetupError, IpcClient,
-    detach::{EXIT_CODE_DAEMON_SETUP, EXIT_CODE_PANIC},
-};
+use waywe_ipc::{DaemonCommand, IpcClient};
 
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
@@ -41,30 +38,6 @@ fn main() -> anyhow::Result<()> {
             };
 
             if let Err(error) = execute_start(mode) {
-                match (error.exit_code, error.setup_error) {
-                    (Some(EXIT_CODE_PANIC), _) | (Some(EXIT_CODE_DAEMON_SETUP), None) => {
-                        eprintln!("waywe-daemon panicked:\n")
-                    }
-                    (
-                        Some(EXIT_CODE_DAEMON_SETUP),
-                        Some(DaemonSetupError::Panicked { message }),
-                    ) => {
-                        eprint!("waywe-daemon panicked:\n\n{message}");
-                        return Ok(());
-                    }
-                    (Some(EXIT_CODE_DAEMON_SETUP), Some(DaemonSetupError::DaemonFileLock)) => {
-                        eprintln!(
-                            "failed to acquire waywe-daemon file lock. Is another daemon is running now?"
-                        );
-                        return Ok(());
-                    }
-                    (Some(EXIT_CODE_DAEMON_SETUP), Some(DaemonSetupError::DaemonizeFailed)) => {
-                        eprintln!("failed to daemonize waywe-daemon:\n")
-                    }
-                    (Some(code), _) => eprintln!("waywe-daemon exited with code {code}:\n"),
-                    (None, _) => eprintln!("waywe-daemon has failed:\n"),
-                };
-
                 io::stderr().write_all(&error.stderr).unwrap();
             }
 

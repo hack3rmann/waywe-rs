@@ -1,5 +1,6 @@
 use rustix::{
-    event::epoll::{self, EventData, EventFlags, EventVec},
+    event::epoll::{self, Event, EventData, EventFlags},
+    fs::Timespec,
     io::Errno,
 };
 use std::{
@@ -28,32 +29,28 @@ impl Epoll {
     }
 
     pub fn wait(&self, buf: &mut PolledFds, timeout: Option<Duration>) -> Result<(), Errno> {
-        let wait_time = timeout
-            .and_then(|d| i32::try_from(d.as_millis()).ok())
-            .unwrap_or(-1);
+        let wait_time = timeout.and_then(|t| Timespec::try_from(t).ok());
 
         buf.clear();
 
-        epoll::wait(&self.fd, &mut buf.events, wait_time)?;
+        epoll::wait(&self.fd, &mut buf.events, wait_time.as_ref())?;
 
         Ok(())
     }
 }
 
 pub struct PolledFds {
-    events: EventVec,
+    events: Vec<Event>,
 }
 
 impl PolledFds {
-    pub fn new() -> Self {
-        Self {
-            events: EventVec::with_capacity(0),
-        }
+    pub const fn new() -> Self {
+        Self { events: vec![] }
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            events: EventVec::with_capacity(capacity),
+            events: Vec::with_capacity(capacity),
         }
     }
 
@@ -81,8 +78,8 @@ impl Default for PolledFds {
     }
 }
 
-impl From<EventVec> for PolledFds {
-    fn from(events: EventVec) -> Self {
+impl From<Vec<Event>> for PolledFds {
+    fn from(events: Vec<Event>) -> Self {
         Self { events }
     }
 }

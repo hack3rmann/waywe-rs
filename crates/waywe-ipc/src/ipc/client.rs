@@ -61,7 +61,7 @@ impl<T> IpcClient<T> {
 
         let addr = SocketAddrUnix::new(ipc::socket_file()).expect("addr is correct");
 
-        net::connect_unix(&socket, &addr)?;
+        net::connect(&socket, &addr)?;
 
         const TIMEOUT: Duration = Duration::from_secs(5);
         net::sockopt::set_socket_timeout(&socket, Timeout::Recv, Some(TIMEOUT))?;
