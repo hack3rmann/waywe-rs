@@ -3,15 +3,25 @@ pub mod event_loop;
 pub mod wallpaper;
 pub mod wallpaper_app;
 
-use crate::detach::{DetachMode, ReadyChannel};
+use std::io;
+
+use crate::{
+    detach::{DetachError, DetachMode, ReadyChannel},
+    event_loop::CreateEventLoopError,
+};
 use clap::Parser;
 use detach::detach;
 use event_loop::EventLoop;
-use std::io;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use wallpaper_app::WallpaperApp;
-use waywe_ipc::config::Config;
+use waywe_ipc::{
+    DaemonSetupError,
+    config::Config,
+    detach::{BINCODE_CONFIG, EXIT_CODE_DAEMON_SETUP},
+    ipc::server::CreateServerError,
+};
+use waywe_runtime::CreateRuntimeError;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -42,13 +52,21 @@ fn main() {
         DetachMode::DontWait
     };
 
-    let ready_channel = handle_detach(&args, detach_mode);
+    let mut ready_channel = handle_detach(&args, detach_mode);
 
     let config = Config::read();
     let app = WallpaperApp::from_config(config);
 
-    let mut event_loop =
-        EventLoop::new(app).unwrap_or_else(|err| panic!("failed to construct event loop: {err}"));
+    let mut event_loop = EventLoop::new(app).unwrap_or_else(|err| {
+        if let CreateEventLoopError::CreateRuntime(CreateRuntimeError::Ipc(
+            CreateServerError::AcquireFileLock,
+        )) = err
+            && let Some(channel) = &mut ready_channel
+        {
+            channel.write(Err(DaemonSetupError::DaemonFileLock));
+        }
+        panic!("failed to construct event loop: {err}");
+    });
 
     if let Some(channel) = ready_channel {
         channel.signal(Ok(()));
@@ -63,7 +81,16 @@ fn handle_detach(args: &Args, mode: DetachMode) -> Option<ReadyChannel> {
         return None;
     }
 
-    detach(mode).unwrap_or_else(|error| {
-        panic!("failed to start daemon in the background: {error}");
-    })
+    detach(mode).unwrap_or_else(|err| handle_detach_error(err))
+}
+
+fn handle_detach_error(error: DetachError) -> ! {
+    match error {
+        DetachError::DaemonSetup(encodable) => {
+            bincode::encode_into_std_write(encodable, &mut std::io::stdout(), BINCODE_CONFIG)
+                .unwrap();
+            std::process::exit(EXIT_CODE_DAEMON_SETUP);
+        }
+        error => panic!("failed to start daemon in the background: {error}"),
+    }
 }

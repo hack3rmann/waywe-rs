@@ -32,3 +32,4 @@ anstyle = "1.0"
 anstyle-progress = "0.1"
 unicode-width = "0.2"
 libc.workspace = true
+bincode.workspace = true

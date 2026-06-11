@@ -14,7 +14,8 @@ use video::{
     SoftwareScaler, VideoPixelFormat,
 };
 use waywe_ipc::{
-    DaemonCommand, WallpaperType,
+    DaemonCommand, DaemonSetupError, WallpaperType,
+    detach::BINCODE_CONFIG,
     profile::{SetupProfile, SetupProfileError},
 };
 
@@ -81,13 +82,14 @@ impl StartWaitMode {
 pub struct DaemonStartError {
     pub exit_code: Option<i32>,
     pub stderr: Vec<u8>,
+    pub setup_error: Option<DaemonSetupError>,
 }
 
 pub fn execute_start(mode: StartWaitMode) -> Result<(), DaemonStartError> {
     let child = process::Command::new("waywe-daemon")
         .arg("--run-in-background")
         .args(mode.daemon_arg())
-        .stdout(Stdio::null())
+        .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
@@ -98,9 +100,14 @@ pub fn execute_start(mode: StartWaitMode) -> Result<(), DaemonStartError> {
         return Ok(());
     }
 
+    let setup_error = bincode::decode_from_slice(&output.stdout, BINCODE_CONFIG)
+        .map(|(res, _n)| res)
+        .ok();
+
     Err(DaemonStartError {
         exit_code: output.status.code(),
         stderr: output.stderr,
+        setup_error,
     })
 }
 

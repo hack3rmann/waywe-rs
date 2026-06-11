@@ -1,4 +1,4 @@
-use bincode::{Decode, Encode, error::DecodeError};
+use bincode::error::DecodeError;
 use daemonize::{Daemonize, Outcome};
 use std::{
     fs::{self, File},
@@ -6,18 +6,7 @@ use std::{
     process, thread,
 };
 use thiserror::Error;
-
-pub const BINCODE_CONFIG: bincode::config::Configuration = bincode::config::standard();
-
-#[derive(Debug, Encode, Decode, Error)]
-pub enum DaemonSetupError {
-    #[error("waywe-daemon panicked")]
-    Panicked,
-    #[error("failed to daemonize waywe-daemon process")]
-    DaemonizeFailed,
-}
-
-pub type DaemonSetupResult = Result<(), DaemonSetupError>;
+use waywe_ipc::{DaemonSetupError, DaemonSetupResult, detach::BINCODE_CONFIG};
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Copy)]
 pub enum DetachMode {
@@ -51,7 +40,9 @@ impl Drop for ReadyChannel {
             return;
         }
 
-        self.write(Err(DaemonSetupError::Panicked));
+        let message = std::fs::read_to_string("/tmp/waywe/daemon-stderr.log").unwrap_or_default();
+
+        self.write(Err(DaemonSetupError::Panicked { message }));
     }
 }
 
@@ -89,7 +80,14 @@ fn daemon_start_wait(daemon: Daemonize<()>) -> Result<Option<ReadyChannel>, Deta
             match result {
                 Ok(_) => Ok(Some(channel)),
                 Err(error) => {
-                    channel.signal(Err(DaemonSetupError::DaemonizeFailed));
+                    let error_string = error.to_string();
+
+                    if error_string.starts_with("unable to lock pid file") {
+                        channel.signal(Err(DaemonSetupError::DaemonPidLock));
+                    } else {
+                        channel.signal(Err(DaemonSetupError::DaemonizeFailed));
+                    }
+
                     Err(error.into())
                 }
             }

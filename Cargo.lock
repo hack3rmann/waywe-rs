@@ -4011,6 +4011,7 @@ dependencies = [
  "anstyle",
  "anstyle-progress",
  "anyhow",
+ "bincode",
  "cargo_metadata",
  "clap",
  "file-format",
