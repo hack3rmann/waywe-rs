@@ -8,7 +8,7 @@ use clap::Parser;
 use detach::detach;
 use event_loop::EventLoop;
 use std::io;
-use tracing::error;
+use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 use wallpaper_app::WallpaperApp;
 use waywe_ipc::config::Config;
@@ -45,9 +45,16 @@ fn main() {
     let ready_channel = handle_detach(&args, detach_mode);
 
     let config = Config::read();
-    let app = WallpaperApp::from_config(ready_channel, config);
+    let app = WallpaperApp::from_config(config);
 
-    EventLoop::new(app).run();
+    let mut event_loop = EventLoop::new(app);
+
+    if let Some(channel) = ready_channel {
+        channel.signal(true);
+        info!("the daemon is ready to process commands");
+    }
+
+    event_loop.run();
 }
 
 fn handle_detach(args: &Args, mode: DetachMode) -> Option<ReadyChannel> {

@@ -1,5 +1,4 @@
 use crate::{
-    detach::ReadyChannel,
     event_loop::WallpaperTarget,
     wallpaper::{
         self, Wallpaper, WallpaperConfig, optimized::OptimizedWallpaper,
@@ -83,15 +82,13 @@ pub struct WallpaperApp {
     pub wallpapers: MonitorMap<RunningWallpapers>,
     pub wallpaper_states: BTreeMap<Arc<str>, WallpaperState>,
     pub config: Config,
-    pub ready_channel: Option<ReadyChannel>,
     pub package_registry: PackageRegistry,
 }
 
 impl WallpaperApp {
-    pub fn from_config(ready_channel: Option<ReadyChannel>, config: Config) -> Self {
+    pub fn from_config(config: Config) -> Self {
         Self {
             config,
-            ready_channel,
             ..Default::default()
         }
     }
@@ -216,10 +213,6 @@ impl App for WallpaperApp {
             runtime.control_flow.idle();
         } else {
             runtime.control_flow.busy();
-        }
-
-        if let Some(ready) = self.ready_channel.take() {
-            ready.signal(true);
         }
 
         result
