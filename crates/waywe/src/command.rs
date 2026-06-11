@@ -77,16 +77,31 @@ impl StartWaitMode {
     }
 }
 
-pub fn execute_start(mode: StartWaitMode) {
-    let mut child = process::Command::new("waywe-daemon")
+#[derive(Clone, Default, Debug)]
+pub struct DaemonStartError {
+    pub exit_code: Option<i32>,
+    pub stderr: Vec<u8>,
+}
+
+pub fn execute_start(mode: StartWaitMode) -> Result<(), DaemonStartError> {
+    let child = process::Command::new("waywe-daemon")
         .arg("--run-in-background")
         .args(mode.daemon_arg())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .unwrap();
 
-    child.wait().unwrap();
+    let output = child.wait_with_output().unwrap();
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    Err(DaemonStartError {
+        exit_code: output.status.code(),
+        stderr: output.stderr,
+    })
 }
 
 pub fn execute_preview(result_path: &Path, monitor_name: Option<&str>) -> Result<(), ExecuteError> {

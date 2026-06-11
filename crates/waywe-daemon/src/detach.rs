@@ -1,13 +1,23 @@
+use bincode::{Decode, Encode, error::DecodeError};
 use daemonize::{Daemonize, Outcome};
 use std::{
     fs::{self, File},
-    io::{self, Read, Write},
-    process,
+    io::{self, Write},
+    process, thread,
 };
 use thiserror::Error;
 
-const READY: u8 = 0;
-const FAILED: u8 = 1;
+pub const BINCODE_CONFIG: bincode::config::Configuration = bincode::config::standard();
+
+#[derive(Debug, Encode, Decode, Error)]
+pub enum DaemonSetupError {
+    #[error("waywe-daemon panicked")]
+    Panicked,
+    #[error("failed to daemonize waywe-daemon process")]
+    DaemonizeFailed,
+}
+
+pub type DaemonSetupResult = Result<(), DaemonSetupError>;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Copy)]
 pub enum DetachMode {
@@ -20,15 +30,33 @@ pub enum DetachMode {
 pub struct ReadyChannel(File);
 
 impl ReadyChannel {
-    pub fn signal(mut self, ok: bool) {
-        let byte = if ok { READY } else { FAILED };
-        _ = self.0.write_all(&[byte]);
+    pub const fn new(pipe: File) -> Self {
+        Self(pipe)
+    }
+
+    pub fn signal(mut self, result: DaemonSetupResult) {
+        self.write(result);
         // Drop closes the write end so the parent does not hang.
+    }
+
+    pub fn write(&mut self, result: DaemonSetupResult) {
+        let bytes = bincode::encode_to_vec(result, BINCODE_CONFIG).unwrap();
+        _ = self.0.write_all(&bytes);
+    }
+}
+
+impl Drop for ReadyChannel {
+    fn drop(&mut self) {
+        if !thread::panicking() {
+            return;
+        }
+
+        self.write(Err(DaemonSetupError::Panicked));
     }
 }
 
 fn daemon_start_wait(daemon: Daemonize<()>) -> Result<Option<ReadyChannel>, DetachError> {
-    let (mut parent_read, mut child_write) = pipe()?;
+    let (mut parent_read, child_write) = pipe()?;
 
     match daemon.execute() {
         Outcome::Parent(result) => {
@@ -40,22 +68,28 @@ fn daemon_start_wait(daemon: Daemonize<()>) -> Result<Option<ReadyChannel>, Deta
                 Err(error) => return Err(error.into()),
             }
 
-            let mut buf = [0u8; 1];
-            parent_read.read_exact(&mut buf)?;
+            let result: DaemonSetupResult =
+                match bincode::decode_from_std_read(&mut parent_read, BINCODE_CONFIG) {
+                    Ok(res) => res,
+                    Err(DecodeError::Io {
+                        inner,
+                        additional: _,
+                    }) => return Err(DetachError::Io(inner)),
+                    Err(_) => unreachable!(),
+                };
 
-            if buf[0] == READY {
-                process::exit(0);
-            }
-
-            Err(DetachError::DaemonNotReady)
+            result?;
+            process::exit(0);
         }
         Outcome::Child(result) => {
             drop(parent_read);
 
+            let channel = ReadyChannel::new(child_write);
+
             match result {
-                Ok(_) => Ok(Some(ReadyChannel(child_write))),
+                Ok(_) => Ok(Some(channel)),
                 Err(error) => {
-                    _ = child_write.write_all(&[FAILED]);
+                    channel.signal(Err(DaemonSetupError::DaemonizeFailed));
                     Err(error.into())
                 }
             }
@@ -94,6 +128,6 @@ pub enum DetachError {
     Io(#[from] io::Error),
     #[error(transparent)]
     Daemonize(#[from] daemonize::Error),
-    #[error("daemon failed during initialization")]
-    DaemonNotReady,
+    #[error("daemon failed during initialization: {0}")]
+    DaemonSetup(#[from] DaemonSetupError),
 }

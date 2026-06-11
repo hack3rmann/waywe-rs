@@ -4036,6 +4036,7 @@ dependencies = [
  "abi_stable",
  "ash",
  "bevy_ecs",
+ "bincode",
  "bytemuck",
  "clap",
  "daemonize",

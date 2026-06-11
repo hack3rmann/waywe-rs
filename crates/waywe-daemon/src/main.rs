@@ -8,7 +8,7 @@ use clap::Parser;
 use detach::detach;
 use event_loop::EventLoop;
 use std::io;
-use tracing::{error, info};
+use tracing::info;
 use tracing_subscriber::EnvFilter;
 use wallpaper_app::WallpaperApp;
 use waywe_ipc::config::Config;
@@ -51,7 +51,7 @@ fn main() {
         EventLoop::new(app).unwrap_or_else(|err| panic!("failed to construct event loop: {err}"));
 
     if let Some(channel) = ready_channel {
-        channel.signal(true);
+        channel.signal(Ok(()));
         info!("the daemon is ready to process commands");
     }
 
@@ -63,10 +63,7 @@ fn handle_detach(args: &Args, mode: DetachMode) -> Option<ReadyChannel> {
         return None;
     }
 
-    detach(mode)
-        .inspect_err(|error| {
-            error!(?error, "failed to start daemon in the background");
-        })
-        .ok()
-        .flatten()
+    detach(mode).unwrap_or_else(|error| {
+        panic!("failed to start daemon in the background: {error}");
+    })
 }

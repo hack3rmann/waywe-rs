@@ -14,6 +14,7 @@ use crate::{
 use anyhow::{Context as _, bail};
 use clap::Parser as _;
 use rustix::io::Errno;
+use std::io::{self, Write};
 use waywe_ipc::{DaemonCommand, IpcClient};
 
 fn main() -> anyhow::Result<()> {
@@ -36,7 +37,16 @@ fn main() -> anyhow::Result<()> {
                 StartWaitMode::Wait
             };
 
-            execute_start(mode);
+            if let Err(error) = execute_start(mode) {
+                match error.exit_code {
+                    Some(101) => eprintln!("waywe-daemon panicked:\n"),
+                    Some(code) => eprintln!("waywe-daemon exited with code {code}:\n"),
+                    None => eprintln!("waywe-daemon has failed:\n"),
+                };
+
+                io::stderr().write_all(&error.stderr).unwrap();
+            }
+
             return Ok(());
         }
         Command::Show { path, monitor } => execute_show(&path, monitor)?,
