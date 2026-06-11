@@ -20,6 +20,7 @@ use abi_stable::std_types::{ROption, RStr};
 use ash::{khr::external_memory_fd::Device as FdDevice, vk};
 use std::{
     marker::PhantomData,
+    mem,
     os::fd::{FromRawFd, IntoRawFd, OwnedFd},
     ptr,
 };
@@ -256,5 +257,28 @@ pub trait DeviceExt: Sealed {
 impl DeviceExt for wgpu::Device {
     fn export_fd(&self, texture: &wgpu::Texture) -> OwnedFd {
         unsafe { texture_export_fd(self, texture) }
+    }
+}
+
+pub trait VecExt {
+    type Item;
+
+    fn set_or_push(&mut self, index: usize, value: Self::Item) -> Option<Self::Item>;
+}
+
+impl<T> VecExt for Vec<T> {
+    type Item = T;
+
+    fn set_or_push(&mut self, index: usize, mut value: Self::Item) -> Option<Self::Item> {
+        if index == self.len() {
+            self.push(value);
+            None
+        } else if index < self.len() {
+            // Safety: 0 <= index < self.len() => index is in bounds
+            mem::swap(unsafe { self.get_unchecked_mut(index) }, &mut value);
+            Some(value)
+        } else {
+            panic!("index {index} must be in 0..{}", self.len());
+        }
     }
 }
