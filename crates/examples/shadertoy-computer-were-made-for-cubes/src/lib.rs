@@ -118,7 +118,7 @@ impl Renderer for ShaderToyRenderer {
         FrameInfo::new_60_fps()
     }
 
-    fn set_surface(&mut self, surface: RenderSurfaceFd) {
+    fn set_surface(&mut self, surface: RenderSurfaceFd, index: u32) {
         let surface = unsafe {
             import_fd_as_texture(
                 &self.gpu.device,
@@ -136,6 +136,10 @@ impl Renderer for ShaderToyRenderer {
         self.surface = Some(surface);
 
         self.wallpaper.configure(&self.gpu, config);
+    }
+
+    fn cycle_buffers(&mut self) {
+        todo!()
     }
 }
 

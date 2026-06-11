@@ -62,7 +62,7 @@ impl Renderer for SceneRenderer {
         info
     }
 
-    fn set_surface(&mut self, surface: RenderSurfaceFd) {
+    fn set_surface(&mut self, surface: RenderSurfaceFd, index: u32) {
         let surface = unsafe {
             import_fd_as_texture(
                 &self.gpu.device,
@@ -81,4 +81,6 @@ impl Renderer for SceneRenderer {
 
         self.surface = Some(surface);
     }
+
+    fn cycle_buffers(&mut self) {}
 }

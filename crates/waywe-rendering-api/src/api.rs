@@ -1,6 +1,6 @@
 use crate::{
     FfiTextureDescriptor,
-    ffi::{self, DropFn, PanicPayload, RenderFn, SetSurfaceFn},
+    ffi::{self, CycleBuffersFn, DropFn, PanicPayload, RenderFn, SetSurfaceFn},
 };
 use abi_stable::std_types::{RDuration, ROption, RString};
 use std::{
@@ -49,6 +49,7 @@ impl From<FfiFrameInfo> for FrameInfo {
 pub struct OpaqueRendererDesc {
     pub config: WallpaperConfig,
     pub working_directory: RString,
+    pub surface_buffer_count: u32,
 }
 
 #[repr(C)]
@@ -61,6 +62,7 @@ pub struct RenderSurfaceFd {
 pub struct OpaqueRenderer {
     render: RenderFn,
     set_surface: SetSurfaceFn,
+    cycle_buffers: CycleBuffersFn,
     drop: DropFn,
     renderer: *mut c_void,
 }
@@ -70,6 +72,7 @@ impl OpaqueRenderer {
         Self {
             render: ffi::render::<T>,
             set_surface: ffi::set_surface::<T>,
+            cycle_buffers: ffi::cycle_buffers::<T>,
             drop: ffi::drop::<T>,
             renderer: Box::into_raw(Box::new(renderer)).cast(),
         }
@@ -86,8 +89,13 @@ impl Renderer for OpaqueRenderer {
         unsafe { frame_info.assume_init() }.into()
     }
 
-    fn set_surface(&mut self, surface: RenderSurfaceFd) {
-        let panic = unsafe { (self.set_surface)(self.renderer, surface) };
+    fn set_surface(&mut self, surface: RenderSurfaceFd, index: u32) {
+        let panic = unsafe { (self.set_surface)(self.renderer, surface, index) };
+        panic.propagate_if_any();
+    }
+
+    fn cycle_buffers(&mut self) {
+        let panic = unsafe { (self.cycle_buffers)(self.renderer) };
         panic.propagate_if_any();
     }
 }
@@ -101,5 +109,6 @@ impl Drop for OpaqueRenderer {
 
 pub trait Renderer {
     fn render(&mut self) -> FrameInfo;
-    fn set_surface(&mut self, surface: RenderSurfaceFd);
+    fn set_surface(&mut self, surface: RenderSurfaceFd, surface_index: u32);
+    fn cycle_buffers(&mut self);
 }
