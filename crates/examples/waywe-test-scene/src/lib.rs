@@ -6,11 +6,11 @@
 //!
 //! # Usage
 //!
-//! Build and load as a scene wallpaper:
+//! Package and load as a scene wallpaper:
 //!
 //! ```shell
-//! cargo build --release -p waywe-test-scene
-//! waywe show target/release/libwaywe_test_scene.so
+//! waywe package build --path crates/examples/waywe-test-scene
+//! waywe show target/release/waywe-test-scene.ww
 //! ```
 //!
 //! The scene includes:

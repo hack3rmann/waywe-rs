@@ -20,12 +20,16 @@ impl WallpaperBuilder for SceneTestWallpaper { /* ... */ }
 
 ## Build
 
-Test assets are downloaded automatically by `build.rs` into `assets/`.
+Test assets are downloaded automatically by `build.rs` into `assets/`. Package the
+dylib together with those assets into a `.ww` archive:
 
 ```shell
-cargo build --release -p waywe-test-scene
 waywe package build --path crates/examples/waywe-test-scene
 ```
+
+This runs `cargo build --release`, bundles `libwaywe_test_scene.so` as `wallpaper.so`,
+and includes every file under `assets/`. The output is written to
+`target/release/waywe-test-scene.ww`.
 
 ## Run
 

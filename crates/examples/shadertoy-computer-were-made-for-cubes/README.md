@@ -23,10 +23,15 @@ See [`src/lib.rs`](src/lib.rs) for the full implementation.
 
 ## Build
 
+Package the renderer dylib (and any files under `assets/`, if present) into a `.ww`
+archive:
+
 ```shell
-cargo build --release -p shadertoy-computer-were-made-for-cubes
 waywe package build --path crates/examples/shadertoy-computer-were-made-for-cubes
 ```
+
+This runs `cargo build --release` and writes
+`target/release/shadertoy-computer-were-made-for-cubes.ww`.
 
 ## Run
 
