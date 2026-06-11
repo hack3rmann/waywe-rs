@@ -8,5 +8,8 @@ pub mod wallpaper;
 
 pub use command::DaemonCommand;
 pub use epoll::Epoll;
-pub use ipc::{IpcSocket, RecvError, SendError};
+pub use ipc::{
+    client::{IpcClient, SendError},
+    server::{IpcServer, RecvError},
+};
 pub use wallpaper::WallpaperType;

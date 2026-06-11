@@ -6,22 +6,32 @@ use std::{
     sync::{Once, atomic::Ordering, mpsc::TryRecvError},
     vec::Drain,
 };
+use thiserror::Error;
 use tokio::runtime::Builder as AsyncRuntimeBuilder;
 use tracing::{debug, error};
 use waywe_ipc::{
-    DaemonCommand, WallpaperType,
+    DaemonCommand, IpcServer, RecvError, WallpaperType,
     epoll::{Epoll, PolledFds},
-    ipc::{IpcSocket, RecvError, Server},
     signals,
 };
 use waywe_runtime::{
-    ControlFlow, Runtime,
+    ControlFlow, CreateRuntimeError, Runtime,
     app::{App, DynApp},
     event::{AbsorbError, Event, EventReceiver, IntoEvent},
     frame::FrameError,
     task_pool::TaskPool,
     wayland::{MonitorId, Wayland},
 };
+
+#[derive(Debug, Error)]
+pub enum CreateEventLoopError {
+    #[error(transparent)]
+    CreateRuntime(#[from] CreateRuntimeError),
+    #[error("failed to create event queue: {0}")]
+    CrateEventQueue(io::Error),
+    #[error("failed to create epoll instance: {0}")]
+    CreateEpoll(Errno),
+}
 
 pub struct EventLoop {
     // NOTE(hack3rmann): app should be dropped first to release all the resources from the runtime
@@ -32,22 +42,20 @@ pub struct EventLoop {
 }
 
 impl EventLoop {
-    pub fn new(app: impl App) -> Self {
+    pub fn new(app: impl App) -> Result<Self, CreateEventLoopError> {
         static SIGNALS_ONCE: Once = Once::new();
         SIGNALS_ONCE.call_once(signals::setup);
 
         let app = DynApp::new(app);
 
-        let event_queue = match EventQueue::new() {
-            Ok(queue) => queue,
-            Err(error) => panic!("failed to create event queue: {error:?}"),
-        };
+        let event_queue = EventQueue::new().map_err(CreateEventLoopError::CrateEventQueue)?;
 
-        let wayland = Wayland::new(event_queue.custom_receiver.make_emitter().unwrap());
+        let event_emitter = event_queue.custom_receiver.make_emitter().unwrap();
 
-        let task_pool = TaskPool::new(event_queue.custom_receiver.make_emitter().unwrap());
+        let wayland = Wayland::new(event_emitter.clone());
+        let task_pool = TaskPool::new(event_emitter);
 
-        let runtime = Runtime::new(wayland, ControlFlow::Busy, task_pool);
+        let runtime = Runtime::new(wayland, ControlFlow::Busy, task_pool)?;
 
         let fds = [
             runtime.wayland.display.as_fd(),
@@ -55,17 +63,14 @@ impl EventLoop {
             event_queue.custom_receiver.pipe_fd(),
         ];
 
-        let epoll = match Epoll::new(fds) {
-            Ok(epoll) => epoll,
-            Err(error) => panic!("failed to create epoll: {error:?}"),
-        };
+        let epoll = Epoll::new(fds).map_err(CreateEventLoopError::CreateEpoll)?;
 
-        Self {
+        Ok(Self {
             runtime,
             app,
             event_queue,
             epoll,
-        }
+        })
     }
 
     async fn run_async(&mut self) {
@@ -194,7 +199,7 @@ impl EventQueue {
     pub fn populate_from_cli(
         &mut self,
         wayland: &Wayland,
-        cli: &IpcSocket<Server, DaemonCommand>,
+        cli: &IpcServer<DaemonCommand>,
     ) -> Result<(), RecvError> {
         let command = match cli.try_recv() {
             Ok(command) => command,

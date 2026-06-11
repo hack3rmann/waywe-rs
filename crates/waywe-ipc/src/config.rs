@@ -48,11 +48,11 @@ impl Config {
             match fs::read_to_string(&path) {
                 Ok(contents) => match toml::from_str(&contents) {
                     Ok(config) => {
-                        info!("loaded config at {}", path.display());
+                        info!(path = %path.display(), "loaded config");
                         return config;
                     }
                     Err(error) => {
-                        error!(?error, "invalid config at {}", path.display());
+                        error!(?error, path = %path.display(), "invalid config");
                         continue;
                     }
                 },
@@ -60,7 +60,7 @@ impl Config {
                     continue;
                 }
                 Err(error) => {
-                    error!(?error, "failed to read config at {}", path.display());
+                    error!(?error, path = %path.display(), "failed to read config");
                     continue;
                 }
             }

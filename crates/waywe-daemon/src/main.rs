@@ -47,7 +47,8 @@ fn main() {
     let config = Config::read();
     let app = WallpaperApp::from_config(config);
 
-    let mut event_loop = EventLoop::new(app);
+    let mut event_loop =
+        EventLoop::new(app).unwrap_or_else(|err| panic!("failed to construct event loop: {err}"));
 
     if let Some(channel) = ready_channel {
         channel.signal(true);

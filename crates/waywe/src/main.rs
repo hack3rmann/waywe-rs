@@ -14,7 +14,7 @@ use crate::{
 use anyhow::{Context as _, bail};
 use clap::Parser as _;
 use rustix::io::Errno;
-use waywe_ipc::{DaemonCommand, IpcSocket, ipc::Client};
+use waywe_ipc::{DaemonCommand, IpcClient};
 
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
@@ -47,7 +47,7 @@ fn main() -> anyhow::Result<()> {
         }
     };
 
-    let socket = match IpcSocket::<Client, DaemonCommand>::connect() {
+    let socket = match IpcClient::<DaemonCommand>::connect() {
         Ok(socket) => socket,
         Err(Errno::CONNREFUSED) => {
             bail!("no waywe-daemon is running");

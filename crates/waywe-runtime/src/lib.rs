@@ -1,15 +1,15 @@
+use crate::wayland::MonitorId;
 use bitflags::bitflags;
 use for_sure::prelude::*;
 use glam::UVec2;
 use gpu::Wgpu;
 use std::sync::Arc;
 use task_pool::TaskPool;
+use thiserror::Error;
 use timer::Timer;
 use video::Video;
 use wayland::Wayland;
-use waywe_ipc::{DaemonCommand, IpcSocket, ipc::Server};
-
-use crate::wayland::MonitorId;
+use waywe_ipc::{DaemonCommand, IpcServer, ipc::server::CreateServerError};
 
 pub mod app;
 pub mod effects;
@@ -53,30 +53,37 @@ bitflags! {
     }
 }
 
+#[derive(Debug, Error)]
+pub enum CreateRuntimeError {
+    #[error(transparent)]
+    Ipc(#[from] CreateServerError),
+}
+
 pub struct Runtime {
     pub timer: Timer,
     pub video: Almost<Video>,
     pub wgpu: Almost<Arc<Wgpu>>,
     pub wayland: Arc<Wayland>,
-    pub ipc: IpcSocket<Server, DaemonCommand>,
+    pub ipc: IpcServer<DaemonCommand>,
     pub control_flow: ControlFlow,
     pub task_pool: TaskPool,
 }
 
 impl Runtime {
-    pub fn new(wayland: Wayland, control_flow: ControlFlow, task_pool: TaskPool) -> Self {
-        Self {
+    pub fn new(
+        wayland: Wayland,
+        control_flow: ControlFlow,
+        task_pool: TaskPool,
+    ) -> Result<Self, CreateRuntimeError> {
+        Ok(Self {
             timer: Timer::default(),
             wayland: Arc::new(wayland),
             wgpu: Nil,
             video: Nil,
-            ipc: match IpcSocket::server() {
-                Ok(ipc) => ipc,
-                Err(error) => panic!("failed to initialize ipc: {error:?}"),
-            },
+            ipc: IpcServer::new()?,
             control_flow,
             task_pool,
-        }
+        })
     }
 
     pub fn wallpaper_config(&self, monitor_id: MonitorId) -> WallpaperConfig {
