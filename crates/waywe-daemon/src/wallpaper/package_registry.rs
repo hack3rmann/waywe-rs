@@ -136,3 +136,9 @@ impl Debug for PackageRegistry {
         inner.packages.fmt(f)
     }
 }
+
+impl Drop for PackageRegistryInner {
+    fn drop(&mut self) {
+        _ = fs::remove_dir_all(&*PACKAGES_DIR);
+    }
+}
