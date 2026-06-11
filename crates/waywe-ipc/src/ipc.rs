@@ -127,13 +127,8 @@ impl<S: SocketSide, T> IpcSocket<S, T> {
         const MAX_LENGTH: u32 = 4096;
         let mut length = 0_u32;
 
-        match net::recv(
-            &fd,
-            bytemuck::bytes_of_mut(&mut length),
-            RecvFlags::DONTWAIT,
-        ) {
+        match net::recv(&fd, bytemuck::bytes_of_mut(&mut length), RecvFlags::WAITALL) {
             Ok(n_bytes) => assert_eq!(n_bytes, mem::size_of_val(&length)),
-            Err(Errno::WOULDBLOCK) => return Err(RecvError::Empty),
             Err(error) => return Err(RecvError::Os(error)),
         }
 
@@ -206,7 +201,7 @@ impl<T> IpcSocket<Server, T> {
             }
         }
 
-        net::listen(&socket, 0)?;
+        net::listen(&socket, 128)?;
 
         Ok(Self {
             fd: socket,

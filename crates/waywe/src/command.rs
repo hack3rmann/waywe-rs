@@ -61,9 +61,26 @@ pub fn execute_current(monitor_name: Option<&str>) -> Result<(), ExecuteError> {
     Ok(())
 }
 
-pub fn execute_start() {
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum StartWaitMode {
+    #[default]
+    Wait,
+    DontWait,
+}
+
+impl StartWaitMode {
+    pub const fn daemon_arg(self) -> Option<&'static str> {
+        match self {
+            StartWaitMode::Wait => Some("--wait"),
+            StartWaitMode::DontWait => None,
+        }
+    }
+}
+
+pub fn execute_start(mode: StartWaitMode) {
     let mut child = process::Command::new("waywe-daemon")
         .arg("--run-in-background")
+        .args(mode.daemon_arg())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()

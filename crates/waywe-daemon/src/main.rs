@@ -3,11 +3,12 @@ pub mod event_loop;
 pub mod wallpaper;
 pub mod wallpaper_app;
 
+use crate::detach::{DetachMode, ReadyChannel};
 use clap::Parser;
 use detach::detach;
 use event_loop::EventLoop;
 use std::io;
-use tracing::error;
+use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 use wallpaper_app::WallpaperApp;
 use waywe_ipc::config::Config;
@@ -16,8 +17,11 @@ use waywe_ipc::config::Config;
 #[command(version, about, long_about = None)]
 struct Args {
     /// Start the daemon program in background
-    #[arg(long, default_value_t = false)]
+    #[arg(long)]
     run_in_background: bool,
+    /// Wait for the daemon to initialize its state
+    #[arg(long)]
+    wait: bool,
 }
 
 fn main() {
@@ -32,14 +36,36 @@ fn main() {
 
     let args = Args::parse();
 
-    if args.run_in_background
-        && let Err(error) = detach()
-    {
-        error!(?error, "failed to start daemon in the background");
-    }
+    let detach_mode = if args.wait {
+        DetachMode::Wait
+    } else {
+        DetachMode::DontWait
+    };
+
+    let ready_channel = handle_detach(&args, detach_mode);
 
     let config = Config::read();
     let app = WallpaperApp::from_config(config);
 
-    EventLoop::new(app).run();
+    let mut event_loop = EventLoop::new(app);
+
+    if let Some(channel) = ready_channel {
+        channel.signal(true);
+        info!("the daemon is ready to process commands");
+    }
+
+    event_loop.run();
+}
+
+fn handle_detach(args: &Args, mode: DetachMode) -> Option<ReadyChannel> {
+    if !args.run_in_background {
+        return None;
+    }
+
+    detach(mode)
+        .inspect_err(|error| {
+            error!(?error, "failed to start daemon in the background");
+        })
+        .ok()
+        .flatten()
 }
