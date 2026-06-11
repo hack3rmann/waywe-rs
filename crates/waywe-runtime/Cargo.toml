@@ -29,3 +29,7 @@ wayland-client.workspace = true
 futures-util.workspace = true
 derive_more = { version = "2.0.1", features = ["full"] }
 static_assertions.workspace = true
+
+[features]
+spirv = ["waywe-spirv-derive/spirv"]
+default = ["spirv"]

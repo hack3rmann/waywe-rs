@@ -5,10 +5,10 @@ pub mod registry;
 /// Interfaces generated via `wayland-scanner`
 pub mod generated {
     wayland_scanner::include_interfaces!([
-        "wayland-protocols/wayland.xml",
-        "wayland-protocols/stable/xdg-shell/xdg-shell.xml",
-        "wayland-protocols/stable/viewporter/viewporter.xml",
-        "wayland-protocols/wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml",
+        "resources/wayland-protocols/wayland.xml",
+        "resources/wayland-protocols/stable/xdg-shell/xdg-shell.xml",
+        "resources/wayland-protocols/stable/viewporter/viewporter.xml",
+        "resources/wayland-protocols/wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml",
     ]);
 }
 

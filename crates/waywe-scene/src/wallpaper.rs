@@ -15,7 +15,7 @@
 
 use crate::{
     DummyWorld, FrameRateSetting, MainWorld, Monitor, PostExtract, PostStartup, PostUpdate,
-    PreUpdate, Startup, Time, Update, WallpaperConfig, WallpaperFlags,
+    PreUpdate, Startup, Time, Update, WallpaperConfig, WallpaperFlags, WorkingDir,
     gpu::Gpu,
     guess_framerate,
     mesh::{CommandEncoder, SurfaceView},
@@ -72,7 +72,7 @@ impl Wallpaper {
     }
 
     /// Create the main world with appropriate systems and resources.
-    pub fn make_main(monitor: Monitor, config: WallpaperConfig) -> EcsApp {
+    pub fn make_main(monitor: Monitor, config: WallpaperConfig, working_dir: String) -> EcsApp {
         let mut main = EcsApp::default();
         let mut flags = WallpaperFlags::empty();
 
@@ -88,6 +88,7 @@ impl Wallpaper {
 
         main.insert_resource(config.framerate)
             .insert_resource(monitor)
+            .insert_resource(WorkingDir(working_dir))
             .insert_resource(flags)
             .init_resource::<Time>()
             .init_resource::<DummyWorld>()
@@ -99,11 +100,11 @@ impl Wallpaper {
     }
 
     /// Create a new wallpaper for a specific monitor.
-    pub fn new(gpu: Arc<Gpu>, monitor: Monitor) -> Self {
+    pub fn new(gpu: Arc<Gpu>, monitor: Monitor, working_dir: String) -> Self {
         Self {
             render: Self::make_render(gpu, monitor),
             // TODO(hack3rmann): allow custom config
-            main: Self::make_main(monitor, WallpaperConfig::default()),
+            main: Self::make_main(monitor, WallpaperConfig::default(), working_dir),
         }
     }
 

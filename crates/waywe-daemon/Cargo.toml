@@ -23,7 +23,6 @@ video.workspace = true
 waywe-ipc.workspace = true
 waywe-runtime.workspace = true
 waywe-scene.workspace = true
-waywe-default-wallpapers.workspace = true
 image.workspace = true
 smallvec.workspace = true
 clap.workspace = true
@@ -39,6 +38,11 @@ bevy_ecs.workspace = true
 waywe-spirv-derive.workspace = true
 waywe-rendering-api.workspace = true
 libloading = "0.9.0"
+abi_stable.workspace = true
+uuid.workspace = true
+flate2.workspace = true
+tar.workspace = true
+tap.workspace = true
 
 [dev-dependencies]
 libc = "0.2.171"

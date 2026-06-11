@@ -1,7 +1,19 @@
 use crate::wallpaper::Wallpaper;
+use abi_stable::std_types::RString;
 use ash::vk;
+use flate2::bufread::GzDecoder;
 use libloading::Library;
-use std::{mem::MaybeUninit, path::Path};
+use std::{
+    env,
+    fs::{self, File},
+    io::BufReader,
+    mem::MaybeUninit,
+    path::{Path, PathBuf},
+    sync::LazyLock,
+};
+use tap::Pipe;
+use tar::Archive;
+use uuid::Uuid;
 use waywe_rendering_api::{
     FfiTextureDescriptor,
     api::{
@@ -14,20 +26,101 @@ use waywe_rendering_api::{
 use waywe_runtime::{WallpaperConfig, frame::FrameInfo, gpu::Wgpu};
 use wgpu::wgc::api::Vulkan;
 
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct WallpaperPackage {
+    pub source_path: PathBuf,
+    pub package_path: PathBuf,
+    pub unpacked_path: PathBuf,
+    pub wallpaper_path: PathBuf,
+}
+
+impl WallpaperPackage {
+    pub fn inflate(path: impl Into<PathBuf>, cache_dir: impl AsRef<Path>) -> Self {
+        let source_path = path.into();
+        let mut unpacked_path = PathBuf::new();
+
+        loop {
+            let uuid = Uuid::now_v7();
+
+            unpacked_path.clear();
+            unpacked_path.push(cache_dir.as_ref());
+            unpacked_path.push(uuid.to_string());
+
+            if !unpacked_path.exists() {
+                break;
+            }
+        }
+
+        fs::create_dir_all(unpacked_path.parent().unwrap()).unwrap();
+
+        let mut archive = File::open(&source_path)
+            .unwrap()
+            .pipe(BufReader::new)
+            .pipe(GzDecoder::new)
+            .pipe(Archive::new);
+
+        archive.unpack(&unpacked_path).unwrap();
+
+        let package_path = fs::read_dir(&unpacked_path)
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+
+        Self {
+            wallpaper_path: package_path.join("wallpaper.so"),
+            package_path,
+            source_path,
+            unpacked_path,
+        }
+    }
+}
+
+impl Drop for WallpaperPackage {
+    fn drop(&mut self) {
+        _ = fs::remove_dir_all(&self.unpacked_path);
+    }
+}
+
+pub static PACKAGES_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
+    let mut runtime_dir = match env::var_os("XDG_RUNTIME_DIR") {
+        Some(path) => PathBuf::from(path),
+        None => {
+            tracing::warn!("XDG_RUNTIME_DIR is not set, using '/tmp' as fallback ");
+            PathBuf::from("/tmp")
+        }
+    };
+
+    let packages_dir = {
+        runtime_dir.push("waywe-packages");
+        runtime_dir
+    };
+
+    if !packages_dir.exists() {
+        fs::create_dir_all(&packages_dir).unwrap();
+    }
+
+    packages_dir
+});
+
 pub struct RenderWallpaper {
-    // NOTE(hack3rmann): `renderer` must be dropped before `_lib`
+    // NOTE(hack3rmann): `renderer` must be dropped before `_lib` and `package`
     renderer: OpaqueRenderer,
     _lib: Library,
     surface: wgpu::Texture,
     config: WallpaperConfig,
+    _package: WallpaperPackage,
 }
 
 unsafe impl Send for RenderWallpaper {}
 unsafe impl Sync for RenderWallpaper {}
 
 impl RenderWallpaper {
-    pub fn load(path: impl AsRef<Path>, gpu: &Wgpu, config: WallpaperConfig) -> Self {
-        let lib = unsafe { Library::new(path.as_ref()) }.unwrap();
+    pub fn load(path: impl Into<PathBuf>, gpu: &Wgpu, config: WallpaperConfig) -> Self {
+        let package = WallpaperPackage::inflate(path, &*PACKAGES_DIR);
+
+        let lib = unsafe { Library::new(&package.wallpaper_path) }.unwrap();
 
         let create_opaque_renderer = unsafe {
             lib.get::<CreateOpaqueRendererFn>(CREATE_OPAQUE_RENDERER_NAME)
@@ -36,7 +129,13 @@ impl RenderWallpaper {
 
         let mut renderer = MaybeUninit::uninit();
 
-        let panic = create_opaque_renderer(&OpaqueRendererDesc { config }, &mut renderer);
+        let panic = create_opaque_renderer(
+            &OpaqueRendererDesc {
+                config,
+                working_directory: RString::from(package.package_path.to_string_lossy().as_ref()),
+            },
+            &mut renderer,
+        );
         panic.propagate_if_any();
 
         let mut renderer = unsafe { renderer.assume_init() };
@@ -54,6 +153,7 @@ impl RenderWallpaper {
             _lib: lib,
             surface,
             config,
+            _package: package,
         }
     }
 

@@ -17,7 +17,11 @@ pub fn create_opaque_renderer<W: WallpaperBuilder + Default>(
 ) -> OpaqueRenderer {
     let gpu = Arc::new(pollster::block_on(Gpu::new()));
 
-    let mut wallpaper = Wallpaper::new(Arc::clone(&gpu), desc.config.into());
+    let mut wallpaper = Wallpaper::new(
+        Arc::clone(&gpu),
+        desc.config.into(),
+        desc.working_directory.as_str().into(),
+    );
     W::default().build(&mut wallpaper);
 
     OpaqueRenderer::new(SceneRenderer {

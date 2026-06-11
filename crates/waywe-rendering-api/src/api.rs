@@ -2,7 +2,7 @@ use crate::{
     FfiTextureDescriptor,
     ffi::{self, DropFn, PanicPayload, RenderFn, SetSurfaceFn},
 };
-use abi_stable::std_types::{RDuration, ROption};
+use abi_stable::std_types::{RDuration, ROption, RString};
 use std::{
     mem::MaybeUninit,
     os::{fd::OwnedFd, raw::c_void},
@@ -48,6 +48,7 @@ impl From<FfiFrameInfo> for FrameInfo {
 #[derive(Clone, Debug, PartialEq)]
 pub struct OpaqueRendererDesc {
     pub config: WallpaperConfig,
+    pub working_directory: RString,
 }
 
 #[repr(C)]

@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -10,12 +10,12 @@ pub struct Args {
 
 #[derive(Subcommand, Debug)]
 pub enum Command {
-    /// Set an image, video, or scene (.so) as a wallpaper
+    /// Set an image, video, or package (.ww) as a wallpaper
     Show {
         /// Monitor to set wallpaper on
         #[arg(short, long)]
         monitor: Option<String>,
-        /// Path to an image, video, or scene shared library
+        /// Path to an image, video, or scene package (.ww)
         path: PathBuf,
     },
     /// Start the daemon process
@@ -40,4 +40,30 @@ pub enum Command {
         #[arg(short, long)]
         monitor: Option<String>,
     },
+    /// Waywe package operations
+    Package {
+        /// Package command
+        #[command(subcommand)]
+        command: PackageCommand,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum PackageCommand {
+    /// Build Waywe package from source
+    Build {
+        /// Build in debug mode
+        #[arg(long)]
+        debug: bool,
+        /// Package path
+        #[arg(long, short, default_value_t = current_workdir())]
+        path: String,
+    },
+}
+
+fn current_workdir() -> String {
+    env::current_dir()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned()
 }
