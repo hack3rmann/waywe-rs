@@ -7,6 +7,7 @@ use crate::{
 };
 use std::{panic, sync::Arc};
 use waywe_rendering_api::{
+    VecExt,
     api::{OpaqueRenderer, OpaqueRendererDesc, RenderSurfaceFd, Renderer},
     import_fd_as_texture,
 };
@@ -27,7 +28,8 @@ pub fn create_opaque_renderer<W: WallpaperBuilder + Default>(
     OpaqueRenderer::new(SceneRenderer {
         gpu,
         scene: PreparedWallpaper::prepare(wallpaper),
-        surface: None,
+        surfaces: vec![],
+        submissions: vec![],
     })
 }
 
@@ -35,34 +37,38 @@ pub fn create_opaque_renderer<W: WallpaperBuilder + Default>(
 pub struct SceneRenderer {
     gpu: Arc<Gpu>,
     scene: PreparedWallpaper,
-    surface: Option<wgpu::Texture>,
+    surfaces: Vec<wgpu::Texture>,
+    submissions: Vec<Option<wgpu::SubmissionIndex>>,
 }
 
 impl Renderer for SceneRenderer {
     fn render(&mut self) -> FrameInfo {
-        let Some(surface) = self.surface.as_ref() else {
+        let Some(surface) = self.surfaces.first() else {
             panic!("surface is unset");
         };
+
+        if let Some(index) = self.submissions.first_mut().and_then(Option::take) {
+            self.gpu
+                .device
+                .poll(wgpu::PollType::Wait {
+                    submission_index: Some(index),
+                    timeout: None,
+                })
+                .unwrap();
+        }
 
         let surface_view = surface.create_view(&Default::default());
         let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
 
         let info = self.scene.frame(surface_view, &mut encoder);
 
-        // TODO(hack3rmann): double buffer this stuff
         let index = self.gpu.queue.submit([encoder.finish()]);
-        self.gpu
-            .device
-            .poll(wgpu::PollType::Wait {
-                submission_index: Some(index),
-                timeout: None,
-            })
-            .unwrap();
+        self.submissions[0] = Some(index);
 
         info
     }
 
-    fn set_surface(&mut self, surface: RenderSurfaceFd) {
+    fn set_surface(&mut self, surface: RenderSurfaceFd, index: u32) {
         let surface = unsafe {
             import_fd_as_texture(
                 &self.gpu.device,
@@ -79,6 +85,12 @@ impl Renderer for SceneRenderer {
         *self.scene.wallpaper.main.resource_mut::<Monitor>() = monitor;
         *self.scene.wallpaper.render.resource_mut::<Monitor>() = monitor;
 
-        self.surface = Some(surface);
+        self.surfaces.set_or_push(index as usize, surface);
+        self.submissions.set_or_push(index as usize, None);
+    }
+
+    fn cycle_buffers(&mut self) {
+        self.surfaces.rotate_left(1);
+        self.submissions.rotate_left(1);
     }
 }

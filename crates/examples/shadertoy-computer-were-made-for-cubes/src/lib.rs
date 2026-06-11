@@ -6,6 +6,7 @@ use std::{
     time::Instant,
 };
 use waywe_rendering_api::{
+    VecExt,
     api::{OpaqueRenderer, OpaqueRendererDesc, RenderSurfaceFd, Renderer},
     ffi::PanicPayload,
     import_fd_as_texture,
@@ -79,7 +80,8 @@ impl Gpu {
 
 pub struct ShaderToyRenderer {
     gpu: Gpu,
-    surface: Option<wgpu::Texture>,
+    surfaces: Vec<wgpu::Texture>,
+    submissions: Vec<Option<wgpu::SubmissionIndex>>,
     wallpaper: ShaderWallpaper,
 }
 
@@ -90,16 +92,28 @@ impl ShaderToyRenderer {
         Self {
             wallpaper: ShaderWallpaper::new(&gpu, config),
             gpu,
-            surface: None,
+            surfaces: vec![],
+            submissions: vec![],
         }
     }
 }
 
 impl Renderer for ShaderToyRenderer {
     fn render(&mut self) -> FrameInfo {
-        let Some(surface) = self.surface.as_ref() else {
+        let Some(surface) = self.surfaces.first() else {
             panic!("no surface is set");
         };
+
+        if let Some(index) = self.submissions.first_mut().and_then(Option::take) {
+            self.gpu
+                .device
+                .poll(wgpu::PollType::Wait {
+                    submission_index: Some(index),
+                    timeout: None,
+                })
+                .unwrap();
+        }
+
         let surface_view = surface.create_view(&Default::default());
 
         let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
@@ -107,18 +121,12 @@ impl Renderer for ShaderToyRenderer {
         self.wallpaper.frame(&surface_view, &mut encoder);
 
         let index = self.gpu.queue.submit([encoder.finish()]);
-        self.gpu
-            .device
-            .poll(wgpu::PollType::Wait {
-                submission_index: Some(index),
-                timeout: None,
-            })
-            .unwrap();
+        self.submissions[0] = Some(index);
 
         FrameInfo::new_60_fps()
     }
 
-    fn set_surface(&mut self, surface: RenderSurfaceFd) {
+    fn set_surface(&mut self, surface: RenderSurfaceFd, index: u32) {
         let surface = unsafe {
             import_fd_as_texture(
                 &self.gpu.device,
@@ -133,9 +141,15 @@ impl Renderer for ShaderToyRenderer {
             surface_format: surface.format(),
         };
 
-        self.surface = Some(surface);
+        self.surfaces.set_or_push(index as usize, surface);
+        self.submissions.set_or_push(index as usize, None);
 
         self.wallpaper.configure(&self.gpu, config);
+    }
+
+    fn cycle_buffers(&mut self) {
+        self.surfaces.rotate_left(0);
+        self.submissions.rotate_left(0);
     }
 }
 

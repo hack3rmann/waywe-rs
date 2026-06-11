@@ -4,7 +4,7 @@ use ash::vk;
 use flate2::bufread::GzDecoder;
 use libloading::Library;
 use std::{
-    env,
+    array, env,
     fs::{self, File},
     io::BufReader,
     mem::MaybeUninit,
@@ -104,11 +104,13 @@ pub static PACKAGES_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     packages_dir
 });
 
+pub const N_RENDER_SURFACES: usize = 2;
+
 pub struct RenderWallpaper {
     // NOTE(hack3rmann): `renderer` must be dropped before `_lib` and `package`
     renderer: OpaqueRenderer,
     _lib: Library,
-    surface: wgpu::Texture,
+    surfaces: [wgpu::Texture; N_RENDER_SURFACES],
     config: WallpaperConfig,
     _package: WallpaperPackage,
 }
@@ -133,6 +135,7 @@ impl RenderWallpaper {
             &OpaqueRendererDesc {
                 config,
                 working_directory: RString::from(package.package_path.to_string_lossy().as_ref()),
+                surface_buffer_count: 1,
             },
             &mut renderer,
         );
@@ -140,18 +143,25 @@ impl RenderWallpaper {
 
         let mut renderer = unsafe { renderer.assume_init() };
 
-        let surface_desc = Self::surface_desc(config);
-        let surface = Self::create_texture(&gpu.device, config);
+        let surfaces = array::from_fn(|i| {
+            let surface_desc = Self::surface_desc(config);
+            let surface = Self::create_texture(&gpu.device, config);
 
-        renderer.set_surface(RenderSurfaceFd {
-            fd: unsafe { texture_export_fd(&gpu.device, &surface) },
-            desc: FfiTextureDescriptor::from(surface_desc),
+            renderer.set_surface(
+                RenderSurfaceFd {
+                    fd: unsafe { texture_export_fd(&gpu.device, &surface) },
+                    desc: FfiTextureDescriptor::from(surface_desc),
+                },
+                i as u32,
+            );
+
+            surface
         });
 
         Self {
             renderer,
             _lib: lib,
-            surface,
+            surfaces,
             config,
             _package: package,
         }
@@ -283,12 +293,19 @@ impl Wallpaper for RenderWallpaper {
             return;
         }
 
-        let desc = Self::surface_desc(config);
-        self.surface = Self::create_texture(&gpu.device, config);
+        self.surfaces = array::from_fn(|i| {
+            let surface_desc = Self::surface_desc(config);
+            let surface = Self::create_texture(&gpu.device, config);
 
-        self.renderer.set_surface(RenderSurfaceFd {
-            fd: unsafe { texture_export_fd(&gpu.device, &self.surface) },
-            desc: FfiTextureDescriptor::from(desc),
+            self.renderer.set_surface(
+                RenderSurfaceFd {
+                    fd: unsafe { texture_export_fd(&gpu.device, &surface) },
+                    desc: FfiTextureDescriptor::from(surface_desc),
+                },
+                i as u32,
+            );
+
+            surface
         });
 
         self.config = config;
@@ -303,10 +320,13 @@ impl Wallpaper for RenderWallpaper {
         let info = self.renderer.render();
 
         encoder.copy_texture_to_texture(
-            self.surface.as_image_copy(),
+            self.surfaces[0].as_image_copy(),
             surface.texture().as_image_copy(),
             surface.texture().size(),
         );
+
+        self.renderer.cycle_buffers();
+        self.surfaces.rotate_left(1);
 
         info
     }
