@@ -4062,23 +4062,12 @@ dependencies = [
  "wayland-client",
  "wayland-server",
  "wayland-sys 0.0.15",
- "waywe-default-wallpapers",
  "waywe-ipc",
  "waywe-rendering-api",
  "waywe-runtime",
  "waywe-scene",
  "waywe-spirv-derive",
  "wgpu",
-]
-
-[[package]]
-name = "waywe-default-wallpapers"
-version = "0.0.15"
-dependencies = [
- "bevy_ecs",
- "derive_more",
- "image",
- "waywe-scene",
 ]
 
 [[package]]

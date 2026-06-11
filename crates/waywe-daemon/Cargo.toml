@@ -23,7 +23,6 @@ video.workspace = true
 waywe-ipc.workspace = true
 waywe-runtime.workspace = true
 waywe-scene.workspace = true
-waywe-default-wallpapers.workspace = true
 image.workspace = true
 smallvec.workspace = true
 clap.workspace = true

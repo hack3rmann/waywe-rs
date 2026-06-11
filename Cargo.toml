@@ -15,7 +15,6 @@ members = [
     "crates/wayland-sys",
     "crates/waywe",
     "crates/waywe-daemon",
-    "crates/waywe-default-wallpapers",
     "crates/waywe-ipc",
     "crates/waywe-runtime",
     "crates/waywe-scene",
@@ -46,7 +45,6 @@ wayland-sys = { path = "crates/wayland-sys" }
 waywe-ipc = { path = "crates/waywe-ipc" }
 waywe-runtime = { path = "crates/waywe-runtime" }
 waywe-scene = { path = "crates/waywe-scene" }
-waywe-default-wallpapers = { path = "crates/waywe-default-wallpapers" }
 waywe-spirv-derive = { path = "crates/waywe-spirv-derive" }
 waywe-rendering-api = { path = "crates/waywe-rendering-api" }
 waywe-scene-macros = { path = "crates/waywe-scene-macros" }
