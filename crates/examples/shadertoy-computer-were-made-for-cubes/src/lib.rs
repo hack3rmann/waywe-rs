@@ -148,8 +148,8 @@ impl Renderer for ShaderToyRenderer {
     }
 
     fn cycle_buffers(&mut self) {
-        self.surfaces.rotate_left(0);
-        self.submissions.rotate_left(0);
+        self.surfaces.rotate_left(1);
+        self.submissions.rotate_left(1);
     }
 }
 
