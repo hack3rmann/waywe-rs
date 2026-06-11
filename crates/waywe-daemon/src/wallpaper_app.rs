@@ -185,7 +185,8 @@ impl App for WallpaperApp {
                 SurfaceResult::Reconfigure(texture) => (true, texture),
                 SurfaceResult::Skip => continue,
                 SurfaceResult::Err => {
-                    panic!("failed to get_current_texture on surface on monitor_id={monitor_id:?}")
+                    tracing::error!(?monitor_id, "failed to get_current_texture on surface");
+                    continue;
                 }
             };
 
