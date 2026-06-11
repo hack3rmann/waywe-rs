@@ -1,11 +1,15 @@
 pub mod optimized;
+pub mod package_registry;
 pub mod transition;
 
-use crate::wallpaper::optimized::{
-    OptimizedWallpaper,
-    image::{Color, ImageWallpaper},
-    render::RenderWallpaper,
-    video::VideoWallpaper,
+use crate::wallpaper::{
+    optimized::{
+        OptimizedWallpaper,
+        image::{Color, ImageWallpaper},
+        render::RenderWallpaper,
+        video::VideoWallpaper,
+    },
+    package_registry::PackageRegistry,
 };
 use std::{path::Path, sync::Arc};
 use waywe_ipc::WallpaperType;
@@ -18,6 +22,7 @@ pub fn create(
     path: &Path,
     ty: WallpaperType,
     config: WallpaperConfig,
+    packages: PackageRegistry,
 ) -> OptimizedWallpaper {
     match ty {
         WallpaperType::Image => {
@@ -34,7 +39,7 @@ pub fn create(
             OptimizedWallpaper::Video(wallpaper)
         }
         WallpaperType::Scene => {
-            let wallpaper = RenderWallpaper::load(path, &gpu, config);
+            let wallpaper = RenderWallpaper::load(path, &gpu, config, packages);
             OptimizedWallpaper::Scene(wallpaper)
         }
     }

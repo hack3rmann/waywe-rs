@@ -2,7 +2,7 @@ use crate::{
     event_loop::WallpaperTarget,
     wallpaper::{
         self, Wallpaper, WallpaperConfig, optimized::OptimizedWallpaper,
-        transition::RunningWallpapers,
+        package_registry::PackageRegistry, transition::RunningWallpapers,
     },
 };
 use for_sure::prelude::*;
@@ -82,6 +82,7 @@ pub struct WallpaperApp {
     pub wallpapers: MonitorMap<RunningWallpapers>,
     pub wallpaper_states: BTreeMap<Arc<str>, WallpaperState>,
     pub config: Config,
+    pub package_registry: PackageRegistry,
 }
 
 impl WallpaperApp {
@@ -374,10 +375,11 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
             }
 
             let config = runtime.wallpaper_config(monitor_id);
+            let packages = self.package_registry.clone();
 
             runtime.task_pool.spawn(move |mut emitter| {
                 let event = WallpaperPreparedEvent {
-                    wallpaper: wallpaper::create(gpu, &path, ty, config),
+                    wallpaper: wallpaper::create(gpu, &path, ty, config, packages),
                     monitor_id,
                 };
 
