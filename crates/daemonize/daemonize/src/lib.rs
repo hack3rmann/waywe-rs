@@ -46,11 +46,11 @@
 mod error;
 
 use crate::error::{check_err, errno};
+use rustix::process::Pid;
 use std::{
     env::set_current_dir,
     ffi::{CStr, CString},
     fs::File,
-    num::NonZeroI32,
     os::unix::{ffi::OsStringExt, io::AsRawFd},
     path::PathBuf,
     process::{self, exit},
@@ -328,7 +328,7 @@ impl Daemonize {
     pub fn execute(self) -> Outcome {
         match perform_fork() {
             Ok(Some(first_child_pid)) => Outcome::Parent(
-                unsafe { waitpid(first_child_pid.get()) }.map(|code| Parent {
+                unsafe { waitpid(first_child_pid.as_raw_pid()) }.map(|code| Parent {
                     first_child_exit_code: code,
                 }),
             ),
@@ -380,8 +380,8 @@ impl Daemonize {
                 set_cloexec_pid_file(pid_file_fd)?;
             }
 
-            if let Some(root) = self.root {
-                change_root(root)?;
+            if let Some(root) = &self.root {
+                rustix::process::chroot(root).map_err(Error::Chroot)?
             }
 
             if let Some(gid) = gid {
@@ -401,26 +401,9 @@ impl Daemonize {
     }
 }
 
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash, Debug)]
-struct Pid(NonZeroI32);
-
-impl Pid {
-    pub const fn new(pid: libc::pid_t) -> Option<Self> {
-        match NonZeroI32::new(pid) {
-            Some(value) => Some(Self(value)),
-            None => None,
-        }
-    }
-
-    pub const fn get(self) -> libc::pid_t {
-        self.0.get()
-    }
-}
-
 fn perform_fork() -> Result<Option<Pid>, Error> {
     match syscalls::fork() {
-        Ok(pid) => Ok(Pid::new(pid)),
+        Ok(pid) => Ok(Pid::from_raw(pid)),
         Err(errno) => Err(Error::Fork(errno)),
     }
 }
@@ -571,12 +554,6 @@ unsafe fn set_cloexec_pid_file(fd: libc::c_int) -> Result<(), Error> {
             Error::SetPidfileFlags,
         )?;
     }
-    Ok(())
-}
-
-unsafe fn change_root(path: PathBuf) -> Result<(), Error> {
-    let path_c = pathbuf_into_cstring(path)?;
-    check_err(unsafe { libc::chroot(path_c.as_ptr()) }, Error::Chroot)?;
     Ok(())
 }
 
