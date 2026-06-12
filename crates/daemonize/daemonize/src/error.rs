@@ -1,14 +1,8 @@
-pub type Errno = libc::c_int;
+use rustix::io::Errno;
 
 /// This error type for `Daemonize` `start` method.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub struct Error {
-    pub kind: ErrorKind,
-}
-
-/// This error type for `Daemonize` `start` method.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub enum ErrorKind {
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Error {
     Fork(Errno),
     Wait(Errno),
     DetachSession(Errno),
@@ -34,67 +28,67 @@ pub enum ErrorKind {
     Chroot(Errno),
 }
 
-impl ErrorKind {
+impl Error {
     fn description(&self) -> &str {
         match self {
-            ErrorKind::Fork(_) => "unable to fork",
-            ErrorKind::Wait(_) => "wait failed",
-            ErrorKind::DetachSession(_) => "unable to create new session",
-            ErrorKind::GroupNotFound => "unable to resolve group name to group id",
-            ErrorKind::GroupContainsNul => "group option contains NUL",
-            ErrorKind::SetGroup(_) => "unable to set group",
-            ErrorKind::UserNotFound => "unable to resolve user name to user id",
-            ErrorKind::UserContainsNul => "user option contains NUL",
-            ErrorKind::SetUser(_) => "unable to set user",
-            ErrorKind::ChangeDirectory(_) => "unable to change directory",
-            ErrorKind::PathContainsNul => "pid_file option contains NUL",
-            ErrorKind::OpenPidfile(_) => "unable to open pid file",
-            ErrorKind::GetPidfileFlags(_) => "unable get pid file flags",
-            ErrorKind::SetPidfileFlags(_) => "unable set pid file flags",
-            ErrorKind::LockPidfile(_) => "unable to lock pid file",
-            ErrorKind::ChownPidfile(_) => "unable to chown pid file",
-            ErrorKind::OpenDevnull(_) => "unable to open /dev/null",
-            ErrorKind::RedirectStreams(_) => "unable to redirect standard streams to /dev/null",
-            ErrorKind::CloseDevnull(_) => "unable to close /dev/null",
-            ErrorKind::TruncatePidfile(_) => "unable to truncate pid file",
-            ErrorKind::WritePid(_) => "unable to write self pid to pid file",
-            ErrorKind::WritePidUnspecifiedError => {
+            Error::Fork(_) => "unable to fork",
+            Error::Wait(_) => "wait failed",
+            Error::DetachSession(_) => "unable to create new session",
+            Error::GroupNotFound => "unable to resolve group name to group id",
+            Error::GroupContainsNul => "group option contains NUL",
+            Error::SetGroup(_) => "unable to set group",
+            Error::UserNotFound => "unable to resolve user name to user id",
+            Error::UserContainsNul => "user option contains NUL",
+            Error::SetUser(_) => "unable to set user",
+            Error::ChangeDirectory(_) => "unable to change directory",
+            Error::PathContainsNul => "pid_file option contains NUL",
+            Error::OpenPidfile(_) => "unable to open pid file",
+            Error::GetPidfileFlags(_) => "unable get pid file flags",
+            Error::SetPidfileFlags(_) => "unable set pid file flags",
+            Error::LockPidfile(_) => "unable to lock pid file",
+            Error::ChownPidfile(_) => "unable to chown pid file",
+            Error::OpenDevnull(_) => "unable to open /dev/null",
+            Error::RedirectStreams(_) => "unable to redirect standard streams to /dev/null",
+            Error::CloseDevnull(_) => "unable to close /dev/null",
+            Error::TruncatePidfile(_) => "unable to truncate pid file",
+            Error::WritePid(_) => "unable to write self pid to pid file",
+            Error::WritePidUnspecifiedError => {
                 "unable to write self pid to pid file due to unknown reason"
             }
-            ErrorKind::Chroot(_) => "unable to chroot into directory",
+            Error::Chroot(_) => "unable to chroot into directory",
         }
     }
 
     fn errno(&self) -> Option<Errno> {
         match self {
-            ErrorKind::Fork(errno) => Some(*errno),
-            ErrorKind::Wait(errno) => Some(*errno),
-            ErrorKind::DetachSession(errno) => Some(*errno),
-            ErrorKind::GroupNotFound => None,
-            ErrorKind::GroupContainsNul => None,
-            ErrorKind::SetGroup(errno) => Some(*errno),
-            ErrorKind::UserNotFound => None,
-            ErrorKind::UserContainsNul => None,
-            ErrorKind::SetUser(errno) => Some(*errno),
-            ErrorKind::ChangeDirectory(errno) => Some(*errno),
-            ErrorKind::PathContainsNul => None,
-            ErrorKind::OpenPidfile(errno) => Some(*errno),
-            ErrorKind::GetPidfileFlags(errno) => Some(*errno),
-            ErrorKind::SetPidfileFlags(errno) => Some(*errno),
-            ErrorKind::LockPidfile(errno) => Some(*errno),
-            ErrorKind::ChownPidfile(errno) => Some(*errno),
-            ErrorKind::OpenDevnull(errno) => Some(*errno),
-            ErrorKind::RedirectStreams(errno) => Some(*errno),
-            ErrorKind::CloseDevnull(errno) => Some(*errno),
-            ErrorKind::TruncatePidfile(errno) => Some(*errno),
-            ErrorKind::WritePid(errno) => Some(*errno),
-            ErrorKind::WritePidUnspecifiedError => None,
-            ErrorKind::Chroot(errno) => Some(*errno),
+            Error::Fork(errno) => Some(*errno),
+            Error::Wait(errno) => Some(*errno),
+            Error::DetachSession(errno) => Some(*errno),
+            Error::GroupNotFound => None,
+            Error::GroupContainsNul => None,
+            Error::SetGroup(errno) => Some(*errno),
+            Error::UserNotFound => None,
+            Error::UserContainsNul => None,
+            Error::SetUser(errno) => Some(*errno),
+            Error::ChangeDirectory(errno) => Some(*errno),
+            Error::PathContainsNul => None,
+            Error::OpenPidfile(errno) => Some(*errno),
+            Error::GetPidfileFlags(errno) => Some(*errno),
+            Error::SetPidfileFlags(errno) => Some(*errno),
+            Error::LockPidfile(errno) => Some(*errno),
+            Error::ChownPidfile(errno) => Some(*errno),
+            Error::OpenDevnull(errno) => Some(*errno),
+            Error::RedirectStreams(errno) => Some(*errno),
+            Error::CloseDevnull(errno) => Some(*errno),
+            Error::TruncatePidfile(errno) => Some(*errno),
+            Error::WritePid(errno) => Some(*errno),
+            Error::WritePidUnspecifiedError => None,
+            Error::Chroot(errno) => Some(*errno),
         }
     }
 }
 
-impl std::fmt::Display for ErrorKind {
+impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.description())?;
         if let Some(errno) = self.errno() {
@@ -104,21 +98,7 @@ impl std::fmt::Display for ErrorKind {
     }
 }
 
-impl std::error::Error for ErrorKind {}
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.kind)
-    }
-}
-
 impl std::error::Error for Error {}
-
-impl From<ErrorKind> for Error {
-    fn from(kind: ErrorKind) -> Self {
-        Self { kind }
-    }
-}
 
 pub trait Num {
     fn is_err(&self) -> bool;
@@ -154,7 +134,7 @@ impl Num for isize {
     }
 }
 
-pub fn check_err<N: Num, F: FnOnce(Errno) -> ErrorKind>(ret: N, f: F) -> Result<N, ErrorKind> {
+pub fn check_err<N: Num, F: FnOnce(Errno) -> Error>(ret: N, f: F) -> Result<N, Error> {
     if ret.is_err() {
         Err(f(errno()))
     } else {
@@ -163,7 +143,9 @@ pub fn check_err<N: Num, F: FnOnce(Errno) -> ErrorKind>(ret: N, f: F) -> Result<
 }
 
 pub fn errno() -> Errno {
-    std::io::Error::last_os_error()
+    let value = std::io::Error::last_os_error()
         .raw_os_error()
-        .expect("errno")
+        .expect("errno");
+
+    Errno::from_raw_os_error(value)
 }

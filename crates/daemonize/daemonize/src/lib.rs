@@ -50,12 +50,13 @@ use std::{
     env::set_current_dir,
     ffi::{CStr, CString},
     fs::File,
+    num::NonZeroI32,
     os::unix::{ffi::OsStringExt, io::AsRawFd},
-    path::{Path, PathBuf},
-    process::exit,
+    path::PathBuf,
+    process::{self, exit},
 };
 
-pub use crate::error::{Error, ErrorKind};
+pub use crate::error::Error;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 enum UserImpl {
@@ -70,16 +71,22 @@ pub struct User {
 }
 
 impl From<&str> for User {
-    fn from(t: &str) -> User {
-        User {
-            inner: UserImpl::Name(t.to_owned()),
+    fn from(t: &str) -> Self {
+        Self::from(t.to_owned())
+    }
+}
+
+impl From<String> for User {
+    fn from(value: String) -> Self {
+        Self {
+            inner: UserImpl::Name(value),
         }
     }
 }
 
 impl From<u32> for User {
-    fn from(t: u32) -> User {
-        User {
+    fn from(t: u32) -> Self {
+        Self {
             inner: UserImpl::Id(t as libc::uid_t),
         }
     }
@@ -98,9 +105,15 @@ pub struct Group {
 }
 
 impl From<&str> for Group {
-    fn from(t: &str) -> Group {
-        Group {
-            inner: GroupImpl::Name(t.to_owned()),
+    fn from(t: &str) -> Self {
+        Self::from(t.to_owned())
+    }
+}
+
+impl From<String> for Group {
+    fn from(value: String) -> Self {
+        Self {
+            inner: GroupImpl::Name(value),
         }
     }
 }
@@ -176,7 +189,7 @@ pub struct Child;
 
 /// Daemonization process outcome. Can be matched to check is it a parent process or a child
 /// process.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Outcome {
     Parent(Result<Parent, Error>),
     Child(Result<Child, Error>),
@@ -211,7 +224,6 @@ impl Outcome {
 ///   * drop group privileges;
 ///   * change root directory;
 ///   * change the pid-file ownership to provided user (and/or) group;
-///   * execute any provided action just before dropping privileges.
 ///
 #[derive(Debug)]
 pub struct Daemonize {
@@ -246,8 +258,8 @@ impl Default for Daemonize {
 
 impl Daemonize {
     /// Create pid-file at `path`, lock it exclusive and write daemon pid.
-    pub fn pid_file<F: AsRef<Path>>(mut self, path: F) -> Self {
-        self.pid_file = Some(path.as_ref().to_owned());
+    pub fn pid_file(mut self, path: impl Into<PathBuf>) -> Self {
+        self.pid_file = Some(path.into());
         self
     }
 
@@ -258,8 +270,8 @@ impl Daemonize {
     }
 
     /// Change working directory to `path` or `/` by default.
-    pub fn working_directory<F: AsRef<Path>>(mut self, path: F) -> Self {
-        self.directory = path.as_ref().to_owned();
+    pub fn working_directory(mut self, path: impl Into<PathBuf>) -> Self {
+        self.directory = path.into();
         self
     }
 
@@ -282,19 +294,19 @@ impl Daemonize {
     }
 
     /// Change root to `path`
-    pub fn chroot<F: AsRef<Path>>(mut self, path: F) -> Self {
-        self.root = Some(path.as_ref().to_owned());
+    pub fn chroot(mut self, path: impl Into<PathBuf>) -> Self {
+        self.root = Some(path.into());
         self
     }
 
     /// Configuration for the child process's standard output stream.
-    pub fn stdout<S: Into<Stdio>>(mut self, stdio: S) -> Self {
+    pub fn stdout(mut self, stdio: impl Into<Stdio>) -> Self {
         self.stdout = stdio.into();
         self
     }
 
     /// Configuration for the child process's standard error stream.
-    pub fn stderr<S: Into<Stdio>>(mut self, stdio: S) -> Self {
+    pub fn stderr(mut self, stdio: impl Into<Stdio>) -> Self {
         self.stderr = stdio.into();
         self
     }
@@ -305,7 +317,7 @@ impl Daemonize {
         match self.execute() {
             Outcome::Parent(Ok(Parent {
                 first_child_exit_code,
-            })) => exit(first_child_exit_code),
+            })) => process::exit(first_child_exit_code),
             Outcome::Parent(Err(err)) => Err(err),
             Outcome::Child(Ok(_child)) => Ok(()),
             Outcome::Child(Err(err)) => Err(err),
@@ -314,26 +326,23 @@ impl Daemonize {
 
     /// Execute daemonization process, don't terminate parent after first fork.
     pub fn execute(self) -> Outcome {
-        unsafe {
-            match perform_fork() {
-                Ok(Some(first_child_pid)) => Outcome::Parent(match waitpid(first_child_pid) {
-                    Err(err) => Err(err.into()),
-                    Ok(first_child_exit_code) => Ok(Parent {
-                        first_child_exit_code,
-                    }),
+        match perform_fork() {
+            Ok(Some(first_child_pid)) => Outcome::Parent(
+                unsafe { waitpid(first_child_pid.get()) }.map(|code| Parent {
+                    first_child_exit_code: code,
                 }),
-                Err(err) => Outcome::Parent(Err(err.into())),
-                Ok(None) => match self.execute_child() {
-                    Ok(()) => Outcome::Child(Ok(Child)),
-                    Err(err) => Outcome::Child(Err(err.into())),
-                },
-            }
+            ),
+            Err(err) => Outcome::Parent(Err(err)),
+            Ok(None) => match self.execute_child() {
+                Ok(()) => Outcome::Child(Ok(Child)),
+                Err(err) => Outcome::Child(Err(err)),
+            },
         }
     }
 
-    fn execute_child(self) -> Result<(), ErrorKind> {
+    fn execute_child(self) -> Result<(), Error> {
         unsafe {
-            set_current_dir(&self.directory).map_err(|_| ErrorKind::ChangeDirectory(errno()))?;
+            set_current_dir(&self.directory).map_err(|_| Error::ChangeDirectory(errno()))?;
             set_sid()?;
             libc::umask(self.umask.inner);
 
@@ -392,22 +401,41 @@ impl Daemonize {
     }
 }
 
-unsafe fn perform_fork() -> Result<Option<libc::pid_t>, ErrorKind> {
-    let pid = check_err(unsafe { libc::fork() }, ErrorKind::Fork)?;
-    if pid == 0 { Ok(None) } else { Ok(Some(pid)) }
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash, Debug)]
+struct Pid(NonZeroI32);
+
+impl Pid {
+    pub const fn new(pid: libc::pid_t) -> Option<Self> {
+        match NonZeroI32::new(pid) {
+            Some(value) => Some(Self(value)),
+            None => None,
+        }
+    }
+
+    pub const fn get(self) -> libc::pid_t {
+        self.0.get()
+    }
 }
 
-unsafe fn waitpid(pid: libc::pid_t) -> Result<libc::c_int, ErrorKind> {
+fn perform_fork() -> Result<Option<Pid>, Error> {
+    match syscalls::fork() {
+        Ok(pid) => Ok(Pid::new(pid)),
+        Err(errno) => Err(Error::Fork(errno)),
+    }
+}
+
+unsafe fn waitpid(pid: libc::pid_t) -> Result<libc::c_int, Error> {
     let mut child_ret = 0;
     check_err(
         unsafe { libc::waitpid(pid, &mut child_ret, 0) },
-        ErrorKind::Wait,
+        Error::Wait,
     )?;
     Ok(child_ret)
 }
 
-unsafe fn set_sid() -> Result<(), ErrorKind> {
-    check_err(unsafe { libc::setsid() }, ErrorKind::DetachSession)?;
+unsafe fn set_sid() -> Result<(), Error> {
+    check_err(unsafe { libc::setsid() }, Error::DetachSession)?;
     Ok(())
 }
 
@@ -415,10 +443,10 @@ unsafe fn redirect_standard_streams(
     stdin: Stdio,
     stdout: Stdio,
     stderr: Stdio,
-) -> Result<(), ErrorKind> {
+) -> Result<(), Error> {
     let devnull_fd = check_err(
         unsafe { libc::open(b"/dev/null\0" as *const [u8; 10] as _, libc::O_RDWR) },
-        ErrorKind::OpenDevnull,
+        Error::OpenDevnull,
     )?;
 
     let process_stdio = |fd, stdio: Stdio| {
@@ -426,15 +454,12 @@ unsafe fn redirect_standard_streams(
             StdioImpl::Devnull => {
                 check_err(
                     unsafe { libc::dup2(devnull_fd, fd) },
-                    ErrorKind::RedirectStreams,
+                    Error::RedirectStreams,
                 )?;
             }
             StdioImpl::RedirectToFile(file) => {
                 let raw_fd = file.as_raw_fd();
-                check_err(
-                    unsafe { libc::dup2(raw_fd, fd) },
-                    ErrorKind::RedirectStreams,
-                )?;
+                check_err(unsafe { libc::dup2(raw_fd, fd) }, Error::RedirectStreams)?;
             }
             StdioImpl::Keep => (),
         };
@@ -445,120 +470,113 @@ unsafe fn redirect_standard_streams(
     process_stdio(libc::STDOUT_FILENO, stdout)?;
     process_stdio(libc::STDERR_FILENO, stderr)?;
 
-    check_err(unsafe { libc::close(devnull_fd) }, ErrorKind::CloseDevnull)?;
+    check_err(unsafe { libc::close(devnull_fd) }, Error::CloseDevnull)?;
 
     Ok(())
 }
 
-unsafe fn get_group(group: Group) -> Result<libc::gid_t, ErrorKind> {
+unsafe fn get_group(group: Group) -> Result<libc::gid_t, Error> {
     match group.inner {
         GroupImpl::Id(id) => Ok(id),
         GroupImpl::Name(name) => {
-            let s = CString::new(name).map_err(|_| ErrorKind::GroupContainsNul)?;
+            let s = CString::new(name).map_err(|_| Error::GroupContainsNul)?;
             match unsafe { get_gid_by_name(&s) } {
                 Some(id) => unsafe { get_group(id.into()) },
-                None => Err(ErrorKind::GroupNotFound),
+                None => Err(Error::GroupNotFound),
             }
         }
     }
 }
 
-unsafe fn set_group(group: libc::gid_t) -> Result<(), ErrorKind> {
-    check_err(unsafe { libc::setgid(group) }, ErrorKind::SetGroup)?;
+unsafe fn set_group(group: libc::gid_t) -> Result<(), Error> {
+    check_err(unsafe { libc::setgid(group) }, Error::SetGroup)?;
     Ok(())
 }
 
-unsafe fn get_user(user: User) -> Result<libc::uid_t, ErrorKind> {
+unsafe fn get_user(user: User) -> Result<libc::uid_t, Error> {
     match user.inner {
         UserImpl::Id(id) => Ok(id),
         UserImpl::Name(name) => {
-            let s = CString::new(name).map_err(|_| ErrorKind::UserContainsNul)?;
+            let s = CString::new(name).map_err(|_| Error::UserContainsNul)?;
             match unsafe { get_uid_by_name(&s) } {
                 Some(id) => unsafe { get_user(id.into()) },
-                None => Err(ErrorKind::UserNotFound),
+                None => Err(Error::UserNotFound),
             }
         }
     }
 }
 
-unsafe fn set_user(user: libc::uid_t) -> Result<(), ErrorKind> {
-    check_err(unsafe { libc::setuid(user) }, ErrorKind::SetUser)?;
+unsafe fn set_user(user: libc::uid_t) -> Result<(), Error> {
+    check_err(unsafe { libc::setuid(user) }, Error::SetUser)?;
     Ok(())
 }
 
-unsafe fn create_pid_file(path: PathBuf) -> Result<libc::c_int, ErrorKind> {
+unsafe fn create_pid_file(path: PathBuf) -> Result<libc::c_int, Error> {
     let path_c = pathbuf_into_cstring(path)?;
 
     let fd = check_err(
         unsafe { libc::open(path_c.as_ptr(), libc::O_WRONLY | libc::O_CREAT, 0o666) },
-        ErrorKind::OpenPidfile,
+        Error::OpenPidfile,
     )?;
 
     check_err(
         unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) },
-        ErrorKind::LockPidfile,
+        Error::LockPidfile,
     )?;
     Ok(fd)
 }
 
-unsafe fn chown_pid_file(
-    path: PathBuf,
-    uid: libc::uid_t,
-    gid: libc::gid_t,
-) -> Result<(), ErrorKind> {
+unsafe fn chown_pid_file(path: PathBuf, uid: libc::uid_t, gid: libc::gid_t) -> Result<(), Error> {
     let path_c = pathbuf_into_cstring(path)?;
     check_err(
         unsafe { libc::chown(path_c.as_ptr(), uid, gid) },
-        ErrorKind::ChownPidfile,
+        Error::ChownPidfile,
     )?;
     Ok(())
 }
 
-unsafe fn write_pid_file(fd: libc::c_int) -> Result<(), ErrorKind> {
+unsafe fn write_pid_file(fd: libc::c_int) -> Result<(), Error> {
     let pid = unsafe { libc::getpid() };
     let pid_buf = format!("{}\n", pid).into_bytes();
     let pid_length = pid_buf.len();
     let pid_c = CString::new(pid_buf).unwrap();
-    check_err(
-        unsafe { libc::ftruncate(fd, 0) },
-        ErrorKind::TruncatePidfile,
-    )?;
+    check_err(unsafe { libc::ftruncate(fd, 0) }, Error::TruncatePidfile)?;
 
     let written = check_err(
         unsafe { libc::write(fd, pid_c.as_ptr() as *const libc::c_void, pid_length) },
-        ErrorKind::WritePid,
+        Error::WritePid,
     )?;
 
     if written < pid_length as isize {
-        return Err(ErrorKind::WritePidUnspecifiedError);
+        return Err(Error::WritePidUnspecifiedError);
     }
 
     Ok(())
 }
 
-unsafe fn set_cloexec_pid_file(fd: libc::c_int) -> Result<(), ErrorKind> {
+unsafe fn set_cloexec_pid_file(fd: libc::c_int) -> Result<(), Error> {
     if cfg!(not(target_os = "redox")) {
         let flags = check_err(
             unsafe { libc::fcntl(fd, libc::F_GETFD) },
-            ErrorKind::GetPidfileFlags,
+            Error::GetPidfileFlags,
         )?;
 
         check_err(
             unsafe { libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC) },
-            ErrorKind::SetPidfileFlags,
+            Error::SetPidfileFlags,
         )?;
     } else {
         check_err(
             unsafe { libc::ioctl(fd, libc::FIOCLEX) },
-            ErrorKind::SetPidfileFlags,
+            Error::SetPidfileFlags,
         )?;
     }
     Ok(())
 }
 
-unsafe fn change_root(path: PathBuf) -> Result<(), ErrorKind> {
+unsafe fn change_root(path: PathBuf) -> Result<(), Error> {
     let path_c = pathbuf_into_cstring(path)?;
-    check_err(unsafe { libc::chroot(path_c.as_ptr()) }, ErrorKind::Chroot)?;
+    check_err(unsafe { libc::chroot(path_c.as_ptr()) }, Error::Chroot)?;
     Ok(())
 }
 
@@ -582,6 +600,33 @@ unsafe fn get_uid_by_name(name: &CStr) -> Option<libc::uid_t> {
     }
 }
 
-fn pathbuf_into_cstring(path: PathBuf) -> Result<CString, ErrorKind> {
-    CString::new(path.into_os_string().into_vec()).map_err(|_| ErrorKind::PathContainsNul)
+fn pathbuf_into_cstring(path: PathBuf) -> Result<CString, Error> {
+    CString::new(path.into_os_string().into_vec()).map_err(|_| Error::PathContainsNul)
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+mod syscalls {
+    use rustix::io::Errno;
+    use std::arch::asm;
+
+    pub fn fork() -> Result<libc::pid_t, Errno> {
+        let ret: i64;
+
+        unsafe {
+            asm!(
+                "syscall",
+                in("rax") libc::SYS_fork as u64,
+                lateout("rax") ret,
+                lateout("rcx") _,
+                lateout("r11") _,
+                options(nostack),
+            );
+        }
+
+        if (-4095..0).contains(&ret) {
+            Err(Errno::from_raw_os_error(ret as i32))
+        } else {
+            Ok(ret as libc::pid_t)
+        }
+    }
 }
