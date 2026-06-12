@@ -91,9 +91,9 @@ pub enum DetachError {
 impl Report for DetachError {
     fn to_setup_error(&self) -> Option<DaemonSetupError> {
         Some(match self {
-            DetachError::Daemonize(DaemonizeError::LockPidfile(errno)) => {
+            &DetachError::Daemonize(DaemonizeError::LockPidfile(errno)) => {
                 DaemonSetupError::DaemonPidLock {
-                    info: errno.to_string(),
+                    errno: errno.into(),
                 }
             }
             _ => return None,
