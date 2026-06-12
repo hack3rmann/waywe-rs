@@ -976,6 +976,7 @@ version = "0.5.0"
 dependencies = [
  "libc",
  "rustix",
+ "thiserror",
 ]
 
 [[package]]

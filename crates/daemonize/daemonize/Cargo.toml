@@ -14,3 +14,4 @@ categories = ["os::unix-apis"]
 [dependencies]
 libc = "0.2.98"
 rustix.workspace = true
+thiserror.workspace = true
