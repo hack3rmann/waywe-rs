@@ -1,4 +1,5 @@
 use rustix::{
+    buffer::spare_capacity,
     event::epoll::{self, Event, EventData, EventFlags},
     fs::Timespec,
     io::Errno,
@@ -33,7 +34,11 @@ impl Epoll {
 
         buf.clear();
 
-        epoll::wait(&self.fd, &mut buf.events, wait_time.as_ref())?;
+        epoll::wait(
+            &self.fd,
+            spare_capacity(&mut buf.events),
+            wait_time.as_ref(),
+        )?;
 
         Ok(())
     }
@@ -44,8 +49,8 @@ pub struct PolledFds {
 }
 
 impl PolledFds {
-    pub const fn new() -> Self {
-        Self { events: vec![] }
+    pub fn new() -> Self {
+        Self::with_capacity(1)
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
