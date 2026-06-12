@@ -87,3 +87,4 @@ flate2 = "1.1.9"
 tar = "0.4.46"
 tap = "1.0.1"
 miette = { version = "7.6.0", features = ["fancy"] }
+display-error-chain = "0.2.2"

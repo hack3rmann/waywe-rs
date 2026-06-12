@@ -66,19 +66,17 @@ pub enum ConnectWaylandSocketError {
     /// `$WAYLAND_SOCKET` env variable is not `i32` integer
     #[error("invalid $WAYLAND_SOCKET env variable '{0}'")]
     InvallidWaylandSocketEnvVar(String),
-
     /// Invalid file desc in `$WAYLAND_SOCKET`
     #[error(transparent)]
     GetSockNameFailed(#[from] rustix::io::Errno),
-
     /// Socket address passed into `$WAYLAND_SOCKET` var is not UNIX
     #[error("socket address '{0:?}' is not unix")]
     SocketAddrIsNotUnix(Box<SocketAddrAny>),
-
     /// Connect failed
     #[error("failed to connect to wayland socket from '{path}': {error}")]
     FailedToConnectToPath {
         /// OS error
+        #[source]
         error: io::Error,
         /// Path tried to connect to
         path: PathBuf,

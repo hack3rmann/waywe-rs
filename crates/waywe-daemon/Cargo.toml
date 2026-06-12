@@ -44,6 +44,7 @@ flate2.workspace = true
 tar.workspace = true
 tap.workspace = true
 bincode.workspace = true
+display-error-chain.workspace = true
 
 [dev-dependencies]
 libc = "0.2.171"

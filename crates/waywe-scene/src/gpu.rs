@@ -1,4 +1,5 @@
 use ash::vk;
+use display_error_chain::ErrorChainExt;
 use waywe_runtime::shaders::{ShaderCache, ShaderDescriptor};
 use wgpu::hal::{DeviceError, api};
 
@@ -35,7 +36,7 @@ impl Gpu {
             .await
         {
             Ok(adapter) => adapter,
-            Err(error) => panic!("failed to request adapter: {error:?}"),
+            Err(error) => panic!("failed to request adapter: {}", error.chain()),
         };
 
         let limits = adapter.limits();
@@ -124,7 +125,7 @@ impl Gpu {
             )
         } {
             Ok(x) => x,
-            Err(error) => panic!("failed to request device: {error}"),
+            Err(error) => panic!("failed to request device: {}", error.chain()),
         };
 
         Self {

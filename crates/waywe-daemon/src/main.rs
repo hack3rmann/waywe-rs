@@ -6,6 +6,7 @@ pub mod wallpaper_app;
 use crate::detach::{DaemonSetupReporter, UnwrapOrReport};
 use clap::Parser;
 use detach::detach;
+use display_error_chain::ErrorChainExt;
 use event_loop::EventLoop;
 use std::{io, path::PathBuf};
 use tracing::info;
@@ -46,7 +47,7 @@ fn main() {
     let app = WallpaperApp::from_config(config);
 
     let mut event_loop = EventLoop::new(app).unwrap_or_else(|err| {
-        panic!("failed to construct event loop: {err}");
+        panic!("failed to construct event loop: {}", err.chain());
     });
 
     reporter.report(Ok(()));

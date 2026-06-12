@@ -27,10 +27,10 @@ use waywe_runtime::{
 pub enum CreateEventLoopError {
     #[error(transparent)]
     CreateRuntime(#[from] CreateRuntimeError),
-    #[error("failed to create event queue: {0}")]
-    CrateEventQueue(io::Error),
-    #[error("failed to create epoll instance: {0}")]
-    CreateEpoll(Errno),
+    #[error("failed to create event queue")]
+    CrateEventQueue(#[source] io::Error),
+    #[error("failed to create epoll instance")]
+    CreateEpoll(#[source] Errno),
 }
 
 pub struct EventLoop {
