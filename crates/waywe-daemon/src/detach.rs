@@ -1,5 +1,6 @@
 use bincode::error::EncodeError;
 use daemonize::Daemonize;
+use std::error::Error;
 use std::{
     fs::{self, File},
     io::{self, BufWriter},
@@ -41,6 +42,29 @@ impl Drop for DaemonResultPipe {
     }
 }
 
+pub struct DaemonSetupReporter {
+    pipe: Option<DaemonResultPipe>,
+}
+
+impl DaemonSetupReporter {
+    pub fn open(path: Option<impl AsRef<Path>>) -> Result<Self, io::Error> {
+        let Some(path) = path else {
+            return Ok(Self { pipe: None });
+        };
+
+        Ok(Self {
+            pipe: Some(DaemonResultPipe::open(path)?),
+        })
+    }
+
+    pub fn report(&mut self, result: DaemonSetupResult) {
+        let Some(mut pipe) = self.pipe.take() else {
+            return;
+        };
+        _ = pipe.write(result);
+    }
+}
+
 pub fn detach() -> Result<(), DetachError> {
     fs::create_dir_all("/tmp/waywe")?;
 
@@ -62,4 +86,45 @@ pub enum DetachError {
     Io(#[from] io::Error),
     #[error(transparent)]
     Daemonize(#[from] DaemonizeError),
+}
+
+impl Report for DetachError {
+    fn to_setup_error(&self) -> Option<DaemonSetupError> {
+        Some(match self {
+            DetachError::Daemonize(DaemonizeError::LockPidfile(errno)) => {
+                DaemonSetupError::DaemonPidLock {
+                    info: errno.to_string(),
+                }
+            }
+            _ => return None,
+        })
+    }
+}
+
+pub trait Report {
+    fn to_setup_error(&self) -> Option<DaemonSetupError>;
+}
+
+pub trait UnwrapOrReport {
+    type Output;
+
+    fn unwrap_or_report(self, reporter: &mut DaemonSetupReporter) -> Self::Output;
+}
+
+impl<T, E: Report + Error> UnwrapOrReport for Result<T, E> {
+    type Output = T;
+
+    #[track_caller]
+    fn unwrap_or_report(self, reporter: &mut DaemonSetupReporter) -> Self::Output {
+        match self {
+            Ok(output) => output,
+            Err(error) => match error.to_setup_error() {
+                Some(setup) => {
+                    reporter.report(Err(setup));
+                    panic!("called `.unwrap_or_report` on reported Err: {error}")
+                }
+                None => panic!("called `.unwrap_or_report` on unreportable Err: {error}"),
+            },
+        }
+    }
 }

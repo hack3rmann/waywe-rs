@@ -3,15 +3,15 @@ pub mod event_loop;
 pub mod wallpaper;
 pub mod wallpaper_app;
 
-use crate::detach::{DaemonResultPipe, DetachError};
+use crate::detach::{DaemonSetupReporter, UnwrapOrReport};
 use clap::Parser;
-use detach::{DaemonizeError, detach};
+use detach::detach;
 use event_loop::EventLoop;
-use std::{io, path::PathBuf, process::ExitCode};
+use std::{io, path::PathBuf};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use wallpaper_app::WallpaperApp;
-use waywe_ipc::{DaemonSetupError, config::Config};
+use waywe_ipc::config::Config;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -24,7 +24,7 @@ struct Args {
     init_signal_fifo: Option<PathBuf>,
 }
 
-fn main() -> ExitCode {
+fn main() {
     let filter = EnvFilter::builder()
         .parse("info,wgpu_hal::vulkan::instance=warn")
         .unwrap();
@@ -36,27 +36,10 @@ fn main() -> ExitCode {
 
     let args = Args::parse();
 
-    let mut init_pipe = args
-        .init_signal_fifo
-        .as_ref()
-        .map(DaemonResultPipe::open)
-        .map(Result::unwrap);
+    let mut reporter = DaemonSetupReporter::open(args.init_signal_fifo.as_ref()).unwrap();
 
     if args.run_in_background {
-        match detach() {
-            Ok(()) => {}
-            Err(DetachError::Daemonize(DaemonizeError::LockPidfile(errno))) => {
-                if let Some(mut pipe) = init_pipe.take() {
-                    pipe.write(Err(DaemonSetupError::DaemonPidLock {
-                        info: errno.to_string(),
-                    }))
-                    .unwrap();
-                }
-
-                panic!();
-            }
-            Err(error) => panic!("{error}"),
-        }
+        detach().unwrap_or_report(&mut reporter);
     }
 
     let config = Config::read();
@@ -66,13 +49,8 @@ fn main() -> ExitCode {
         panic!("failed to construct event loop: {err}");
     });
 
-    if let Some(mut pipe) = init_pipe.take() {
-        pipe.write(Ok(())).unwrap();
-    }
-
+    reporter.report(Ok(()));
     info!("the daemon is ready to process commands");
 
     event_loop.run();
-
-    ExitCode::SUCCESS
 }
