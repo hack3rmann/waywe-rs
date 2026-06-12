@@ -188,7 +188,7 @@ impl EnvData {
 }
 
 pub fn execute_tester() {
-    let mut daemonize = Daemonize::new();
+    let mut daemonize = Daemonize::default();
     let mut args = std::env::args().skip(1);
 
     fn read_value<T: FromStr>(args: &mut dyn Iterator<Item = String>, key: &str) -> T

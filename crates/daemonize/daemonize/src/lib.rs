@@ -45,21 +45,17 @@
 
 mod error;
 
-extern crate libc;
+use crate::error::{check_err, errno};
+use std::{
+    env::set_current_dir,
+    ffi::{CStr, CString},
+    fs::File,
+    os::unix::{ffi::OsStringExt, io::AsRawFd},
+    path::{Path, PathBuf},
+    process::exit,
+};
 
-use std::env::set_current_dir;
-use std::ffi::{CStr, CString};
-use std::fmt;
-use std::fs::File;
-use std::mem::transmute;
-use std::os::unix::ffi::OsStringExt;
-use std::os::unix::io::AsRawFd;
-use std::path::{Path, PathBuf};
-use std::process::exit;
-
-use self::error::{check_err, errno};
-
-pub use self::error::{Error, ErrorKind};
+pub use crate::error::{Error, ErrorKind};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 enum UserImpl {
@@ -176,19 +172,17 @@ pub struct Parent {
 /// Child process execution outcome.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[non_exhaustive]
-pub struct Child<T> {
-    pub privileged_action_result: T,
-}
+pub struct Child;
 
 /// Daemonization process outcome. Can be matched to check is it a parent process or a child
 /// process.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Outcome<T> {
+pub enum Outcome {
     Parent(Result<Parent, Error>),
-    Child(Result<Child<T>, Error>),
+    Child(Result<Child, Error>),
 }
 
-impl<T> Outcome<T> {
+impl Outcome {
     pub fn is_parent(&self) -> bool {
         match self {
             Outcome::Parent(_) => true,
@@ -219,7 +213,8 @@ impl<T> Outcome<T> {
 ///   * change the pid-file ownership to provided user (and/or) group;
 ///   * execute any provided action just before dropping privileges.
 ///
-pub struct Daemonize<T> {
+#[derive(Debug)]
+pub struct Daemonize {
     directory: PathBuf,
     pid_file: Option<PathBuf>,
     chown_pid_file: bool,
@@ -227,45 +222,20 @@ pub struct Daemonize<T> {
     group: Option<Group>,
     umask: Mask,
     root: Option<PathBuf>,
-    privileged_action: Box<dyn FnOnce() -> T>,
     stdin: Stdio,
     stdout: Stdio,
     stderr: Stdio,
 }
 
-impl<T> fmt::Debug for Daemonize<T> {
-    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt.debug_struct("Daemonize")
-            .field("directory", &self.directory)
-            .field("pid_file", &self.pid_file)
-            .field("chown_pid_file", &self.chown_pid_file)
-            .field("user", &self.user)
-            .field("group", &self.group)
-            .field("umask", &self.umask)
-            .field("root", &self.root)
-            .field("stdin", &self.stdin)
-            .field("stdout", &self.stdout)
-            .field("stderr", &self.stderr)
-            .finish()
-    }
-}
-
-impl Default for Daemonize<()> {
+impl Default for Daemonize {
     fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Daemonize<()> {
-    pub fn new() -> Self {
         Daemonize {
-            directory: Path::new("/").to_owned(),
+            directory: PathBuf::from("/"),
             pid_file: None,
             chown_pid_file: false,
             user: None,
             group: None,
             umask: 0o027.into(),
-            privileged_action: Box::new(|| ()),
             root: None,
             stdin: Stdio::devnull(),
             stdout: Stdio::devnull(),
@@ -274,7 +244,7 @@ impl Daemonize<()> {
     }
 }
 
-impl<T> Daemonize<T> {
+impl Daemonize {
     /// Create pid-file at `path`, lock it exclusive and write daemon pid.
     pub fn pid_file<F: AsRef<Path>>(mut self, path: F) -> Self {
         self.pid_file = Some(path.as_ref().to_owned());
@@ -317,14 +287,6 @@ impl<T> Daemonize<T> {
         self
     }
 
-    /// Execute `action` just before dropping privileges. Most common use case is to open
-    /// listening socket. Result of `action` execution will be returned by `start` method.
-    pub fn privileged_action<N, F: FnOnce() -> N + 'static>(self, action: F) -> Daemonize<N> {
-        let mut new: Daemonize<N> = unsafe { transmute(self) };
-        new.privileged_action = Box::new(action);
-        new
-    }
-
     /// Configuration for the child process's standard output stream.
     pub fn stdout<S: Into<Stdio>>(mut self, stdio: S) -> Self {
         self.stdout = stdio.into();
@@ -336,21 +298,22 @@ impl<T> Daemonize<T> {
         self.stderr = stdio.into();
         self
     }
+
     /// Start daemonization process, terminate parent after first fork, returns privileged action
     /// result to the child.
-    pub fn start(self) -> Result<T, Error> {
+    pub fn start(self) -> Result<(), Error> {
         match self.execute() {
             Outcome::Parent(Ok(Parent {
                 first_child_exit_code,
             })) => exit(first_child_exit_code),
             Outcome::Parent(Err(err)) => Err(err),
-            Outcome::Child(Ok(child)) => Ok(child.privileged_action_result),
+            Outcome::Child(Ok(_child)) => Ok(()),
             Outcome::Child(Err(err)) => Err(err),
         }
     }
 
     /// Execute daemonization process, don't terminate parent after first fork.
-    pub fn execute(self) -> Outcome<T> {
+    pub fn execute(self) -> Outcome {
         unsafe {
             match perform_fork() {
                 Ok(Some(first_child_pid)) => Outcome::Parent(match waitpid(first_child_pid) {
@@ -361,16 +324,14 @@ impl<T> Daemonize<T> {
                 }),
                 Err(err) => Outcome::Parent(Err(err.into())),
                 Ok(None) => match self.execute_child() {
-                    Ok(privileged_action_result) => Outcome::Child(Ok(Child {
-                        privileged_action_result,
-                    })),
+                    Ok(()) => Outcome::Child(Ok(Child)),
                     Err(err) => Outcome::Child(Err(err.into())),
                 },
             }
         }
     }
 
-    fn execute_child(self) -> Result<T, ErrorKind> {
+    fn execute_child(self) -> Result<(), ErrorKind> {
         unsafe {
             set_current_dir(&self.directory).map_err(|_| ErrorKind::ChangeDirectory(errno()))?;
             set_sid()?;
@@ -410,8 +371,6 @@ impl<T> Daemonize<T> {
                 set_cloexec_pid_file(pid_file_fd)?;
             }
 
-            let privileged_action_result = (self.privileged_action)();
-
             if let Some(root) = self.root {
                 change_root(root)?;
             }
@@ -428,7 +387,7 @@ impl<T> Daemonize<T> {
                 write_pid_file(pid_file_fd)?;
             }
 
-            Ok(privileged_action_result)
+            Ok(())
         }
     }
 }

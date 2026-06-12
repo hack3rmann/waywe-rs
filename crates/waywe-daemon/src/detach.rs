@@ -46,7 +46,7 @@ pub fn detach() -> Result<(), DetachError> {
     let stdout = File::create("/tmp/waywe/daemon-stdout.log")?;
     let stderr = File::create("/tmp/waywe/daemon-stderr.log")?;
 
-    Daemonize::new()
+    Daemonize::default()
         .pid_file("/tmp/waywe/daemon.pid")
         .stdout(stdout)
         .stderr(stderr)
