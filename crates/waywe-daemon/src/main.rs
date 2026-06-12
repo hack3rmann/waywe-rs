@@ -3,15 +3,15 @@ pub mod event_loop;
 pub mod wallpaper;
 pub mod wallpaper_app;
 
-use crate::detach::DaemonResultPipe;
+use crate::detach::{DaemonResultPipe, DetachError};
 use clap::Parser;
-use detach::detach;
+use detach::{DaemonizeError, detach};
 use event_loop::EventLoop;
-use std::{io, path::PathBuf};
+use std::{io, path::PathBuf, process::ExitCode};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use wallpaper_app::WallpaperApp;
-use waywe_ipc::config::Config;
+use waywe_ipc::{DaemonSetupError, config::Config};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -24,7 +24,7 @@ struct Args {
     init_signal_fifo: Option<PathBuf>,
 }
 
-fn main() {
+fn main() -> ExitCode {
     let filter = EnvFilter::builder()
         .parse("info,wgpu_hal::vulkan::instance=warn")
         .unwrap();
@@ -43,7 +43,20 @@ fn main() {
         .map(Result::unwrap);
 
     if args.run_in_background {
-        detach().unwrap();
+        match detach() {
+            Ok(()) => {}
+            Err(DetachError::Daemonize(DaemonizeError::LockPidfile(errno))) => {
+                if let Some(mut pipe) = init_pipe.take() {
+                    pipe.write(Err(DaemonSetupError::DaemonPidLock {
+                        info: errno.to_string(),
+                    }))
+                    .unwrap();
+                }
+
+                panic!();
+            }
+            Err(error) => panic!("{error}"),
+        }
     }
 
     let config = Config::read();
@@ -60,4 +73,6 @@ fn main() {
     info!("the daemon is ready to process commands");
 
     event_loop.run();
+
+    ExitCode::SUCCESS
 }

@@ -19,6 +19,8 @@ pub enum DaemonSetupError {
     Panicked { message: String },
     #[error("failed to acquire daemon file lock")]
     DaemonFileLock,
+    #[error("failed to acquire daemon pid file lock: {info}")]
+    DaemonPidLock { info: String },
 }
 
 pub type DaemonSetupResult = Result<(), DaemonSetupError>;

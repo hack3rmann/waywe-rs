@@ -2,13 +2,15 @@ use bincode::error::EncodeError;
 use daemonize::Daemonize;
 use std::{
     fs::{self, File},
-    io::{self, BufWriter, Write},
+    io::{self, BufWriter},
     path::Path,
     thread,
 };
 use tap::Pipe;
 use thiserror::Error;
 use waywe_ipc::{DaemonSetupError, DaemonSetupResult, detach::BINCODE_CONFIG};
+
+pub use daemonize::Error as DaemonizeError;
 
 pub struct DaemonResultPipe {
     file: BufWriter<File>,
@@ -36,7 +38,6 @@ impl Drop for DaemonResultPipe {
         let message = fs::read_to_string("/tmp/waywe/daemon-stderr.log").unwrap_or_default();
 
         _ = self.write(Err(DaemonSetupError::Panicked { message }));
-        _ = self.file.flush();
     }
 }
 
@@ -60,5 +61,5 @@ pub enum DetachError {
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]
-    Daemonize(#[from] daemonize::Error),
+    Daemonize(#[from] DaemonizeError),
 }
