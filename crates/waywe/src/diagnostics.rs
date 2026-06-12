@@ -4,7 +4,7 @@ use waywe_ipc::DaemonSetupError;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum DaemonSetupDiagnostics {
-    #[error("waywe-daemon panicked:\n{message}")]
+    #[error("waywe-daemon panicked during startup:\n{message}")]
     #[diagnostic(
         code(waywe::daemon::panicked),
         help(
