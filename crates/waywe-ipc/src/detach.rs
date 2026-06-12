@@ -17,8 +17,6 @@ pub const BINCODE_CONFIG: bincode::config::Configuration = bincode::config::stan
 pub enum DaemonSetupError {
     #[error("waywe-daemon panicked:\n{message}")]
     Panicked { message: String },
-    #[error("failed to acquire daemon file lock")]
-    DaemonFileLock,
     #[error("failed to acquire daemon pid file lock: {info}")]
     DaemonPidLock { info: String },
 }

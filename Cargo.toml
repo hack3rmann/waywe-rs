@@ -86,3 +86,4 @@ uuid = { version = "1.23.3", features = ["v7"] }
 flate2 = "1.1.9"
 tar = "0.4.46"
 tap = "1.0.1"
+miette = { version = "7.6.0", features = ["fancy"] }

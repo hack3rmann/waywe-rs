@@ -5,51 +5,51 @@ use thiserror::Error;
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Error)]
 pub enum Error {
     #[error("unable to fork: {0}")]
-    Fork(Errno),
+    Fork(#[source] Errno),
     #[error("wait failed: {0}")]
-    Wait(Errno),
+    Wait(#[source] Errno),
     #[error("unable to create new session: {0}")]
-    DetachSession(Errno),
+    DetachSession(#[source] Errno),
     #[error("unable to resolve group name to group id")]
     GroupNotFound,
     #[error("group option contains NUL")]
     GroupContainsNul,
     #[error("unable to set group: {0}")]
-    SetGroup(Errno),
+    SetGroup(#[source] Errno),
     #[error("unable to resolve user name to user id")]
     UserNotFound,
     #[error("user option contains NUL")]
     UserContainsNul,
     #[error("unable to set user: {0}")]
-    SetUser(Errno),
+    SetUser(#[source] Errno),
     #[error("unable to change directory: {0}")]
-    ChangeDirectory(Errno),
+    ChangeDirectory(#[source] Errno),
     #[error("pid_file option contains NUL")]
     PathContainsNul,
     #[error("unable to open pid file: {0}")]
-    OpenPidfile(Errno),
+    OpenPidfile(#[source] Errno),
     #[error("unable get pid file flags: {0}")]
-    GetPidfileFlags(Errno),
+    GetPidfileFlags(#[source] Errno),
     #[error("unable set pid file flags: {0}")]
-    SetPidfileFlags(Errno),
+    SetPidfileFlags(#[source] Errno),
     #[error("unable to lock pid file: {0}")]
-    LockPidfile(Errno),
+    LockPidfile(#[source] Errno),
     #[error("unable to chown pid file: {0}")]
-    ChownPidfile(Errno),
+    ChownPidfile(#[source] Errno),
     #[error("unable to open /dev/null: {0}")]
-    OpenDevnull(Errno),
+    OpenDevnull(#[source] Errno),
     #[error("unable to redirect standard streams to /dev/null: {0}")]
-    RedirectStreams(Errno),
+    RedirectStreams(#[source] Errno),
     #[error("unable to close /dev/null: {0}")]
-    CloseDevnull(Errno),
+    CloseDevnull(#[source] Errno),
     #[error("unable to truncate pid file: {0}")]
-    TruncatePidfile(Errno),
+    TruncatePidfile(#[source] Errno),
     #[error("unable to write self pid to pid file: {0}")]
-    WritePid(Errno),
+    WritePid(#[source] Errno),
     #[error("unable to write self pid to pid file due to unknown reason")]
     WritePidUnspecifiedError,
     #[error("unable to chroot into directory")]
-    Chroot(Errno),
+    Chroot(#[source] Errno),
 }
 
 impl Error {
