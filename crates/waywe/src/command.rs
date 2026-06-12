@@ -14,7 +14,8 @@ use video::{
     SoftwareScaler, VideoPixelFormat,
 };
 use waywe_ipc::{
-    DaemonCommand, WallpaperType,
+    DaemonCommand, DaemonSetupResult, WallpaperType,
+    detach::{BINCODE_CONFIG, SetupPipe},
     profile::{SetupProfile, SetupProfileError},
 };
 
@@ -77,16 +78,37 @@ impl StartWaitMode {
     }
 }
 
-pub fn execute_start(mode: StartWaitMode) {
+pub fn execute_start(mode: StartWaitMode) -> DaemonSetupResult {
+    let fifo = match mode {
+        StartWaitMode::Wait => Some(SetupPipe::new("/tmp/waywe")),
+        StartWaitMode::DontWait => None,
+    };
+
+    let fifo_arg = fifo
+        .as_ref()
+        .map(|fifo| ["--init-signal-fifo", fifo.path.as_path().to_str().unwrap()])
+        .into_iter()
+        .flatten();
+
     let mut child = process::Command::new("waywe-daemon")
         .arg("--run-in-background")
-        .args(mode.daemon_arg())
+        .args(fifo_arg)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .unwrap();
 
-    child.wait().unwrap();
+    let mut fifo_file = fifo.as_ref().map(SetupPipe::read);
+
+    let result: DaemonSetupResult = if let Some(fifo) = &mut fifo_file {
+        bincode::decode_from_std_read(fifo, BINCODE_CONFIG).unwrap()
+    } else {
+        Ok(())
+    };
+
+    let _status = child.wait().unwrap();
+
+    result
 }
 
 pub fn execute_preview(result_path: &Path, monitor_name: Option<&str>) -> Result<(), ExecuteError> {

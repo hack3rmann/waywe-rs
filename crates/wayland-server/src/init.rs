@@ -67,7 +67,7 @@ pub fn create_wayland_socket() -> Result<WaylandSocketCreateInfo, Errno> {
 
     // HACK(hack3rmann): unbounded loop
     loop {
-        match net::bind_unix(&socket, &addr) {
+        match net::bind(&socket, &addr) {
             Ok(()) => break,
             Err(Errno::ADDRINUSE) => {
                 warn!(

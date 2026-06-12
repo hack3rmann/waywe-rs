@@ -30,3 +30,4 @@ glam.workspace = true
 image.workspace = true
 thiserror.workspace = true
 pollster.workspace = true
+display-error-chain.workspace = true

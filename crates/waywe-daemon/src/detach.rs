@@ -1,91 +1,83 @@
-use daemonize::{Daemonize, Outcome};
+use bincode::error::EncodeError;
+use daemonize::Daemonize;
+use std::error::Error;
 use std::{
     fs::{self, File},
-    io::{self, Read, Write},
-    process,
+    io::{self, BufWriter},
+    path::Path,
+    thread,
 };
+use tap::Pipe;
 use thiserror::Error;
+use waywe_ipc::{DaemonSetupError, DaemonSetupResult, detach::BINCODE_CONFIG};
 
-const READY: u8 = 0;
-const FAILED: u8 = 1;
+pub use daemonize::Error as DaemonizeError;
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Copy)]
-pub enum DetachMode {
-    #[default]
-    Wait,
-    DontWait,
+pub struct DaemonResultPipe {
+    file: BufWriter<File>,
 }
 
-/// Call `.signal(true)` after the daemon has finished initializing.
-pub struct ReadyChannel(File);
+impl DaemonResultPipe {
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, io::Error> {
+        Ok(Self {
+            file: File::options().write(true).open(path)?.pipe(BufWriter::new),
+        })
+    }
 
-impl ReadyChannel {
-    pub fn signal(mut self, ok: bool) {
-        let byte = if ok { READY } else { FAILED };
-        _ = self.0.write_all(&[byte]);
-        // Drop closes the write end so the parent does not hang.
+    pub fn write(&mut self, result: DaemonSetupResult) -> Result<(), EncodeError> {
+        bincode::encode_into_std_write(result, &mut self.file, BINCODE_CONFIG)?;
+        Ok(())
     }
 }
 
-fn daemon_start_wait(daemon: Daemonize<()>) -> Result<Option<ReadyChannel>, DetachError> {
-    let (mut parent_read, mut child_write) = pipe()?;
-
-    match daemon.execute() {
-        Outcome::Parent(result) => {
-            drop(child_write);
-
-            match result {
-                Ok(parent) if parent.first_child_exit_code == 0 => {}
-                Ok(parent) => process::exit(parent.first_child_exit_code),
-                Err(error) => return Err(error.into()),
-            }
-
-            let mut buf = [0u8; 1];
-            parent_read.read_exact(&mut buf)?;
-
-            if buf[0] == READY {
-                process::exit(0);
-            }
-
-            Err(DetachError::DaemonNotReady)
+impl Drop for DaemonResultPipe {
+    fn drop(&mut self) {
+        if !thread::panicking() {
+            return;
         }
-        Outcome::Child(result) => {
-            drop(parent_read);
 
-            match result {
-                Ok(_) => Ok(Some(ReadyChannel(child_write))),
-                Err(error) => {
-                    _ = child_write.write_all(&[FAILED]);
-                    Err(error.into())
-                }
-            }
-        }
+        let message = fs::read_to_string("/tmp/waywe/daemon-stderr.log").unwrap_or_default();
+
+        _ = self.write(Err(DaemonSetupError::Panicked { message }));
     }
 }
 
-pub fn detach(mode: DetachMode) -> Result<Option<ReadyChannel>, DetachError> {
+pub struct DaemonSetupReporter {
+    pipe: Option<DaemonResultPipe>,
+}
+
+impl DaemonSetupReporter {
+    pub fn open(path: Option<impl AsRef<Path>>) -> Result<Self, io::Error> {
+        let Some(path) = path else {
+            return Ok(Self { pipe: None });
+        };
+
+        Ok(Self {
+            pipe: Some(DaemonResultPipe::open(path)?),
+        })
+    }
+
+    pub fn report(&mut self, result: DaemonSetupResult) {
+        let Some(mut pipe) = self.pipe.take() else {
+            return;
+        };
+        _ = pipe.write(result);
+    }
+}
+
+pub fn detach() -> Result<(), DetachError> {
     fs::create_dir_all("/tmp/waywe")?;
 
     let stdout = File::create("/tmp/waywe/daemon-stdout.log")?;
     let stderr = File::create("/tmp/waywe/daemon-stderr.log")?;
 
-    let daemon = Daemonize::new()
+    Daemonize::default()
         .pid_file("/tmp/waywe/daemon.pid")
         .stdout(stdout)
-        .stderr(stderr);
+        .stderr(stderr)
+        .start()?;
 
-    match mode {
-        DetachMode::DontWait => {
-            daemon.start()?;
-            Ok(None)
-        }
-        DetachMode::Wait => daemon_start_wait(daemon),
-    }
-}
-
-fn pipe() -> io::Result<(File, File)> {
-    let (read, write) = rustix::pipe::pipe()?;
-    Ok((File::from(read), File::from(write)))
+    Ok(())
 }
 
 #[derive(Debug, Error)]
@@ -93,7 +85,46 @@ pub enum DetachError {
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]
-    Daemonize(#[from] daemonize::Error),
-    #[error("daemon failed during initialization")]
-    DaemonNotReady,
+    Daemonize(#[from] DaemonizeError),
+}
+
+impl Report for DetachError {
+    fn to_setup_error(&self) -> Option<DaemonSetupError> {
+        Some(match self {
+            &DetachError::Daemonize(DaemonizeError::LockPidfile(errno)) => {
+                DaemonSetupError::DaemonPidLock {
+                    errno: errno.into(),
+                }
+            }
+            _ => return None,
+        })
+    }
+}
+
+pub trait Report {
+    fn to_setup_error(&self) -> Option<DaemonSetupError>;
+}
+
+pub trait UnwrapOrReport {
+    type Output;
+
+    fn unwrap_or_report(self, reporter: &mut DaemonSetupReporter) -> Self::Output;
+}
+
+impl<T, E: Report + Error> UnwrapOrReport for Result<T, E> {
+    type Output = T;
+
+    #[track_caller]
+    fn unwrap_or_report(self, reporter: &mut DaemonSetupReporter) -> Self::Output {
+        match self {
+            Ok(output) => output,
+            Err(error) => match error.to_setup_error() {
+                Some(setup) => {
+                    reporter.report(Err(setup));
+                    panic!("called `.unwrap_or_report` on reported Err: {error}")
+                }
+                None => panic!("called `.unwrap_or_report` on unreportable Err: {error}"),
+            },
+        }
+    }
 }
