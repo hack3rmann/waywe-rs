@@ -3,19 +3,15 @@ pub mod event_loop;
 pub mod wallpaper;
 pub mod wallpaper_app;
 
+use crate::detach::DaemonResultPipe;
 use clap::Parser;
 use detach::detach;
 use event_loop::EventLoop;
-use std::{
-    fs::File,
-    io::{self, BufWriter},
-    path::PathBuf,
-};
-use tap::Pipe;
+use std::{io, path::PathBuf};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use wallpaper_app::WallpaperApp;
-use waywe_ipc::{DaemonSetupResult, config::Config, detach::BINCODE_CONFIG};
+use waywe_ipc::config::Config;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -40,6 +36,12 @@ fn main() {
 
     let args = Args::parse();
 
+    let mut init_pipe = args
+        .init_signal_fifo
+        .as_ref()
+        .map(DaemonResultPipe::open)
+        .map(Result::unwrap);
+
     if args.run_in_background {
         detach().unwrap();
     }
@@ -51,15 +53,8 @@ fn main() {
         panic!("failed to construct event loop: {err}");
     });
 
-    if let Some(pipe_path) = &args.init_signal_fifo {
-        let mut pipe = File::options()
-            .write(true)
-            .open(pipe_path)
-            .unwrap_or_else(|err| panic!("failed to open signal fifo: {err}"))
-            .pipe(BufWriter::new);
-
-        bincode::encode_into_std_write(DaemonSetupResult::Ok(()), &mut pipe, BINCODE_CONFIG)
-            .unwrap();
+    if let Some(mut pipe) = init_pipe.take() {
+        pipe.write(Ok(())).unwrap();
     }
 
     info!("the daemon is ready to process commands");

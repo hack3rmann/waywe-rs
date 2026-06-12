@@ -15,12 +15,10 @@ pub const BINCODE_CONFIG: bincode::config::Configuration = bincode::config::stan
 
 #[derive(Debug, Clone, Encode, Decode, Error)]
 pub enum DaemonSetupError {
-    #[error("waywe-daemon panicked")]
+    #[error("waywe-daemon panicked:\n{message}")]
     Panicked { message: String },
     #[error("failed to acquire daemon file lock")]
     DaemonFileLock,
-    #[error("failed to acquire daemon pid file lock")]
-    DaemonPidLock,
 }
 
 pub type DaemonSetupResult = Result<(), DaemonSetupError>;
@@ -32,6 +30,9 @@ pub struct SetupPipe {
 impl SetupPipe {
     pub fn new(base_dir: impl AsRef<Path>) -> Self {
         let base_dir = base_dir.as_ref();
+
+        std::fs::create_dir_all(base_dir).unwrap();
+
         let mut path = PathBuf::new();
 
         loop {
@@ -49,8 +50,8 @@ impl SetupPipe {
         }
     }
 
-    pub fn write(&self) -> File {
-        File::options().write(true).open(&self.path).unwrap()
+    pub fn read(&self) -> File {
+        File::options().read(true).open(&self.path).unwrap()
     }
 }
 

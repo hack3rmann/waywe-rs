@@ -14,8 +14,8 @@ use video::{
     SoftwareScaler, VideoPixelFormat,
 };
 use waywe_ipc::{
-    DaemonCommand, DaemonSetupError, WallpaperType,
-    detach::BINCODE_CONFIG,
+    DaemonCommand, DaemonSetupResult, WallpaperType,
+    detach::{BINCODE_CONFIG, SetupPipe},
     profile::{SetupProfile, SetupProfileError},
 };
 
@@ -78,37 +78,37 @@ impl StartWaitMode {
     }
 }
 
-#[derive(Clone, Default, Debug)]
-pub struct DaemonStartError {
-    pub exit_code: Option<i32>,
-    pub stderr: Vec<u8>,
-    pub setup_error: Option<DaemonSetupError>,
-}
+pub fn execute_start(mode: StartWaitMode) -> DaemonSetupResult {
+    let fifo = match mode {
+        StartWaitMode::Wait => Some(SetupPipe::new("/tmp/waywe")),
+        StartWaitMode::DontWait => None,
+    };
 
-pub fn execute_start(mode: StartWaitMode) -> Result<(), DaemonStartError> {
-    let child = process::Command::new("waywe-daemon")
+    let fifo_arg = fifo
+        .as_ref()
+        .map(|fifo| ["--init-signal-fifo", fifo.path.as_path().to_str().unwrap()])
+        .into_iter()
+        .flatten();
+
+    let mut child = process::Command::new("waywe-daemon")
         .arg("--run-in-background")
-        .args(mode.daemon_arg())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .args(fifo_arg)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .spawn()
         .unwrap();
 
-    let output = child.wait_with_output().unwrap();
+    let mut fifo_file = fifo.as_ref().map(SetupPipe::read);
 
-    if output.status.success() {
-        return Ok(());
-    }
+    let result: DaemonSetupResult = if let Some(fifo) = &mut fifo_file {
+        bincode::decode_from_std_read(fifo, BINCODE_CONFIG).unwrap()
+    } else {
+        Ok(())
+    };
 
-    let setup_error = bincode::decode_from_slice(&output.stdout, BINCODE_CONFIG)
-        .map(|(res, _n)| res)
-        .ok();
+    let _status = child.wait().unwrap();
 
-    Err(DaemonStartError {
-        exit_code: output.status.code(),
-        stderr: output.stderr,
-        setup_error,
-    })
+    result
 }
 
 pub fn execute_preview(result_path: &Path, monitor_name: Option<&str>) -> Result<(), ExecuteError> {

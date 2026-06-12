@@ -14,7 +14,6 @@ use crate::{
 use anyhow::{Context as _, bail};
 use clap::Parser as _;
 use rustix::io::Errno;
-use std::io::{self, Write};
 use waywe_ipc::{DaemonCommand, IpcClient};
 
 fn main() -> anyhow::Result<()> {
@@ -38,7 +37,7 @@ fn main() -> anyhow::Result<()> {
             };
 
             if let Err(error) = execute_start(mode) {
-                io::stderr().write_all(&error.stderr).unwrap();
+                eprintln!("whatever failed: {error}");
             }
 
             return Ok(());
