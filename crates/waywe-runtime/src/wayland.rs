@@ -533,6 +533,8 @@ pub(crate) fn handle_global_remove(
         events
             .emit(WaylandEvent::MonitorUnplugged {
                 id: monitor_id,
+                // FIXME(hack3rmann): panics when monitor is kinda unplugged and the main monitor
+                // is unplugged
                 name: info.name.unwrap(),
             })
             .unwrap();

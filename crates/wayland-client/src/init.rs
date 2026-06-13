@@ -1,6 +1,6 @@
 //! Connecting to wayland on-init
 
-use rustix::net::SocketAddrAny;
+use rustix::net::{AddressFamily, SocketAddrAny};
 use std::{
     env,
     ffi::OsString,
@@ -28,10 +28,10 @@ pub unsafe fn connect_wayland_socket() -> Result<OwnedFd, ConnectWaylandSocketEr
         let socket_address = rustix::net::getsockname(&file_desc)
             .map_err(ConnectWaylandSocketError::GetSockNameFailed)?;
 
-        if !matches!(socket_address, SocketAddrAny::Unix(..)) {
-            return Err(ConnectWaylandSocketError::SocketAddrIsNotUnix(
+        if socket_address.address_family() != AddressFamily::UNIX {
+            return Err(ConnectWaylandSocketError::SocketAddrIsNotUnix(Box::new(
                 socket_address,
-            ));
+            )));
         }
 
         return Ok(file_desc);
@@ -66,19 +66,17 @@ pub enum ConnectWaylandSocketError {
     /// `$WAYLAND_SOCKET` env variable is not `i32` integer
     #[error("invalid $WAYLAND_SOCKET env variable '{0}'")]
     InvallidWaylandSocketEnvVar(String),
-
     /// Invalid file desc in `$WAYLAND_SOCKET`
     #[error(transparent)]
     GetSockNameFailed(#[from] rustix::io::Errno),
-
     /// Socket address passed into `$WAYLAND_SOCKET` var is not UNIX
     #[error("socket address '{0:?}' is not unix")]
-    SocketAddrIsNotUnix(SocketAddrAny),
-
+    SocketAddrIsNotUnix(Box<SocketAddrAny>),
     /// Connect failed
     #[error("failed to connect to wayland socket from '{path}': {error}")]
     FailedToConnectToPath {
         /// OS error
+        #[source]
         error: io::Error,
         /// Path tried to connect to
         path: PathBuf,

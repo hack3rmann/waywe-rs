@@ -25,6 +25,8 @@ members = [
     "crates/waywe-scene-macros",
     "crates/examples/waywe-test-scene",
     "crates/examples/shadertoy-computer-were-made-for-cubes",
+    "crates/daemonize/daemonize",
+    "crates/daemonize/daemonize-tests",
 ]
 
 [workspace.package]
@@ -48,6 +50,7 @@ waywe-scene = { path = "crates/waywe-scene" }
 waywe-spirv-derive = { path = "crates/waywe-spirv-derive" }
 waywe-rendering-api = { path = "crates/waywe-rendering-api" }
 waywe-scene-macros = { path = "crates/waywe-scene-macros" }
+daemonize = { path = "crates/daemonize/daemonize" }
 transmute-extra = { path = "crates/transmute-extra" }
 video = { path = "crates/video" }
 thiserror = "2.0.11"
@@ -61,7 +64,7 @@ paste = "1.0.15"
 smallvec = { version = "1.14.0", features = ["union", "serde", "const_generics", "const_new", "write"] }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 glam = { version = "0.30.3", features = ["bytemuck", "serde"] }
-rustix = { version = "0.38.44", features = ["fs", "net", "process", "mm", "shm", "event", "pipe"] }
+rustix = { version = "1.1.4", features = ["fs", "net", "process", "mm", "shm", "event", "pipe"] }
 bytemuck = { version = "1.21.0", features = ["extern_crate_alloc", "derive"] }
 libc = "0.2.170"
 image = "0.25.6"
@@ -83,3 +86,5 @@ uuid = { version = "1.23.3", features = ["v7"] }
 flate2 = "1.1.9"
 tar = "0.4.46"
 tap = "1.0.1"
+miette = { version = "7.6.0", features = ["fancy"] }
+display-error-chain = "0.2.2"

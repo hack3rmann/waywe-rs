@@ -3,12 +3,13 @@ pub mod event_loop;
 pub mod wallpaper;
 pub mod wallpaper_app;
 
-use crate::detach::{DetachMode, ReadyChannel};
+use crate::detach::{DaemonSetupReporter, UnwrapOrReport};
 use clap::Parser;
 use detach::detach;
+use display_error_chain::ErrorChainExt;
 use event_loop::EventLoop;
-use std::io;
-use tracing::{error, info};
+use std::{io, path::PathBuf};
+use tracing::info;
 use tracing_subscriber::EnvFilter;
 use wallpaper_app::WallpaperApp;
 use waywe_ipc::config::Config;
@@ -19,15 +20,15 @@ struct Args {
     /// Start the daemon program in background
     #[arg(long)]
     run_in_background: bool,
-    /// Wait for the daemon to initialize its state
+    /// Write result into a FIFO after the daemon initializes itself
     #[arg(long)]
-    wait: bool,
+    init_signal_fifo: Option<PathBuf>,
 }
 
 fn main() {
-    let filter = EnvFilter::builder()
-        .parse("info,wgpu_hal::vulkan::instance=warn")
-        .unwrap();
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"))
+        .add_directive("wgpu_hal::vulkan::instance=warn".parse().unwrap());
 
     tracing_subscriber::fmt()
         .with_writer(io::stderr)
@@ -36,36 +37,21 @@ fn main() {
 
     let args = Args::parse();
 
-    let detach_mode = if args.wait {
-        DetachMode::Wait
-    } else {
-        DetachMode::DontWait
-    };
+    let mut reporter = DaemonSetupReporter::open(args.init_signal_fifo.as_ref()).unwrap();
 
-    let ready_channel = handle_detach(&args, detach_mode);
+    if args.run_in_background {
+        detach().unwrap_or_report(&mut reporter);
+    }
 
     let config = Config::read();
     let app = WallpaperApp::from_config(config);
 
-    let mut event_loop = EventLoop::new(app);
+    let mut event_loop = EventLoop::new(app).unwrap_or_else(|err| {
+        panic!("failed to construct event loop: {}", err.chain());
+    });
 
-    if let Some(channel) = ready_channel {
-        channel.signal(true);
-        info!("the daemon is ready to process commands");
-    }
+    reporter.report(Ok(()));
+    info!("the daemon is ready to process commands");
 
     event_loop.run();
-}
-
-fn handle_detach(args: &Args, mode: DetachMode) -> Option<ReadyChannel> {
-    if !args.run_in_background {
-        return None;
-    }
-
-    detach(mode)
-        .inspect_err(|error| {
-            error!(?error, "failed to start daemon in the background");
-        })
-        .ok()
-        .flatten()
 }
