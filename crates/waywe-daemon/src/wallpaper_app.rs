@@ -289,14 +289,13 @@ impl Handle<WaylandEvent> for WallpaperApp {
 
                 wall.configure(&runtime.wgpu, config);
             }
-            WaylandEvent::MonitorPlugged { id: monitor_id } => {
+            WaylandEvent::MonitorPlugged {
+                id: monitor_id,
+                name: monitor_name,
+            } => {
                 if Almost::is_value(&runtime.wgpu) {
                     runtime.wgpu.register_surface(&runtime.wayland, monitor_id);
                 }
-
-                let monitors = runtime.wayland.client_state.monitors.read().unwrap();
-                let monitor = &monitors[&monitor_id];
-                let monitor_name = Arc::clone(&monitor.name);
 
                 if let Some(state) = self.wallpaper_states.get_mut(&monitor_name) {
                     state.is_active = true;

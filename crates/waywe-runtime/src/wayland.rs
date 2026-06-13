@@ -41,7 +41,7 @@ use wayland_client::{
 #[derive(Clone, Debug, PartialEq)]
 pub enum WaylandEvent {
     ResizeRequested { monitor_id: MonitorId, size: UVec2 },
-    MonitorPlugged { id: MonitorId },
+    MonitorPlugged { id: MonitorId, name: Arc<str> },
     MonitorUnplugged { id: MonitorId, name: Arc<str> },
     // TODO(hack3rmann): implement approach from <https://github.com/cjacker/wl-find-cursor/blob/main/main.c>
     CursorMoved { position: UVec2 },
@@ -468,11 +468,11 @@ impl Output {
             monitors.insert(
                 self.monitor_id,
                 MonitorInfo {
-                    output: WlObjectHandle::new(self.monitor_id),
+                    output: WlObjectHandle::new(self.output_id),
                     surface,
                     layer_surface,
                     size,
-                    name,
+                    name: Arc::clone(&name),
                 },
             );
         }
@@ -483,6 +483,7 @@ impl Output {
             .unwrap()
             .emit(WaylandEvent::MonitorPlugged {
                 id: self.monitor_id,
+                name,
             })
             .unwrap();
 
