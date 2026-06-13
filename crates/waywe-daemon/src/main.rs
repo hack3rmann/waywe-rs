@@ -26,9 +26,9 @@ struct Args {
 }
 
 fn main() {
-    let filter = EnvFilter::builder()
-        .parse("info,wgpu_hal::vulkan::instance=warn")
-        .unwrap();
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"))
+        .add_directive("wgpu_hal::vulkan::instance=warn".parse().unwrap());
 
     tracing_subscriber::fmt()
         .with_writer(io::stderr)
