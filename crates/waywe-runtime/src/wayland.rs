@@ -14,12 +14,12 @@ use std::{
 };
 use wayland_client::{
     interface::{
-        WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlOutputNameEvent,
-        WlPointerEvent, WlRegionAddRequest, WlRegionDestroyRequest, WlRegistryEvent,
-        WlRegistryGlobalEvent, WlRegistryGlobalRemoveEvent, WlSeatCapabilitiesEvent,
-        WlSeatCapability, WlSeatGetPointerRequest, WlSurfaceCommitRequest,
-        WlSurfaceSetBufferScaleRequest, WlSurfaceSetOpaqueRegionRequest,
-        ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellLayer,
+        WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlOutputMode,
+        WlOutputModeEvent, WlOutputNameEvent, WlPointerEvent, WlRegionAddRequest,
+        WlRegionDestroyRequest, WlRegistryEvent, WlRegistryGlobalEvent,
+        WlRegistryGlobalRemoveEvent, WlSeatCapabilitiesEvent, WlSeatCapability,
+        WlSeatGetPointerRequest, WlSurfaceCommitRequest, WlSurfaceSetBufferScaleRequest,
+        WlSurfaceSetOpaqueRegionRequest, ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellLayer,
         ZwlrLayerSurfaceAckConfigureRequest, ZwlrLayerSurfaceAnchor,
         ZwlrLayerSurfaceConfigureEvent, ZwlrLayerSurfaceKeyboardInteractivity,
         ZwlrLayerSurfaceSetAnchorRequest, ZwlrLayerSurfaceSetExclusiveZoneRequest,
@@ -356,7 +356,43 @@ impl HasObjectType for Region {
 }
 
 pub struct Output {
-    pub monitor_id: MonitorId,
+    pub id: MonitorId,
+    pub size: Option<UVec2>,
+    pub name: Option<Arc<str>>,
+}
+
+impl Output {
+    pub const fn new(id: MonitorId) -> Self {
+        Self {
+            id,
+            size: None,
+            name: None,
+        }
+    }
+
+    pub fn handle_name(&mut self, state: &ClientState, event: WlOutputNameEvent) {
+        // Safety: name is an ASCII string which is a valid utf-8 string
+        let name = Arc::from(unsafe { str::from_utf8_unchecked(event.name.to_bytes()) });
+        self.name = Some(Arc::clone(&name));
+
+        let mut monitors = state.monitors.write().unwrap();
+        let monitor = monitors.get_mut(&self.id).unwrap();
+        monitor.name = Some(Arc::clone(&name));
+
+        let mut names = state.monitor_names.write().unwrap();
+        names.insert(name, self.id);
+    }
+
+    pub fn handle_mode(&mut self, _state: &ClientState, event: WlOutputModeEvent) {
+        if !event.flags.contains(WlOutputMode::CURRENT) {
+            return;
+        }
+
+        self.size = Some(UVec2::new(
+            u32::try_from(event.width).unwrap(),
+            u32::try_from(event.height).unwrap(),
+        ));
+    }
 }
 
 impl HasObjectType for Output {
@@ -372,19 +408,11 @@ impl Dispatch for Output {
         _storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
-        let Some(WlOutputNameEvent { name }) = message.as_event() else {
-            return;
-        };
-
-        // Safety: name is an ASCII string which is a valid utf-8 string
-        let name = Arc::from(unsafe { str::from_utf8_unchecked(name.to_bytes()) });
-
-        let mut monitors = state.monitors.write().unwrap();
-        let monitor = monitors.get_mut(&self.monitor_id).unwrap();
-        monitor.name = Some(Arc::clone(&name));
-
-        let mut names = state.monitor_names.write().unwrap();
-        names.insert(name, self.monitor_id);
+        if let Some(event) = message.as_event::<WlOutputNameEvent>() {
+            self.handle_name(state, event);
+        } else if let Some(event) = message.as_event::<WlOutputModeEvent>() {
+            self.handle_mode(state, event);
+        }
     }
 }
 
@@ -402,8 +430,8 @@ pub fn handle_output(
     let mut storage = Pin::new(storage);
 
     let output = registry
-        .bind_from_fn_by_id(&mut buf, storage.as_mut(), monitor_id, |_, _, _| Output {
-            monitor_id,
+        .bind_from_fn_by_id(&mut buf, storage.as_mut(), monitor_id, move |_, _, _| {
+            Output::new(monitor_id)
         })
         .unwrap();
 
@@ -518,6 +546,8 @@ pub(crate) fn handle_global_remove(
     let Some(info) = monitors.remove(&monitor_id) else {
         return;
     };
+
+    dbg!(&info);
 
     if let Some(name) = info.name.as_ref().cloned() {
         let mut names = state.monitor_names.write().unwrap();
