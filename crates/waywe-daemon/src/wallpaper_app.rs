@@ -120,7 +120,7 @@ impl WallpaperApp {
 
         let monitor_name = {
             let monitors = runtime.wayland.client_state.monitors.read().unwrap();
-            monitors[&monitor_id].name.as_ref().map(Arc::clone).unwrap()
+            Arc::clone(&monitors[&monitor_id].name)
         };
 
         if let Entry::Vacant(entry) = self.wallpaper_states.entry(monitor_name) {
@@ -168,7 +168,7 @@ impl App for WallpaperApp {
         for (&monitor_id, wallpapers) in self.wallpapers.iter_mut() {
             let monitor_name = {
                 let monitors = runtime.wayland.client_state.monitors.read().unwrap();
-                monitors[&monitor_id].name.as_ref().cloned().unwrap()
+                Arc::clone(&monitors[&monitor_id].name)
             };
 
             if let Some(state) = self.wallpaper_states.get(&monitor_name)
@@ -296,7 +296,7 @@ impl Handle<WaylandEvent> for WallpaperApp {
 
                 let monitors = runtime.wayland.client_state.monitors.read().unwrap();
                 let monitor = &monitors[&monitor_id];
-                let monitor_name = Arc::clone(monitor.name.as_ref().unwrap());
+                let monitor_name = Arc::clone(&monitor.name);
 
                 if let Some(state) = self.wallpaper_states.get_mut(&monitor_name) {
                     state.is_active = true;
@@ -362,7 +362,7 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
 
             let monitors = runtime.wayland.client_state.monitors.read().unwrap();
             let monitor = &monitors[&monitor_id];
-            let monitor_name = Arc::clone(monitor.name.as_ref().unwrap());
+            let monitor_name = Arc::clone(&monitor.name);
             let monitor_profile = Monitor {
                 wallpaper_type: ty,
                 path: path.clone(),
