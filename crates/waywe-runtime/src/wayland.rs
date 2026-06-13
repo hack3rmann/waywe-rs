@@ -289,8 +289,8 @@ impl Dispatch for LayerSurface {
             WlRegionAddRequest {
                 x: 0,
                 y: 0,
-                width: width.cast_signed(),
-                height: height.cast_signed(),
+                width: size.x.cast_signed(),
+                height: size.y.cast_signed(),
             },
         );
 
@@ -654,17 +654,6 @@ impl Wayland {
             compositor,
             layer_shell,
         });
-
-        let n_outputs = storage.object_data(registry).count_of(WlObjectType::Output);
-
-        for output_index in 0..n_outputs {
-            let monitor_id = storage
-                .object_data(registry)
-                .name_of_index(WlObjectType::Output, output_index)
-                .unwrap();
-
-            handle_output(registry, storage.as_mut(), monitor_id);
-        }
 
         const N_INIT_ROUNDTRIPS: usize = 2;
 

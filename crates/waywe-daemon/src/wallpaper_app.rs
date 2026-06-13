@@ -276,7 +276,9 @@ impl Handle<WaylandEvent> for WallpaperApp {
                     *needs_redraw = true;
                 }
 
-                let wall = self.wallpapers.get_mut(&monitor_id).unwrap();
+                let Some(wall) = self.wallpapers.get_mut(&monitor_id) else {
+                    return;
+                };
                 let surface_format = {
                     let surfaces = runtime.wgpu.surfaces.read().unwrap();
                     surfaces[&monitor_id].format
