@@ -7,10 +7,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     ffi::CStr,
     pin::Pin,
-    sync::{
-        Arc, Mutex, RwLock,
-        atomic::{AtomicBool, Ordering::*},
-    },
+    sync::{Arc, Mutex, RwLock},
 };
 use wayland_client::{
     interface::{
@@ -70,7 +67,6 @@ pub struct ClientState {
     pub monitors: RwLock<MonitorMap<MonitorInfo>>,
     pub monitor_names: RwLock<HashMap<Arc<str>, MonitorId>>,
     pub globals: Option<Globals>,
-    pub resize_requested: AtomicBool,
 }
 
 impl ClientState {
@@ -80,7 +76,6 @@ impl ClientState {
             monitors: RwLock::new(MonitorMap::default()),
             monitor_names: RwLock::new(HashMap::default()),
             globals: None,
-            resize_requested: AtomicBool::new(false),
         }
     }
 
@@ -252,18 +247,11 @@ impl Dispatch for LayerSurface {
 
         let size = UVec2::new(width, height);
 
-        state.resize_requested.store(
-            state.monitor_size(self.monitor_id) != Some(UVec2::ZERO)
-                && state.monitor_size(self.monitor_id) != Some(size),
-            Release,
-        );
-
         {
             let mut monitors = state.monitors.write().unwrap();
             let monitor = monitors.get_mut(&self.monitor_id).unwrap();
 
-            // this is resize if and only if monitor is ininialized
-            // and size is changed indeed
+            // this is resize if and only if size is changed indeed
             if monitor.size != size {
                 state
                     .events
@@ -274,6 +262,8 @@ impl Dispatch for LayerSurface {
                         size,
                     })
                     .unwrap();
+
+                monitor.size = size;
             }
         }
 
