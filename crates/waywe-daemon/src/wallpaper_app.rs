@@ -19,7 +19,7 @@ use waywe_ipc::{
     profile::{Monitor, SetupProfile},
 };
 use waywe_runtime::{
-    Runtime, RuntimeFeatures,
+    ControlFlow, Runtime, RuntimeFeatures,
     app::App,
     event::{EventHandler, Handle, TryReplicate},
     frame::{FrameError, FrameInfo},
@@ -162,8 +162,7 @@ impl App for WallpaperApp {
             return Err(FrameError::NoWorkToDo);
         }
 
-        // FIXME(hack3rmann): multiple monitors
-        let mut result = Err(FrameError::NoWorkToDo);
+        let mut results: SmallVec<[_; 4]> = smallvec![];
 
         for (&monitor_id, wallpapers) in self.wallpapers.iter_mut() {
             let monitor_name = {
@@ -174,6 +173,7 @@ impl App for WallpaperApp {
             if let Some(state) = self.wallpaper_states.get(&monitor_name)
                 && !state.needs_redraw()
             {
+                results.push(Err(FrameError::NoWorkToDo));
                 continue;
             }
 
@@ -183,9 +183,13 @@ impl App for WallpaperApp {
             {
                 SurfaceResult::Ok(texture) => (false, texture),
                 SurfaceResult::Reconfigure(texture) => (true, texture),
-                SurfaceResult::Skip => continue,
+                SurfaceResult::Skip => {
+                    results.push(Err(FrameError::NoWorkToDo));
+                    continue;
+                }
                 SurfaceResult::Err => {
                     tracing::error!(?monitor_id, "failed to get_current_texture on surface");
+                    results.push(Err(FrameError::NoWorkToDo));
                     continue;
                 }
             };
@@ -195,7 +199,8 @@ impl App for WallpaperApp {
                 .device
                 .create_command_encoder(&Default::default());
 
-            result = wallpapers.render(&runtime.wgpu, &surface.texture, &mut encoder);
+            let result = wallpapers.render(&runtime.wgpu, &surface.texture, &mut encoder);
+            results.push(result);
 
             runtime.wgpu.queue.submit([encoder.finish()]);
             surface.present();
@@ -209,13 +214,22 @@ impl App for WallpaperApp {
             }
         }
 
-        if let Err(FrameError::NoWorkToDo) = &result {
-            runtime.control_flow.idle();
-        } else {
-            runtime.control_flow.busy();
+        if results
+            .iter()
+            .all(|res| *res == Err(FrameError::NoWorkToDo))
+        {
+            runtime.control_flow = ControlFlow::Idle;
+            return Err(FrameError::NoWorkToDo);
         }
 
-        result
+        runtime.control_flow = ControlFlow::Busy;
+
+        let results = results.iter().flatten().cloned();
+        let frame_info = results
+            .reduce(|acc, elem| acc.min_or_60_fps(elem))
+            .expect("at least one Ok FrameInfo");
+
+        Ok(frame_info)
     }
 }
 
