@@ -49,15 +49,12 @@ impl EventLoop {
         let app = DynApp::new(app);
 
         let event_queue = EventQueue::new().map_err(CreateEventLoopError::CrateEventQueue)?;
-
         let event_emitter = event_queue.custom_receiver.make_emitter().unwrap();
 
         let wayland = Wayland::new(event_emitter.clone());
         let task_pool = TaskPool::new(event_emitter);
 
-        let runtime = pollster::block_on(async {
-            Runtime::new(wayland, ControlFlow::Busy, task_pool).await
-        })?;
+        let runtime = Runtime::new(wayland, ControlFlow::Busy, task_pool)?;
 
         let fds = [
             runtime.wayland.display.as_fd(),

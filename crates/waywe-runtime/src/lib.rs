@@ -57,7 +57,7 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    pub async fn new(
+    pub fn new(
         wayland: Wayland,
         control_flow: ControlFlow,
         task_pool: TaskPool,
@@ -67,7 +67,7 @@ impl Runtime {
 
         Ok(Self {
             timer: Timer::default(),
-            wgpu: Arc::new(Wgpu::new().await),
+            wgpu: Arc::default(),
             wayland: Arc::new(wayland),
             ipc: IpcServer::new()?,
             control_flow,
