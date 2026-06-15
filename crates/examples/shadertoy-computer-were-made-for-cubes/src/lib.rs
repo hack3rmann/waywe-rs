@@ -3,7 +3,7 @@ use glam::{UVec2, Vec2};
 use std::{
     mem::{self, MaybeUninit},
     panic,
-    time::Instant,
+    time::Duration,
 };
 use waywe_rendering_api::{
     VecExt,
@@ -151,6 +151,10 @@ impl Renderer for ShaderToyRenderer {
         self.surfaces.rotate_left(1);
         self.submissions.rotate_left(1);
     }
+
+    fn advance_time(&mut self, delta: Duration) {
+        self.wallpaper.advance_time(delta);
+    }
 }
 
 #[derive(ShaderDescriptor)]
@@ -200,7 +204,7 @@ pub const SCREEN_QUAD: [Vertex; 6] = [
 ];
 
 pub struct ShaderWallpaper {
-    pub start: Option<Instant>,
+    pub time: Duration,
     pub vertex_shader: wgpu::ShaderModule,
     pub fragment_shader: wgpu::ShaderModule,
     pub vertices: wgpu::Buffer,
@@ -243,7 +247,7 @@ impl ShaderWallpaper {
         );
 
         Self {
-            start: None,
+            time: Duration::ZERO,
             vertex_shader,
             fragment_shader,
             pipeline_layout,
@@ -315,8 +319,6 @@ impl ShaderWallpaper {
     }
 
     pub fn frame(&mut self, surface: &wgpu::TextureView, encoder: &mut wgpu::CommandEncoder) {
-        let start = *self.start.get_or_insert_with(Instant::now);
-
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("computer-were-made-for-cubes-render-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -345,7 +347,7 @@ impl ShaderWallpaper {
             0,
             bytemuck::bytes_of(&PushConst {
                 resolution,
-                time: start.elapsed().as_secs_f32(),
+                time: self.time.as_secs_f32(),
             }),
         );
 
@@ -364,5 +366,9 @@ impl ShaderWallpaper {
         }
 
         self.config = config;
+    }
+
+    pub fn advance_time(&mut self, delta: Duration) {
+        self.time += delta;
     }
 }

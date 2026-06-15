@@ -198,14 +198,16 @@ impl App for WallpaperApp {
                 }
             };
 
-            wallpapers.advance_time(time_delta);
-
             let mut encoder = runtime
                 .wgpu
                 .device
                 .create_command_encoder(&Default::default());
 
+            // FIXME(hack3rmann): if panic goes in here, `wgpu` fails to destroy `SwapchainAcquireSemaphore`
+            // panic!()
+            wallpapers.advance_time(time_delta);
             let result = wallpapers.render(&runtime.wgpu, &surface.texture, &mut encoder);
+
             results.push(result);
 
             runtime.wgpu.queue.submit([encoder.finish()]);

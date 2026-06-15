@@ -250,7 +250,7 @@ impl Wallpaper for RenderWallpaper {
         info
     }
 
-    fn advance_time(&mut self, _delta: Duration) {
-        todo!("advance time for renderpaper")
+    fn advance_time(&mut self, delta: Duration) {
+        self.renderer.advance_time(delta);
     }
 }
