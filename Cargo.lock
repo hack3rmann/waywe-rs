@@ -4290,6 +4290,7 @@ dependencies = [
  "futures-util",
  "fxhash",
  "glam",
+ "pollster",
  "raw-window-handle",
  "reusable-box",
  "rustix",

@@ -49,7 +49,6 @@ impl EventLoop {
         let app = DynApp::new(app);
 
         let event_queue = EventQueue::new().map_err(CreateEventLoopError::CrateEventQueue)?;
-
         let event_emitter = event_queue.custom_receiver.make_emitter().unwrap();
 
         let wayland = Wayland::new(event_emitter.clone());

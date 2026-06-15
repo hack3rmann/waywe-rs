@@ -21,142 +21,51 @@ pub struct Wgpu {
 }
 
 impl Wgpu {
-    pub async fn new(wayland: &Wayland) -> Self {
+    pub fn new() -> Self {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::VULKAN,
-            flags: if cfg!(debug_assertions) {
-                wgpu::InstanceFlags::DEBUG | wgpu::InstanceFlags::VALIDATION
-            } else {
-                wgpu::InstanceFlags::empty()
-            },
+            flags: wgpu::InstanceFlags::from_build_config(),
             memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
             backend_options: wgpu::BackendOptions::from_env_or_default(),
             // NOTE(hack3rmann): on Vulkan this handle is unused
             display: None,
         });
 
-        let adapter = match instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::LowPower,
-                force_fallback_adapter: false,
-                // take any available surface
-                compatible_surface: None,
-            })
-            .await
-        {
+        let adapter_opts = wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            force_fallback_adapter: false,
+            // take any available surface
+            compatible_surface: None,
+        };
+
+        // NOTE(hack3rmann): when the backend is Vulkan, `wgpu::Instance::request_adapter` is
+        // effectively synchronous, so no need to spread `async`-ness desease
+        let adapter_result = pollster::block_on(instance.request_adapter(&adapter_opts));
+
+        let adapter = match adapter_result {
             Ok(adapter) => adapter,
             Err(error) => panic!("failed to request adapter: {error:?}"),
         };
-
-        let limits = adapter.limits();
 
         let features = wgpu::Features::TEXTURE_FORMAT_NV12
             | wgpu::Features::IMMEDIATES
             | wgpu::Features::BGRA8UNORM_STORAGE
             | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgpu::Features::PIPELINE_CACHE;
+
         let memory_hints = wgpu::MemoryHints::Performance;
 
-        let open_device = unsafe {
-            let adapter = adapter.as_hal::<api::Vulkan>().unwrap();
-
-            let mut enabled_extensions = adapter.required_device_extensions(features);
-            enabled_extensions.extend_from_slice(&[
-                c"VK_KHR_external_memory_fd",
-                c"VK_EXT_image_drm_format_modifier",
-            ]);
-
-            let mut enabled_phd_features =
-                adapter.physical_device_features(&enabled_extensions, features);
-
-            let family_index = 0;
-            let family_info = vk::DeviceQueueCreateInfo::default()
-                .queue_family_index(family_index)
-                .queue_priorities(&[1.0]);
-            let family_infos = [family_info];
-
-            let str_pointers = enabled_extensions
-                .iter()
-                .map(|&s| {
-                    // Safe because `enabled_extensions` entries have static lifetime.
-                    s.as_ptr()
-                })
-                .collect::<Vec<_>>();
-
-            let pre_info = vk::DeviceCreateInfo::default()
-                .queue_create_infos(&family_infos)
-                .enabled_extension_names(&str_pointers);
-            let info = enabled_phd_features.add_to_device_create(pre_info);
-            let raw_device = adapter
-                .shared_instance()
-                .raw_instance()
-                .create_device(adapter.raw_physical_device(), &info, None)
-                .map_err(map_err)
-                .unwrap();
-
-            fn map_err(err: vk::Result) -> DeviceError {
-                match err {
-                    vk::Result::ERROR_TOO_MANY_OBJECTS => DeviceError::OutOfMemory,
-                    vk::Result::ERROR_INITIALIZATION_FAILED => DeviceError::Lost,
-                    vk::Result::ERROR_EXTENSION_NOT_PRESENT
-                    | vk::Result::ERROR_FEATURE_NOT_PRESENT => {
-                        panic!("{err:?}");
-                    }
-                    _ => todo!(),
-                }
-            }
-
-            adapter
-                .device_from_raw(
-                    raw_device,
-                    None,
-                    &enabled_extensions,
-                    features,
-                    &limits,
-                    &memory_hints,
-                    family_info.queue_family_index,
-                    0,
-                )
-                .unwrap()
-        };
-
-        let (device, queue) = match unsafe {
-            adapter.create_device_from_hal::<api::Vulkan>(
-                open_device,
-                &wgpu::DeviceDescriptor {
-                    required_features: features,
-                    label: Some("waywe-gpu-device"),
-                    required_limits: adapter.limits(),
-                    memory_hints,
-                    trace: wgpu::Trace::Off,
-                    experimental_features: wgpu::ExperimentalFeatures::disabled(),
-                },
-            )
-        } {
-            Ok(x) => x,
+        let (device, queue) = match create_device_and_queue(&adapter, features, memory_hints) {
+            Ok(both) => both,
             Err(error) => panic!("failed to request device: {error}"),
         };
-
-        let surfaces = wayland
-            .client_state
-            .monitors
-            .read()
-            .unwrap()
-            .iter()
-            .map(|(&id, info)| {
-                (
-                    id,
-                    create_surface(&instance, &adapter, &device, wayland, info, id),
-                )
-            })
-            .collect::<MonitorMap<_>>();
 
         Self {
             adapter,
             instance,
             device,
             queue,
-            surfaces: RwLock::new(surfaces),
+            surfaces: RwLock::default(),
             shader_cache: ShaderCache::default(),
         }
     }
@@ -254,12 +163,89 @@ impl Wgpu {
     }
 }
 
+impl Default for Wgpu {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum SurfaceResult {
     Ok(wgpu::SurfaceTexture),
     Reconfigure(wgpu::SurfaceTexture),
     Skip,
     Err,
+}
+
+fn create_device_and_queue(
+    adapter: &wgpu::Adapter,
+    features: wgpu::Features,
+    memory_hints: wgpu::MemoryHints,
+) -> Result<(wgpu::Device, wgpu::Queue), wgpu::RequestDeviceError> {
+    let adapter_hal = unsafe { adapter.as_hal::<api::Vulkan>().unwrap() };
+    let instance_raw = adapter_hal.shared_instance().raw_instance();
+
+    let mut enabled_extensions = adapter_hal.required_device_extensions(features);
+    enabled_extensions.extend_from_slice(&[
+        c"VK_KHR_external_memory_fd",
+        c"VK_EXT_image_drm_format_modifier",
+    ]);
+
+    let mut enabled_phd_features =
+        adapter_hal.physical_device_features(&enabled_extensions, features);
+
+    let family_index = 0;
+    let family_info = vk::DeviceQueueCreateInfo::default()
+        .queue_family_index(family_index)
+        .queue_priorities(&[1.0]);
+    let family_infos = [family_info];
+
+    let str_pointers = enabled_extensions
+        .iter()
+        .map(|&s| s.as_ptr())
+        .collect::<Vec<_>>();
+
+    let pre_info = vk::DeviceCreateInfo::default()
+        .queue_create_infos(&family_infos)
+        .enabled_extension_names(&str_pointers);
+    let info = enabled_phd_features.add_to_device_create(pre_info);
+    let raw_device =
+        unsafe { instance_raw.create_device(adapter_hal.raw_physical_device(), &info, None) }
+            .map_err(|err| match err {
+                vk::Result::ERROR_TOO_MANY_OBJECTS => DeviceError::OutOfMemory,
+                vk::Result::ERROR_INITIALIZATION_FAILED => DeviceError::Lost,
+                vk::Result::ERROR_EXTENSION_NOT_PRESENT | vk::Result::ERROR_FEATURE_NOT_PRESENT => {
+                    panic!("{err:?}");
+                }
+                _ => unimplemented!(),
+            })
+            .map_err(wgpu::wgc::device::DeviceError::from_hal)
+            .map_err(wgpu::wgc::instance::RequestDeviceError::Device)?;
+
+    let open_device = unsafe {
+        adapter_hal.device_from_raw(
+            raw_device,
+            None,
+            &enabled_extensions,
+            features,
+            &adapter.limits(),
+            &memory_hints,
+            family_info.queue_family_index,
+            0,
+        )
+    }
+    .unwrap();
+
+    let desc = wgpu::DeviceDescriptor {
+        required_features: features,
+        label: Some("waywe-gpu-device"),
+        required_limits: adapter.limits(),
+        memory_hints,
+        trace: wgpu::Trace::Off,
+        experimental_features: wgpu::ExperimentalFeatures::disabled(),
+    };
+
+    unsafe { adapter.create_device_from_hal::<api::Vulkan>(open_device, &desc) }
 }
 
 fn create_surface(

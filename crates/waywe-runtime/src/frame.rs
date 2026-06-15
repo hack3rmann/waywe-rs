@@ -2,7 +2,7 @@ use std::time::Duration;
 use thiserror::Error;
 use video::RatioI32;
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FrameInfo {
     pub target_frame_time: Option<Duration>,
 }
@@ -31,7 +31,7 @@ impl FrameInfo {
     }
 }
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum FrameError {
     #[error("event loop stop requested")]
     StopRequested,
