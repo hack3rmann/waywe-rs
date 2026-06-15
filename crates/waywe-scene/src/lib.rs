@@ -142,7 +142,7 @@ pub mod prelude {
 /// Frame rate configuration for the wallpaper.
 ///
 /// Controls how frequently the wallpaper updates and renders.
-#[derive(Clone, Copy, Resource, Debug, PartialEq)]
+#[derive(Clone, Copy, Resource, Debug, PartialEq, Eq)]
 pub enum FrameRateSetting {
     /// Target a specific frame duration (e.g., 16.67ms for 60 FPS).
     TargetFrameDuration(Duration),

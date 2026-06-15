@@ -1,13 +1,10 @@
 use crate::wallpaper::{Wallpaper, WallpaperConfig, optimized::image::FullscreenVertex};
 use for_sure::prelude::*;
 use glam::Vec2;
-use std::{mem, path::PathBuf};
+use std::{mem, path::PathBuf, time::Duration};
 use video::{BackendError, FrameDuration};
 use waywe_runtime::{frame::FrameInfo, gpu::Wgpu};
-use waywe_scene::{
-    time::Time,
-    video::{RenderVideo, Video},
-};
+use waywe_scene::video::{RenderVideo, Video};
 use waywe_spirv_derive::ShaderDescriptor;
 use wgpu::util::DeviceExt;
 
@@ -18,7 +15,6 @@ pub struct VideoWallpaper {
     pub rendered_video: Almost<RenderVideo>,
     pub pipeline: VideoPipeline,
     pub config: WallpaperConfig,
-    pub time: Time,
 }
 
 impl VideoWallpaper {
@@ -31,7 +27,6 @@ impl VideoWallpaper {
             video: Video::new(path)?,
             rendered_video: Nil,
             pipeline: VideoPipeline::new(gpu, config),
-            time: Time::default(),
             config,
         })
     }
@@ -81,9 +76,6 @@ impl Wallpaper for VideoWallpaper {
         surface: &wgpu::TextureView,
         encoder: &mut wgpu::CommandEncoder,
     ) -> FrameInfo {
-        self.time.update();
-        self.video.advance_by(self.time.delta);
-
         if self.video.n_frames_since_update == 0 || Almost::is_nil(&self.rendered_video) {
             self.rendered_video = Value(RenderVideo::export_from(
                 &self.video,
@@ -133,6 +125,10 @@ impl Wallpaper for VideoWallpaper {
         FrameInfo {
             target_frame_time: Some(duration),
         }
+    }
+
+    fn advance_time(&mut self, delta: Duration) {
+        self.video.advance_by(delta);
     }
 }
 

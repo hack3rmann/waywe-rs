@@ -11,7 +11,7 @@ use crate::wallpaper::{
     },
     package_registry::PackageRegistry,
 };
-use std::{path::Path, sync::Arc};
+use std::{path::Path, sync::Arc, time::Duration};
 use waywe_ipc::WallpaperType;
 use waywe_runtime::{frame::FrameInfo, gpu::Wgpu};
 
@@ -54,4 +54,6 @@ pub trait Wallpaper {
         surface: &wgpu::TextureView,
         encoder: &mut wgpu::CommandEncoder,
     ) -> FrameInfo;
+
+    fn advance_time(&mut self, delta: Duration);
 }

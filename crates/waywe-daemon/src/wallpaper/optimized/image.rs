@@ -2,7 +2,7 @@ use crate::wallpaper::{Wallpaper, WallpaperConfig};
 use bytemuck::{Pod, Zeroable};
 use glam::{UVec2, Vec2};
 use image::{ImageBuffer, ImageError, Rgba};
-use std::{io, mem};
+use std::{io, mem, time::Duration};
 use thiserror::Error;
 use waywe_runtime::{frame::FrameInfo, gpu::Wgpu};
 use waywe_spirv_derive::ShaderDescriptor;
@@ -291,6 +291,8 @@ impl Wallpaper for ImageWallpaper {
             target_frame_time: None,
         }
     }
+
+    fn advance_time(&mut self, _delta: Duration) {}
 }
 
 #[derive(Debug, Error)]

@@ -5,7 +5,7 @@ use crate::{
     prelude::{Wallpaper, WallpaperBuilder},
     wallpaper::PreparedWallpaper,
 };
-use std::{panic, sync::Arc};
+use std::{panic, sync::Arc, time::Duration};
 use waywe_rendering_api::{
     VecExt,
     api::{OpaqueRenderer, OpaqueRendererDesc, RenderSurfaceFd, Renderer},
@@ -92,5 +92,9 @@ impl Renderer for SceneRenderer {
     fn cycle_buffers(&mut self) {
         self.surfaces.rotate_left(1);
         self.submissions.rotate_left(1);
+    }
+
+    fn advance_time(&mut self, delta: Duration) {
+        self.scene.wallpaper.advance_time(delta);
     }
 }

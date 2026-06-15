@@ -5,7 +5,7 @@ use crate::wallpaper::{
 use abi_stable::std_types::RString;
 use ash::vk;
 use libloading::Library;
-use std::{array, mem::MaybeUninit, path::PathBuf, sync::Arc};
+use std::{array, mem::MaybeUninit, path::PathBuf, sync::Arc, time::Duration};
 use waywe_rendering_api::{
     FfiTextureDescriptor,
     api::{
@@ -248,5 +248,9 @@ impl Wallpaper for RenderWallpaper {
         self.surfaces.rotate_left(1);
 
         info
+    }
+
+    fn advance_time(&mut self, delta: Duration) {
+        self.renderer.advance_time(delta);
     }
 }
