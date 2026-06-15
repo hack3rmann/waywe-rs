@@ -2,6 +2,8 @@ pub mod image;
 pub mod render;
 pub mod video;
 
+use std::time::Duration;
+
 use super::WallpaperConfig;
 use crate::wallpaper::{
     Wallpaper,
@@ -35,6 +37,14 @@ impl Wallpaper for OptimizedWallpaper {
             OptimizedWallpaper::Image(wall) => wall.frame(gpu, surface, encoder),
             OptimizedWallpaper::Video(wall) => wall.frame(gpu, surface, encoder),
             OptimizedWallpaper::Scene(wall) => wall.frame(gpu, surface, encoder),
+        }
+    }
+
+    fn advance_time(&mut self, delta: Duration) {
+        match self {
+            OptimizedWallpaper::Image(wall) => wall.advance_time(delta),
+            OptimizedWallpaper::Video(wall) => wall.advance_time(delta),
+            OptimizedWallpaper::Scene(wall) => wall.advance_time(delta),
         }
     }
 }

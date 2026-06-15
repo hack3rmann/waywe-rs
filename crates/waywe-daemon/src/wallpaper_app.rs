@@ -10,6 +10,7 @@ use std::{
     collections::{BTreeMap, btree_map::Entry},
     path::PathBuf,
     sync::Arc,
+    time::Instant,
 };
 use tracing::{debug, error};
 use waywe_ipc::{
@@ -82,6 +83,7 @@ pub struct WallpaperApp {
     pub wallpaper_states: BTreeMap<Arc<str>, WallpaperState>,
     pub config: Config,
     pub package_registry: PackageRegistry,
+    pub last_instant: Option<Instant>,
 }
 
 impl WallpaperApp {
@@ -159,6 +161,13 @@ impl App for WallpaperApp {
     async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
         let mut results: SmallVec<[_; 4]> = smallvec![];
 
+        let time_delta = self
+            .last_instant
+            .as_ref()
+            .map(Instant::elapsed)
+            .unwrap_or_default();
+        self.last_instant = Some(Instant::now());
+
         for (&monitor_id, wallpapers) in self.wallpapers.iter_mut() {
             let monitor_name = {
                 let monitors = runtime.wayland.client_state.monitors.read().unwrap();
@@ -189,6 +198,8 @@ impl App for WallpaperApp {
                 }
             };
 
+            wallpapers.advance_time(time_delta);
+
             let mut encoder = runtime
                 .wgpu
                 .device
@@ -214,6 +225,7 @@ impl App for WallpaperApp {
             .all(|res| *res == Err(FrameError::NoWorkToDo))
         {
             runtime.control_flow = ControlFlow::Idle;
+            self.last_instant = None;
             return Err(FrameError::NoWorkToDo);
         }
 

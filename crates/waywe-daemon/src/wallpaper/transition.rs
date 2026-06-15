@@ -3,12 +3,7 @@ use bytemuck::{Pod, Zeroable};
 use for_sure::prelude::*;
 use glam::Vec2;
 use smallvec::SmallVec;
-use std::{
-    collections::VecDeque,
-    f32::consts::PI,
-    mem,
-    time::{Duration, Instant},
-};
+use std::{collections::VecDeque, f32::consts::PI, mem, time::Duration};
 use waywe_ipc::config::{
     Angle, Animation, AnimationConfig, AnimationDirection, AnimationStyle, CenterPosition,
     Interpolation,
@@ -405,10 +400,10 @@ impl OngoingTransition {
         }
     }
 
-    pub fn update(&mut self) {
+    pub fn advance_time(&mut self, delta: Duration) {
         match self {
-            Self::Circular(circular) => circular.update(),
-            Self::Slide(slide) => slide.update(),
+            Self::Circular(circular) => circular.advance_time(delta),
+            Self::Slide(slide) => slide.advance_time(delta),
         }
     }
 
@@ -439,7 +434,7 @@ pub struct SlideTransition {
     /// Amount of work done in 0..=1 (normalized time)
     pub done_fraction: f32,
     pub scale: f32,
-    pub start_time: Instant,
+    pub animation_progress: Duration,
     pub animation_duration: Duration,
     pub position: Vec2,
     pub normal: Vec2,
@@ -461,15 +456,16 @@ impl SlideTransition {
         Self {
             done_fraction: 0.0,
             scale,
-            start_time: Instant::now(),
+            animation_progress: Duration::ZERO,
             animation_duration: duraition,
             normal,
             position,
         }
     }
 
-    pub fn update(&mut self) {
-        let total = self.start_time.elapsed().as_secs_f32() / self.animation_duration.as_secs_f32();
+    pub fn advance_time(&mut self, delta: Duration) {
+        self.animation_progress += delta;
+        let total = self.animation_progress.as_secs_f32() / self.animation_duration.as_secs_f32();
         self.done_fraction = total.min(1.0);
     }
 
@@ -495,7 +491,7 @@ pub struct CircularTransition {
     /// Amount of work done in 0..=1 (normalized time)
     pub done_fraction: f32,
     pub scale: f32,
-    pub start_time: Instant,
+    pub animation_progress: Duration,
     pub animation_duration: Duration,
     pub direction: AnimationDirection,
     pub centre: Vec2,
@@ -522,7 +518,7 @@ impl CircularTransition {
         Self {
             done_fraction: 0.0,
             scale,
-            start_time: Instant::now(),
+            animation_progress: Duration::ZERO,
             animation_duration: duration,
             direction,
             centre,
@@ -533,8 +529,9 @@ impl CircularTransition {
         self.centre
     }
 
-    pub fn update(&mut self) {
-        let total = self.start_time.elapsed().as_secs_f32() / self.animation_duration.as_secs_f32();
+    pub fn advance_time(&mut self, delta: Duration) {
+        self.animation_progress += delta;
+        let total = self.animation_progress.as_secs_f32() / self.animation_duration.as_secs_f32();
         self.done_fraction = total.min(1.0);
     }
 
@@ -691,8 +688,6 @@ impl RunningWallpapers {
         let mut frame_result = first.frame(gpu, &self.textures.from, encoder);
 
         for (wallpaper, transition) in wallpapers.zip(&mut self.ongoing_transitions) {
-            transition.update();
-
             let frame_info = wallpaper.frame(gpu, &self.textures.to, encoder);
             frame_result = frame_result.min_or_60_fps(frame_info);
 
@@ -751,5 +746,15 @@ impl Wallpaper for RunningWallpapers {
         encoder: &mut wgpu::CommandEncoder,
     ) -> FrameInfo {
         self.render(gpu, surface.texture(), encoder).unwrap()
+    }
+
+    fn advance_time(&mut self, delta: Duration) {
+        for transition in &mut self.ongoing_transitions {
+            transition.advance_time(delta);
+        }
+
+        for effected in &mut self.executing {
+            effected.wallpaper.advance_time(delta);
+        }
     }
 }
