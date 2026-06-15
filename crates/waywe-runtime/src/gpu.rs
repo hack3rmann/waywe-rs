@@ -24,11 +24,7 @@ impl Wgpu {
     pub fn new() -> Self {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::VULKAN,
-            flags: if cfg!(debug_assertions) {
-                wgpu::InstanceFlags::DEBUG | wgpu::InstanceFlags::VALIDATION
-            } else {
-                wgpu::InstanceFlags::empty()
-            },
+            flags: wgpu::InstanceFlags::from_build_config(),
             memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
             backend_options: wgpu::BackendOptions::from_env_or_default(),
             // NOTE(hack3rmann): on Vulkan this handle is unused
