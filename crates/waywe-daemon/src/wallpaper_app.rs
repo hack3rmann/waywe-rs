@@ -5,7 +5,6 @@ use crate::{
         package_registry::PackageRegistry, transition::RunningWallpapers,
     },
 };
-use for_sure::prelude::*;
 use smallvec::{SmallVec, smallvec};
 use std::{
     collections::{BTreeMap, btree_map::Entry},
@@ -19,7 +18,7 @@ use waywe_ipc::{
     profile::{Monitor, SetupProfile},
 };
 use waywe_runtime::{
-    ControlFlow, Runtime, RuntimeFeatures,
+    ControlFlow, Runtime,
     app::App,
     event::{EventHandler, Handle, TryReplicate},
     frame::{FrameError, FrameInfo},
@@ -158,10 +157,6 @@ impl App for WallpaperApp {
     }
 
     async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
-        if Almost::is_nil(&runtime.wgpu) {
-            return Err(FrameError::NoWorkToDo);
-        }
-
         let mut results: SmallVec<[_; 4]> = smallvec![];
 
         for (&monitor_id, wallpapers) in self.wallpapers.iter_mut() {
@@ -273,9 +268,7 @@ impl Handle<WaylandEvent> for WallpaperApp {
     async fn handle(&mut self, runtime: &mut Runtime, event: WaylandEvent) {
         match event {
             WaylandEvent::ResizeRequested { monitor_id, size } => {
-                if Almost::is_value(&runtime.wgpu) {
-                    runtime.wgpu.resize_surface(monitor_id, size);
-                }
+                runtime.wgpu.resize_surface(monitor_id, size);
 
                 let Some(monitor_name) = runtime.wayland.client_state.monitor_name(monitor_id)
                 else {
@@ -309,9 +302,7 @@ impl Handle<WaylandEvent> for WallpaperApp {
                 id: monitor_id,
                 name: monitor_name,
             } => {
-                if Almost::is_value(&runtime.wgpu) {
-                    runtime.wgpu.register_surface(&runtime.wayland, monitor_id);
-                }
+                runtime.wgpu.register_surface(&runtime.wayland, monitor_id);
 
                 if let Some(state) = self.wallpaper_states.get_mut(&monitor_name) {
                     state.is_active = true;
@@ -359,9 +350,6 @@ impl Handle<WaylandEvent> for WallpaperApp {
 impl Handle<NewWallpaperEvent> for WallpaperApp {
     async fn handle(&mut self, runtime: &mut Runtime, event: NewWallpaperEvent) {
         let NewWallpaperEvent { path, ty, target } = event;
-
-        // FIXME(hack3rmann): remove runtime features
-        runtime.enable(RuntimeFeatures::GPU).await;
 
         let monitor_ids: SmallVec<[MonitorId; 4]> = match target {
             WallpaperTarget::ForAll => {

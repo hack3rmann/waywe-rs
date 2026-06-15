@@ -1,13 +1,10 @@
 use crate::wayland::MonitorId;
-use bitflags::bitflags;
-use for_sure::prelude::*;
 use glam::UVec2;
 use gpu::Wgpu;
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 use task_pool::TaskPool;
 use thiserror::Error;
 use timer::Timer;
-use video::Video;
 use wayland::Wayland;
 use waywe_ipc::{DaemonCommand, IpcServer, ipc::server::CreateServerError};
 
@@ -19,7 +16,6 @@ pub mod gpu;
 pub mod shaders;
 pub mod task_pool;
 pub mod timer;
-pub mod video;
 pub mod wayland;
 
 #[derive(Clone, Copy, Default, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
@@ -45,14 +41,6 @@ impl ControlFlow {
     }
 }
 
-bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord, Default, Hash)]
-    pub struct RuntimeFeatures: u32 {
-        const GPU = 0x1;
-        const VIDEO = 0x2;
-    }
-}
-
 #[derive(Debug, Error)]
 pub enum CreateRuntimeError {
     #[error(transparent)]
@@ -61,8 +49,7 @@ pub enum CreateRuntimeError {
 
 pub struct Runtime {
     pub timer: Timer,
-    pub video: Almost<Video>,
-    pub wgpu: Almost<Arc<Wgpu>>,
+    pub wgpu: Arc<Wgpu>,
     pub wayland: Arc<Wayland>,
     pub ipc: IpcServer<DaemonCommand>,
     pub control_flow: ControlFlow,
@@ -70,16 +57,18 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    pub fn new(
+    pub async fn new(
         wayland: Wayland,
         control_flow: ControlFlow,
         task_pool: TaskPool,
     ) -> Result<Self, CreateRuntimeError> {
+        static VIDEO_ONCE: Once = Once::new();
+        VIDEO_ONCE.call_once(video::init);
+
         Ok(Self {
             timer: Timer::default(),
+            wgpu: Arc::new(Wgpu::new().await),
             wayland: Arc::new(wayland),
-            wgpu: Nil,
-            video: Nil,
             ipc: IpcServer::new()?,
             control_flow,
             task_pool,
@@ -99,28 +88,6 @@ impl Runtime {
         WallpaperConfig {
             surface_size,
             surface_format,
-        }
-    }
-
-    pub fn init_video(&mut self) {
-        if Almost::is_nil(&self.video) {
-            self.video = Value(Video::default());
-        }
-    }
-
-    pub async fn init_wgpu(&mut self) {
-        if Almost::is_nil(&self.wgpu) {
-            self.wgpu = Value(Arc::new(Wgpu::new(&self.wayland).await));
-        }
-    }
-
-    pub async fn enable(&mut self, features: RuntimeFeatures) {
-        if features.contains(RuntimeFeatures::VIDEO) {
-            self.init_video();
-        }
-
-        if features.contains(RuntimeFeatures::GPU) {
-            self.init_wgpu().await;
         }
     }
 }

@@ -21,7 +21,7 @@ pub struct Wgpu {
 }
 
 impl Wgpu {
-    pub async fn new(wayland: &Wayland) -> Self {
+    pub async fn new() -> Self {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::VULKAN,
             flags: if cfg!(debug_assertions) {
@@ -137,26 +137,12 @@ impl Wgpu {
             Err(error) => panic!("failed to request device: {error}"),
         };
 
-        let surfaces = wayland
-            .client_state
-            .monitors
-            .read()
-            .unwrap()
-            .iter()
-            .map(|(&id, info)| {
-                (
-                    id,
-                    create_surface(&instance, &adapter, &device, wayland, info, id),
-                )
-            })
-            .collect::<MonitorMap<_>>();
-
         Self {
             adapter,
             instance,
             device,
             queue,
-            surfaces: RwLock::new(surfaces),
+            surfaces: RwLock::default(),
             shader_cache: ShaderCache::default(),
         }
     }

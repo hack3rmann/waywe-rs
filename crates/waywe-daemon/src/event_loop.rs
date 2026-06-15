@@ -55,7 +55,9 @@ impl EventLoop {
         let wayland = Wayland::new(event_emitter.clone());
         let task_pool = TaskPool::new(event_emitter);
 
-        let runtime = Runtime::new(wayland, ControlFlow::Busy, task_pool)?;
+        let runtime = pollster::block_on(async {
+            Runtime::new(wayland, ControlFlow::Busy, task_pool).await
+        })?;
 
         let fds = [
             runtime.wayland.display.as_fd(),
