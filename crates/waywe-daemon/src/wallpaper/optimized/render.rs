@@ -181,6 +181,8 @@ impl RenderWallpaper {
         let memory = unsafe { raw_device.allocate_memory(&alloc_info, None) }.unwrap();
         unsafe { raw_device.bind_image_memory(vk_image, memory, 0) }.unwrap();
 
+        let usage = wgpu::TextureUses::COLOR_TARGET | wgpu::TextureUses::COPY_SRC;
+
         let hal_desc = wgpu::hal::TextureDescriptor {
             label: wgpu_desc.label,
             size: wgpu_desc.size,
@@ -188,7 +190,7 @@ impl RenderWallpaper {
             sample_count: 1,
             dimension: wgpu_desc.dimension,
             format: wgpu_desc.format,
-            usage: wgpu::TextureUses::COLOR_TARGET | wgpu::TextureUses::COPY_SRC,
+            usage,
             memory_flags: wgpu::hal::MemoryFlags::empty(),
             view_formats: vec![],
         };
@@ -202,7 +204,7 @@ impl RenderWallpaper {
             )
         };
 
-        unsafe { device.create_texture_from_hal::<Vulkan>(hal_texture, &wgpu_desc) }
+        unsafe { device.create_texture_from_hal::<Vulkan>(hal_texture, &wgpu_desc, usage) }
     }
 }
 

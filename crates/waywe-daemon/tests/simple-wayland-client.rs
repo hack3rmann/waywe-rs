@@ -218,7 +218,7 @@ impl Swapchain {
                         constants: &[],
                         zero_initialize_workgroup_memory: false,
                     },
-                    buffers: &[wgpu::VertexBufferLayout {
+                    buffers: &[Some(wgpu::VertexBufferLayout {
                         array_stride: vertex_size,
                         step_mode: wgpu::VertexStepMode::Vertex,
                         attributes: &[wgpu::VertexAttribute {
@@ -226,7 +226,7 @@ impl Swapchain {
                             offset: 0,
                             shader_location: 0,
                         }],
-                    }],
+                    })],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: fragment_shader,
@@ -357,6 +357,7 @@ fn simple_wayland_client() {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 force_fallback_adapter: false,
                 compatible_surface: Some(&wgpu_surface),
+                apply_limit_buckets: false,
             })
             .await
             .expect("failed to request adapter")
@@ -513,7 +514,7 @@ fn simple_wayland_client() {
 
         _ = wgpu_queue.submit([encoder.finish()]);
 
-        surface_texture.present();
+        wgpu_queue.present(surface_texture);
 
         display.roundtrip(queue.as_mut(), client_state.as_ref());
     }

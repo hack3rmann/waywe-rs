@@ -36,6 +36,7 @@ impl Wgpu {
             force_fallback_adapter: false,
             // take any available surface
             compatible_surface: None,
+            apply_limit_buckets: false,
         };
 
         // NOTE(hack3rmann): when the backend is Vulkan, `wgpu::Instance::request_adapter` is

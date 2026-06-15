@@ -239,7 +239,7 @@ impl VideoPipeline {
                         constants: &[],
                         zero_initialize_workgroup_memory: false,
                     },
-                    buffers: &[wgpu::VertexBufferLayout {
+                    buffers: &[Some(wgpu::VertexBufferLayout {
                         array_stride: mem::size_of_val(&SCREEN_TRIANGLE[0]) as u64,
                         step_mode: wgpu::VertexStepMode::Vertex,
                         attributes: &[wgpu::VertexAttribute {
@@ -247,7 +247,7 @@ impl VideoPipeline {
                             offset: 0,
                             shader_location: 0,
                         }],
-                    }],
+                    })],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &gpu.shader_cache.get::<VideoFragment>().unwrap(),

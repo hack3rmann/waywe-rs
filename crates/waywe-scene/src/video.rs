@@ -451,6 +451,8 @@ impl RenderVideo {
                 .unwrap()
         };
 
+        let usage = wgpu::TextureUses::RESOURCE;
+
         let texture_desc = wgpu::hal::TextureDescriptor {
             label: Some("video-texture"),
             size: wgpu::Extent3d {
@@ -462,7 +464,7 @@ impl RenderVideo {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::NV12,
-            usage: wgpu::TextureUses::RESOURCE,
+            usage,
             memory_flags: wgpu::hal::MemoryFlags::PREFER_COHERENT,
             view_formats: vec![],
         };
@@ -495,6 +497,7 @@ impl RenderVideo {
                     usage: wgpu::TextureUsages::TEXTURE_BINDING,
                     view_formats: &[],
                 },
+                usage,
             )
         }
     }

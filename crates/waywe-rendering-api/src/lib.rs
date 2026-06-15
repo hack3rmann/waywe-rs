@@ -244,7 +244,13 @@ pub unsafe fn import_fd_as_texture(
         view_formats: &[],
     };
 
-    unsafe { device.create_texture_from_hal::<hal::api::Vulkan>(texture_hal, &wgpu_desc) }
+    unsafe {
+        device.create_texture_from_hal::<hal::api::Vulkan>(
+            texture_hal,
+            &wgpu_desc,
+            desc.wgpu_uses(),
+        )
+    }
 }
 
 pub trait Sealed {}

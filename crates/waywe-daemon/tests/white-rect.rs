@@ -102,6 +102,7 @@ async fn use_wgpu_to_draw_anything() {
             power_preference: wgpu::PowerPreference::HighPerformance,
             force_fallback_adapter: false,
             compatible_surface: Some(&wgpu_surface),
+            apply_limit_buckets: false,
         })
         .await
         .expect("failed to request adapter");
@@ -171,7 +172,7 @@ async fn use_wgpu_to_draw_anything() {
                 constants: &[],
                 zero_initialize_workgroup_memory: false,
             },
-            buffers: &[wgpu::VertexBufferLayout {
+            buffers: &[Some(wgpu::VertexBufferLayout {
                 array_stride: mem::size_of_val(&triangle[0]) as u64,
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes: &[wgpu::VertexAttribute {
@@ -179,7 +180,7 @@ async fn use_wgpu_to_draw_anything() {
                     offset: 0,
                     shader_location: 0,
                 }],
-            }],
+            })],
         },
         fragment: Some(wgpu::FragmentState {
             module: &fragment_shader,
@@ -262,7 +263,6 @@ async fn use_wgpu_to_draw_anything() {
         }
 
         wgpu_queue.submit([encoder.finish()]);
-
-        surface_texture.present();
+        wgpu_queue.present(surface_texture);
     }
 }

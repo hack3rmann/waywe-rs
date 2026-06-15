@@ -32,6 +32,7 @@ impl Gpu {
                 force_fallback_adapter: false,
                 // take any available surface
                 compatible_surface: None,
+                apply_limit_buckets: false,
             })
             .await
         {
