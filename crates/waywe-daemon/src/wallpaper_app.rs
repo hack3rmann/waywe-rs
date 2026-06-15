@@ -8,6 +8,7 @@ use crate::{
 use smallvec::{SmallVec, smallvec};
 use std::{
     collections::{BTreeMap, btree_map::Entry},
+    panic::{self, AssertUnwindSafe},
     path::PathBuf,
     sync::Arc,
     time::Instant,
@@ -203,15 +204,23 @@ impl App for WallpaperApp {
                 .device
                 .create_command_encoder(&Default::default());
 
-            // FIXME(hack3rmann): if panic goes in here, `wgpu` fails to destroy `SwapchainAcquireSemaphore`
-            // panic!()
-            wallpapers.advance_time(time_delta);
-            let result = wallpapers.render(&runtime.wgpu, &surface.texture, &mut encoder);
-
-            results.push(result);
+            // BUG(hack3rmann): if we panic between `surface.get_current_texture` and `surface.present`,
+            // `wgpu` fails to destroy `SwapchainAcquireSemaphore`, which potentially leads to
+            // a segmentation fault. This is a `wgpu` bug
+            let unwind_result = panic::catch_unwind(AssertUnwindSafe(|| {
+                wallpapers.advance_time(time_delta);
+                wallpapers.render(&runtime.wgpu, &surface.texture, &mut encoder)
+            }));
 
             runtime.wgpu.queue.submit([encoder.finish()]);
             surface.present();
+
+            let result = match unwind_result {
+                Ok(res) => res,
+                Err(payload) => panic::resume_unwind(payload),
+            };
+
+            results.push(result);
 
             if let Some(state) = self.wallpaper_states.get_mut(&monitor_name) {
                 *state = state.redraw_completed();
