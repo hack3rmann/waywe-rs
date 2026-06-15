@@ -206,7 +206,8 @@ impl App for WallpaperApp {
 
             // BUG(hack3rmann): if we panic between `surface.get_current_texture` and `surface.present`,
             // `wgpu` fails to destroy `SwapchainAcquireSemaphore`, which potentially leads to
-            // a segmentation fault. This is a `wgpu` bug
+            // a segmentation fault. This is a `wgpu` bug, see
+            // <https://github.com/gfx-rs/wgpu/issues/8243>
             let unwind_result = panic::catch_unwind(AssertUnwindSafe(|| {
                 wallpapers.advance_time(time_delta);
                 wallpapers.render(&runtime.wgpu, &surface.texture, &mut encoder)
