@@ -1,27 +1,8 @@
-use crate::event::EventEmitter;
+use crate::event::{EventEmitter, IntoEvent};
+use display_error_chain::ErrorChainExt;
 use smallvec::{SmallVec, smallvec};
-use std::{
-    any::Any,
-    fmt::{self, Display},
-    thread::{self, JoinHandle},
-};
+use tokio::task::JoinHandle;
 use tracing::error;
-
-struct PrettyPanicPayload<'s>(pub &'s (dyn Any + Send + 'static));
-
-impl Display for PrettyPanicPayload<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = if let Some(s) = self.0.downcast_ref::<&str>() {
-            s
-        } else if let Some(s) = self.0.downcast_ref::<&String>() {
-            s
-        } else {
-            "unknown panic payload"
-        };
-
-        f.write_str(s)
-    }
-}
 
 pub struct TaskPool {
     pub handles: SmallVec<[JoinHandle<()>; 1]>,
@@ -36,7 +17,7 @@ impl TaskPool {
         }
     }
 
-    pub fn erase_finished(&mut self) -> usize {
+    pub async fn erase_finished(&mut self) -> usize {
         let mut n_finished = 0;
         let mut i = 0;
 
@@ -44,8 +25,8 @@ impl TaskPool {
             while i < self.handles.len() && self.handles[i].is_finished() {
                 let handle = self.handles.swap_remove(i);
 
-                if let Err(panic_payload) = handle.join() {
-                    error!("task failed: {}", PrettyPanicPayload(&panic_payload));
+                if let Err(err) = handle.await {
+                    error!("task failed: {}", err.chain());
                 }
 
                 n_finished += 1;
@@ -57,12 +38,31 @@ impl TaskPool {
         n_finished
     }
 
-    pub fn spawn(&mut self, f: impl FnOnce(EventEmitter) + Send + 'static) {
-        self.erase_finished();
+    pub async fn spawn<F, R>(&mut self, f: F)
+    where
+        F: FnOnce(EventEmitter) -> R + Send + 'static,
+        R: Future<Output = ()> + Send + 'static,
+    {
+        self.erase_finished().await;
 
         let emitter = self.emitter.clone();
-        let handle = thread::spawn(move || f(emitter));
+        let handle = tokio::spawn(async move {
+            f(emitter).await;
+        });
 
         self.handles.push(handle);
+    }
+
+    pub async fn spawn_event<F, R, E>(&mut self, f: F)
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Future<Output = E> + Send + 'static,
+        E: IntoEvent,
+    {
+        self.spawn(async move |mut emitter| {
+            let event = f().await;
+            emitter.emit(event).expect("failed to send event");
+        })
+        .await;
     }
 }
