@@ -30,6 +30,8 @@ futures-util.workspace = true
 derive_more = { version = "2.0.1", features = ["full"] }
 static_assertions.workspace = true
 pollster.workspace = true
+tokio.workspace = true
+display-error-chain.workspace = true
 
 [features]
 spirv = ["waywe-spirv-derive/spirv"]

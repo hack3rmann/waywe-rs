@@ -375,9 +375,11 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
             let path = path.clone();
             let gpu = Arc::clone(&runtime.wgpu);
 
-            let monitors = runtime.wayland.client_state.monitors.read().unwrap();
-            let monitor = &monitors[&monitor_id];
-            let monitor_name = Arc::clone(&monitor.name);
+            let monitor_name = {
+                let monitors = runtime.wayland.client_state.monitors.read().unwrap();
+                Arc::clone(&monitors[&monitor_id].name)
+            };
+
             let monitor_profile = Monitor {
                 wallpaper_type: ty,
                 path: path.clone(),
@@ -393,14 +395,13 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
             let config = runtime.wallpaper_config(monitor_id);
             let packages = self.package_registry.clone();
 
-            runtime.task_pool.spawn(move |mut emitter| {
-                let event = WallpaperPreparedEvent {
-                    wallpaper: wallpaper::create(gpu, &path, ty, config, packages),
+            runtime
+                .task_pool
+                .spawn_event(async move || WallpaperPreparedEvent {
+                    wallpaper: wallpaper::create(gpu, &path, ty, config, packages).await,
                     monitor_id,
-                };
-
-                emitter.emit(event).unwrap();
-            });
+                })
+                .await;
         }
     }
 }

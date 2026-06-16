@@ -271,6 +271,7 @@ impl EventReceiver {
     }
 }
 
+// TODO(hack3rmann): make async
 pub struct EventEmitter {
     writer: PipeWriter,
     sender: Sender<Event>,

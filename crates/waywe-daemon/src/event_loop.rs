@@ -111,7 +111,7 @@ impl EventLoop {
                 break 'event_loop;
             }
 
-            self.runtime.task_pool.erase_finished();
+            self.runtime.task_pool.erase_finished().await;
             self.runtime.wayland.display_roundtrip();
 
             if let Err(error) = self.event_queue.populate_events_from_custom()
@@ -148,7 +148,7 @@ impl EventLoop {
     }
 
     pub fn run(&mut self) {
-        let async_runtime = AsyncRuntimeBuilder::new_current_thread()
+        let async_runtime = AsyncRuntimeBuilder::new_multi_thread()
             .enable_all()
             .build()
             .unwrap();
