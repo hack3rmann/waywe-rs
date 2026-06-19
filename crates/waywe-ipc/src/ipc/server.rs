@@ -1,5 +1,6 @@
 use crate::ipc;
 use bincode::{Decode, error::DecodeError};
+use calloop::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
 use rustix::{
     io::Errno,
     net::{self, AddressFamily, RecvFlags, SocketAddrUnix, SocketFlags, SocketType},
@@ -164,5 +165,50 @@ impl From<TryLockError> for CreateServerError {
             TryLockError::Error(error) => Self::Io(error),
             TryLockError::WouldBlock => Self::AcquireFileLock,
         }
+    }
+}
+
+impl<T: Decode<()>> EventSource for IpcServer<T> {
+    type Event = T;
+    type Metadata = ();
+    type Ret = ();
+    type Error = RecvError;
+
+    fn process_events<F>(
+        &mut self,
+        _: Readiness,
+        _: Token,
+        mut callback: F,
+    ) -> Result<PostAction, Self::Error>
+    where
+        F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+    {
+        loop {
+            match self.try_recv() {
+                Ok(value) => callback(value, &mut ()),
+                Err(RecvError::Empty) => return Ok(PostAction::Continue),
+                Err(other) => return Err(other),
+            }
+        }
+    }
+
+    fn register(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> calloop::Result<()> {
+        unsafe { poll.register(&self.fd, Interest::READ, Mode::Level, token_factory.token()) }
+    }
+
+    fn reregister(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> calloop::Result<()> {
+        poll.reregister(&self.fd, Interest::READ, Mode::Level, token_factory.token())
+    }
+
+    fn unregister(&mut self, poll: &mut Poll) -> calloop::Result<()> {
+        poll.unregister(&self.fd)
     }
 }

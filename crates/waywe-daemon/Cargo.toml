@@ -46,6 +46,7 @@ tap.workspace = true
 bincode.workspace = true
 display-error-chain.workspace = true
 static_assertions.workspace = true
+calloop.workspace = true
 
 [dev-dependencies]
 libc = "0.2.171"

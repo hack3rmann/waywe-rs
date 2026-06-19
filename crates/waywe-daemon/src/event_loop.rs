@@ -1,9 +1,14 @@
 use crate::wallpaper_app::{NewWallpaperEvent, WallpaperPauseEvent};
+use calloop::{
+    LoopSignal,
+    signals::{Signal, Signals},
+};
 use rustix::io::Errno;
 use std::{
     io,
     os::fd::AsFd as _,
     sync::{Once, atomic::Ordering, mpsc::TryRecvError},
+    time::Duration,
     vec::Drain,
 };
 use thiserror::Error;
@@ -70,6 +75,40 @@ impl EventLoop {
             event_queue,
             epoll,
         })
+    }
+
+    fn run_calloop(&mut self) {
+        struct ClientState {
+            loop_signal: LoopSignal,
+        }
+
+        let mut event_loop =
+            calloop::EventLoop::<ClientState>::try_new().expect("failed to initilize poll");
+        let handle = event_loop.handle();
+
+        let signals = Signals::new(&[Signal::SIGINT, Signal::SIGQUIT, Signal::SIGHUP]).unwrap();
+        handle
+            .insert_source(signals, |_, &mut (), state| {
+                state.loop_signal.stop();
+            })
+            .unwrap();
+
+        handle
+            .insert_source(self.runtime.wayland.clone(), |_, &mut (), _| todo!())
+            .unwrap();
+
+        let ipc = IpcServer::<DaemonCommand>::new().unwrap();
+        handle.insert_source(ipc, |_, &mut (), _| todo!()).unwrap();
+
+        let mut state = ClientState {
+            loop_signal: event_loop.get_signal(),
+        };
+
+        event_loop
+            .run(Duration::from_secs_f32(1.0 / 60.0), &mut state, |_state| {
+                // TODO: do frame when time comes
+            })
+            .unwrap();
     }
 
     async fn run_async(&mut self) {

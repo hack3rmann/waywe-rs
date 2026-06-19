@@ -19,4 +19,5 @@ glam.workspace = true
 serde.workspace = true
 toml.workspace = true
 uuid.workspace = true
+calloop.workspace = true
 rand = "0.9.1"

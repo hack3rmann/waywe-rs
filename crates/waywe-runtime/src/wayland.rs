@@ -1,4 +1,5 @@
 use crate::event::EventEmitter;
+use calloop::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
 use glam::UVec2;
 use raw_window_handle::{
     HasDisplayHandle as _, RawDisplayHandle, RawWindowHandle, WaylandWindowHandle,
@@ -6,9 +7,11 @@ use raw_window_handle::{
 use std::{
     collections::{BTreeMap, HashMap},
     ffi::CStr,
+    ops::Deref,
     pin::Pin,
     sync::{Arc, Mutex, RwLock},
 };
+use thiserror::Error;
 use wayland_client::{
     interface::{
         WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlOutputMode,
@@ -64,6 +67,7 @@ pub struct Globals {
 
 pub struct ClientState {
     pub events: Mutex<EventEmitter>,
+    pub stored_events: Mutex<Vec<WaylandEvent>>,
     pub monitors: RwLock<MonitorMap<MonitorInfo>>,
     pub monitor_names: RwLock<HashMap<Arc<str>, MonitorId>>,
     pub globals: Option<Globals>,
@@ -73,6 +77,7 @@ impl ClientState {
     pub fn new(events: EventEmitter) -> Self {
         Self {
             events: Mutex::new(events),
+            stored_events: Mutex::default(),
             monitors: RwLock::new(MonitorMap::default()),
             monitor_names: RwLock::new(HashMap::default()),
             globals: None,
@@ -189,6 +194,9 @@ impl Dispatch for Pointer {
 
         let mut events = state.events.lock().unwrap();
         events.emit(WaylandEvent::CursorMoved { position }).unwrap();
+
+        let mut events = state.stored_events.lock().unwrap();
+        events.push(WaylandEvent::CursorMoved { position });
     }
 }
 
@@ -262,6 +270,12 @@ impl Dispatch for LayerSurface {
                         size,
                     })
                     .unwrap();
+
+                let mut events = state.stored_events.lock().unwrap();
+                events.push(WaylandEvent::ResizeRequested {
+                    monitor_id: self.monitor_id,
+                    size,
+                });
 
                 monitor.size = size;
             }
@@ -473,9 +487,15 @@ impl Output {
             .unwrap()
             .emit(WaylandEvent::MonitorPlugged {
                 id: self.monitor_id,
-                name,
+                name: Arc::clone(&name),
             })
             .unwrap();
+
+        let mut events = state.stored_events.lock().unwrap();
+        events.push(WaylandEvent::MonitorPlugged {
+            id: self.monitor_id,
+            name,
+        });
 
         self.is_init_done = true;
     }
@@ -568,9 +588,15 @@ pub(crate) fn handle_global_remove(
         events
             .emit(WaylandEvent::MonitorUnplugged {
                 id: monitor_id,
-                name: info.name,
+                name: Arc::clone(&info.name),
             })
             .unwrap();
+
+        let mut events = state.stored_events.lock().unwrap();
+        events.push(WaylandEvent::MonitorUnplugged {
+            id: monitor_id,
+            name: info.name,
+        });
     }
 }
 
@@ -608,14 +634,14 @@ pub struct MonitorSurface {
     pub layer_surface: WlObjectHandle<LayerSurface>,
 }
 
-pub struct Wayland {
+pub struct WaylandInner {
     pub client_state: Pin<Box<ClientState>>,
     pub main_queue: RwLock<Pin<Box<WlEventQueue<ClientState>>>>,
     pub display: WlDisplay<ClientState>,
     pub registry: WlObjectHandle<WlRegistry<ClientState>>,
 }
 
-impl Wayland {
+impl WaylandInner {
     pub fn display_roundtrip(&self) {
         let mut main_queue = self.main_queue.write().unwrap();
 
@@ -672,5 +698,84 @@ impl Wayland {
 
     pub fn raw_display_handle(&self) -> RawDisplayHandle {
         self.display.display_handle().unwrap().as_raw()
+    }
+}
+
+#[derive(Clone)]
+pub struct Wayland(Arc<WaylandInner>);
+
+impl Deref for Wayland {
+    type Target = WaylandInner;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Wayland {
+    pub fn new(events: EventEmitter) -> Self {
+        Self(Arc::new(WaylandInner::new(events)))
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum WaylandProcessEventsError {}
+
+impl EventSource for Wayland {
+    type Event = WaylandEvent;
+    type Metadata = ();
+    type Ret = ();
+    type Error = WaylandProcessEventsError;
+
+    fn process_events<F>(
+        &mut self,
+        _: Readiness,
+        _: Token,
+        mut callback: F,
+    ) -> Result<PostAction, Self::Error>
+    where
+        F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+    {
+        self.display_roundtrip();
+
+        let mut events = self.client_state.stored_events.lock().unwrap();
+
+        for event in events.drain(..) {
+            callback(event, &mut ());
+        }
+
+        Ok(PostAction::Continue)
+    }
+
+    fn register(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> calloop::Result<()> {
+        unsafe {
+            poll.register(
+                &self.display,
+                Interest::READ,
+                Mode::Level,
+                token_factory.token(),
+            )
+        }
+    }
+
+    fn reregister(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> calloop::Result<()> {
+        poll.reregister(
+            &self.display,
+            Interest::READ,
+            Mode::Level,
+            token_factory.token(),
+        )
+    }
+
+    fn unregister(&mut self, poll: &mut Poll) -> calloop::Result<()> {
+        poll.unregister(&self.display)
     }
 }

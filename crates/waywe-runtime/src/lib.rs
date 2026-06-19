@@ -1,11 +1,10 @@
-use crate::wayland::MonitorId;
+use crate::wayland::{MonitorId, Wayland};
 use glam::UVec2;
 use gpu::Wgpu;
 use std::sync::{Arc, Once};
 use task_pool::TaskPool;
 use thiserror::Error;
 use timer::Timer;
-use wayland::Wayland;
 use waywe_ipc::{DaemonCommand, IpcServer, ipc::server::CreateServerError};
 
 pub mod app;
@@ -50,7 +49,7 @@ pub enum CreateRuntimeError {
 pub struct Runtime {
     pub timer: Timer,
     pub wgpu: Arc<Wgpu>,
-    pub wayland: Arc<Wayland>,
+    pub wayland: Wayland,
     pub ipc: IpcServer<DaemonCommand>,
     pub control_flow: ControlFlow,
     pub task_pool: TaskPool,
@@ -68,7 +67,7 @@ impl Runtime {
         Ok(Self {
             timer: Timer::default(),
             wgpu: Arc::default(),
-            wayland: Arc::new(wayland),
+            wayland,
             ipc: IpcServer::new()?,
             control_flow,
             task_pool,
