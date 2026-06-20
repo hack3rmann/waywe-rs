@@ -1,4 +1,3 @@
-use crate::event::EventEmitter;
 use calloop::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
 use glam::UVec2;
 use raw_window_handle::{
@@ -65,8 +64,8 @@ pub struct Globals {
     pub layer_shell: WlObjectHandle<LayerShell>,
 }
 
+#[derive(Default)]
 pub struct ClientState {
-    pub events: Mutex<EventEmitter>,
     pub stored_events: Mutex<Vec<WaylandEvent>>,
     pub monitors: RwLock<MonitorMap<MonitorInfo>>,
     pub monitor_names: RwLock<HashMap<Arc<str>, MonitorId>>,
@@ -74,16 +73,6 @@ pub struct ClientState {
 }
 
 impl ClientState {
-    pub fn new(events: EventEmitter) -> Self {
-        Self {
-            events: Mutex::new(events),
-            stored_events: Mutex::default(),
-            monitors: RwLock::new(MonitorMap::default()),
-            monitor_names: RwLock::new(HashMap::default()),
-            globals: None,
-        }
-    }
-
     pub fn monitor_size(&self, id: MonitorId) -> Option<UVec2> {
         let monitors = self.monitors.read().unwrap();
         monitors.get(&id).map(|info| info.size)
@@ -192,9 +181,6 @@ impl Dispatch for Pointer {
             motion.surface_y.to_int().cast_unsigned(),
         );
 
-        let mut events = state.events.lock().unwrap();
-        events.emit(WaylandEvent::CursorMoved { position }).unwrap();
-
         let mut events = state.stored_events.lock().unwrap();
         events.push(WaylandEvent::CursorMoved { position });
     }
@@ -261,16 +247,6 @@ impl Dispatch for LayerSurface {
 
             // this is resize if and only if size is changed indeed
             if monitor.size != size {
-                state
-                    .events
-                    .lock()
-                    .unwrap()
-                    .emit(WaylandEvent::ResizeRequested {
-                        monitor_id: self.monitor_id,
-                        size,
-                    })
-                    .unwrap();
-
                 let mut events = state.stored_events.lock().unwrap();
                 events.push(WaylandEvent::ResizeRequested {
                     monitor_id: self.monitor_id,
@@ -481,16 +457,6 @@ impl Output {
             );
         }
 
-        state
-            .events
-            .lock()
-            .unwrap()
-            .emit(WaylandEvent::MonitorPlugged {
-                id: self.monitor_id,
-                name: Arc::clone(&name),
-            })
-            .unwrap();
-
         let mut events = state.stored_events.lock().unwrap();
         events.push(WaylandEvent::MonitorPlugged {
             id: self.monitor_id,
@@ -584,14 +550,6 @@ pub(crate) fn handle_global_remove(
     storage.release(info.layer_surface).unwrap();
 
     {
-        let mut events = state.events.lock().unwrap();
-        events
-            .emit(WaylandEvent::MonitorUnplugged {
-                id: monitor_id,
-                name: Arc::clone(&info.name),
-            })
-            .unwrap();
-
         let mut events = state.stored_events.lock().unwrap();
         events.push(WaylandEvent::MonitorUnplugged {
             id: monitor_id,
@@ -649,8 +607,8 @@ impl WaylandInner {
             .roundtrip(main_queue.as_mut(), self.client_state.as_ref());
     }
 
-    pub fn new(events: EventEmitter) -> Self {
-        let mut client_state = Box::pin(ClientState::new(events));
+    pub fn new() -> Self {
+        let mut client_state = Box::pin(ClientState::default());
         let display = WlDisplay::connect(client_state.as_ref()).unwrap();
         let mut queue = Box::pin(display.take_main_queue().unwrap());
 
@@ -699,9 +657,27 @@ impl WaylandInner {
     pub fn raw_display_handle(&self) -> RawDisplayHandle {
         self.display.display_handle().unwrap().as_raw()
     }
+
+    pub fn drain_stored_events(&self, mut handle: impl FnMut(WaylandEvent)) {
+        let mut events = self.client_state.stored_events.lock().unwrap();
+
+        for event in events.drain(..) {
+            handle(event);
+        }
+    }
+
+    pub fn process_events(&self, mut handle: impl FnMut(WaylandEvent)) {
+        self.drain_stored_events(&mut handle);
+    }
 }
 
-#[derive(Clone)]
+impl Default for WaylandInner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Clone, Default)]
 pub struct Wayland(Arc<WaylandInner>);
 
 impl Deref for Wayland {
@@ -709,12 +685,6 @@ impl Deref for Wayland {
 
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl Wayland {
-    pub fn new(events: EventEmitter) -> Self {
-        Self(Arc::new(WaylandInner::new(events)))
     }
 }
 
@@ -737,12 +707,7 @@ impl EventSource for Wayland {
         F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
         self.display_roundtrip();
-
-        let mut events = self.client_state.stored_events.lock().unwrap();
-
-        for event in events.drain(..) {
-            callback(event, &mut ());
-        }
+        self.drain_stored_events(|event| callback(event, &mut ()));
 
         Ok(PostAction::Continue)
     }

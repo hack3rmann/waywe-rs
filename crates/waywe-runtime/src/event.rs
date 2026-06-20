@@ -1,6 +1,7 @@
 use crate::{Runtime, app::App};
 use box_into_inner::IntoInner;
 use bytemuck::{Contiguous, NoUninit};
+use calloop::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
 use fxhash::FxHashMap;
 use reusable_box::{ReusableBox, ReusedBoxFuture};
 use rustix::fs::OFlags;
@@ -268,6 +269,63 @@ impl EventReceiver {
         }
 
         Ok(self.receiver.try_recv()?)
+    }
+}
+
+impl EventSource for EventReceiver {
+    type Event = Event;
+    type Metadata = ();
+    type Ret = ();
+    type Error = AbsorbError;
+
+    fn process_events<F>(
+        &mut self,
+        _: Readiness,
+        _: Token,
+        mut callback: F,
+    ) -> Result<PostAction, Self::Error>
+    where
+        F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+    {
+        loop {
+            match self.try_recv() {
+                Ok(value) => callback(value, &mut ()),
+                Err(AbsorbError::WouldBlock) => return Ok(PostAction::Continue),
+                Err(other) => return Err(other),
+            }
+        }
+    }
+
+    fn register(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> calloop::Result<()> {
+        unsafe {
+            poll.register(
+                self.reader.as_fd(),
+                Interest::READ,
+                Mode::Level,
+                token_factory.token(),
+            )
+        }
+    }
+
+    fn reregister(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> calloop::Result<()> {
+        poll.reregister(
+            self.reader.as_fd(),
+            Interest::READ,
+            Mode::Level,
+            token_factory.token(),
+        )
+    }
+
+    fn unregister(&mut self, poll: &mut Poll) -> calloop::Result<()> {
+        poll.unregister(self.reader.as_fd())
     }
 }
 

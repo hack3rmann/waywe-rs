@@ -19,7 +19,7 @@ use waywe_ipc::{
     profile::{Monitor, SetupProfile},
 };
 use waywe_runtime::{
-    ControlFlow, Runtime,
+    Runtime,
     app::App,
     event::{EventHandler, Handle, TryReplicate},
     frame::{FrameError, FrameInfo},
@@ -103,7 +103,9 @@ impl WallpaperApp {
         match self.wallpapers.entry(monitor_id) {
             Entry::Vacant(entry) => {
                 let mut wallpapers = RunningWallpapers::new(
-                    runtime.wallpaper_config(monitor_id),
+                    runtime
+                        .wallpaper_config(monitor_id)
+                        .unwrap_or_else(|| panic!("no config for {monitor_id:?}")),
                     self.config.animation.clone(),
                 );
 
@@ -224,12 +226,9 @@ impl App for WallpaperApp {
             .iter()
             .all(|res| *res == Err(FrameError::NoWorkToDo))
         {
-            runtime.control_flow = ControlFlow::Idle;
             self.last_instant = None;
             return Err(FrameError::NoWorkToDo);
         }
-
-        runtime.control_flow = ControlFlow::Busy;
 
         let results = results.iter().flatten().cloned();
         let frame_info = results
@@ -267,11 +266,15 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
             monitor_id,
         } = event;
 
+        // NOTE(hack3rmann): wallpaper may be prepared after monitor is disconnected
+        let Some(config) = runtime.wallpaper_config(monitor_id) else {
+            return;
+        };
+
         // NOTE(hack3rmann): we may get outdated wallpaper configuration if resize event comes
         // before WallpaperPreparedEvent and after NewWallpaperEvent
-        wallpaper.configure(&runtime.wgpu, runtime.wallpaper_config(monitor_id));
+        wallpaper.configure(&runtime.wgpu, config);
 
-        runtime.control_flow.busy();
         self.set_wallpaper(runtime, wallpaper, monitor_id);
     }
 }
@@ -337,8 +340,6 @@ impl Handle<WaylandEvent> for WallpaperApp {
 
                     runtime.task_pool.emitter.emit(event).unwrap();
                 }
-
-                runtime.control_flow.busy();
             }
             WaylandEvent::MonitorUnplugged {
                 id: monitor_id,
@@ -392,7 +393,9 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
                 error!(?error, "failed to save setup profile");
             }
 
-            let config = runtime.wallpaper_config(monitor_id);
+            let config = runtime
+                .wallpaper_config(monitor_id)
+                .unwrap_or_else(|| panic!("no config for {monitor_id:?}"));
             let packages = self.package_registry.clone();
 
             runtime
