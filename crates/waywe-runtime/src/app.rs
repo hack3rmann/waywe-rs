@@ -1,6 +1,6 @@
 use crate::{
     Runtime,
-    event::{DynEventHandler, Event, EventHandler},
+    event::{DynEventHandler, Event, EventHandler, PostEventActions},
     frame::{FrameError, FrameInfo},
 };
 use futures_util::Future;
@@ -71,9 +71,13 @@ impl DynApp {
         }
     }
 
-    pub async fn handle_event(&mut self, runtime: &mut Runtime, event: &mut Event) {
+    pub async fn handle_event(
+        &mut self,
+        runtime: &mut Runtime,
+        event: &mut Event,
+    ) -> PostEventActions {
         let layer_ptr = unsafe { NonNull::new_unchecked((&raw mut *self.app).cast::<()>()) };
-        unsafe { self.handler.execute_all(layer_ptr, runtime, event) }.await;
+        unsafe { self.handler.execute_all(layer_ptr, runtime, event) }.await
     }
 
     pub async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {

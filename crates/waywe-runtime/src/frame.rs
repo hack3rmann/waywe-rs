@@ -35,8 +35,6 @@ impl FrameInfo {
 pub enum FrameError {
     #[error("event loop stop requested")]
     StopRequested,
-    #[error("frame skipped due to error")]
-    Skip,
     #[error("no work to do")]
     NoWorkToDo,
 }
