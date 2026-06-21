@@ -54,4 +54,6 @@ fn main() {
     info!("the daemon is ready to process commands");
 
     event_loop.run();
+
+    info!("shutting down the daemon");
 }

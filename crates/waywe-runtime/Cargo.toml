@@ -32,6 +32,7 @@ static_assertions.workspace = true
 pollster.workspace = true
 tokio.workspace = true
 display-error-chain.workspace = true
+calloop.workspace = true
 
 [features]
 spirv = ["waywe-spirv-derive/spirv"]

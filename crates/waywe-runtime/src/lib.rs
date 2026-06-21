@@ -1,12 +1,9 @@
-use crate::wayland::MonitorId;
+use crate::wayland::{MonitorId, Wayland};
 use glam::UVec2;
 use gpu::Wgpu;
 use std::sync::{Arc, Once};
 use task_pool::TaskPool;
-use thiserror::Error;
 use timer::Timer;
-use wayland::Wayland;
-use waywe_ipc::{DaemonCommand, IpcServer, ipc::server::CreateServerError};
 
 pub mod app;
 pub mod effects;
@@ -18,77 +15,40 @@ pub mod task_pool;
 pub mod timer;
 pub mod wayland;
 
-#[derive(Clone, Copy, Default, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
-pub enum ControlFlow {
-    // TODO(hack3rmann): add optional timeout here
-    #[default]
-    Idle,
-    Busy,
-    ShouldStop,
-}
-
-impl ControlFlow {
-    pub fn idle(&mut self) {
-        *self = Self::Idle;
-    }
-
-    pub fn busy(&mut self) {
-        *self = Self::Busy;
-    }
-
-    pub fn stop(&mut self) {
-        *self = Self::ShouldStop;
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum CreateRuntimeError {
-    #[error(transparent)]
-    Ipc(#[from] CreateServerError),
-}
-
 pub struct Runtime {
     pub timer: Timer,
     pub wgpu: Arc<Wgpu>,
-    pub wayland: Arc<Wayland>,
-    pub ipc: IpcServer<DaemonCommand>,
-    pub control_flow: ControlFlow,
+    pub wayland: Wayland,
     pub task_pool: TaskPool,
 }
 
 impl Runtime {
-    pub fn new(
-        wayland: Wayland,
-        control_flow: ControlFlow,
-        task_pool: TaskPool,
-    ) -> Result<Self, CreateRuntimeError> {
+    pub fn new(wayland: Wayland, task_pool: TaskPool) -> Self {
         static VIDEO_ONCE: Once = Once::new();
         VIDEO_ONCE.call_once(video::init);
 
-        Ok(Self {
+        Self {
             timer: Timer::default(),
             wgpu: Arc::default(),
-            wayland: Arc::new(wayland),
-            ipc: IpcServer::new()?,
-            control_flow,
+            wayland,
             task_pool,
-        })
+        }
     }
 
-    pub fn wallpaper_config(&self, monitor_id: MonitorId) -> WallpaperConfig {
+    pub fn wallpaper_config(&self, monitor_id: MonitorId) -> Option<WallpaperConfig> {
         let surface_size = {
             let monitors = self.wayland.client_state.monitors.read().unwrap();
-            monitors[&monitor_id].size
+            monitors.get(&monitor_id)?.size
         };
         let surface_format = {
             let surfaces = self.wgpu.surfaces.read().unwrap();
-            surfaces[&monitor_id].format
+            surfaces.get(&monitor_id)?.format
         };
 
-        WallpaperConfig {
+        Some(WallpaperConfig {
             surface_size,
             surface_format,
-        }
+        })
     }
 }
 

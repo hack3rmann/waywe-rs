@@ -1,6 +1,8 @@
 use crate::{Runtime, app::App};
+use bitflags::bitflags;
 use box_into_inner::IntoInner;
 use bytemuck::{Contiguous, NoUninit};
+use calloop::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
 use fxhash::FxHashMap;
 use reusable_box::{ReusableBox, ReusedBoxFuture};
 use rustix::fs::OFlags;
@@ -14,8 +16,19 @@ use std::{
 };
 use thiserror::Error;
 
+bitflags! {
+    #[derive(Clone, Copy, Default, Debug, PartialEq, PartialOrd, Eq, Ord, Hash)]
+    pub struct PostEventActions: u32 {
+        const REDRAW = 1 << 0;
+    }
+}
+
 pub trait Handle<E: IntoEvent> {
-    fn handle(&mut self, runtime: &mut Runtime, event: E) -> impl Future<Output = ()> + Send;
+    fn handle(
+        &mut self,
+        runtime: &mut Runtime,
+        event: E,
+    ) -> impl Future<Output = PostEventActions> + Send;
 }
 
 type DynHandler = for<'f> unsafe fn(
@@ -23,7 +36,7 @@ type DynHandler = for<'f> unsafe fn(
     &'f mut Runtime,
     &'f mut Event,
     &'f mut ReusableBox,
-) -> ReusedBoxFuture<'f, ()>;
+) -> ReusedBoxFuture<'f, PostEventActions>;
 
 /// # Safety
 ///
@@ -35,15 +48,15 @@ unsafe fn handle_event<'f, A, E>(
     runtime: &'f mut Runtime,
     event: &'f mut Event,
     future: &'f mut ReusableBox,
-) -> ReusedBoxFuture<'f, ()>
+) -> ReusedBoxFuture<'f, PostEventActions>
 where
     E: IntoEvent,
     A: App + Handle<E>,
 {
     let layer = unsafe { layer.cast::<A>().as_mut() };
-    future.store_future(event.handle(async move |event: E| {
-        <A as Handle<E>>::handle(layer, runtime, event).await;
-    }))
+    future.store_future(
+        event.handle(async move |event: E| <A as Handle<E>>::handle(layer, runtime, event).await),
+    )
 }
 
 pub struct EventHandler<A: ?Sized> {
@@ -61,23 +74,6 @@ impl<A: App> EventHandler<A> {
 
         self.handler.handlers.insert(id, handle_event::<A, E>);
         self
-    }
-
-    pub async fn execute_all(&mut self, app: &mut A, runtime: &mut Runtime, event: &mut Event) {
-        let Some(id) = event.underlying_type() else {
-            return;
-        };
-
-        let Some(handle) = self.handler.handlers.get(&id) else {
-            return;
-        };
-
-        let layer = NonNull::from_mut(app).cast();
-
-        // Safety:
-        // - event contains data
-        // - type matches exactly
-        unsafe { handle(layer, runtime, event, &mut self.handler.future).await };
     }
 
     pub fn to_dyn(self) -> DynEventHandler {
@@ -110,19 +106,19 @@ impl DynEventHandler {
         app: NonNull<()>,
         runtime: &mut Runtime,
         event: &mut Event,
-    ) {
+    ) -> PostEventActions {
         let Some(id) = event.underlying_type() else {
-            return;
+            return PostEventActions::default();
         };
 
         let Some(handle) = self.handlers.get(&id) else {
-            return;
+            return PostEventActions::default();
         };
 
         // Safety:
         // - event contains data
         // - type matches exactly
-        unsafe { handle(app, runtime, event, &mut self.future).await };
+        unsafe { handle(app, runtime, event, &mut self.future).await }
     }
 }
 
@@ -171,24 +167,27 @@ impl Event {
         boxed.into_inner()
     }
 
-    pub async fn handle<T: IntoEvent>(&mut self, f: impl AsyncFnOnce(T)) {
+    pub async fn handle<T: IntoEvent>(
+        &mut self,
+        f: impl AsyncFnOnce(T) -> PostEventActions,
+    ) -> PostEventActions {
         // Try to replicate the event. Take the event if could not replicate
         let replicated = self.0.as_deref().and_then(TryReplicate::try_replicate);
 
         let Some(any_value) = replicated.or_else(|| self.0.take()) else {
-            return;
+            return PostEventActions::default();
         };
 
         let boxed_value = match any_value.downcast::<T>() {
             Ok(value) => value,
             Err(other) => {
                 self.0 = Some(other);
-                return;
+                return PostEventActions::default();
             }
         };
 
         let value = boxed_value.into_inner();
-        f(value).await;
+        f(value).await
     }
 }
 
@@ -268,6 +267,63 @@ impl EventReceiver {
         }
 
         Ok(self.receiver.try_recv()?)
+    }
+}
+
+impl EventSource for EventReceiver {
+    type Event = Event;
+    type Metadata = ();
+    type Ret = ();
+    type Error = AbsorbError;
+
+    fn process_events<F>(
+        &mut self,
+        _: Readiness,
+        _: Token,
+        mut callback: F,
+    ) -> Result<PostAction, Self::Error>
+    where
+        F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+    {
+        loop {
+            match self.try_recv() {
+                Ok(value) => callback(value, &mut ()),
+                Err(AbsorbError::WouldBlock) => return Ok(PostAction::Continue),
+                Err(other) => return Err(other),
+            }
+        }
+    }
+
+    fn register(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> calloop::Result<()> {
+        unsafe {
+            poll.register(
+                self.reader.as_fd(),
+                Interest::READ,
+                Mode::Level,
+                token_factory.token(),
+            )
+        }
+    }
+
+    fn reregister(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> calloop::Result<()> {
+        poll.reregister(
+            self.reader.as_fd(),
+            Interest::READ,
+            Mode::Level,
+            token_factory.token(),
+        )
+    }
+
+    fn unregister(&mut self, poll: &mut Poll) -> calloop::Result<()> {
+        poll.unregister(self.reader.as_fd())
     }
 }
 

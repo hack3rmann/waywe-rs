@@ -89,6 +89,14 @@ impl Timer {
     }
 
     pub fn sleep_enough(&mut self, target_frame_time: Duration) {
+        let delay = self.next_frame_delay(target_frame_time);
+
+        if !delay.is_zero() {
+            thread::sleep(delay);
+        }
+    }
+
+    pub fn next_frame_delay(&mut self, target_frame_time: Duration) -> Duration {
         let render_time = self.current_frame_duration();
         let sleep_time = target_frame_time.saturating_sub(render_time);
 
@@ -98,13 +106,17 @@ impl Timer {
 
             if !unborrowed_time.is_zero() {
                 self.time_borrow = Duration::default();
-                thread::sleep(unborrowed_time);
+                unborrowed_time
             } else {
                 self.time_borrow -= sleep_time;
+                Duration::ZERO
             }
         // ignore first frame lag
         } else if !self.is_first_frame() {
             self.time_borrow += render_time - target_frame_time;
+            target_frame_time
+        } else {
+            target_frame_time
         }
     }
 }

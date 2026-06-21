@@ -627,14 +627,14 @@ impl RunningWallpapers {
     }
 
     pub fn remove_finished(&mut self) {
-        let n_unfinished = self
+        let n_finished = self
             .ongoing_transitions
             .iter()
             .take_while(|t| t.is_finished())
             .count();
 
-        _ = self.ongoing_transitions.drain(..n_unfinished);
-        _ = self.executing.drain(..n_unfinished);
+        _ = self.ongoing_transitions.drain(..n_finished);
+        _ = self.executing.drain(..n_finished);
 
         if self.executing.len() <= 1 {
             self.transition_pipeline = Nil;

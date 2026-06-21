@@ -19,9 +19,9 @@ use waywe_ipc::{
     profile::{Monitor, SetupProfile},
 };
 use waywe_runtime::{
-    ControlFlow, Runtime,
+    Runtime,
     app::App,
-    event::{EventHandler, Handle, TryReplicate},
+    event::{EventHandler, Handle, PostEventActions, TryReplicate},
     frame::{FrameError, FrameInfo},
     gpu::SurfaceResult,
     wayland::{MonitorId, MonitorMap, WaylandEvent},
@@ -91,41 +91,6 @@ impl WallpaperApp {
         Self {
             config,
             ..Default::default()
-        }
-    }
-
-    pub fn set_wallpaper(
-        &mut self,
-        runtime: &Runtime,
-        wallpaper: OptimizedWallpaper,
-        monitor_id: MonitorId,
-    ) {
-        match self.wallpapers.entry(monitor_id) {
-            Entry::Vacant(entry) => {
-                let mut wallpapers = RunningWallpapers::new(
-                    runtime.wallpaper_config(monitor_id),
-                    self.config.animation.clone(),
-                );
-
-                wallpapers
-                    .effects_builder
-                    .add_builtins(&self.config.effects);
-                wallpapers.enqueue_wallpaper(&runtime.wgpu, wallpaper);
-
-                entry.insert(wallpapers);
-            }
-            Entry::Occupied(mut occupied_entry) => occupied_entry
-                .get_mut()
-                .enqueue_wallpaper(&runtime.wgpu, wallpaper),
-        }
-
-        let monitor_name = {
-            let monitors = runtime.wayland.client_state.monitors.read().unwrap();
-            Arc::clone(&monitors[&monitor_id].name)
-        };
-
-        if let Entry::Vacant(entry) = self.wallpaper_states.entry(monitor_name) {
-            entry.insert(WallpaperState::ACTIVE_RUNNING);
         }
     }
 }
@@ -220,16 +185,27 @@ impl App for WallpaperApp {
             }
         }
 
-        if results
+        let no_work = results
             .iter()
-            .all(|res| *res == Err(FrameError::NoWorkToDo))
-        {
-            runtime.control_flow = ControlFlow::Idle;
+            .all(|res| *res == Err(FrameError::NoWorkToDo));
+
+        let going_sleep = results.iter().all(|res| {
+            matches!(
+                res,
+                Err(FrameError::NoWorkToDo)
+                    | Ok(FrameInfo {
+                        target_frame_time: None
+                    })
+            )
+        });
+
+        if going_sleep {
             self.last_instant = None;
-            return Err(FrameError::NoWorkToDo);
         }
 
-        runtime.control_flow = ControlFlow::Busy;
+        if no_work {
+            return Err(FrameError::NoWorkToDo);
+        }
 
         let results = results.iter().flatten().cloned();
         let frame_info = results
@@ -241,7 +217,11 @@ impl App for WallpaperApp {
 }
 
 impl Handle<WallpaperPauseEvent> for WallpaperApp {
-    async fn handle(&mut self, runtime: &mut Runtime, event: WallpaperPauseEvent) {
+    async fn handle(
+        &mut self,
+        runtime: &mut Runtime,
+        event: WallpaperPauseEvent,
+    ) -> PostEventActions {
         let WallpaperPauseEvent { target } = event;
 
         match target {
@@ -257,35 +237,62 @@ impl Handle<WallpaperPauseEvent> for WallpaperApp {
                 state.kind = state.kind.inverted();
             }
         }
+
+        PostEventActions::REDRAW
     }
 }
 
 impl Handle<WallpaperPreparedEvent> for WallpaperApp {
-    async fn handle(&mut self, runtime: &mut Runtime, event: WallpaperPreparedEvent) {
+    async fn handle(
+        &mut self,
+        runtime: &mut Runtime,
+        event: WallpaperPreparedEvent,
+    ) -> PostEventActions {
+        // FIXME(hack3rmann): monitor unplug + plug can occur while preparing a wallpaper,
+        // which can cause monitor reindexing. We should use monitor_name here instead
         let WallpaperPreparedEvent {
             mut wallpaper,
             monitor_id,
         } = event;
 
+        // NOTE(hack3rmann): wallpaper may be prepared after monitor is disconnected
+        let Some(config) = runtime.wallpaper_config(monitor_id) else {
+            return PostEventActions::empty();
+        };
+
         // NOTE(hack3rmann): we may get outdated wallpaper configuration if resize event comes
         // before WallpaperPreparedEvent and after NewWallpaperEvent
-        wallpaper.configure(&runtime.wgpu, runtime.wallpaper_config(monitor_id));
+        wallpaper.configure(&runtime.wgpu, config);
 
-        runtime.control_flow.busy();
-        self.set_wallpaper(runtime, wallpaper, monitor_id);
+        self.wallpapers
+            .get_mut(&monitor_id)
+            .expect("the running wallpapers should become initialized on monitor plug")
+            .enqueue_wallpaper(&runtime.wgpu, wallpaper);
+
+        let monitor_name = {
+            let monitors = runtime.wayland.client_state.monitors.read().unwrap();
+            Arc::clone(&monitors[&monitor_id].name)
+        };
+
+        if let Entry::Vacant(entry) = self.wallpaper_states.entry(monitor_name) {
+            entry.insert(WallpaperState::ACTIVE_RUNNING);
+        }
+
+        PostEventActions::REDRAW
     }
 }
 
 impl Handle<WaylandEvent> for WallpaperApp {
-    async fn handle(&mut self, runtime: &mut Runtime, event: WaylandEvent) {
+    async fn handle(&mut self, runtime: &mut Runtime, event: WaylandEvent) -> PostEventActions {
         match event {
             WaylandEvent::ResizeRequested { monitor_id, size } => {
                 runtime.wgpu.resize_surface(monitor_id, size);
 
-                let Some(monitor_name) = runtime.wayland.client_state.monitor_name(monitor_id)
-                else {
-                    return;
-                };
+                let monitor_name = runtime
+                    .wayland
+                    .client_state
+                    .monitor_name(monitor_id)
+                    .unwrap();
 
                 if let Some(WallpaperState {
                     kind: WallpaperStateKind::Paused { needs_redraw },
@@ -296,7 +303,7 @@ impl Handle<WaylandEvent> for WallpaperApp {
                 }
 
                 let Some(wall) = self.wallpapers.get_mut(&monitor_id) else {
-                    return;
+                    return PostEventActions::empty();
                 };
                 let surface_format = {
                     let surfaces = runtime.wgpu.surfaces.read().unwrap();
@@ -309,6 +316,8 @@ impl Handle<WaylandEvent> for WallpaperApp {
                 };
 
                 wall.configure(&runtime.wgpu, config);
+
+                PostEventActions::REDRAW
             }
             WaylandEvent::MonitorPlugged {
                 id: monitor_id,
@@ -338,7 +347,20 @@ impl Handle<WaylandEvent> for WallpaperApp {
                     runtime.task_pool.emitter.emit(event).unwrap();
                 }
 
-                runtime.control_flow.busy();
+                let mut wallpapers = RunningWallpapers::new(
+                    runtime
+                        .wallpaper_config(monitor_id)
+                        .unwrap_or_else(|| panic!("no config for {monitor_id:?}")),
+                    self.config.animation.clone(),
+                );
+
+                wallpapers
+                    .effects_builder
+                    .add_builtins(&self.config.effects);
+
+                self.wallpapers.insert(monitor_id, wallpapers);
+
+                PostEventActions::REDRAW
             }
             WaylandEvent::MonitorUnplugged {
                 id: monitor_id,
@@ -353,14 +375,20 @@ impl Handle<WaylandEvent> for WallpaperApp {
                 }
 
                 runtime.wgpu.unregister_surface(monitor_id);
+
+                PostEventActions::empty()
             }
-            WaylandEvent::CursorMoved { position: _ } => {}
+            WaylandEvent::CursorMoved { position: _ } => PostEventActions::empty(),
         }
     }
 }
 
 impl Handle<NewWallpaperEvent> for WallpaperApp {
-    async fn handle(&mut self, runtime: &mut Runtime, event: NewWallpaperEvent) {
+    async fn handle(
+        &mut self,
+        runtime: &mut Runtime,
+        event: NewWallpaperEvent,
+    ) -> PostEventActions {
         let NewWallpaperEvent { path, ty, target } = event;
 
         let monitor_ids: SmallVec<[MonitorId; 4]> = match target {
@@ -392,7 +420,9 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
                 error!(?error, "failed to save setup profile");
             }
 
-            let config = runtime.wallpaper_config(monitor_id);
+            let config = runtime
+                .wallpaper_config(monitor_id)
+                .unwrap_or_else(|| panic!("no config for {monitor_id:?}"));
             let packages = self.package_registry.clone();
 
             runtime
@@ -403,5 +433,7 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
                 })
                 .await;
         }
+
+        PostEventActions::empty()
     }
 }

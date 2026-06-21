@@ -1,5 +1,8 @@
-use super::wayland::{MonitorId, MonitorInfo, MonitorMap, SurfaceExtension, Wayland};
-use crate::shaders::{ShaderCache, ShaderDescriptor};
+use super::wayland::{MonitorId, MonitorInfo, MonitorMap, SurfaceExtension};
+use crate::{
+    shaders::{ShaderCache, ShaderDescriptor},
+    wayland::Wayland,
+};
 use ash::vk;
 use glam::UVec2;
 use std::sync::RwLock;

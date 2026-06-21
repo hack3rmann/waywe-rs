@@ -206,9 +206,10 @@ pub fn execute_show(
             let _image = reader.decode()?;
             let absolute_path = path.canonicalize()?;
 
-            DaemonCommand::SetImage {
+            DaemonCommand::Show {
                 path: absolute_path,
                 monitor: monitor_name,
+                ty: WallpaperType::Image,
             }
         }
         Kind::Video => {
@@ -220,17 +221,19 @@ pub fn execute_show(
                 });
             }
 
-            DaemonCommand::SetVideo {
+            DaemonCommand::Show {
                 path: absolute_path,
                 monitor: monitor_name,
+                ty: WallpaperType::Video,
             }
         }
         Kind::Compressed => {
             let absolute_path = path.canonicalize()?;
 
-            DaemonCommand::SetScene {
+            DaemonCommand::Show {
                 path: absolute_path,
                 monitor: monitor_name,
+                ty: WallpaperType::Scene,
             }
         }
         _ => return Err(ExecuteError::UnsupportedFileFormat(file_kind)),
