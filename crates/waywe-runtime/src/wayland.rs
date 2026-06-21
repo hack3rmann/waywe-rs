@@ -211,6 +211,7 @@ impl Dispatch for Surface {
 }
 
 pub struct LayerSurface {
+    pub is_initial_configure_done: bool,
     pub monitor_id: MonitorId,
     pub handle: WlObjectHandle<Self>,
     pub surface: WlObjectHandle<Surface>,
@@ -243,11 +244,16 @@ impl Dispatch for LayerSurface {
 
         {
             let mut monitors = state.monitors.write().unwrap();
+            let mut events = state.stored_events.lock().unwrap();
             let monitor = monitors.get_mut(&self.monitor_id).unwrap();
 
+            if !self.is_initial_configure_done {
+                events.push(WaylandEvent::MonitorPlugged {
+                    id: self.monitor_id,
+                    name: Arc::clone(&monitor.name),
+                });
             // this is resize if and only if size is changed indeed
-            if monitor.size != size {
-                let mut events = state.stored_events.lock().unwrap();
+            } else if monitor.size != size {
                 events.push(WaylandEvent::ResizeRequested {
                     monitor_id: self.monitor_id,
                     size,
@@ -298,6 +304,8 @@ impl Dispatch for LayerSurface {
 
         self.surface
             .request(&mut buf, &storage.as_ref(), WlSurfaceCommitRequest);
+
+        self.is_initial_configure_done = true;
     }
 }
 
@@ -394,6 +402,7 @@ impl Output {
                 namespace: WLR_NAMESPACE,
             },
             move |proxy| LayerSurface {
+                is_initial_configure_done: false,
                 monitor_id,
                 handle: WlObjectHandle::new(proxy.id()),
                 surface,
@@ -456,12 +465,6 @@ impl Output {
                 },
             );
         }
-
-        let mut events = state.stored_events.lock().unwrap();
-        events.push(WaylandEvent::MonitorPlugged {
-            id: self.monitor_id,
-            name,
-        });
 
         self.is_init_done = true;
     }
