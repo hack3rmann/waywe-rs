@@ -1,8 +1,13 @@
 use file_format::{FileFormat, Kind};
 use image::{DynamicImage, ImageError, ImageReader, RgbImage};
+use rustix::{
+    io::Errno,
+    process::{Pid, Signal, kill_process},
+};
 use std::{
     ffi::CStr,
-    io,
+    fs::File,
+    io::{self, Read},
     path::{Path, PathBuf},
     process::{self, ExitStatus, Stdio},
 };
@@ -63,25 +68,25 @@ pub fn execute_current(monitor_name: Option<&str>) -> Result<(), ExecuteError> {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum StartWaitMode {
+pub enum WaitMode {
     #[default]
     Wait,
     DontWait,
 }
 
-impl StartWaitMode {
+impl WaitMode {
     pub const fn daemon_arg(self) -> Option<&'static str> {
         match self {
-            StartWaitMode::Wait => Some("--wait"),
-            StartWaitMode::DontWait => None,
+            WaitMode::Wait => Some("--wait"),
+            WaitMode::DontWait => None,
         }
     }
 }
 
-pub fn execute_start(mode: StartWaitMode) -> DaemonSetupResult {
+pub fn execute_start(mode: WaitMode) -> DaemonSetupResult {
     let fifo = match mode {
-        StartWaitMode::Wait => Some(SetupPipe::new("/tmp/waywe")),
-        StartWaitMode::DontWait => None,
+        WaitMode::Wait => Some(SetupPipe::new("/tmp/waywe")),
+        WaitMode::DontWait => None,
     };
 
     let fifo_arg = fifo
@@ -109,6 +114,31 @@ pub fn execute_start(mode: StartWaitMode) -> DaemonSetupResult {
     let _status = child.wait().unwrap();
 
     result
+}
+
+pub fn execute_stop(mode: WaitMode) {
+    let mut pid_file = File::open("/tmp/waywe/daemon.pid").unwrap();
+
+    let mut pid_bytes = Vec::with_capacity(64);
+    pid_file.read_to_end(&mut pid_bytes).unwrap();
+
+    let pid_str = String::from_utf8(pid_bytes).unwrap();
+    let pid_raw = pid_str.trim().parse::<i32>().unwrap();
+    let pid = Pid::from_raw(pid_raw).unwrap();
+
+    match kill_process(pid, Signal::TERM) {
+        Ok(()) => {}
+        // no such process
+        Err(Errno::SRCH) => return,
+        Err(errno) => panic!("{errno}"),
+    }
+
+    if mode == WaitMode::DontWait {
+        return;
+    }
+
+    pid_file.lock().unwrap();
+    pid_file.unlock().unwrap();
 }
 
 pub fn execute_preview(result_path: &Path, monitor_name: Option<&str>) -> Result<(), ExecuteError> {
