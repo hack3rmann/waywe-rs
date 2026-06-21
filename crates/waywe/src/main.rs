@@ -65,7 +65,7 @@ fn main() -> miette::Result<()> {
                 WaitMode::Wait
             };
 
-            execute_stop(mode);
+            execute_stop(mode).wrap_err("failed to stop the daemon")?;
 
             return Ok(());
         }
