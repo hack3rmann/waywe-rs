@@ -24,6 +24,12 @@ pub enum Command {
         #[arg(long)]
         dont_wait: bool,
     },
+    /// Stop the daemon process
+    Stop {
+        /// Don't wait the daemon to stop
+        #[arg(long)]
+        dont_wait: bool,
+    },
     /// Get path to the current wallpaper
     Current {
         /// Monitor to set wallpaper on

@@ -8,7 +8,8 @@ pub mod status;
 use crate::{
     args::{Args, Command},
     command::{
-        StartWaitMode, execute_current, execute_pause, execute_preview, execute_show, execute_start,
+        WaitMode, execute_current, execute_pause, execute_preview, execute_show, execute_start,
+        execute_stop,
     },
     diagnostics::DaemonSetupDiagnostics,
     package::execute_package,
@@ -46,14 +47,25 @@ fn main() -> miette::Result<()> {
         }
         Command::Start { dont_wait } => {
             let mode = if dont_wait {
-                StartWaitMode::DontWait
+                WaitMode::DontWait
             } else {
-                StartWaitMode::Wait
+                WaitMode::Wait
             };
 
             if let Err(error) = execute_start(mode) {
                 return Err(DaemonSetupDiagnostics::from(error).into());
             }
+
+            return Ok(());
+        }
+        Command::Stop { dont_wait } => {
+            let mode = if dont_wait {
+                WaitMode::DontWait
+            } else {
+                WaitMode::Wait
+            };
+
+            execute_stop(mode).wrap_err("failed to stop the daemon")?;
 
             return Ok(());
         }
