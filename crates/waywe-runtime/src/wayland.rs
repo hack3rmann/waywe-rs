@@ -642,6 +642,10 @@ impl WaylandInner {
             .expect("failed to prepare poll")
     }
 
+    pub fn unprepare_poll(&self) {
+        self.display.cancel_read();
+    }
+
     pub fn flush(&self) -> Result<usize, Errno> {
         self.display.flush()
     }
@@ -753,6 +757,8 @@ impl EventSource for WaylandEventSource {
     type Ret = ();
     type Error = WaylandProcessEventsError;
 
+    const NEEDS_EXTRA_LIFECYCLE_EVENTS: bool = true;
+
     fn process_events<F>(
         &mut self,
         _: Readiness,
@@ -779,14 +785,10 @@ impl EventSource for WaylandEventSource {
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
     ) -> calloop::Result<()> {
-        unsafe {
-            poll.register(
-                &self.wayland.display,
-                Interest::READ,
-                Mode::Level,
-                token_factory.token(),
-            )
-        }
+        let token = token_factory.token();
+        self.token = Some(token);
+
+        unsafe { poll.register(&self.wayland.display, Interest::READ, Mode::Level, token) }
     }
 
     fn reregister(
@@ -794,12 +796,10 @@ impl EventSource for WaylandEventSource {
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
     ) -> calloop::Result<()> {
-        poll.reregister(
-            &self.wayland.display,
-            Interest::READ,
-            Mode::Level,
-            token_factory.token(),
-        )
+        let token = token_factory.token();
+        self.token = Some(token);
+
+        poll.reregister(&self.wayland.display, Interest::READ, Mode::Level, token)
     }
 
     fn unregister(&mut self, poll: &mut Poll) -> calloop::Result<()> {
@@ -828,6 +828,7 @@ impl EventSource for WaylandEventSource {
             .any(|(readiness, token)| readiness.readable && self.token == Some(token));
 
         if !contains_us {
+            self.wayland.unprepare_poll();
             return;
         }
 

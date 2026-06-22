@@ -335,6 +335,10 @@ impl<S> WlDisplay<S> {
         if res == 0 { Ok(()) } else { Err(last_errno()) }
     }
 
+    pub fn cancel_read(&self) {
+        unsafe { ffi::wl_display_cancel_read(self.as_raw().as_ptr()) };
+    }
+
     pub fn read_events(&self) -> Result<(), Errno> {
         let res = unsafe { ffi::wl_display_read_events(self.as_raw().as_ptr()) };
 

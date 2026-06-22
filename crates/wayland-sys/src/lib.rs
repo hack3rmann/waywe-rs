@@ -1290,6 +1290,16 @@ unsafe extern "C" {
     /// events and try again until we’re successful.
     pub fn wl_display_prepare_read(display: *mut wl_display) -> c_int;
 
+    /// Release exclusive access to display file descriptor
+    ///
+    /// Parameters:
+    ///
+    ///     display The display context object
+    ///
+    /// This releases the exclusive access. Useful for canceling the lock when a timed out poll returns
+    /// fd not readable and we’re not going to read from the fd anytime soon.
+    pub fn wl_display_cancel_read(display: *mut wl_display);
+
     /// Block until all pending request are processed by the server
     ///
     /// # Parameters
