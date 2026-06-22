@@ -260,14 +260,15 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
             return PostEventActions::empty();
         };
 
+        // NOTE(hack3rmann): monitor could be unplugged when this event arrives
+        let Some(run) = self.wallpapers.get_mut(&monitor_id) else {
+            return PostEventActions::empty();
+        };
+
         // NOTE(hack3rmann): we may get outdated wallpaper configuration if resize event comes
         // before WallpaperPreparedEvent and after NewWallpaperEvent
         wallpaper.configure(&runtime.wgpu, config);
-
-        self.wallpapers
-            .get_mut(&monitor_id)
-            .expect("the running wallpapers should become initialized on monitor plug")
-            .enqueue_wallpaper(&runtime.wgpu, wallpaper);
+        run.enqueue_wallpaper(&runtime.wgpu, wallpaper);
 
         let monitor_name = {
             let monitors = runtime.wayland.client_state.monitors.read().unwrap();
@@ -279,9 +280,11 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
                 entry.insert(WallpaperState::ACTIVE_RUNNING);
             }
             Entry::Occupied(entry) => {
-                // HACK(hack3rmann): too defensive. Try to fix the root cause
-                if let WallpaperStateKind::Paused { needs_redraw } = &mut entry.into_mut().kind {
-                    *needs_redraw = true
+                let state = entry.into_mut();
+                state.is_active = true;
+
+                if let WallpaperStateKind::Paused { needs_redraw } = &mut state.kind {
+                    *needs_redraw = true;
                 }
             }
         }
@@ -333,14 +336,6 @@ impl Handle<WaylandEvent> for WallpaperApp {
             } => {
                 runtime.wgpu.register_surface(&runtime.wayland, monitor_id);
 
-                if let Some(state) = self.wallpaper_states.get_mut(&monitor_name) {
-                    state.is_active = true;
-
-                    if let WallpaperStateKind::Paused { needs_redraw } = &mut state.kind {
-                        *needs_redraw = true;
-                    }
-                }
-
                 debug!(?monitor_id, ?monitor_name, "new monitor detected");
 
                 if let Ok(mut profile) = SetupProfile::read()
@@ -355,20 +350,18 @@ impl Handle<WaylandEvent> for WallpaperApp {
                     runtime.task_pool.emitter.emit(event).unwrap();
                 }
 
-                let mut wallpapers = RunningWallpapers::new(
+                let mut run = RunningWallpapers::new(
                     runtime
                         .wallpaper_config(monitor_id)
                         .unwrap_or_else(|| panic!("no config for {monitor_id:?}")),
                     self.config.animation.clone(),
                 );
 
-                wallpapers
-                    .effects_builder
-                    .add_builtins(&self.config.effects);
+                run.effects_builder.add_builtins(&self.config.effects);
 
-                self.wallpapers.insert(monitor_id, wallpapers);
+                self.wallpapers.insert(monitor_id, run);
 
-                PostEventActions::REDRAW
+                PostEventActions::empty()
             }
             WaylandEvent::MonitorUnplugged {
                 id: monitor_id,
