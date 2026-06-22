@@ -22,6 +22,7 @@ use crate::{
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, RawDisplayHandle, WaylandDisplayHandle,
 };
+use rustix::io::Errno;
 use std::{
     fmt,
     mem::ManuallyDrop,
@@ -210,6 +211,23 @@ impl<S> WlDisplay<S> {
     ///
     /// - anyone mustn't access the object storage during this call
     /// - anyone mustn't access the state during this call
+    pub(crate) unsafe fn dispatch_queue_pending_unchecked(&self, queue: &WlEventQueue<S>) -> i32
+    where
+        S: State,
+    {
+        if let Some(queue_ptr) = queue.as_raw() {
+            unsafe {
+                ffi::wl_display_dispatch_queue_pending(self.as_raw().as_ptr(), queue_ptr.as_ptr())
+            }
+        } else {
+            unsafe { self.dispatch_pending_unchecked() }
+        }
+    }
+
+    /// # Safety
+    ///
+    /// - anyone mustn't access the object storage during this call
+    /// - anyone mustn't access the state during this call
     pub(crate) unsafe fn flush_unchecked(&self) -> i32 {
         unsafe { ffi::wl_display_flush(self.as_raw().as_ptr()) }
     }
@@ -249,7 +267,7 @@ impl<S> WlDisplay<S> {
     /// This function blocks until the server has processed all currently
     /// issued requests by sending a request to the display server
     /// and waiting for a reply before returning.
-    pub fn roundtrip(&self, queue: Pin<&mut WlEventQueue<S>>, state: Pin<&S>)
+    pub fn roundtrip(&self, queue: Pin<&mut WlEventQueue<S>>, state: Pin<&S>) -> usize
     where
         S: State,
     {
@@ -263,16 +281,18 @@ impl<S> WlDisplay<S> {
             let error_code = self.get_error_code().unwrap();
             panic!("WlDisplay::roundtrip_queue failed: {error_code:?}");
         }
+
+        usize::try_from(n_events_dispatched).unwrap()
     }
 
-    /// Dispatch main queue events without reading from the display fd
-    pub fn dispatch_pending(&self, state: Pin<&S>)
+    /// Dispatch queue events without reading from the display fd
+    pub fn dispatch_pending(&self, queue: Pin<&mut WlEventQueue<S>>, state: Pin<&S>) -> usize
     where
         S: State,
     {
         assert_eq!(&raw const *state, self.shared.state.as_ptr().cast_const());
 
-        let n_events_dispatched = unsafe { self.dispatch_pending_unchecked() };
+        let n_events_dispatched = unsafe { self.dispatch_queue_pending_unchecked(&queue) };
 
         dispatch::handle_panic();
 
@@ -280,17 +300,62 @@ impl<S> WlDisplay<S> {
             let error_code = self.get_error_code().unwrap();
             panic!("WlDisplay::dispatch_pending failed: {error_code:?}");
         }
+
+        usize::try_from(n_events_dispatched).unwrap()
+    }
+
+    pub fn prepare_poll(
+        &self,
+        mut queue: Pin<&mut WlEventQueue<S>>,
+        state: Pin<&S>,
+    ) -> Result<usize, Errno>
+    where
+        S: State,
+    {
+        let mut n_dispatched = 0;
+
+        self.flush()?;
+
+        loop {
+            match self.prepare_read() {
+                Ok(()) => break,
+                Err(Errno::AGAIN) => {
+                    n_dispatched += self.dispatch_pending(queue.as_mut(), state);
+                }
+                Err(errno) => return Err(errno),
+            }
+        }
+
+        Ok(n_dispatched)
+    }
+
+    pub fn prepare_read(&self) -> Result<(), Errno> {
+        let res = unsafe { ffi::wl_display_prepare_read(self.as_raw().as_ptr()) };
+
+        if res == 0 { Ok(()) } else { Err(last_errno()) }
+    }
+
+    pub fn read_events(&self) -> Result<(), Errno> {
+        let res = unsafe { ffi::wl_display_read_events(self.as_raw().as_ptr()) };
+
+        if res == 0 { Ok(()) } else { Err(last_errno()) }
     }
 
     /// Send all buffered requests on the display to the server
-    pub fn flush(&self) {
+    pub fn flush(&self) -> Result<usize, Errno> {
         let res = unsafe { self.flush_unchecked() };
 
-        if res == -1 {
-            let error_code = self.get_error_code().unwrap();
-            panic!("WlDisplay::flush failed: {error_code:?}");
+        if res != -1 {
+            Ok(res as usize)
+        } else {
+            Err(last_errno())
         }
     }
+}
+
+fn last_errno() -> Errno {
+    let errno = unsafe { libc::__errno_location().read() };
+    Errno::from_raw_os_error(errno)
 }
 
 impl<S> AsFd for WlDisplay<S> {

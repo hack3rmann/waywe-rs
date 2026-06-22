@@ -1,8 +1,11 @@
-use calloop::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
+use calloop::{
+    EventIterator, EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory,
+};
 use glam::UVec2;
 use raw_window_handle::{
     HasDisplayHandle as _, RawDisplayHandle, RawWindowHandle, WaylandWindowHandle,
 };
+use rustix::io::Errno;
 use std::{
     collections::{BTreeMap, HashMap},
     ffi::CStr,
@@ -610,12 +613,37 @@ impl WaylandInner {
             .roundtrip(main_queue.as_mut(), self.client_state.as_ref());
     }
 
-    pub fn dispatch_pending(&self) {
-        self.display.dispatch_pending(self.client_state.as_ref());
+    pub fn dispatch_pending(&self) -> usize {
+        let mut total_dispatched = 0;
+
+        let mut main_queue = self.main_queue.write().unwrap();
+
+        loop {
+            let n_dispatched = self
+                .display
+                .dispatch_pending(main_queue.as_mut(), self.client_state.as_ref());
+
+            if n_dispatched == 0 {
+                break;
+            }
+
+            total_dispatched += n_dispatched;
+        }
+
+        total_dispatched
     }
 
-    pub fn flush(&self) {
-        self.display.flush();
+    #[track_caller]
+    pub fn prepare_poll(&self) -> usize {
+        let mut main_queue = self.main_queue.write().unwrap();
+
+        self.display
+            .prepare_poll(main_queue.as_mut(), self.client_state.as_ref())
+            .expect("failed to prepare poll")
+    }
+
+    pub fn flush(&self) -> Result<usize, Errno> {
+        self.display.flush()
     }
 
     pub fn new() -> Self {
@@ -699,10 +727,27 @@ impl Deref for Wayland {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum WaylandProcessEventsError {}
+pub struct WaylandEventSource {
+    wayland: Wayland,
+    token: Option<Token>,
+}
 
-impl EventSource for Wayland {
+impl WaylandEventSource {
+    pub const fn new(wayland: Wayland) -> Self {
+        Self {
+            wayland,
+            token: None,
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum WaylandProcessEventsError {
+    #[error("WlDisplay::flush failed")]
+    FlushFailed(#[from] Errno),
+}
+
+impl EventSource for WaylandEventSource {
     type Event = WaylandEvent;
     type Metadata = ();
     type Ret = ();
@@ -717,8 +762,14 @@ impl EventSource for Wayland {
     where
         F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
-        self.dispatch_pending();
-        self.drain_stored_events(|event| callback(event, &mut ()));
+        self.wayland.dispatch_pending();
+        self.wayland
+            .drain_stored_events(|event| callback(event, &mut ()));
+
+        match self.wayland.flush() {
+            Ok(_) | Err(Errno::AGAIN) => {}
+            Err(error) => panic!("failed to flush display: {error}"),
+        }
 
         Ok(PostAction::Continue)
     }
@@ -730,7 +781,7 @@ impl EventSource for Wayland {
     ) -> calloop::Result<()> {
         unsafe {
             poll.register(
-                &self.display,
+                &self.wayland.display,
                 Interest::READ,
                 Mode::Level,
                 token_factory.token(),
@@ -744,7 +795,7 @@ impl EventSource for Wayland {
         token_factory: &mut TokenFactory,
     ) -> calloop::Result<()> {
         poll.reregister(
-            &self.display,
+            &self.wayland.display,
             Interest::READ,
             Mode::Level,
             token_factory.token(),
@@ -752,6 +803,37 @@ impl EventSource for Wayland {
     }
 
     fn unregister(&mut self, poll: &mut Poll) -> calloop::Result<()> {
-        poll.unregister(&self.display)
+        poll.unregister(&self.wayland.display)
+    }
+
+    fn before_sleep(&mut self) -> calloop::Result<Option<(Readiness, Token)>> {
+        let n_dispatched = self.wayland.prepare_poll();
+
+        if n_dispatched == 0 {
+            return Ok(None);
+        }
+
+        let readiness = Readiness {
+            readable: false,
+            writable: false,
+            error: false,
+        };
+
+        Ok(self.token.map(|t| (readiness, t)))
+    }
+
+    fn before_handle_events(&mut self, events: EventIterator<'_>) {
+        let contains_us = events
+            .into_iter()
+            .any(|(readiness, token)| readiness.readable && self.token == Some(token));
+
+        if !contains_us {
+            return;
+        }
+
+        match self.wayland.display.read_events() {
+            Ok(()) | Err(Errno::AGAIN) => {}
+            Err(error) => panic!("failed to read events: {error}"),
+        }
     }
 }
