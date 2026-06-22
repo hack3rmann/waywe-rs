@@ -306,12 +306,6 @@ pub fn execute_show(
     })
 }
 
-pub fn execute_pause(monitor_name: Option<String>) -> Result<DaemonCommand, ExecuteError> {
-    Ok(DaemonCommand::Pause {
-        monitor: monitor_name,
-    })
-}
-
 fn is_video_path_valid(path: PathBuf) -> bool {
     if !path.exists() {
         error!(?path, "file does not exist");

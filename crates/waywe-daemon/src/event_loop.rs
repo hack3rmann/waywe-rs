@@ -222,12 +222,12 @@ impl LoopState {
 
                 NewWallpaperEvent { path, ty, target }.into_event()
             }
-            DaemonCommand::Pause { monitor } => {
+            DaemonCommand::Pause { monitor, mode } => {
                 let Some(target) = get_target(monitor.as_deref()) else {
                     return;
                 };
 
-                WallpaperPauseEvent { target }.into_event()
+                WallpaperPauseEvent { target, mode }.into_event()
             }
         };
 

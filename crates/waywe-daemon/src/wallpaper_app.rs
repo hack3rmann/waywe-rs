@@ -15,6 +15,7 @@ use std::{
 use tracing::{debug, error};
 use waywe_ipc::{
     WallpaperType,
+    command::PauseMode,
     config::Config,
     profile::{Monitor, SetupProfile},
 };
@@ -41,6 +42,25 @@ impl WallpaperStateKind {
         match self {
             Self::Running => Self::Paused { needs_redraw: true },
             Self::Paused { needs_redraw: _ } => Self::Running,
+        }
+    }
+
+    pub const fn paused(self) -> Self {
+        match self {
+            Self::Running => Self::Paused { needs_redraw: true },
+            Self::Paused { needs_redraw } => Self::Paused { needs_redraw },
+        }
+    }
+
+    pub const fn resumed(self) -> Self {
+        Self::Running
+    }
+
+    pub const fn altered(self, mode: PauseMode) -> Self {
+        match mode {
+            PauseMode::Toggle => self.inverted(),
+            PauseMode::On => self.paused(),
+            PauseMode::Off => self.resumed(),
         }
     }
 }
@@ -112,6 +132,7 @@ pub struct NewWallpaperEvent {
 #[derive(Clone)]
 pub struct WallpaperPauseEvent {
     pub target: WallpaperTarget,
+    pub mode: PauseMode,
 }
 
 impl App for WallpaperApp {
@@ -222,19 +243,19 @@ impl Handle<WallpaperPauseEvent> for WallpaperApp {
         runtime: &mut Runtime,
         event: WallpaperPauseEvent,
     ) -> PostEventActions {
-        let WallpaperPauseEvent { target } = event;
+        let WallpaperPauseEvent { target, mode } = event;
 
         match target {
             WallpaperTarget::ForAll => {
                 for state in self.wallpaper_states.values_mut() {
-                    state.kind = state.kind.inverted();
+                    state.kind = state.kind.altered(mode);
                 }
             }
             WallpaperTarget::ForMonitor(id) => {
                 let name = runtime.wayland.client_state.monitor_name(id).unwrap();
                 let state = self.wallpaper_states.get_mut(&name).unwrap();
 
-                state.kind = state.kind.inverted();
+                state.kind = state.kind.altered(mode);
             }
         }
 

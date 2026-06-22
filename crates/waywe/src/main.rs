@@ -8,8 +8,7 @@ pub mod status;
 use crate::{
     args::{Args, Command},
     command::{
-        WaitMode, execute_current, execute_pause, execute_preview, execute_show, execute_start,
-        execute_stop,
+        WaitMode, execute_current, execute_preview, execute_show, execute_start, execute_stop,
     },
     diagnostics::DaemonSetupDiagnostics,
     package::execute_package,
@@ -18,7 +17,7 @@ use clap::Parser as _;
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use rustix::io::Errno;
 use thiserror::Error;
-use waywe_ipc::{DaemonCommand, IpcClient};
+use waywe_ipc::{DaemonCommand, IpcClient, command::PauseMode};
 
 #[derive(Error, Debug, Diagnostic)]
 #[error("no waywe-daemon is running")]
@@ -70,7 +69,10 @@ fn main() -> miette::Result<()> {
             return Ok(());
         }
         Command::Show { path, monitor } => execute_show(&path, monitor).into_diagnostic()?,
-        Command::Pause { monitor } => execute_pause(monitor).into_diagnostic()?,
+        Command::Pause { monitor, on, off } => DaemonCommand::Pause {
+            monitor,
+            mode: PauseMode::from_on_off(on, off),
+        },
         Command::Package { command } => {
             execute_package(command).into_diagnostic()?;
             return Ok(());

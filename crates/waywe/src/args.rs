@@ -49,6 +49,12 @@ pub enum Command {
         /// Monitor to pause the wallpaper on
         #[arg(short, long)]
         monitor: Option<String>,
+        /// Switches pause on
+        #[arg(long, overrides_with = "off")]
+        on: bool,
+        /// Switches pause off
+        #[arg(long, overrides_with = "on")]
+        off: bool,
     },
     /// Waywe package operations
     Package {
