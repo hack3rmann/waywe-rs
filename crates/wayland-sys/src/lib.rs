@@ -1166,6 +1166,46 @@ unsafe extern "C" {
     /// This function may dispatch other events being received on the default queue.
     pub fn wl_display_roundtrip(display: *mut wl_display) -> c_int;
 
+    /// Dispatch main queue events without reading from the display fd
+    ///
+    /// # Parameters
+    ///
+    /// `display` The display context object
+    ///
+    /// # Returns
+    ///
+    /// The number of dispatched events or -1 on failure
+    ///
+    /// This function dispatches events on the main event queue. It does not attempt
+    /// to read the display fd and simply returns zero if the main queue is empty, i.e., it doesn’t block.
+    ///
+    /// This is necessary when a client’s main loop wakes up on some fd other than the
+    /// display fd (network socket, timer fd, etc) and calls wl_display_dispatch_queue()
+    /// from that callback. This may queue up events in the main queue while reading all
+    /// data from the display fd. When the main thread returns to the main loop to block,
+    /// the display fd no longer has data, causing a call to poll(2) (or similar functions)
+    /// to block indefinitely, even though there are events ready to dispatch.
+    ///
+    /// To proper integrate the wayland display fd into a main loop, the client should always
+    /// call wl_display_dispatch_pending() and then wl_display_flush() prior to going back
+    /// to sleep. At that point, the fd typically doesn’t have data so attempting I/O could
+    /// block, but events queued up on the main queue should be dispatched.
+    ///
+    /// A real-world example is a main loop that wakes up on a timerfd (or a sound card fd
+    /// becoming writable, for example in a video player), which then triggers GL rendering
+    /// and eventually eglSwapBuffers(). eglSwapBuffers() may call wl_display_dispatch_queue()
+    /// if it didn’t receive the frame event for the previous frame, and as such queue events
+    /// in the main queue.
+    ///
+    /// # Note
+    ///
+    /// Calling this makes the current thread the main one.
+    ///
+    /// # See Also
+    ///
+    /// `wl_display_dispatch`, `wl_display_dispatch_queue`, `wl_display_flush`
+    pub fn wl_display_dispatch_pending(display: *mut wl_display) -> c_int;
+
     /// Block until all pending request are processed by the server
     ///
     /// # Parameters

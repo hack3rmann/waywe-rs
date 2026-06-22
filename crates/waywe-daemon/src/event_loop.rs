@@ -116,6 +116,10 @@ impl EventLoop {
             })
             .map_err(calloop::Error::from)?;
 
+        handle.insert_idle(move |state| {
+            state.runtime.wayland.flush();
+        });
+
         let ipc = IpcServer::<DaemonCommand>::new()?;
         handle
             .insert_source(ipc, move |command, &mut (), state| {
@@ -167,37 +171,31 @@ impl LoopState {
 
         self.runtime.timer.mark_frame_start();
 
-        self.tokio.block_on(async {
-            self.runtime.task_pool.erase_finished().await;
+        let info = self.tokio.block_on(self.app.frame(&mut self.runtime));
 
-            for mut event in self.event_queue.drain() {
-                self.app.handle_event(&mut self.runtime, &mut event).await;
+        match info {
+            Ok(FrameInfo {
+                target_frame_time: Some(target),
+            }) => {
+                let delay = self.runtime.timer.next_frame_delay(target);
+
+                self.loop_handle
+                    .insert_source(Timer::from_duration(delay), |_, &mut (), state| {
+                        state.is_frame_requested = true;
+                        TimeoutAction::Drop
+                    })
+                    .unwrap();
             }
-
-            match self.app.frame(&mut self.runtime).await {
-                Ok(FrameInfo {
-                    target_frame_time: Some(target),
-                }) => {
-                    let delay = self.runtime.timer.next_frame_delay(target);
-
-                    self.loop_handle
-                        .insert_source(Timer::from_duration(delay), |_, &mut (), state| {
-                            state.is_frame_requested = true;
-                            TimeoutAction::Drop
-                        })
-                        .unwrap();
-                }
-                Err(FrameError::StopRequested) => {
-                    self.loop_signal.stop();
-                }
-                Ok(FrameInfo {
-                    target_frame_time: None,
-                })
-                | Err(FrameError::NoWorkToDo) => {
-                    // go sleep mode
-                }
+            Err(FrameError::StopRequested) => {
+                self.loop_signal.stop();
             }
-        });
+            Ok(FrameInfo {
+                target_frame_time: None,
+            })
+            | Err(FrameError::NoWorkToDo) => {
+                // go sleep mode
+            }
+        }
 
         self.is_frame_requested = false;
     }

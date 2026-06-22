@@ -610,6 +610,14 @@ impl WaylandInner {
             .roundtrip(main_queue.as_mut(), self.client_state.as_ref());
     }
 
+    pub fn dispatch_pending(&self) {
+        self.display.dispatch_pending(self.client_state.as_ref());
+    }
+
+    pub fn flush(&self) {
+        self.display.flush();
+    }
+
     pub fn new() -> Self {
         let mut client_state = Box::pin(ClientState::default());
         let display = WlDisplay::connect(client_state.as_ref()).unwrap();
@@ -709,7 +717,7 @@ impl EventSource for Wayland {
     where
         F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
-        self.display_roundtrip();
+        self.dispatch_pending();
         self.drain_stored_events(|event| callback(event, &mut ()));
 
         Ok(PostAction::Continue)

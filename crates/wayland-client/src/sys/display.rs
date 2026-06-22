@@ -202,6 +202,22 @@ impl<S> WlDisplay<S> {
     ///
     /// - anyone mustn't access the object storage during this call
     /// - anyone mustn't access the state during this call
+    pub(crate) unsafe fn dispatch_pending_unchecked(&self) -> i32 {
+        unsafe { ffi::wl_display_dispatch_pending(self.as_raw().as_ptr()) }
+    }
+
+    /// # Safety
+    ///
+    /// - anyone mustn't access the object storage during this call
+    /// - anyone mustn't access the state during this call
+    pub(crate) unsafe fn flush_unchecked(&self) -> i32 {
+        unsafe { ffi::wl_display_flush(self.as_raw().as_ptr()) }
+    }
+
+    /// # Safety
+    ///
+    /// - anyone mustn't access the object storage during this call
+    /// - anyone mustn't access the state during this call
     pub(crate) unsafe fn roundtrip_queue_unchecked(&self, queue: &WlEventQueue<S>) -> i32
     where
         S: State,
@@ -246,6 +262,33 @@ impl<S> WlDisplay<S> {
         if n_events_dispatched == -1 {
             let error_code = self.get_error_code().unwrap();
             panic!("WlDisplay::roundtrip_queue failed: {error_code:?}");
+        }
+    }
+
+    /// Dispatch main queue events without reading from the display fd
+    pub fn dispatch_pending(&self, state: Pin<&S>)
+    where
+        S: State,
+    {
+        assert_eq!(&raw const *state, self.shared.state.as_ptr().cast_const());
+
+        let n_events_dispatched = unsafe { self.dispatch_pending_unchecked() };
+
+        dispatch::handle_panic();
+
+        if n_events_dispatched == -1 {
+            let error_code = self.get_error_code().unwrap();
+            panic!("WlDisplay::dispatch_pending failed: {error_code:?}");
+        }
+    }
+
+    /// Send all buffered requests on the display to the server
+    pub fn flush(&self) {
+        let res = unsafe { self.flush_unchecked() };
+
+        if res == -1 {
+            let error_code = self.get_error_code().unwrap();
+            panic!("WlDisplay::flush failed: {error_code:?}");
         }
     }
 }
