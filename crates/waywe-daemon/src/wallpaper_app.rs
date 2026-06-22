@@ -274,8 +274,16 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
             Arc::clone(&monitors[&monitor_id].name)
         };
 
-        if let Entry::Vacant(entry) = self.wallpaper_states.entry(monitor_name) {
-            entry.insert(WallpaperState::ACTIVE_RUNNING);
+        match self.wallpaper_states.entry(monitor_name) {
+            Entry::Vacant(entry) => {
+                entry.insert(WallpaperState::ACTIVE_RUNNING);
+            }
+            Entry::Occupied(entry) => {
+                // HACK(hack3rmann): too defensive. Try to fix the root cause
+                if let WallpaperStateKind::Paused { needs_redraw } = &mut entry.into_mut().kind {
+                    *needs_redraw = true
+                }
+            }
         }
 
         PostEventActions::REDRAW
