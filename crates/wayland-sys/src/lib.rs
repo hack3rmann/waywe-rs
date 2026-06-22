@@ -1206,6 +1206,100 @@ unsafe extern "C" {
     /// `wl_display_dispatch`, `wl_display_dispatch_queue`, `wl_display_flush`
     pub fn wl_display_dispatch_pending(display: *mut wl_display) -> c_int;
 
+    /// Dispatch pending events in an event queue
+    ///
+    /// # Parameters
+    ///
+    /// - `display` The display context object
+    /// - `queue` The event queue to dispatch
+    ///
+    /// # Returns
+    ///
+    /// The number of dispatched events on success or -1 on failure
+    ///
+    /// Dispatch all incoming events for objects assigned to the given event queue. On failure
+    /// -1 is returned and errno set appropriately. If there are no events queued, this
+    /// function returns immediately.
+    pub fn wl_display_dispatch_queue_pending(
+        display: *mut wl_display,
+        queue: *mut wl_event_queue,
+    ) -> c_int;
+
+    /// Read events from display file descriptor
+    ///
+    /// # Parameters
+    ///
+    /// `display` The display context object
+    ///
+    /// # Returns
+    ///
+    /// 0 on success or -1 on error. In case of error errno will be set accordingly
+    ///
+    /// This will read events from the file descriptor for the display. This function does not
+    /// dispatch events, it only reads and queues events into their corresponding event queues.
+    /// If no data is avilable on the file descriptor, wl_display_read_events() returns immediately.
+    /// To dispatch events that may have been queued, call wl_display_dispatch_pending()
+    /// or wl_display_dispatch_queue_pending().
+    ///
+    /// Before calling this function, wl_display_prepare_read() must be called first.
+    pub fn wl_display_read_events(display: *mut wl_display) -> c_int;
+
+    /// Prepare to read events after polling file descriptor
+    ///
+    /// # Parameters:
+    ///
+    /// `display` The display context object
+    ///
+    /// # Returns
+    ///
+    /// 0 on success or -1 if event queue was not empty
+    ///
+    /// This function must be called before reading from the file descriptor using
+    /// wl_display_read_events(). Calling wl_display_prepare_read() announces the calling threads
+    /// intention to read and ensures that until the thread is ready to read and calls
+    /// wl_display_read_events(), no other thread will read from the file descriptor. This only
+    /// succeeds if the event queue is empty though, and if there are undispatched events in
+    /// the queue, -1 is returned and errno set to EAGAIN.
+    ///
+    /// If a thread successfully calls wl_display_prepare_read(), it must either call
+    /// wl_display_read_events() when it’s ready or cancel the read intention by calling wl_display_cancel_read().
+    ///
+    /// Use this function before polling on the display fd or to integrate the fd into a toolkit event
+    /// loop in a race-free way. Typically, a toolkit will call wl_display_dispatch_pending() before
+    /// sleeping, to make sure it doesn’t block with unhandled events. Upon waking up, it will assume
+    /// the file descriptor is readable and read events from the fd by calling wl_display_dispatch(). Simplified, we have:
+    ///
+    /// wl_display_dispatch_pending(display); wl_display_flush(display); poll(fds, nfds, -1); wl_display_dispatch(display);
+    ///
+    /// There are two races here: first, before blocking in poll(), the fd could become readable and
+    /// another thread reads the events. Some of these events may be for the main queue and the other
+    /// thread will queue them there and then the main thread will go to sleep in poll(). This will
+    /// stall the application, which could be waiting for a event to kick of the next animation frame, for example.
+    ///
+    /// The other race is immediately after poll(), where another thread could preempt and read events
+    /// before the main thread calls wl_display_dispatch(). This call now blocks and starves the other fds in the event loop.
+    ///
+    /// A correct sequence would be:
+    ///
+    /// while (wl_display_prepare_read(display) != 0) wl_display_dispatch_pending(display);
+    /// wl_display_flush(display); poll(fds, nfds, -1); wl_display_read_events(display); wl_display_dispatch_pending(display);
+    ///
+    /// Here we call wl_display_prepare_read(), which ensures that between returning from that
+    /// call and eventually calling wl_display_read_events(), no other thread will read from the fd and
+    /// queue events in our queue. If the call to wl_display_prepare_read() fails, we dispatch the pending
+    /// events and try again until we’re successful.
+    pub fn wl_display_prepare_read(display: *mut wl_display) -> c_int;
+
+    /// Release exclusive access to display file descriptor
+    ///
+    /// Parameters:
+    ///
+    ///     display The display context object
+    ///
+    /// This releases the exclusive access. Useful for canceling the lock when a timed out poll returns
+    /// fd not readable and we’re not going to read from the fd anytime soon.
+    pub fn wl_display_cancel_read(display: *mut wl_display);
+
     /// Block until all pending request are processed by the server
     ///
     /// # Parameters

@@ -4128,6 +4128,7 @@ version = "0.0.15"
 dependencies = [
  "bitflags 2.13.0",
  "fxhash",
+ "libc",
  "phf",
  "raw-window-handle",
  "rustix",
