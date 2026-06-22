@@ -6,6 +6,7 @@ use raw_window_handle::{
     HasDisplayHandle as _, RawDisplayHandle, RawWindowHandle, WaylandWindowHandle,
 };
 use rustix::io::Errno;
+use smallstr::SmallString;
 use std::{
     collections::{BTreeMap, HashMap},
     ffi::CStr,
@@ -43,19 +44,20 @@ use wayland_client::{
 #[derive(Clone, Debug, PartialEq)]
 pub enum WaylandEvent {
     ResizeRequested { monitor_id: MonitorId, size: UVec2 },
-    MonitorPlugged { id: MonitorId, name: Arc<str> },
-    MonitorUnplugged { id: MonitorId, name: Arc<str> },
+    MonitorPlugged { id: MonitorId, name: MonitorName },
+    MonitorUnplugged { id: MonitorId, name: MonitorName },
     // TODO(hack3rmann): implement approach from <https://github.com/cjacker/wl-find-cursor/blob/main/main.c>
     CursorMoved { position: UVec2 },
 }
 
 pub type MonitorId = WlObjectId;
 pub type MonitorMap<T> = BTreeMap<MonitorId, T>;
+pub type MonitorName = SmallString<[u8; 32]>;
 
 #[derive(Default, Debug)]
 pub struct MonitorInfo {
     pub size: UVec2,
-    pub name: Arc<str>,
+    pub name: MonitorName,
     pub output: WlObjectHandle<Output>,
     pub surface: WlObjectHandle<Surface>,
     pub layer_surface: WlObjectHandle<LayerSurface>,
@@ -71,7 +73,7 @@ pub struct Globals {
 pub struct ClientState {
     pub stored_events: Mutex<Vec<WaylandEvent>>,
     pub monitors: RwLock<MonitorMap<MonitorInfo>>,
-    pub monitor_names: RwLock<HashMap<Arc<str>, MonitorId>>,
+    pub monitor_names: RwLock<HashMap<MonitorName, MonitorId>>,
     pub globals: Option<Globals>,
 }
 
@@ -81,9 +83,9 @@ impl ClientState {
         monitors.get(&id).map(|info| info.size)
     }
 
-    pub fn monitor_name(&self, id: MonitorId) -> Option<Arc<str>> {
+    pub fn monitor_name(&self, id: MonitorId) -> Option<MonitorName> {
         let monitors = self.monitors.read().unwrap();
-        Some(Arc::clone(&monitors.get(&id)?.name))
+        Some(monitors.get(&id)?.name.clone())
     }
 
     pub fn monitor_id(&self, name: &str) -> Option<MonitorId> {
@@ -253,7 +255,7 @@ impl Dispatch for LayerSurface {
             if !self.is_initial_configure_done {
                 events.push(WaylandEvent::MonitorPlugged {
                     id: self.monitor_id,
-                    name: Arc::clone(&monitor.name),
+                    name: monitor.name.clone(),
                 });
             // this is resize if and only if size is changed indeed
             } else if monitor.size != size {
@@ -333,7 +335,7 @@ pub struct Output {
     pub monitor_id: MonitorId,
     pub output_id: WlObjectId,
     pub size: Option<UVec2>,
-    pub name: Option<Arc<str>>,
+    pub name: Option<MonitorName>,
     pub is_init_done: bool,
 }
 
@@ -350,8 +352,8 @@ impl Output {
 
     pub fn handle_name(&mut self, event: WlOutputNameEvent) {
         // Safety: name is an ASCII string which is a valid utf-8 string
-        let name = Arc::from(unsafe { str::from_utf8_unchecked(event.name.to_bytes()) });
-        self.name = Some(Arc::clone(&name));
+        let name = unsafe { str::from_utf8_unchecked(event.name.to_bytes()) };
+        self.name = Some(MonitorName::from_str(name));
     }
 
     pub fn handle_mode(&mut self, event: WlOutputModeEvent) {
@@ -382,7 +384,7 @@ impl Output {
 
         {
             let mut names = state.monitor_names.write().unwrap();
-            names.insert(Arc::clone(&name), self.monitor_id);
+            names.insert(name.clone(), self.monitor_id);
         }
 
         let mut buf = WlStackMessageBuffer::new();
@@ -464,7 +466,7 @@ impl Output {
                     surface,
                     layer_surface,
                     size,
-                    name: Arc::clone(&name),
+                    name,
                 },
             );
         }

@@ -20,4 +20,5 @@ serde.workspace = true
 toml.workspace = true
 uuid.workspace = true
 calloop.workspace = true
+smallstr.workspace = true
 rand = "0.9.1"

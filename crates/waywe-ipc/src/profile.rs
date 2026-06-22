@@ -9,7 +9,6 @@ use std::{
     fs::{self, File},
     io,
     path::PathBuf,
-    sync::Arc,
 };
 use thiserror::Error;
 
@@ -21,7 +20,7 @@ pub struct Monitor {
 
 #[derive(Clone, Default, PartialEq, Debug, Eq, Encode, Decode)]
 pub struct SetupProfile {
-    pub monitors: HashMap<Arc<str>, Monitor>,
+    pub monitors: HashMap<String, Monitor>,
 }
 
 impl SetupProfile {
@@ -40,7 +39,7 @@ impl SetupProfile {
         )?)
     }
 
-    pub fn with(mut self, name: Arc<str>, monitor: Monitor) -> Self {
+    pub fn with(mut self, name: String, monitor: Monitor) -> Self {
         self.monitors.insert(name, monitor);
         self
     }
@@ -49,7 +48,7 @@ impl SetupProfile {
         let profile = match Self::read() {
             Ok(mut profile) => {
                 for (key, value) in &self.monitors {
-                    profile.monitors.insert(Arc::clone(key), value.clone());
+                    profile.monitors.insert(key.clone(), value.clone());
                 }
 
                 profile

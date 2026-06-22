@@ -25,7 +25,7 @@ use waywe_runtime::{
     event::{EventHandler, Handle, PostEventActions, TryReplicate},
     frame::{FrameError, FrameInfo},
     gpu::SurfaceResult,
-    wayland::{MonitorId, MonitorMap, WaylandEvent},
+    wayland::{MonitorId, MonitorMap, MonitorName, WaylandEvent},
 };
 
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -100,7 +100,7 @@ impl WallpaperState {
 #[derive(Default)]
 pub struct WallpaperApp {
     pub wallpapers: MonitorMap<RunningWallpapers>,
-    pub wallpaper_states: BTreeMap<Arc<str>, WallpaperState>,
+    pub wallpaper_states: BTreeMap<MonitorName, WallpaperState>,
     pub config: Config,
     pub package_registry: PackageRegistry,
     pub last_instant: Option<Instant>,
@@ -157,7 +157,7 @@ impl App for WallpaperApp {
         for (&monitor_id, wallpapers) in self.wallpapers.iter_mut() {
             let monitor_name = {
                 let monitors = runtime.wayland.client_state.monitors.read().unwrap();
-                Arc::clone(&monitors[&monitor_id].name)
+                monitors[&monitor_id].name.clone()
             };
 
             if let Some(state) = self.wallpaper_states.get(&monitor_name)
@@ -293,7 +293,7 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
 
         let monitor_name = {
             let monitors = runtime.wayland.client_state.monitors.read().unwrap();
-            Arc::clone(&monitors[&monitor_id].name)
+            monitors[&monitor_id].name.clone()
         };
 
         match self.wallpaper_states.entry(monitor_name) {
@@ -360,7 +360,7 @@ impl Handle<WaylandEvent> for WallpaperApp {
                 debug!(?monitor_id, ?monitor_name, "new monitor detected");
 
                 if let Ok(mut profile) = SetupProfile::read()
-                    && let Some(info) = profile.monitors.remove(&monitor_name)
+                    && let Some(info) = profile.monitors.remove(monitor_name.as_str())
                 {
                     let event = NewWallpaperEvent {
                         path: info.path,
@@ -427,7 +427,7 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
 
             let monitor_name = {
                 let monitors = runtime.wayland.client_state.monitors.read().unwrap();
-                Arc::clone(&monitors[&monitor_id].name)
+                monitors[&monitor_id].name.clone()
             };
 
             let monitor_profile = Monitor {
@@ -436,7 +436,7 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
             };
 
             if let Err(error) = SetupProfile::default()
-                .with(monitor_name, monitor_profile)
+                .with(monitor_name.to_string(), monitor_profile)
                 .store()
             {
                 error!(?error, "failed to save setup profile");
