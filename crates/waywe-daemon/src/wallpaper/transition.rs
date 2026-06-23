@@ -5,8 +5,8 @@ use glam::Vec2;
 use smallvec::SmallVec;
 use std::{collections::VecDeque, f32::consts::PI, mem, time::Duration};
 use waywe_ipc::config::{
-    Angle, Animation, AnimationConfig, AnimationDirection, AnimationStyle, CenterPosition,
-    Interpolation,
+    Angle, AnimationConfig, AnimationDirection, AnimationStyle, CenterPosition, Interpolation,
+    TransitionStyle,
 };
 use waywe_runtime::{
     effects::{Effects, config::EffectsBuilder},
@@ -382,10 +382,10 @@ pub enum OngoingTransition {
 
 impl OngoingTransition {
     pub fn new(aspect_ratio: f32, config: &AnimationConfig) -> Self {
-        let duration = Duration::from_millis(config.duration_milliseconds);
+        let duration = Duration::from_millis(config.duration);
 
-        match config.animation {
-            Animation::Circle {
+        match config.style {
+            TransitionStyle::Circle {
                 center_position,
                 direction,
             } => Self::Circular(CircularTransition::new(
@@ -394,7 +394,7 @@ impl OngoingTransition {
                 direction,
                 duration,
             )),
-            Animation::Slide { angle } => {
+            TransitionStyle::Slide { angle } => {
                 Self::Slide(SlideTransition::new(aspect_ratio, angle, duration))
             }
         }
@@ -651,7 +651,7 @@ impl RunningWallpapers {
             let pipeline = WallpaperTransitionPipeline::new(
                 gpu,
                 self.wallpaper_config,
-                self.config.animation.style(),
+                self.config.style.animation(),
             );
 
             self.textures = Value(WallpaperTransitionState::new(gpu, &pipeline));
@@ -693,7 +693,7 @@ impl RunningWallpapers {
 
             let state = transition.state(self.config.easing);
 
-            if transition.animation_style() != self.config.animation.style() {
+            if transition.animation_style() != self.config.style.animation() {
                 self.transition_pipeline
                     .switch_shader(gpu, transition.animation_style());
             }

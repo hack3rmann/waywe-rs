@@ -1,11 +1,12 @@
+use display_error_chain::ErrorChainExt;
 use glam::Vec2;
 use rand::distr::{Distribution as _, Uniform};
 use serde::{Deserialize, Serialize};
-use std::{env, fs, io::ErrorKind, path::PathBuf, time::Duration};
-use tracing::{error, info};
+use serde_dhall::StaticType;
+use std::{env, path::PathBuf, time::Duration};
+use tracing::{debug, error, info};
 
-#[derive(Debug, Default, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize, StaticType)]
 pub struct Config {
     pub animation: AnimationConfig,
     #[serde(default)]
@@ -22,7 +23,7 @@ impl Config {
     /// 2. `$HOME/.config/waywe/config.toml`
     /// 3. `/etc/waywe/config.toml`
     pub fn read() -> Self {
-        const TRAILING: &str = "waywe/config.toml";
+        const TRAILING: &str = "waywe/config.dhall";
 
         let xdg_path = env::var_os("XDG_CONFIG_HOME").map(|xdg| {
             let mut p = PathBuf::from(xdg);
@@ -45,39 +46,37 @@ impl Config {
         let home_paths = [xdg_path, home_path, etc_path].into_iter().flatten();
 
         for path in home_paths {
-            match fs::read_to_string(&path) {
-                Ok(contents) => match toml::from_str(&contents) {
-                    Ok(config) => {
-                        info!(path = %path.display(), "loaded config");
-                        return config;
-                    }
-                    Err(error) => {
-                        error!(?error, path = %path.display(), "invalid config");
-                        continue;
-                    }
-                },
-                Err(error) if error.kind() == ErrorKind::NotFound => {
-                    continue;
+            if !path.exists() || !path.is_file() {
+                continue;
+            }
+
+            match serde_dhall::from_file(&path).parse::<Config>() {
+                Ok(config) => {
+                    info!(path = %path.display(), "loaded config");
+                    debug!("config {config:#?}");
+                    return config;
                 }
                 Err(error) => {
-                    error!(?error, path = %path.display(), "failed to read config");
+                    error!(error = %error.chain(), path = %path.display(), "invalid config");
                     continue;
                 }
             }
         }
 
-        Config::default()
+        let default = Config::default();
+        info!("loaded default config {default:#?}");
+
+        default
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case", tag = "type")]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, StaticType)]
 pub enum Effects {
     Convolve(ConvolveConfig),
     Blur(BlurConfig),
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, StaticType)]
 pub struct ConvolveConfig {
     pub kernel: Vec<f32>,
 }
@@ -97,7 +96,9 @@ impl Default for ConvolveConfig {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, StaticType,
+)]
 pub struct BlurConfig {
     pub n_levels: u32,
     pub level_multiplier: u32,
@@ -112,31 +113,28 @@ impl Default for BlurConfig {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, Default, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Default, PartialEq, Eq, StaticType)]
 pub enum AnimationStyle {
     #[default]
     Circle,
     Slide,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "kebab-case", tag = "style")]
-pub enum Animation {
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone, StaticType)]
+#[serde(rename = "Transition")]
+pub enum TransitionStyle {
     Circle {
-        #[serde(default)]
+        #[serde(rename = "center")]
         center_position: CenterPosition,
-        #[serde(default)]
         direction: AnimationDirection,
     },
     Slide {
-        #[serde(default)]
         angle: Angle,
     },
 }
 
-impl Animation {
-    pub fn style(&self) -> AnimationStyle {
+impl TransitionStyle {
+    pub fn animation(&self) -> AnimationStyle {
         match self {
             Self::Circle { .. } => AnimationStyle::Circle,
             Self::Slide { .. } => AnimationStyle::Slide,
@@ -144,7 +142,7 @@ impl Animation {
     }
 }
 
-impl Default for Animation {
+impl Default for TransitionStyle {
     fn default() -> Self {
         Self::Circle {
             center_position: CenterPosition::default(),
@@ -153,31 +151,40 @@ impl Default for Animation {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone, StaticType)]
 pub struct AnimationConfig {
     #[serde(default = "get_default_duration")]
-    pub duration_milliseconds: u64,
+    pub duration: u64,
     #[serde(default)]
     pub easing: Interpolation,
-    #[serde(default, flatten)]
-    pub animation: Animation,
+    #[serde(default)]
+    pub style: TransitionStyle,
 }
 
 impl Default for AnimationConfig {
     fn default() -> Self {
         Self {
-            duration_milliseconds: get_default_duration(),
+            duration: get_default_duration(),
             easing: Interpolation::default(),
-            animation: Animation::default(),
+            style: TransitionStyle::default(),
         }
     }
 }
 
 #[derive(
-    Debug, Default, PartialEq, PartialOrd, Eq, Ord, Clone, Copy, Hash, Serialize, Deserialize,
+    Debug,
+    Default,
+    PartialEq,
+    PartialOrd,
+    Eq,
+    Ord,
+    Clone,
+    Copy,
+    Hash,
+    Serialize,
+    Deserialize,
+    StaticType,
 )]
-#[serde(rename_all = "kebab-case")]
 pub enum AnimationDirection {
     Out,
     #[default]
@@ -192,15 +199,26 @@ const fn get_default_duration() -> u64 {
     AnimationConfig::DEFAULT_DURATION.as_millis() as u64
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Default, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[derive(
+    Clone, Copy, Debug, PartialEq, PartialOrd, Default, Serialize, Deserialize, StaticType,
+)]
+pub struct Bezier {
+    a: f32,
+    b: f32,
+    c: f32,
+    d: f32,
+}
+
+#[derive(
+    Clone, Copy, Debug, PartialEq, PartialOrd, Default, Serialize, Deserialize, StaticType,
+)]
 pub enum Interpolation {
     None,
     EaseIn,
     #[default]
     EaseOut,
     EaseInOut,
-    Bezier([f32; 4]),
+    Bezier(Bezier),
 }
 
 impl Interpolation {
@@ -210,7 +228,7 @@ impl Interpolation {
             Interpolation::EaseIn => x * x,
             Interpolation::EaseOut => 1.0 - (1.0 - x) * (1.0 - x),
             Interpolation::EaseInOut => 3.0 * x * x - 2.0 * x * x * x,
-            Interpolation::Bezier([a, b, c, d]) => {
+            Interpolation::Bezier(Bezier { a, b, c, d }) => {
                 Self::cubic_bezier(x, a.clamp(0.0, 1.0), b, c.clamp(0.0, 1.0), d)
             }
         }
@@ -250,12 +268,11 @@ impl Interpolation {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "kebab-case")]
-#[derive(Default)]
+#[derive(Clone, Default, Copy, Debug, PartialEq, Serialize, Deserialize, StaticType)]
 pub enum CenterPosition {
     Point {
-        position: Vec2,
+        x: f32,
+        y: f32,
     },
     #[default]
     Random,
@@ -264,7 +281,7 @@ pub enum CenterPosition {
 impl CenterPosition {
     pub fn get(self) -> Vec2 {
         match self {
-            Self::Point { position } => position,
+            Self::Point { x, y } => Vec2::new(x, y),
             Self::Random => {
                 let distribution = Uniform::new_inclusive(-1.0_f32, 1.0).unwrap();
                 let mut rng = rand::rng();
@@ -278,14 +295,11 @@ impl CenterPosition {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "kebab-case")]
-#[derive(Default)]
+#[derive(
+    Clone, Default, Copy, Debug, PartialEq, PartialOrd, Serialize, Deserialize, StaticType,
+)]
 pub enum Angle {
-    Value {
-        #[serde(rename = "degrees")]
-        angle_degrees: f32,
-    },
+    Degrees(f32),
     #[default]
     Random,
 }
@@ -293,7 +307,7 @@ pub enum Angle {
 impl Angle {
     pub fn get_degrees(self) -> f32 {
         match self {
-            Self::Value { angle_degrees } => angle_degrees,
+            Self::Degrees(value) => value,
             Self::Random => {
                 let distribution = Uniform::new_inclusive(0.0_f32, 360.0).unwrap();
                 let mut rng = rand::rng();
@@ -317,12 +331,15 @@ mod tests {
     fn print_config_circle() {
         let config = Config {
             animation: AnimationConfig {
-                animation: Animation::default(),
+                style: TransitionStyle::default(),
                 ..AnimationConfig::default()
             },
             effects: vec![],
         };
-        let string = toml::to_string(&config).unwrap();
+        let string = serde_dhall::serialize(&config)
+            .static_type_annotation()
+            .to_string()
+            .unwrap();
         println!("{string}");
     }
 
@@ -331,7 +348,7 @@ mod tests {
     fn print_config_slide() {
         let config = Config {
             animation: AnimationConfig {
-                animation: Animation::Slide {
+                style: TransitionStyle::Slide {
                     angle: Angle::Random,
                 },
                 ..AnimationConfig::default()

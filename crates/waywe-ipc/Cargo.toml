@@ -21,4 +21,6 @@ toml.workspace = true
 uuid.workspace = true
 calloop.workspace = true
 smallstr.workspace = true
+serde_dhall.workspace = true
+display-error-chain.workspace = true
 rand = "0.9.1"
