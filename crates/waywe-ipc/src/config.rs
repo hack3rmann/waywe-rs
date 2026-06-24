@@ -19,9 +19,9 @@ impl Config {
     /// Waywe does not create the config file for you,
     /// but it looks for one in the following locations on UNIX systems:
     ///
-    /// 1. `$XDG_CONFIG_HOME/waywe/config.toml`
-    /// 2. `$HOME/.config/waywe/config.toml`
-    /// 3. `/etc/waywe/config.toml`
+    /// 1. `$XDG_CONFIG_HOME/waywe/config.dhall`
+    /// 2. `$HOME/.config/waywe/config.dhall`
+    /// 3. `/etc/waywe/config.dhall`
     pub fn read() -> Self {
         const TRAILING: &str = "waywe/config.dhall";
 
