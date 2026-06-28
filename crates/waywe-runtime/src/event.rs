@@ -335,10 +335,12 @@ pub struct EventEmitter {
 
 impl EventEmitter {
     pub fn emit(&mut self, event: impl IntoEvent) -> Result<(), EmitError> {
-        self.writer.write_all(bytemuck::bytes_of(&EventType::Any))?;
+        // NOTE(hack3rmann): to prevent data race MPCS sender must be populated first
         self.sender
             .send(event.into_event())
             .map_err(|_| EmitError::Disconnected)?;
+        self.writer.write_all(bytemuck::bytes_of(&EventType::Any))?;
+
         Ok(())
     }
 }
