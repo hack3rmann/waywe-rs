@@ -4,6 +4,7 @@ use calloop::{
     signals::{Signal, Signals},
     timer::{TimeoutAction, Timer},
 };
+use display_error_chain::ErrorChainExt;
 use std::{io, vec::Drain};
 use thiserror::Error;
 use tokio::runtime::{Builder as AsyncRuntimeBuilder, Runtime as AsyncRuntime};
@@ -90,7 +91,7 @@ impl EventLoop {
             .run(None, &mut self.state, move |state| {
                 state.event_loop_frame();
             })
-            .expect("failed to run event loop");
+            .unwrap_or_else(|err| panic!("failed to run event loop: {}", err.chain()));
 
         self.state.tokio.block_on(async {
             self.state.app.exit(&mut self.state.runtime).await;

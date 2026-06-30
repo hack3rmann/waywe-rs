@@ -89,6 +89,7 @@ miette = { version = "7.6.0", features = ["fancy"] }
 display-error-chain = "0.2.2"
 calloop = { version = "0.14.4", features = ["signals"] }
 smallstr = { version = "0.3.1", features = ["union"] }
+serde_dhall = "0.13.0"
 
 [workspace.dependencies.wgpu]
 git = "https://github.com/hack3rmann/wgpu.git"
