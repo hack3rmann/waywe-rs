@@ -27,9 +27,6 @@ https://github.com/user-attachments/assets/48a8b135-bbf2-4055-8453-19292a923939
 1. Modern Linux distribution.
 2. `wlroots`-based Wayland compositor (e.g. Hyprland or Sway).
 3. Support for `libva` hardware acceleration.
-4. Support for Vulkan features:
-    - `VK_KHR_external_memory_fd`
-    - `VK_EXT_image_drm_format_modifier`
 
 ## Install
 
@@ -116,77 +113,12 @@ archive (`.tar.gz` aliased as `.ww`) under `target/<profile>/`.
 
 ## Configuration
 
-You can configure your transition animations in `~/.config/waywe/config.toml`.
-Default config will be generated if user would not have one.
-
-Default configuration:
-
-```toml
-[animation]
-# Transition duration in milliseconds
-duration-milliseconds = 2000
-# Animation direction: "in" | "out"
-direction = "out"
-# Interpolation function: "none" | "ease-in" | "ease-out" | "ease-in-out" | "bezier" 
-# 
-# - "none": f(t) = t
-# - "ease-in": f(t) = t**2
-# - "ease-out": f(t) = 1 - (1 - t)**2
-# - "ease-in-out": f(t) = 3 * x**2 - 2 * x**3
-# - "bezeier": [a, b, c, d] where a, b, c, d are floats and a, c are from [0.0, 1.0]
-easing = "ease-out"
-# Animation style: "circle" | "slide"
-style = "circle"
-
-[animation.center-position]
-# Animation circle center position type: "random" | "point" [default="random"]
-#
-# - "random": center will be picked randomly on screen and `position` parameter will be ignored
-# - "point": center position will be at point `position` (see next)
-type = "random"
-# Exact center position of animation circle, used with `type = "point"`.
-# Describes position coordinares in range `-1.0..=1.0`
-position = [0.0, 0.0]
-
-# Optional post-proccess effects
-[[effects]]
-# Convolution filter
-type = "convolve"
-# Convolution kernel (for example, sharpen filter)
-kernel = [0.0, -1.0, 0.0, -1.0, 5.0, -1.0, 0.0, -1.0, 0.0]
-
-[[effects]]
-# Fast blur filter
-type = "blur"
-# Number of downsample passes
-n_levels = 4
-# Growth rate of blur passes on each downsample step (0 for no growth)
-level_multiplier = 2
-```
-
-And if you want slide animation:
-
-```toml
-[animation]
-duration-milliseconds = 2000
-easing = "ease-out"
-# Animation style: "circle" | "slide"
-style = "slide"
-
-[animation.angle]
-# Animation angle type: "random" | "value" [default="random"]
-#
-# - "random": angle will be picked randomly from 0 to 360 and `value` will be ignored 
-# - "value": angle in degrees
-type = "random"
-# value from 0 to 360 degrees
-degrees = 0
-```
+Configuration is written in `Dhall` language. See config [docs](docs/config/README.md).
 
 ## Troubleshooting
 
 This project is tested only on several machines with Intel or AMD
-CPUs with integrated graphics running Fedora 42.
+CPUs with integrated graphics running Fedora 42/43/44.
 
 ### Common issues
 
