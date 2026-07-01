@@ -76,7 +76,6 @@ toml = "0.8.23"
 fxhash = "0.2.1"
 box_into_inner = "0.1.0"
 futures-util = { version = "0.3.31", features = ["alloc"] }
-derive_more = { version = "2.0.1", features = ["full"] }
 abi_stable = "0.11.3"
 bevy_ecs = "0.17.2"
 ash = "0.38.0"

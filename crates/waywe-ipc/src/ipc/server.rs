@@ -5,6 +5,7 @@ use rustix::{
     io::Errno,
     net::{self, AddressFamily, RecvFlags, SocketAddrUnix, SocketFlags, SocketType},
 };
+use slab::Slab;
 use smallvec::{SmallVec, smallvec};
 use std::{
     fs::{File, TryLockError},
@@ -21,8 +22,13 @@ use thiserror::Error;
 use tracing::{debug, warn};
 
 pub struct IpcServer<T> {
-    _lock_file: File,
+    clients: Slab<OwnedFd>,
     fd: OwnedFd,
+    new_clients: SmallVec<[usize; 2]>,
+    removed_clients: SmallVec<[usize; 2]>,
+    client_tokens: Vec<(Token, usize)>,
+    token: Option<Token>,
+    _lock_file: File,
     _p: PhantomData<T>,
 }
 
@@ -39,28 +45,46 @@ impl<T> AsRawFd for IpcServer<T> {
 }
 
 impl<T> IpcServer<T> {
-    pub fn try_recv(&self) -> Result<T, RecvError>
+    pub fn accept_all(&mut self) -> Result<(), RecvError> {
+        loop {
+            let fd = match net::accept_with(&self.fd, SocketFlags::empty()) {
+                Ok(fd) => fd,
+                Err(Errno::WOULDBLOCK) => return Err(RecvError::Empty),
+                Err(other) => return Err(RecvError::Os(other)),
+            };
+
+            let index = self.clients.insert(fd);
+            self.new_clients.push(index);
+        }
+    }
+
+    pub fn try_recv(&mut self, client_index: usize) -> Result<T, RecvError>
     where
         T: Decode<()>,
     {
-        let fd = match net::accept_with(&self.fd, SocketFlags::empty()) {
-            Ok(fd) => fd,
-            Err(Errno::INTR | Errno::WOULDBLOCK) => return Err(RecvError::Empty),
-            Err(other) => return Err(RecvError::Os(other)),
-        };
+        let client = &self.clients[client_index];
 
         const MAX_LENGTH: u32 = 4096;
         let mut length = 0_u32;
 
-        match net::recv(&fd, bytemuck::bytes_of_mut(&mut length), RecvFlags::WAITALL) {
+        match net::recv(
+            client,
+            bytemuck::bytes_of_mut(&mut length),
+            RecvFlags::DONTWAIT,
+        ) {
+            Ok((_, 0)) => {
+                self.removed_clients.push(client_index);
+                return Err(RecvError::Disconnected);
+            }
             Ok((_, n_bytes)) => assert_eq!(n_bytes, mem::size_of_val(&length)),
+            Err(Errno::WOULDBLOCK) => return Err(RecvError::Empty),
             Err(error) => return Err(RecvError::Os(error)),
         }
 
         assert!(length <= MAX_LENGTH, "too large message, unbelivable");
 
         let mut buf: SmallVec<[u8; ipc::BUFFER_SIZE]> = smallvec![0; length as usize];
-        net::recv(&fd, &mut buf[..], RecvFlags::WAITALL)?;
+        net::recv(client, &mut buf[..], RecvFlags::WAITALL)?;
 
         let (value, _n_bytes) = bincode::decode_from_slice(&buf, bincode::config::standard())?;
 
@@ -125,8 +149,13 @@ impl<T> IpcServer<T> {
         net::listen(&socket, 128)?;
 
         Ok(Self {
+            new_clients: SmallVec::new_const(),
+            removed_clients: SmallVec::new_const(),
+            clients: Slab::new(),
             _lock_file: lock_file,
             fd: socket,
+            token: None,
+            client_tokens: vec![],
             _p: PhantomData,
         })
     }
@@ -143,6 +172,8 @@ impl<T> Drop for IpcServer<T> {
 pub enum RecvError {
     #[error("socket is empty")]
     Empty,
+    #[error("client has disconnected")]
+    Disconnected,
     #[error(transparent)]
     Os(#[from] Errno),
     #[error(transparent)]
@@ -177,19 +208,39 @@ impl<T: Decode<()>> EventSource for IpcServer<T> {
     fn process_events<F>(
         &mut self,
         _: Readiness,
-        _: Token,
+        token: Token,
         mut callback: F,
     ) -> Result<PostAction, Self::Error>
     where
         F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
+        if Some(token) == self.token {
+            match self.accept_all() {
+                Ok(()) | Err(RecvError::Empty) => {}
+                Err(error) => return Err(error),
+            }
+
+            return Ok(PostAction::Reregister);
+        }
+
+        let Some(client_index) = self
+            .client_tokens
+            .iter()
+            .find_map(|&(client_token, index)| (client_token == token).then_some(index))
+        else {
+            return Ok(PostAction::Continue);
+        };
+
         loop {
-            match self.try_recv() {
-                Ok(value) => callback(value, &mut ()),
-                Err(RecvError::Empty) => return Ok(PostAction::Continue),
-                Err(other) => return Err(other),
+            match self.try_recv(client_index) {
+                Ok(event) => callback(event, &mut ()),
+                Err(RecvError::Empty) => break,
+                Err(RecvError::Disconnected) => return Ok(PostAction::Reregister),
+                Err(error) => return Err(error),
             }
         }
+
+        Ok(PostAction::Continue)
     }
 
     fn register(
@@ -197,7 +248,21 @@ impl<T: Decode<()>> EventSource for IpcServer<T> {
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
     ) -> calloop::Result<()> {
-        unsafe { poll.register(&self.fd, Interest::READ, Mode::Level, token_factory.token()) }
+        let token = token_factory.token();
+        self.token = Some(token);
+
+        unsafe { poll.register(&self.fd, Interest::READ, Mode::Level, token)? };
+
+        self.client_tokens.clear();
+
+        for (id, client) in &self.clients {
+            let token = token_factory.token();
+
+            unsafe { poll.register(client, Interest::READ, Mode::Level, token)? };
+            self.client_tokens.push((token, id));
+        }
+
+        Ok(())
     }
 
     fn reregister(
@@ -205,10 +270,57 @@ impl<T: Decode<()>> EventSource for IpcServer<T> {
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
     ) -> calloop::Result<()> {
-        poll.reregister(&self.fd, Interest::READ, Mode::Level, token_factory.token())
+        let token = token_factory.token();
+        self.token = Some(token);
+
+        poll.reregister(&self.fd, Interest::READ, Mode::Level, token)?;
+
+        for &id in &self.removed_clients {
+            // NOTE(hack3rmann): client must be unregistered before its fd is closed
+            poll.unregister(&self.clients[id])?;
+        }
+
+        for id in self.removed_clients.drain(..) {
+            // Safety: client Fd dies after unregister (see note above)
+            self.clients.remove(id);
+
+            let index = self
+                .client_tokens
+                .iter()
+                .position(|(_token, this_id)| *this_id == id)
+                .unwrap();
+            self.client_tokens.swap_remove(index);
+        }
+
+        for (stored_token, id) in &mut self.client_tokens {
+            let token = token_factory.token();
+
+            poll.reregister(&self.clients[*id], Interest::READ, Mode::Level, token)?;
+            *stored_token = token;
+        }
+
+        for id in self.new_clients.drain(..) {
+            let token = token_factory.token();
+
+            // Safety: client Fd dies after unregister (see above)
+            unsafe { poll.register(&self.clients[id], Interest::READ, Mode::Level, token)? };
+            self.client_tokens.push((token, id));
+        }
+
+        Ok(())
     }
 
     fn unregister(&mut self, poll: &mut Poll) -> calloop::Result<()> {
-        poll.unregister(&self.fd)
+        poll.unregister(&self.fd)?;
+        self.token = None;
+
+        for (_id, client) in &self.clients {
+            poll.unregister(client)?;
+        }
+
+        self.clients.clear();
+        self.client_tokens.clear();
+
+        Ok(())
     }
 }
