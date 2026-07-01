@@ -252,19 +252,19 @@ impl Dispatch for LayerSurface {
             let mut events = state.stored_events.lock().unwrap();
             let monitor = monitors.get_mut(&self.monitor_id).unwrap();
 
+            let is_resized = monitor.size != size;
+            monitor.size = size;
+
             if !self.is_initial_configure_done {
                 events.push(WaylandEvent::MonitorPlugged {
                     id: self.monitor_id,
                     name: monitor.name.clone(),
                 });
-            // this is resize if and only if size is changed indeed
-            } else if monitor.size != size {
+            } else if is_resized {
                 events.push(WaylandEvent::ResizeRequested {
                     monitor_id: self.monitor_id,
                     size,
                 });
-
-                monitor.size = size;
             }
         }
 
