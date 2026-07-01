@@ -123,7 +123,7 @@ impl EventLoop {
         let ipc = IpcServer::<DaemonCommand>::new()?;
         handle
             .insert_source(ipc, move |command, &mut (), state| {
-                state.handle_daemon_command(command);
+                state.handle_daemon_command(command.event);
             })
             .map_err(calloop::Error::from)?;
 

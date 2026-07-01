@@ -21,11 +21,36 @@ use std::{
 use thiserror::Error;
 use tracing::{debug, warn};
 
+#[derive(Clone, Default, PartialEq, Eq, Debug, PartialOrd, Ord, Hash)]
+struct ClientIdGenerator {
+    last: u32,
+}
+
+impl ClientIdGenerator {
+    pub const fn next(&mut self) -> u32 {
+        let result = self.last;
+        self.last = self.last.wrapping_add(1);
+        result
+    }
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug, PartialOrd, Ord, Hash)]
+pub struct ClientId {
+    id: u32,
+    index: u32,
+}
+
+struct Client {
+    pub fd: OwnedFd,
+    pub id: u32,
+}
+
 pub struct IpcServer<T> {
-    clients: Slab<OwnedFd>,
+    clients: Slab<Client>,
     fd: OwnedFd,
     new_clients: SmallVec<[usize; 2]>,
     removed_clients: SmallVec<[usize; 2]>,
+    id_generator: ClientIdGenerator,
     client_tokens: Vec<(Token, usize)>,
     token: Option<Token>,
     _lock_file: File,
@@ -53,7 +78,9 @@ impl<T> IpcServer<T> {
                 Err(other) => return Err(RecvError::Os(other)),
             };
 
-            let index = self.clients.insert(fd);
+            let id = self.id_generator.next();
+            let index = self.clients.insert(Client { fd, id });
+
             self.new_clients.push(index);
         }
     }
@@ -68,7 +95,7 @@ impl<T> IpcServer<T> {
         let mut length = 0_u32;
 
         match net::recv(
-            client,
+            &client.fd,
             bytemuck::bytes_of_mut(&mut length),
             RecvFlags::DONTWAIT,
         ) {
@@ -84,7 +111,7 @@ impl<T> IpcServer<T> {
         assert!(length <= MAX_LENGTH, "too large message, unbelivable");
 
         let mut buf: SmallVec<[u8; ipc::BUFFER_SIZE]> = smallvec![0; length as usize];
-        net::recv(client, &mut buf[..], RecvFlags::WAITALL)?;
+        net::recv(&client.fd, &mut buf[..], RecvFlags::WAITALL)?;
 
         let (value, _n_bytes) = bincode::decode_from_slice(&buf, bincode::config::standard())?;
 
@@ -152,6 +179,7 @@ impl<T> IpcServer<T> {
             new_clients: SmallVec::new_const(),
             removed_clients: SmallVec::new_const(),
             clients: Slab::new(),
+            id_generator: ClientIdGenerator::default(),
             _lock_file: lock_file,
             fd: socket,
             token: None,
@@ -199,8 +227,14 @@ impl From<TryLockError> for CreateServerError {
     }
 }
 
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug, PartialOrd, Ord, Hash)]
+pub struct IpcEvent<T> {
+    pub event: T,
+    pub sender_id: ClientId,
+}
+
 impl<T: Decode<()>> EventSource for IpcServer<T> {
-    type Event = T;
+    type Event = IpcEvent<T>;
     type Metadata = ();
     type Ret = ();
     type Error = RecvError;
@@ -233,7 +267,15 @@ impl<T: Decode<()>> EventSource for IpcServer<T> {
 
         loop {
             match self.try_recv(client_index) {
-                Ok(event) => callback(event, &mut ()),
+                Ok(event) => {
+                    let sender_id = ClientId {
+                        id: self.clients[client_index].id,
+                        index: u32::try_from(client_index).unwrap(),
+                    };
+                    let event = IpcEvent { event, sender_id };
+
+                    callback(event, &mut ());
+                }
                 Err(RecvError::Empty) => break,
                 Err(RecvError::Disconnected) => return Ok(PostAction::Reregister),
                 Err(error) => return Err(error),
@@ -258,7 +300,7 @@ impl<T: Decode<()>> EventSource for IpcServer<T> {
         for (id, client) in &self.clients {
             let token = token_factory.token();
 
-            unsafe { poll.register(client, Interest::READ, Mode::Level, token)? };
+            unsafe { poll.register(&client.fd, Interest::READ, Mode::Level, token)? };
             self.client_tokens.push((token, id));
         }
 
@@ -277,7 +319,7 @@ impl<T: Decode<()>> EventSource for IpcServer<T> {
 
         for &id in &self.removed_clients {
             // NOTE(hack3rmann): client must be unregistered before its fd is closed
-            poll.unregister(&self.clients[id])?;
+            poll.unregister(&self.clients[id].fd)?;
         }
 
         for id in self.removed_clients.drain(..) {
@@ -295,7 +337,7 @@ impl<T: Decode<()>> EventSource for IpcServer<T> {
         for (stored_token, id) in &mut self.client_tokens {
             let token = token_factory.token();
 
-            poll.reregister(&self.clients[*id], Interest::READ, Mode::Level, token)?;
+            poll.reregister(&self.clients[*id].fd, Interest::READ, Mode::Level, token)?;
             *stored_token = token;
         }
 
@@ -303,7 +345,7 @@ impl<T: Decode<()>> EventSource for IpcServer<T> {
             let token = token_factory.token();
 
             // Safety: client Fd dies after unregister (see above)
-            unsafe { poll.register(&self.clients[id], Interest::READ, Mode::Level, token)? };
+            unsafe { poll.register(&self.clients[id].fd, Interest::READ, Mode::Level, token)? };
             self.client_tokens.push((token, id));
         }
 
@@ -315,7 +357,7 @@ impl<T: Decode<()>> EventSource for IpcServer<T> {
         self.token = None;
 
         for (_id, client) in &self.clients {
-            poll.unregister(client)?;
+            poll.unregister(&client.fd)?;
         }
 
         self.clients.clear();
