@@ -43,6 +43,20 @@ impl PanicPayload {
             Err(payload) => payload.into(),
         }
     }
+
+    pub fn as_str(&self) -> Option<&str> {
+        match &self.0 {
+            ROption::RSome(payload) => Some(payload.as_str()),
+            ROption::RNone => None,
+        }
+    }
+
+    pub fn into_string(self) -> Option<String> {
+        match self.0 {
+            ROption::RSome(payload) => Some(payload.into_string()),
+            ROption::RNone => None,
+        }
+    }
 }
 
 impl From<Box<dyn Any + Send>> for PanicPayload {

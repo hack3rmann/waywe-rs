@@ -6,6 +6,7 @@ use abi_stable::std_types::RString;
 use ash::vk;
 use libloading::Library;
 use std::{array, mem::MaybeUninit, path::PathBuf, sync::Arc, time::Duration};
+use thiserror::Error;
 use waywe_rendering_api::{
     FfiTextureDescriptor,
     api::{
@@ -32,21 +33,27 @@ pub struct RenderWallpaper {
 unsafe impl Send for RenderWallpaper {}
 unsafe impl Sync for RenderWallpaper {}
 
+#[derive(Debug, Error)]
+pub enum RenderWallpaperLoadError {
+    #[error(transparent)]
+    Dll(#[from] libloading::Error),
+    #[error("create_opaque_renderer panicked: {0}")]
+    CreateOpaqueRendererPanicked(String),
+}
+
 impl RenderWallpaper {
     pub fn load(
         path: impl Into<PathBuf>,
         gpu: &Wgpu,
         config: WallpaperConfig,
         packages: PackageRegistry,
-    ) -> Self {
+    ) -> Result<Self, RenderWallpaperLoadError> {
         let package = packages.inflate(path);
 
-        let lib = unsafe { Library::new(&package.wallpaper_path) }.unwrap();
+        let lib = unsafe { Library::new(&package.wallpaper_path)? };
 
-        let create_opaque_renderer = unsafe {
-            lib.get::<CreateOpaqueRendererFn>(CREATE_OPAQUE_RENDERER_NAME)
-                .unwrap()
-        };
+        let create_opaque_renderer =
+            unsafe { lib.get::<CreateOpaqueRendererFn>(CREATE_OPAQUE_RENDERER_NAME)? };
 
         let mut renderer = MaybeUninit::uninit();
 
@@ -58,7 +65,12 @@ impl RenderWallpaper {
             },
             &mut renderer,
         );
-        panic.propagate_if_any();
+
+        if let Some(payload) = panic.into_string() {
+            return Err(RenderWallpaperLoadError::CreateOpaqueRendererPanicked(
+                payload,
+            ));
+        }
 
         let mut renderer = unsafe { renderer.assume_init() };
 
@@ -77,13 +89,13 @@ impl RenderWallpaper {
             surface
         });
 
-        Self {
+        Ok(Self {
             renderer,
             _lib: lib,
             surfaces,
             config,
             _package: package,
-        }
+        })
     }
 
     fn surface_desc(config: WallpaperConfig) -> wgpu::TextureDescriptor<'static> {

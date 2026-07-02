@@ -1,10 +1,13 @@
 use crate::ipc;
-use bincode::{Encode, error::EncodeError};
+use bincode::{
+    Decode, Encode,
+    error::{DecodeError, EncodeError},
+};
 use rustix::{
     io::{self, Errno},
     net::{self, AddressFamily, SocketAddrUnix, SocketFlags, SocketType, sockopt::Timeout},
 };
-use smallvec::SmallVec;
+use smallvec::{SmallVec, smallvec};
 use std::{
     marker::PhantomData,
     mem,
@@ -16,25 +19,25 @@ use std::{
 };
 use thiserror::Error;
 
-pub struct IpcClient<T> {
+pub struct IpcClient<T, R> {
     fd: OwnedFd,
-    _p: PhantomData<T>,
+    _p: PhantomData<(T, R)>,
 }
 
-impl<T> AsFd for IpcClient<T> {
+impl<T, R> AsFd for IpcClient<T, R> {
     fn as_fd(&self) -> BorrowedFd<'_> {
         self.fd.as_fd()
     }
 }
 
-impl<T> AsRawFd for IpcClient<T> {
+impl<T, R> AsRawFd for IpcClient<T, R> {
     fn as_raw_fd(&self) -> RawFd {
         self.fd.as_raw_fd()
     }
 }
 
-impl<T> IpcClient<T> {
-    pub fn send(&self, value: T) -> Result<(), SendError>
+impl<T, R> IpcClient<T, R> {
+    pub fn send(&self, value: T) -> Result<(), ClientError>
     where
         T: Encode,
     {
@@ -46,9 +49,30 @@ impl<T> IpcClient<T> {
         let size = bytemuck::from_bytes_mut::<u32>(&mut buf[..mem::size_of::<u32>()]);
         *size = n_bytes as u32;
 
-        io::write(&self.fd, &buf)?;
+        io::write(self, &buf)?;
 
         Ok(())
+    }
+
+    pub fn recv(&self) -> Result<R, ClientError>
+    where
+        R: Decode<()>,
+    {
+        let mut n_bytes = 0_u32;
+
+        let n_bytes_read = io::read(self, bytemuck::bytes_of_mut(&mut n_bytes))?;
+        assert_eq!(n_bytes_read, mem::size_of_val(&n_bytes));
+
+        let mut buf: SmallVec<[u8; ipc::BUFFER_SIZE]> = smallvec![0; n_bytes as usize];
+
+        let n_bytes_read = io::read(self, &mut buf[..])?;
+        assert_eq!(n_bytes_read, n_bytes as usize);
+
+        let (response, n_bytes_decoded) =
+            bincode::decode_from_slice(&buf, bincode::config::standard())?;
+        assert_eq!(n_bytes_decoded, n_bytes_read);
+
+        Ok(response)
     }
 
     pub fn connect() -> Result<Self, Errno> {
@@ -74,9 +98,11 @@ impl<T> IpcClient<T> {
 }
 
 #[derive(Debug, Error)]
-pub enum SendError {
+pub enum ClientError {
     #[error(transparent)]
     Os(#[from] Errno),
     #[error(transparent)]
     Encode(#[from] EncodeError),
+    #[error(transparent)]
+    Decode(#[from] DecodeError),
 }

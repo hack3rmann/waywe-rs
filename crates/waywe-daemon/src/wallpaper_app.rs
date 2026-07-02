@@ -5,9 +5,13 @@ use crate::{
         package_registry::PackageRegistry, transition::RunningWallpapers,
     },
 };
+use calloop::channel::Sender;
+use display_error_chain::ErrorChainExt;
+use glam::UVec2;
 use smallvec::{SmallVec, smallvec};
 use std::{
     collections::{BTreeMap, btree_map::Entry},
+    io::ErrorKind,
     path::PathBuf,
     sync::Arc,
     time::Instant,
@@ -15,9 +19,10 @@ use std::{
 use tracing::{debug, error};
 use waywe_ipc::{
     WallpaperType,
-    command::PauseMode,
+    command::{DaemonError, DaemonResponse, DaemonResult, PauseMode},
     config::Config,
-    profile::{Monitor, SetupProfile},
+    ipc::server::{ClientId, IpcResponse},
+    profile::{Monitor, SetupProfile, SetupProfileError},
 };
 use waywe_runtime::{
     Runtime,
@@ -118,21 +123,32 @@ impl WallpaperApp {
 pub struct WallpaperPreparedEvent {
     pub wallpaper: OptimizedWallpaper,
     pub monitor_id: MonitorId,
+    pub sender_id: Option<ClientId>,
 }
 
 impl TryReplicate for WallpaperPreparedEvent {}
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct NewWallpaperEvent {
     pub path: PathBuf,
     pub ty: WallpaperType,
     pub target: WallpaperTarget,
+    pub sender_id: Option<ClientId>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
+pub struct WallpaperPreviewEvent {
+    pub path: PathBuf,
+    pub ty: WallpaperType,
+    pub size: UVec2,
+    pub sender_id: ClientId,
+}
+
+#[derive(Clone, Debug)]
 pub struct WallpaperPauseEvent {
     pub target: WallpaperTarget,
     pub mode: PauseMode,
+    pub sender_id: ClientId,
 }
 
 impl App for WallpaperApp {
@@ -141,7 +157,8 @@ impl App for WallpaperApp {
             .add_event::<WaylandEvent>()
             .add_event::<NewWallpaperEvent>()
             .add_event::<WallpaperPreparedEvent>()
-            .add_event::<WallpaperPauseEvent>();
+            .add_event::<WallpaperPauseEvent>()
+            .add_event::<WallpaperPreviewEvent>();
     }
 
     async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
@@ -243,7 +260,11 @@ impl Handle<WallpaperPauseEvent> for WallpaperApp {
         runtime: &mut Runtime,
         event: WallpaperPauseEvent,
     ) -> PostEventActions {
-        let WallpaperPauseEvent { target, mode } = event;
+        let WallpaperPauseEvent {
+            target,
+            mode,
+            sender_id,
+        } = event;
 
         match target {
             WallpaperTarget::ForAll => {
@@ -258,6 +279,14 @@ impl Handle<WallpaperPauseEvent> for WallpaperApp {
                 state.kind = state.kind.altered(mode);
             }
         }
+
+        runtime
+            .ipc_sender
+            .send(IpcResponse {
+                body: Ok(DaemonResponse::PauseDone),
+                destination_id: sender_id,
+            })
+            .unwrap();
 
         PostEventActions::REDRAW
     }
@@ -274,6 +303,7 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
         let WallpaperPreparedEvent {
             mut wallpaper,
             monitor_id,
+            sender_id,
         } = event;
 
         // NOTE(hack3rmann): wallpaper may be prepared after monitor is disconnected
@@ -308,6 +338,16 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
                     *needs_redraw = true;
                 }
             }
+        }
+
+        if let Some(destination_id) = sender_id {
+            runtime
+                .ipc_sender
+                .send(IpcResponse {
+                    body: Ok(DaemonResponse::WallpaperSet),
+                    destination_id,
+                })
+                .unwrap();
         }
 
         PostEventActions::REDRAW
@@ -359,16 +399,26 @@ impl Handle<WaylandEvent> for WallpaperApp {
 
                 debug!(?monitor_id, ?monitor_name, "new monitor detected");
 
-                if let Ok(mut profile) = SetupProfile::read()
-                    && let Some(info) = profile.monitors.remove(monitor_name.as_str())
-                {
-                    let event = NewWallpaperEvent {
-                        path: info.path,
-                        ty: info.wallpaper_type,
-                        target: WallpaperTarget::ForMonitor(monitor_id),
-                    };
+                match SetupProfile::read() {
+                    Ok(mut profile) => 'ok: {
+                        debug!("read setup profile {profile:#?}");
 
-                    runtime.task_pool.emitter.emit(event).unwrap();
+                        let Some(info) = profile.monitors.remove(monitor_name.as_str()) else {
+                            break 'ok;
+                        };
+                        let event = NewWallpaperEvent {
+                            path: info.path,
+                            ty: info.wallpaper_type,
+                            target: WallpaperTarget::ForMonitor(monitor_id),
+                            sender_id: None,
+                        };
+
+                        runtime.task_pool.emitter.emit(event).unwrap();
+                    }
+                    Err(SetupProfileError::Io(error)) if error.kind() == ErrorKind::NotFound => {
+                        tracing::debug!("no setup profile present");
+                    }
+                    Err(error) => error!(error = %error.chain(), "failed to read setup profile"),
                 }
 
                 let mut run = RunningWallpapers::new(
@@ -411,7 +461,12 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
         runtime: &mut Runtime,
         event: NewWallpaperEvent,
     ) -> PostEventActions {
-        let NewWallpaperEvent { path, ty, target } = event;
+        let NewWallpaperEvent {
+            path,
+            ty,
+            target,
+            sender_id,
+        } = event;
 
         let monitor_ids: SmallVec<[MonitorId; 4]> = match target {
             WallpaperTarget::ForAll => {
@@ -446,16 +501,66 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
                 .wallpaper_config(monitor_id)
                 .unwrap_or_else(|| panic!("no config for {monitor_id:?}"));
             let packages = self.package_registry.clone();
+            let ipc_sender = runtime.ipc_sender.clone();
 
             runtime
                 .task_pool
-                .spawn_event(async move || WallpaperPreparedEvent {
-                    wallpaper: wallpaper::create(gpu, &path, ty, config, packages).await,
-                    monitor_id,
+                .spawn(async move |mut emitter| {
+                    match wallpaper::create(gpu, &path, ty, config, packages).await {
+                        Ok(wallpaper) => emitter
+                            .emit(WallpaperPreparedEvent {
+                                wallpaper,
+                                monitor_id,
+                                sender_id,
+                            })
+                            .unwrap(),
+                        Err(error) => report_error(&ipc_sender, sender_id, error.clone()),
+                    }
                 })
                 .await;
         }
 
         PostEventActions::empty()
     }
+}
+
+impl Handle<WallpaperPreviewEvent> for WallpaperApp {
+    async fn handle(
+        &mut self,
+        runtime: &mut Runtime,
+        event: WallpaperPreviewEvent,
+    ) -> PostEventActions {
+        let response = IpcResponse {
+            body: Ok(DaemonResponse::Preview {
+                width: event.size.x,
+                height: event.size.y,
+                rgba: vec![],
+            }),
+            destination_id: event.sender_id,
+        };
+        runtime.ipc_sender.send(response).unwrap();
+
+        debug!(?event);
+
+        PostEventActions::empty()
+    }
+}
+
+fn report_error(
+    ipc_sender: &Sender<IpcResponse<DaemonResult>>,
+    destination_id: Option<ClientId>,
+    error: DaemonError,
+) {
+    error!(error = %error.chain(), "failed to create a wallpaper");
+
+    let Some(destination_id) = destination_id else {
+        return;
+    };
+
+    ipc_sender
+        .send(IpcResponse {
+            body: Err(error.clone()),
+            destination_id,
+        })
+        .unwrap();
 }

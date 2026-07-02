@@ -1,15 +1,21 @@
-use crate::wallpaper_app::{NewWallpaperEvent, WallpaperPauseEvent};
+use crate::wallpaper_app::{NewWallpaperEvent, WallpaperPauseEvent, WallpaperPreviewEvent};
 use calloop::{
     EventLoop as CalloopEventLoop, LoopHandle, LoopSignal,
+    channel::{Channel, channel},
     signals::{Signal, Signals},
     timer::{TimeoutAction, Timer},
 };
 use display_error_chain::ErrorChainExt;
+use glam::UVec2;
 use std::{io, vec::Drain};
 use thiserror::Error;
 use tokio::runtime::{Builder as AsyncRuntimeBuilder, Runtime as AsyncRuntime};
 use tracing::info;
-use waywe_ipc::{DaemonCommand, IpcServer, ipc::server::CreateServerError};
+use waywe_ipc::{
+    DaemonCommand, IpcServer,
+    command::DaemonResult,
+    ipc::server::{CreateServerError, IpcEvent, IpcResponse},
+};
 use waywe_runtime::{
     Runtime,
     app::{App, DynApp},
@@ -55,9 +61,10 @@ impl EventLoop {
             EventQueue::new().map_err(CreateEventLoopError::CrateEventQueue)?;
         let event_emitter = custom_receiver.make_emitter().unwrap();
 
+        let (ipc_sender, ipc_channel) = channel();
         let wayland = Wayland::default();
         let task_pool = TaskPool::new(event_emitter);
-        let runtime = Runtime::new(wayland.clone(), task_pool);
+        let runtime = Runtime::new(wayland.clone(), task_pool, ipc_sender);
         let app = DynApp::new(app);
 
         runtime.wayland.drain_stored_events(|event| {
@@ -78,7 +85,7 @@ impl EventLoop {
             is_frame_requested: true,
         };
 
-        Self::register_sources(&handle, signals, custom_receiver, wayland)?;
+        Self::register_sources(&handle, signals, custom_receiver, wayland, ipc_channel)?;
         state.process_event_queue();
 
         Ok(Self { calloop, state })
@@ -103,6 +110,7 @@ impl EventLoop {
         signals: Signals,
         custom_receiver: EventReceiver,
         wayland: Wayland,
+        ipc_channel: Channel<IpcResponse<DaemonResult>>,
     ) -> Result<(), CreateEventLoopError> {
         handle
             .insert_source(signals, |event, &mut (), state| {
@@ -120,7 +128,7 @@ impl EventLoop {
             )
             .map_err(calloop::Error::from)?;
 
-        let ipc = IpcServer::<DaemonCommand>::new()?;
+        let ipc = IpcServer::<DaemonCommand, DaemonResult>::new(ipc_channel)?;
         handle
             .insert_source(ipc, move |command, &mut (), state| {
                 state.handle_daemon_command(command);
@@ -200,7 +208,7 @@ impl LoopState {
         self.is_frame_requested = false;
     }
 
-    fn handle_daemon_command(&mut self, command: DaemonCommand) {
+    fn handle_daemon_command(&mut self, command: IpcEvent<DaemonCommand>) {
         let wayland = self.runtime.wayland.clone();
         let get_target = move |monitor_name: Option<&str>| {
             let Some(name) = monitor_name else {
@@ -215,20 +223,47 @@ impl LoopState {
             Some(target)
         };
 
-        let event = match command {
+        let event = match command.event {
             DaemonCommand::Show { path, monitor, ty } => {
                 let Some(target) = get_target(monitor.as_deref()) else {
                     return;
                 };
 
-                NewWallpaperEvent { path, ty, target }.into_event()
+                NewWallpaperEvent {
+                    path,
+                    ty,
+                    target,
+                    sender_id: Some(command.sender_id),
+                }
+                .into_event()
+            }
+            DaemonCommand::Preview {
+                ty,
+                path,
+                width,
+                height,
+            } => {
+                tracing::debug!(?ty, ?path, ?width, ?height, "preview");
+
+                WallpaperPreviewEvent {
+                    path,
+                    ty,
+                    size: UVec2::new(width, height),
+                    sender_id: command.sender_id,
+                }
+                .into_event()
             }
             DaemonCommand::Pause { monitor, mode } => {
                 let Some(target) = get_target(monitor.as_deref()) else {
                     return;
                 };
 
-                WallpaperPauseEvent { target, mode }.into_event()
+                WallpaperPauseEvent {
+                    target,
+                    mode,
+                    sender_id: command.sender_id,
+                }
+                .into_event()
             }
         };
 
