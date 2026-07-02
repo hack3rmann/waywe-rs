@@ -38,7 +38,7 @@ pub struct SetupPipe {
 }
 
 impl SetupPipe {
-    pub fn new(base_dir: impl AsRef<Path>) -> Self {
+    pub fn new_in(base_dir: impl AsRef<Path>) -> Self {
         let base_dir = base_dir.as_ref();
 
         std::fs::create_dir_all(base_dir).unwrap();

@@ -109,6 +109,7 @@ impl PackageRegistry {
 
         let inflate_package = {
             let package_source = package_source.clone();
+            // TODO(hack3rmann): return error on inflate fail
             move || Arc::new(WallpaperPackage::inflate(package_source))
         };
 

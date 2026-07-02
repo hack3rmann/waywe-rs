@@ -5,7 +5,7 @@ use gpu::Wgpu;
 use std::sync::{Arc, Once};
 use task_pool::TaskPool;
 use timer::Timer;
-use waywe_ipc::{command::DaemonResponse, ipc::server::IpcResponse};
+use waywe_ipc::{command::DaemonResult, ipc::server::IpcResponse};
 
 pub mod app;
 pub mod effects;
@@ -22,14 +22,14 @@ pub struct Runtime {
     pub wgpu: Arc<Wgpu>,
     pub wayland: Wayland,
     pub task_pool: TaskPool,
-    pub ipc_sender: Sender<IpcResponse<DaemonResponse>>,
+    pub ipc_sender: Sender<IpcResponse<DaemonResult>>,
 }
 
 impl Runtime {
     pub fn new(
         wayland: Wayland,
         task_pool: TaskPool,
-        ipc_sender: Sender<IpcResponse<DaemonResponse>>,
+        ipc_sender: Sender<IpcResponse<DaemonResult>>,
     ) -> Self {
         static VIDEO_ONCE: Once = Once::new();
         VIDEO_ONCE.call_once(video::init);

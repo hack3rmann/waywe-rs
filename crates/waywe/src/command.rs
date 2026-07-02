@@ -18,7 +18,7 @@ use tracing::error;
 use video::{BackendError, FormatContext, MediaType, VideoPixelFormat};
 use waywe_ipc::{
     ClientError, DaemonCommand, DaemonSetupResult, IpcClient, WallpaperType,
-    command::{DaemonResponse, PauseMode},
+    command::{DaemonError, DaemonResponse, DaemonResult, PauseMode},
     detach::{BINCODE_CONFIG, SetupPipe},
     profile::{SetupProfile, SetupProfileError},
 };
@@ -61,6 +61,9 @@ pub enum ExecuteError {
         )
     )]
     UnexpectedDaemonResponse(DaemonResponse),
+    #[error("daemon returned an error")]
+    #[diagnostic(code(waywe::daemon::respond_error))]
+    DaemonError(#[from] DaemonError),
 }
 
 pub fn execute_current(monitor_name: Option<&str>) -> Result<(), ExecuteError> {
@@ -115,7 +118,7 @@ pub fn execute_pause(
         return Ok(());
     }
 
-    let response = socket.recv()?;
+    let response = socket.recv()??;
 
     if response != DaemonResponse::PauseDone {
         return Err(ExecuteError::UnexpectedDaemonResponse(response));
@@ -126,7 +129,7 @@ pub fn execute_pause(
 
 pub fn execute_start(mode: WaitMode) -> DaemonSetupResult {
     let fifo = match mode {
-        WaitMode::Wait => Some(SetupPipe::new("/tmp/waywe")),
+        WaitMode::Wait => Some(SetupPipe::new_in("/tmp/waywe")),
         WaitMode::DontWait => None,
     };
 
@@ -232,7 +235,7 @@ pub fn execute_preview(
     let socket = connect_daemon()?;
 
     socket.send(command)?;
-    let response = socket.recv()?;
+    let response = socket.recv()??;
 
     let DaemonResponse::Preview {
         width,
@@ -248,7 +251,7 @@ pub fn execute_preview(
     Ok(())
 }
 
-pub type DaemonSocket = IpcClient<DaemonCommand, DaemonResponse>;
+pub type DaemonSocket = IpcClient<DaemonCommand, DaemonResult>;
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum ConnectDaemonError {
@@ -324,7 +327,7 @@ pub fn execute_show(
         return Ok(());
     }
 
-    let response = socket.recv()?;
+    let response = socket.recv()??;
 
     if response != DaemonResponse::WallpaperSet {
         return Err(ExecuteError::UnexpectedDaemonResponse(response));

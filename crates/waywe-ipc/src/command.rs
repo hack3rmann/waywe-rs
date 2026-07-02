@@ -1,6 +1,8 @@
 use crate::WallpaperType;
 use bincode::{Decode, Encode};
-use std::path::PathBuf;
+use display_error_chain::ErrorChainExt;
+use std::{error::Error, path::PathBuf};
+use thiserror::Error;
 
 #[derive(Encode, Decode, Default, Debug, Clone, Copy, PartialEq, PartialOrd, Hash, Eq, Ord)]
 pub enum PauseMode {
@@ -65,3 +67,17 @@ impl DaemonResponse {
         )
     }
 }
+
+#[derive(Encode, Decode, Error, Debug, PartialEq, PartialOrd, Hash, Eq, Ord, Clone)]
+pub enum DaemonError {
+    #[error("{0}")]
+    Generic(String),
+}
+
+impl DaemonError {
+    pub fn from_generic(error: impl Error) -> Self {
+        Self::Generic(error.chain().to_string())
+    }
+}
+
+pub type DaemonResult = Result<DaemonResponse, DaemonError>;

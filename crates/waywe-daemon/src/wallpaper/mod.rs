@@ -12,7 +12,7 @@ use crate::wallpaper::{
     package_registry::PackageRegistry,
 };
 use std::{path::Path, sync::Arc, time::Duration};
-use waywe_ipc::WallpaperType;
+use waywe_ipc::{WallpaperType, command::DaemonError};
 use waywe_runtime::{frame::FrameInfo, gpu::Wgpu};
 
 pub use waywe_runtime::WallpaperConfig;
@@ -23,26 +23,31 @@ pub async fn create(
     ty: WallpaperType,
     config: WallpaperConfig,
     packages: PackageRegistry,
-) -> OptimizedWallpaper {
-    match ty {
+) -> Result<OptimizedWallpaper, DaemonError> {
+    Ok(match ty {
         WallpaperType::Image => {
             let image = image::ImageReader::open(path)
-                .unwrap()
+                .map_err(DaemonError::from_generic)?
                 .decode()
-                .unwrap()
+                .map_err(DaemonError::from_generic)?
                 .into_rgba8();
+
             let wallpaper = ImageWallpaper::new(&gpu, &image, Color::BLACK, config);
+
             OptimizedWallpaper::Image(wallpaper)
         }
         WallpaperType::Video => {
-            let wallpaper = VideoWallpaper::new(path, &gpu, config).unwrap();
+            let wallpaper =
+                VideoWallpaper::new(path, &gpu, config).map_err(DaemonError::from_generic)?;
+
             OptimizedWallpaper::Video(wallpaper)
         }
         WallpaperType::Scene => {
-            let wallpaper = RenderWallpaper::load(path, &gpu, config, packages);
+            let wallpaper = RenderWallpaper::load(path, &gpu, config, packages)
+                .map_err(DaemonError::from_generic)?;
             OptimizedWallpaper::Scene(wallpaper)
         }
-    }
+    })
 }
 
 pub trait Wallpaper {

@@ -5,6 +5,8 @@ use crate::{
         package_registry::PackageRegistry, transition::RunningWallpapers,
     },
 };
+use calloop::channel::Sender;
+use display_error_chain::ErrorChainExt;
 use glam::UVec2;
 use smallvec::{SmallVec, smallvec};
 use std::{
@@ -16,7 +18,7 @@ use std::{
 use tracing::{debug, error};
 use waywe_ipc::{
     WallpaperType,
-    command::{DaemonResponse, PauseMode},
+    command::{DaemonError, DaemonResponse, DaemonResult, PauseMode},
     config::Config,
     ipc::server::{ClientId, IpcResponse},
     profile::{Monitor, SetupProfile},
@@ -280,7 +282,7 @@ impl Handle<WallpaperPauseEvent> for WallpaperApp {
         runtime
             .ipc_sender
             .send(IpcResponse {
-                body: DaemonResponse::PauseDone,
+                body: Ok(DaemonResponse::PauseDone),
                 destination_id: sender_id,
             })
             .unwrap();
@@ -341,7 +343,7 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
             runtime
                 .ipc_sender
                 .send(IpcResponse {
-                    body: DaemonResponse::WallpaperSet,
+                    body: Ok(DaemonResponse::WallpaperSet),
                     destination_id,
                 })
                 .unwrap();
@@ -489,13 +491,21 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
                 .wallpaper_config(monitor_id)
                 .unwrap_or_else(|| panic!("no config for {monitor_id:?}"));
             let packages = self.package_registry.clone();
+            let ipc_sender = runtime.ipc_sender.clone();
 
             runtime
                 .task_pool
-                .spawn_event(async move || WallpaperPreparedEvent {
-                    wallpaper: wallpaper::create(gpu, &path, ty, config, packages).await,
-                    monitor_id,
-                    sender_id,
+                .spawn(async move |mut emitter| {
+                    match wallpaper::create(gpu, &path, ty, config, packages).await {
+                        Ok(wallpaper) => emitter
+                            .emit(WallpaperPreparedEvent {
+                                wallpaper,
+                                monitor_id,
+                                sender_id,
+                            })
+                            .unwrap(),
+                        Err(error) => report_error(&ipc_sender, sender_id, error.clone()),
+                    }
                 })
                 .await;
         }
@@ -511,11 +521,11 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
         event: WallpaperPreviewEvent,
     ) -> PostEventActions {
         let response = IpcResponse {
-            body: DaemonResponse::Preview {
+            body: Ok(DaemonResponse::Preview {
                 width: event.size.x,
                 height: event.size.y,
                 rgba: vec![],
-            },
+            }),
             destination_id: event.sender_id,
         };
         runtime.ipc_sender.send(response).unwrap();
@@ -524,4 +534,23 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
 
         PostEventActions::empty()
     }
+}
+
+fn report_error(
+    ipc_sender: &Sender<IpcResponse<DaemonResult>>,
+    destination_id: Option<ClientId>,
+    error: DaemonError,
+) {
+    error!(error = %error.chain(), "failed to create a wallpaper");
+
+    let Some(destination_id) = destination_id else {
+        return;
+    };
+
+    ipc_sender
+        .send(IpcResponse {
+            body: Err(error.clone()),
+            destination_id,
+        })
+        .unwrap();
 }

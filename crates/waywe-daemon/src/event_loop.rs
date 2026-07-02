@@ -13,7 +13,7 @@ use tokio::runtime::{Builder as AsyncRuntimeBuilder, Runtime as AsyncRuntime};
 use tracing::info;
 use waywe_ipc::{
     DaemonCommand, IpcServer,
-    command::DaemonResponse,
+    command::DaemonResult,
     ipc::server::{CreateServerError, IpcEvent, IpcResponse},
 };
 use waywe_runtime::{
@@ -110,7 +110,7 @@ impl EventLoop {
         signals: Signals,
         custom_receiver: EventReceiver,
         wayland: Wayland,
-        ipc_channel: Channel<IpcResponse<DaemonResponse>>,
+        ipc_channel: Channel<IpcResponse<DaemonResult>>,
     ) -> Result<(), CreateEventLoopError> {
         handle
             .insert_source(signals, |event, &mut (), state| {
@@ -128,7 +128,7 @@ impl EventLoop {
             )
             .map_err(calloop::Error::from)?;
 
-        let ipc = IpcServer::<DaemonCommand, DaemonResponse>::new(ipc_channel)?;
+        let ipc = IpcServer::<DaemonCommand, DaemonResult>::new(ipc_channel)?;
         handle
             .insert_source(ipc, move |command, &mut (), state| {
                 state.handle_daemon_command(command);
