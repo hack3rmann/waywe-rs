@@ -20,7 +20,6 @@ use waywe_ipc::command::PauseMode;
 
 fn main() -> miette::Result<()> {
     tracing_subscriber::fmt::init();
-    video::init();
 
     match Args::parse().command {
         Command::Preview {

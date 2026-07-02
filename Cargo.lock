@@ -4940,7 +4940,6 @@ dependencies = [
  "clap",
  "file-format",
  "flate2",
- "image",
  "libc",
  "miette",
  "rustix",
@@ -4951,7 +4950,6 @@ dependencies = [
  "tracing-subscriber",
  "transmute-extra",
  "unicode-width 0.2.2",
- "video",
  "waywe-ipc",
 ]
 

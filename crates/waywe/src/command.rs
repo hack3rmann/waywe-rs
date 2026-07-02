@@ -1,5 +1,4 @@
 use file_format::{FileFormat, Kind};
-use image::ImageError;
 use miette::Diagnostic;
 use rustix::{
     io::Errno,
@@ -13,7 +12,6 @@ use std::{
     string::FromUtf8Error,
 };
 use thiserror::Error;
-use video::BackendError;
 use waywe_ipc::{
     ClientError, DaemonCommand, DaemonSetupResult, IpcClient, WallpaperType,
     command::{DaemonError, DaemonResponse, DaemonResult, PauseMode},
@@ -30,11 +28,7 @@ pub enum ExecuteError {
     #[error("unsupported file format '{0:?}'")]
     UnsupportedFileFormat(Kind),
     #[error(transparent)]
-    VideoOpen(#[from] BackendError),
-    #[error(transparent)]
     Io(#[from] io::Error),
-    #[error(transparent)]
-    Image(#[from] ImageError),
     #[error("video '{path}' is invalid")]
     InvalidVideo { path: PathBuf },
     #[error("cargo build failed with status {status}")]
