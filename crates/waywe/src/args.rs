@@ -17,6 +17,9 @@ pub enum Command {
         monitor: Option<String>,
         /// Path to an image, video, or scene package (.ww)
         path: PathBuf,
+        /// Don't wait for the daemon to respond
+        #[arg(long)]
+        dont_wait: bool,
     },
     /// Start the daemon process
     Start {
@@ -61,6 +64,9 @@ pub enum Command {
         /// Switches pause off
         #[arg(long, overrides_with = "on")]
         off: bool,
+        /// Don't wait for the daemon to respond
+        #[arg(long)]
+        dont_wait: bool,
     },
     /// Waywe package operations
     Package {

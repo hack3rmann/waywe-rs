@@ -18,7 +18,7 @@ use tracing::error;
 use video::{BackendError, FormatContext, MediaType, VideoPixelFormat};
 use waywe_ipc::{
     ClientError, DaemonCommand, DaemonSetupResult, IpcClient, WallpaperType,
-    command::DaemonResponse,
+    command::{DaemonResponse, PauseMode},
     detach::{BINCODE_CONFIG, SetupPipe},
     profile::{SetupProfile, SetupProfileError},
 };
@@ -86,12 +86,42 @@ pub enum WaitMode {
 }
 
 impl WaitMode {
+    pub const fn from_dont(dont_wait: bool) -> Self {
+        if dont_wait {
+            Self::DontWait
+        } else {
+            Self::Wait
+        }
+    }
+
     pub const fn daemon_arg(self) -> Option<&'static str> {
         match self {
             WaitMode::Wait => Some("--wait"),
             WaitMode::DontWait => None,
         }
     }
+}
+
+pub fn execute_pause(
+    monitor: Option<String>,
+    mode: PauseMode,
+    wait_mode: WaitMode,
+) -> Result<(), ExecuteError> {
+    let socket = connect_daemon()?;
+
+    socket.send(DaemonCommand::Pause { monitor, mode })?;
+
+    if wait_mode == WaitMode::DontWait {
+        return Ok(());
+    }
+
+    let response = socket.recv()?;
+
+    if response != DaemonResponse::PauseDone {
+        return Err(ExecuteError::UnexpectedDaemonResponse(response));
+    }
+
+    Ok(())
 }
 
 pub fn execute_start(mode: WaitMode) -> DaemonSetupResult {
@@ -191,13 +221,31 @@ pub fn execute_preview(
     source: &Path,
     width: u32,
     height: u32,
-) -> Result<DaemonCommand, ExecuteError> {
-    Ok(DaemonCommand::Preview {
+) -> Result<(), ExecuteError> {
+    let command = DaemonCommand::Preview {
         ty: WallpaperType::Scene,
         path: source.to_owned(),
         width,
         height,
-    })
+    };
+
+    let socket = connect_daemon()?;
+
+    socket.send(command)?;
+    let response = socket.recv()?;
+
+    let DaemonResponse::Preview {
+        width,
+        height,
+        rgba,
+    } = response
+    else {
+        return Err(ExecuteError::UnexpectedDaemonResponse(response));
+    };
+
+    tracing::debug!(?width, ?height, ?rgba, "preview");
+
+    Ok(())
 }
 
 pub type DaemonSocket = IpcClient<DaemonCommand, DaemonResponse>;
@@ -222,7 +270,11 @@ pub fn connect_daemon() -> Result<DaemonSocket, ConnectDaemonError> {
     })
 }
 
-pub fn execute_show(path: &Path, monitor_name: Option<String>) -> Result<(), ExecuteError> {
+pub fn execute_show(
+    path: &Path,
+    monitor_name: Option<String>,
+    wait_mode: WaitMode,
+) -> Result<(), ExecuteError> {
     let file_kind = FileFormat::from_file(path)?.kind();
 
     let command = match file_kind {
@@ -267,6 +319,11 @@ pub fn execute_show(path: &Path, monitor_name: Option<String>) -> Result<(), Exe
     let socket = connect_daemon()?;
 
     socket.send(command)?;
+
+    if wait_mode == WaitMode::DontWait {
+        return Ok(());
+    }
+
     let response = socket.recv()?;
 
     if response != DaemonResponse::WallpaperSet {

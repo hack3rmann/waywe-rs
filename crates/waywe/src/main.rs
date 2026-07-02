@@ -8,84 +8,50 @@ pub mod status;
 use crate::{
     args::{Args, Command},
     command::{
-        WaitMode, connect_daemon, execute_current, execute_preview, execute_show, execute_start,
+        WaitMode, execute_current, execute_pause, execute_preview, execute_show, execute_start,
         execute_stop,
     },
     diagnostics::DaemonSetupDiagnostics,
     package::execute_package,
 };
 use clap::Parser as _;
-use miette::{Context, IntoDiagnostic};
-use waywe_ipc::{DaemonCommand, command::PauseMode};
+use miette::IntoDiagnostic;
+use waywe_ipc::command::PauseMode;
 
 fn main() -> miette::Result<()> {
     tracing_subscriber::fmt::init();
     video::init();
 
-    let daemon_command = match Args::parse().command {
+    match Args::parse().command {
         Command::Preview {
             out,
             path,
             width,
             height,
-        } => execute_preview(&out, &path, width, height)
-            .into_diagnostic()
-            .wrap_err_with(|| format!("while executing preview into '{}'", out.display()))?,
-        Command::Current { monitor } => {
-            execute_current(monitor.as_deref())
-                .into_diagnostic()
-                .wrap_err("while searching for currenty displayed wallpaper")?;
-            return Ok(());
-        }
+        } => execute_preview(&out, &path, width, height)?,
+        Command::Current { monitor } => execute_current(monitor.as_deref())?,
         Command::Start { dont_wait } => {
-            let mode = if dont_wait {
-                WaitMode::DontWait
-            } else {
-                WaitMode::Wait
-            };
-
-            if let Err(error) = execute_start(mode) {
+            if let Err(error) = execute_start(WaitMode::from_dont(dont_wait)) {
                 return Err(DaemonSetupDiagnostics::from(error).into());
             }
-
-            return Ok(());
         }
-        Command::Stop { dont_wait } => {
-            let mode = if dont_wait {
-                WaitMode::DontWait
-            } else {
-                WaitMode::Wait
-            };
-
-            execute_stop(mode).wrap_err("failed to stop the daemon")?;
-
-            return Ok(());
-        }
-        Command::Show { path, monitor } => {
-            execute_show(&path, monitor)?;
-            return Ok(());
-        }
-        Command::Pause { monitor, on, off } => DaemonCommand::Pause {
+        Command::Stop { dont_wait } => execute_stop(WaitMode::from_dont(dont_wait))?,
+        Command::Show {
+            path,
             monitor,
-            mode: PauseMode::from_on_off(on, off),
-        },
-        Command::Package { command } => {
-            execute_package(command).into_diagnostic()?;
-            return Ok(());
-        }
-    };
-
-    let socket = connect_daemon()?;
-
-    socket.send(daemon_command).into_diagnostic()?;
-
-    loop {
-        let response = socket.recv().into_diagnostic()?;
-        dbg!(&response);
-
-        if response.is_terminal() {
-            break;
-        }
+            dont_wait,
+        } => execute_show(&path, monitor, WaitMode::from_dont(dont_wait))?,
+        Command::Pause {
+            monitor,
+            on,
+            off,
+            dont_wait,
+        } => execute_pause(
+            monitor,
+            PauseMode::from_on_off(on, off),
+            WaitMode::from_dont(dont_wait),
+        )?,
+        Command::Package { command } => execute_package(command).into_diagnostic()?,
     }
 
     Ok(())
