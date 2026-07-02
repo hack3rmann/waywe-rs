@@ -17,12 +17,13 @@ use thiserror::Error;
 use tracing::error;
 use video::{BackendError, FormatContext, MediaType, VideoPixelFormat};
 use waywe_ipc::{
-    DaemonCommand, DaemonSetupResult, WallpaperType,
+    ClientError, DaemonCommand, DaemonSetupResult, IpcClient, WallpaperType,
+    command::DaemonResponse,
     detach::{BINCODE_CONFIG, SetupPipe},
     profile::{SetupProfile, SetupProfileError},
 };
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum ExecuteError {
     #[error("failed to open profile file: {0}")]
     ProfileIo(#[from] SetupProfileError),
@@ -48,6 +49,18 @@ pub enum ExecuteError {
     DylibNotFound { path: PathBuf },
     #[error(transparent)]
     CargoMetadata(#[from] cargo_metadata::Error),
+    #[error(transparent)]
+    ConnectDaemon(#[from] ConnectDaemonError),
+    #[error(transparent)]
+    Ipc(#[from] ClientError),
+    #[error("unexpected daemon response {0:#?}")]
+    #[diagnostic(
+        code(waywe::unexpected_daemon_response),
+        help(
+            "this is a bug, please create a GitHub issue: https://github.com/hack3rmann/waywe-rs/issues/new"
+        )
+    )]
+    UnexpectedDaemonResponse(DaemonResponse),
 }
 
 pub fn execute_current(monitor_name: Option<&str>) -> Result<(), ExecuteError> {
@@ -187,13 +200,32 @@ pub fn execute_preview(
     })
 }
 
-pub fn execute_show(
-    path: &Path,
-    monitor_name: Option<String>,
-) -> Result<DaemonCommand, ExecuteError> {
+pub type DaemonSocket = IpcClient<DaemonCommand, DaemonResponse>;
+
+#[derive(Error, Debug, Diagnostic)]
+pub enum ConnectDaemonError {
+    #[error("no waywe-daemon is running")]
+    #[diagnostic(
+        code(waywe::daemon::not_running),
+        help("start the daemon first: `waywe start`")
+    )]
+    NotRunning(#[source] Errno),
+    #[error("unexpected OS error")]
+    #[diagnostic(code(waywe::daemon::connect_failed))]
+    OtherOs(#[from] Errno),
+}
+
+pub fn connect_daemon() -> Result<DaemonSocket, ConnectDaemonError> {
+    DaemonSocket::connect().map_err(|errno| match errno {
+        Errno::CONNREFUSED | Errno::NOENT => ConnectDaemonError::NotRunning(errno),
+        _ => ConnectDaemonError::OtherOs(errno),
+    })
+}
+
+pub fn execute_show(path: &Path, monitor_name: Option<String>) -> Result<(), ExecuteError> {
     let file_kind = FileFormat::from_file(path)?.kind();
 
-    Ok(match file_kind {
+    let command = match file_kind {
         Kind::Image => {
             let reader = ImageReader::open(path)?.with_guessed_format()?;
             let _image = reader.decode()?;
@@ -230,7 +262,18 @@ pub fn execute_show(
             }
         }
         _ => return Err(ExecuteError::UnsupportedFileFormat(file_kind)),
-    })
+    };
+
+    let socket = connect_daemon()?;
+
+    socket.send(command)?;
+    let response = socket.recv()?;
+
+    if response != DaemonResponse::WallpaperSet {
+        return Err(ExecuteError::UnexpectedDaemonResponse(response));
+    }
+
+    Ok(())
 }
 
 fn is_video_path_valid(path: PathBuf) -> bool {
