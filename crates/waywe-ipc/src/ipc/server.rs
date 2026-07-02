@@ -104,7 +104,7 @@ impl<T, R> IpcServer<T, R> {
             bytemuck::bytes_of_mut(&mut length),
             RecvFlags::DONTWAIT,
         ) {
-            Ok((_, 0)) => {
+            Ok((_, 0)) | Err(Errno::CONNRESET) => {
                 self.removed_clients.push(client_index);
                 return Err(RecvError::Disconnected);
             }
@@ -147,7 +147,7 @@ impl<T, R> IpcServer<T, R> {
 
         *bytemuck::from_bytes_mut::<u32>(&mut self.response_buf[..4]) = n_bytes as u32;
 
-        net::send(&client.fd, &self.response_buf, SendFlags::DONTWAIT).unwrap();
+        _ = net::send(&client.fd, &self.response_buf, SendFlags::DONTWAIT);
     }
 
     fn acquire_file_lock() -> Result<File, TryLockError> {

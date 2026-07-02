@@ -17,7 +17,10 @@ use clap::Parser as _;
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use rustix::io::Errno;
 use thiserror::Error;
-use waywe_ipc::{DaemonCommand, IpcClient, command::PauseMode};
+use waywe_ipc::{
+    DaemonCommand, IpcClient,
+    command::{DaemonResponse, PauseMode},
+};
 
 #[derive(Error, Debug, Diagnostic)]
 #[error("no waywe-daemon is running")]
@@ -25,7 +28,7 @@ use waywe_ipc::{DaemonCommand, IpcClient, command::PauseMode};
     code(waywe::daemon::not_running),
     help("start the daemon first: `waywe start`")
 )]
-struct DaemonIsNotRunning;
+struct DaemonIsNotRunning(#[from] pub Errno);
 
 fn main() -> miette::Result<()> {
     tracing_subscriber::fmt::init();
@@ -81,15 +84,24 @@ fn main() -> miette::Result<()> {
         }
     };
 
-    let socket = match IpcClient::<DaemonCommand>::connect() {
+    let socket = match IpcClient::<DaemonCommand, DaemonResponse>::connect() {
         Ok(socket) => socket,
-        Err(Errno::CONNREFUSED | Errno::NOENT) => return Err(DaemonIsNotRunning.into()),
+        Err(e @ Errno::CONNREFUSED | e @ Errno::NOENT) => return Err(DaemonIsNotRunning(e).into()),
         Err(error) => {
             panic!("failed to connect to waywe-daemon: {error}");
         }
     };
 
     socket.send(daemon_command).into_diagnostic()?;
+
+    loop {
+        let response = socket.recv().into_diagnostic()?;
+        dbg!(&response);
+
+        if response.is_terminal() {
+            break;
+        }
+    }
 
     Ok(())
 }

@@ -8,7 +8,7 @@ pub mod wallpaper;
 pub use command::DaemonCommand;
 pub use detach::{DaemonSetupError, DaemonSetupResult};
 pub use ipc::{
-    client::{IpcClient, SendError},
+    client::{ClientError, IpcClient},
     server::{IpcServer, RecvError},
 };
 pub use wallpaper::WallpaperType;

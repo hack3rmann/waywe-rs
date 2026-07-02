@@ -229,7 +229,13 @@ impl LoopState {
                     return;
                 };
 
-                NewWallpaperEvent { path, ty, target }.into_event()
+                NewWallpaperEvent {
+                    path,
+                    ty,
+                    target,
+                    sender_id: Some(command.sender_id),
+                }
+                .into_event()
             }
             DaemonCommand::Preview {
                 ty,
@@ -252,7 +258,12 @@ impl LoopState {
                     return;
                 };
 
-                WallpaperPauseEvent { target, mode }.into_event()
+                WallpaperPauseEvent {
+                    target,
+                    mode,
+                    sender_id: command.sender_id,
+                }
+                .into_event()
             }
         };
 

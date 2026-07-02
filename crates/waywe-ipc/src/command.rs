@@ -47,9 +47,21 @@ pub enum DaemonCommand {
 
 #[derive(Encode, Decode, Debug, PartialEq, PartialOrd, Hash, Eq, Ord, Clone)]
 pub enum DaemonResponse {
+    WallpaperSet,
+    // TODO(hack3rmann): return pause state for each plugged monitor
+    PauseDone,
     Preview {
         width: u32,
         height: u32,
         rgba: Vec<u8>,
     },
+}
+
+impl DaemonResponse {
+    pub const fn is_terminal(&self) -> bool {
+        matches!(
+            self,
+            Self::WallpaperSet | Self::PauseDone | Self::Preview { .. }
+        )
+    }
 }

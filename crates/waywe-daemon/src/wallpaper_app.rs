@@ -120,6 +120,7 @@ impl WallpaperApp {
 pub struct WallpaperPreparedEvent {
     pub wallpaper: OptimizedWallpaper,
     pub monitor_id: MonitorId,
+    pub sender_id: Option<ClientId>,
 }
 
 impl TryReplicate for WallpaperPreparedEvent {}
@@ -129,6 +130,7 @@ pub struct NewWallpaperEvent {
     pub path: PathBuf,
     pub ty: WallpaperType,
     pub target: WallpaperTarget,
+    pub sender_id: Option<ClientId>,
 }
 
 #[derive(Clone, Debug)]
@@ -143,6 +145,7 @@ pub struct WallpaperPreviewEvent {
 pub struct WallpaperPauseEvent {
     pub target: WallpaperTarget,
     pub mode: PauseMode,
+    pub sender_id: ClientId,
 }
 
 impl App for WallpaperApp {
@@ -254,7 +257,11 @@ impl Handle<WallpaperPauseEvent> for WallpaperApp {
         runtime: &mut Runtime,
         event: WallpaperPauseEvent,
     ) -> PostEventActions {
-        let WallpaperPauseEvent { target, mode } = event;
+        let WallpaperPauseEvent {
+            target,
+            mode,
+            sender_id,
+        } = event;
 
         match target {
             WallpaperTarget::ForAll => {
@@ -269,6 +276,14 @@ impl Handle<WallpaperPauseEvent> for WallpaperApp {
                 state.kind = state.kind.altered(mode);
             }
         }
+
+        runtime
+            .ipc_sender
+            .send(IpcResponse {
+                body: DaemonResponse::PauseDone,
+                destination_id: sender_id,
+            })
+            .unwrap();
 
         PostEventActions::REDRAW
     }
@@ -285,6 +300,7 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
         let WallpaperPreparedEvent {
             mut wallpaper,
             monitor_id,
+            sender_id,
         } = event;
 
         // NOTE(hack3rmann): wallpaper may be prepared after monitor is disconnected
@@ -319,6 +335,16 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
                     *needs_redraw = true;
                 }
             }
+        }
+
+        if let Some(destination_id) = sender_id {
+            runtime
+                .ipc_sender
+                .send(IpcResponse {
+                    body: DaemonResponse::WallpaperSet,
+                    destination_id,
+                })
+                .unwrap();
         }
 
         PostEventActions::REDRAW
@@ -377,6 +403,7 @@ impl Handle<WaylandEvent> for WallpaperApp {
                         path: info.path,
                         ty: info.wallpaper_type,
                         target: WallpaperTarget::ForMonitor(monitor_id),
+                        sender_id: None,
                     };
 
                     runtime.task_pool.emitter.emit(event).unwrap();
@@ -422,7 +449,12 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
         runtime: &mut Runtime,
         event: NewWallpaperEvent,
     ) -> PostEventActions {
-        let NewWallpaperEvent { path, ty, target } = event;
+        let NewWallpaperEvent {
+            path,
+            ty,
+            target,
+            sender_id,
+        } = event;
 
         let monitor_ids: SmallVec<[MonitorId; 4]> = match target {
             WallpaperTarget::ForAll => {
@@ -463,6 +495,7 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
                 .spawn_event(async move || WallpaperPreparedEvent {
                     wallpaper: wallpaper::create(gpu, &path, ty, config, packages).await,
                     monitor_id,
+                    sender_id,
                 })
                 .await;
         }
