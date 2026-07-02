@@ -11,6 +11,7 @@ use glam::UVec2;
 use smallvec::{SmallVec, smallvec};
 use std::{
     collections::{BTreeMap, btree_map::Entry},
+    io::ErrorKind,
     path::PathBuf,
     sync::Arc,
     time::Instant,
@@ -21,7 +22,7 @@ use waywe_ipc::{
     command::{DaemonError, DaemonResponse, DaemonResult, PauseMode},
     config::Config,
     ipc::server::{ClientId, IpcResponse},
-    profile::{Monitor, SetupProfile},
+    profile::{Monitor, SetupProfile, SetupProfileError},
 };
 use waywe_runtime::{
     Runtime,
@@ -398,17 +399,26 @@ impl Handle<WaylandEvent> for WallpaperApp {
 
                 debug!(?monitor_id, ?monitor_name, "new monitor detected");
 
-                if let Ok(mut profile) = SetupProfile::read()
-                    && let Some(info) = profile.monitors.remove(monitor_name.as_str())
-                {
-                    let event = NewWallpaperEvent {
-                        path: info.path,
-                        ty: info.wallpaper_type,
-                        target: WallpaperTarget::ForMonitor(monitor_id),
-                        sender_id: None,
-                    };
+                match SetupProfile::read() {
+                    Ok(mut profile) => 'ok: {
+                        debug!("read setup profile {profile:#?}");
 
-                    runtime.task_pool.emitter.emit(event).unwrap();
+                        let Some(info) = profile.monitors.remove(monitor_name.as_str()) else {
+                            break 'ok;
+                        };
+                        let event = NewWallpaperEvent {
+                            path: info.path,
+                            ty: info.wallpaper_type,
+                            target: WallpaperTarget::ForMonitor(monitor_id),
+                            sender_id: None,
+                        };
+
+                        runtime.task_pool.emitter.emit(event).unwrap();
+                    }
+                    Err(SetupProfileError::Io(error)) if error.kind() == ErrorKind::NotFound => {
+                        tracing::debug!("no setup profile present");
+                    }
+                    Err(error) => error!(error = %error.chain(), "failed to read setup profile"),
                 }
 
                 let mut run = RunningWallpapers::new(
