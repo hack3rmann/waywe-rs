@@ -1,9 +1,11 @@
 use crate::wayland::{MonitorId, Wayland};
+use calloop::channel::Sender;
 use glam::UVec2;
 use gpu::Wgpu;
 use std::sync::{Arc, Once};
 use task_pool::TaskPool;
 use timer::Timer;
+use waywe_ipc::{command::DaemonResponse, ipc::server::IpcResponse};
 
 pub mod app;
 pub mod effects;
@@ -20,14 +22,20 @@ pub struct Runtime {
     pub wgpu: Arc<Wgpu>,
     pub wayland: Wayland,
     pub task_pool: TaskPool,
+    pub ipc_sender: Sender<IpcResponse<DaemonResponse>>,
 }
 
 impl Runtime {
-    pub fn new(wayland: Wayland, task_pool: TaskPool) -> Self {
+    pub fn new(
+        wayland: Wayland,
+        task_pool: TaskPool,
+        ipc_sender: Sender<IpcResponse<DaemonResponse>>,
+    ) -> Self {
         static VIDEO_ONCE: Once = Once::new();
         VIDEO_ONCE.call_once(video::init);
 
         Self {
+            ipc_sender,
             timer: Timer::default(),
             wgpu: Arc::default(),
             wayland,

@@ -33,8 +33,23 @@ pub enum DaemonCommand {
         path: PathBuf,
         monitor: Option<String>,
     },
+    Preview {
+        ty: WallpaperType,
+        path: PathBuf,
+        width: u32,
+        height: u32,
+    },
     Pause {
         monitor: Option<String>,
         mode: PauseMode,
+    },
+}
+
+#[derive(Encode, Decode, Debug, PartialEq, PartialOrd, Hash, Eq, Ord, Clone)]
+pub enum DaemonResponse {
+    Preview {
+        width: u32,
+        height: u32,
+        rgba: Vec<u8>,
     },
 }

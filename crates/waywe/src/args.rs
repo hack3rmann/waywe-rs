@@ -38,11 +38,17 @@ pub enum Command {
     },
     /// Create a preview for the wallpaper
     Preview {
-        /// Monitor to set wallpaper on
-        #[arg(short, long)]
-        monitor: Option<String>,
+        /// Path to an image, video, or scene package (.ww)
+        path: PathBuf,
         /// Where to store the preview
+        #[arg(long, short)]
         out: PathBuf,
+        /// Width of the resulting image
+        #[arg(long)]
+        width: u32,
+        /// Height of the resulting image
+        #[arg(long)]
+        height: u32,
     },
     /// Pause/Resume current wallpaper
     Pause {

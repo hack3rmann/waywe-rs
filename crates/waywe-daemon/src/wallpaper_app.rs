@@ -5,6 +5,7 @@ use crate::{
         package_registry::PackageRegistry, transition::RunningWallpapers,
     },
 };
+use glam::UVec2;
 use smallvec::{SmallVec, smallvec};
 use std::{
     collections::{BTreeMap, btree_map::Entry},
@@ -15,8 +16,9 @@ use std::{
 use tracing::{debug, error};
 use waywe_ipc::{
     WallpaperType,
-    command::PauseMode,
+    command::{DaemonResponse, PauseMode},
     config::Config,
+    ipc::server::{ClientId, IpcResponse},
     profile::{Monitor, SetupProfile},
 };
 use waywe_runtime::{
@@ -122,14 +124,22 @@ pub struct WallpaperPreparedEvent {
 
 impl TryReplicate for WallpaperPreparedEvent {}
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct NewWallpaperEvent {
     pub path: PathBuf,
     pub ty: WallpaperType,
     pub target: WallpaperTarget,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
+pub struct WallpaperPreviewEvent {
+    pub path: PathBuf,
+    pub ty: WallpaperType,
+    pub size: UVec2,
+    pub sender_id: ClientId,
+}
+
+#[derive(Clone, Debug)]
 pub struct WallpaperPauseEvent {
     pub target: WallpaperTarget,
     pub mode: PauseMode,
@@ -141,7 +151,8 @@ impl App for WallpaperApp {
             .add_event::<WaylandEvent>()
             .add_event::<NewWallpaperEvent>()
             .add_event::<WallpaperPreparedEvent>()
-            .add_event::<WallpaperPauseEvent>();
+            .add_event::<WallpaperPauseEvent>()
+            .add_event::<WallpaperPreviewEvent>();
     }
 
     async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
@@ -455,6 +466,28 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
                 })
                 .await;
         }
+
+        PostEventActions::empty()
+    }
+}
+
+impl Handle<WallpaperPreviewEvent> for WallpaperApp {
+    async fn handle(
+        &mut self,
+        runtime: &mut Runtime,
+        event: WallpaperPreviewEvent,
+    ) -> PostEventActions {
+        let response = IpcResponse {
+            body: DaemonResponse::Preview {
+                width: event.size.x,
+                height: event.size.y,
+                rgba: vec![],
+            },
+            destination_id: event.sender_id,
+        };
+        runtime.ipc_sender.send(response).unwrap();
+
+        debug!(?event);
 
         PostEventActions::empty()
     }

@@ -32,12 +32,14 @@ fn main() -> miette::Result<()> {
     video::init();
 
     let daemon_command = match Args::parse().command {
-        Command::Preview { out, monitor } => {
-            execute_preview(&out, monitor.as_deref())
-                .into_diagnostic()
-                .wrap_err_with(|| format!("while executing preview into '{}'", out.display()))?;
-            return Ok(());
-        }
+        Command::Preview {
+            out,
+            path,
+            width,
+            height,
+        } => execute_preview(&out, &path, width, height)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("while executing preview into '{}'", out.display()))?,
         Command::Current { monitor } => {
             execute_current(monitor.as_deref())
                 .into_diagnostic()
