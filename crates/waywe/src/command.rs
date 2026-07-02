@@ -1,12 +1,11 @@
 use file_format::{FileFormat, Kind};
-use image::{ImageError, ImageReader};
+use image::ImageError;
 use miette::Diagnostic;
 use rustix::{
     io::Errno,
     process::{Pid, Signal, kill_process},
 };
 use std::{
-    ffi::CStr,
     fs::File,
     io::{self, ErrorKind, Read},
     path::{Path, PathBuf},
@@ -14,8 +13,7 @@ use std::{
     string::FromUtf8Error,
 };
 use thiserror::Error;
-use tracing::error;
-use video::{BackendError, FormatContext, MediaType, VideoPixelFormat};
+use video::BackendError;
 use waywe_ipc::{
     ClientError, DaemonCommand, DaemonSetupResult, IpcClient, WallpaperType,
     command::{DaemonError, DaemonResponse, DaemonResult, PauseMode},
@@ -62,7 +60,7 @@ pub enum ExecuteError {
     )]
     UnexpectedDaemonResponse(DaemonResponse),
     #[error("daemon returned an error")]
-    #[diagnostic(code(waywe::daemon::respond_error))]
+    #[diagnostic(code(waywe::daemon::response_error))]
     DaemonError(#[from] DaemonError),
 }
 
@@ -279,43 +277,24 @@ pub fn execute_show(
     wait_mode: WaitMode,
 ) -> Result<(), ExecuteError> {
     let file_kind = FileFormat::from_file(path)?.kind();
+    let absolute_path = path.canonicalize()?;
 
     let command = match file_kind {
-        Kind::Image => {
-            let reader = ImageReader::open(path)?.with_guessed_format()?;
-            let _image = reader.decode()?;
-            let absolute_path = path.canonicalize()?;
-
-            DaemonCommand::Show {
-                path: absolute_path,
-                monitor: monitor_name,
-                ty: WallpaperType::Image,
-            }
-        }
-        Kind::Video => {
-            let absolute_path = path.canonicalize()?;
-
-            if !is_video_path_valid(absolute_path.clone()) {
-                return Err(ExecuteError::InvalidVideo {
-                    path: absolute_path,
-                });
-            }
-
-            DaemonCommand::Show {
-                path: absolute_path,
-                monitor: monitor_name,
-                ty: WallpaperType::Video,
-            }
-        }
-        Kind::Compressed => {
-            let absolute_path = path.canonicalize()?;
-
-            DaemonCommand::Show {
-                path: absolute_path,
-                monitor: monitor_name,
-                ty: WallpaperType::Scene,
-            }
-        }
+        Kind::Image => DaemonCommand::Show {
+            path: absolute_path,
+            monitor: monitor_name,
+            ty: WallpaperType::Image,
+        },
+        Kind::Video => DaemonCommand::Show {
+            path: absolute_path,
+            monitor: monitor_name,
+            ty: WallpaperType::Video,
+        },
+        Kind::Compressed => DaemonCommand::Show {
+            path: absolute_path,
+            monitor: monitor_name,
+            ty: WallpaperType::Scene,
+        },
         _ => return Err(ExecuteError::UnsupportedFileFormat(file_kind)),
     };
 
@@ -334,53 +313,4 @@ pub fn execute_show(
     }
 
     Ok(())
-}
-
-fn is_video_path_valid(path: PathBuf) -> bool {
-    if !path.exists() {
-        error!(?path, "file does not exist");
-        return false;
-    }
-
-    let path = transmute_extra::pathbuf_into_cstring(path);
-
-    if !is_video_valid(&path) {
-        error!(?path, "video is invalid");
-        return false;
-    }
-
-    true
-}
-
-fn is_video_valid(path: &CStr) -> bool {
-    let format_context = match FormatContext::from_input(path) {
-        Ok(context) => context,
-        Err(error) => {
-            error!(?path, ?error, "failed to open file");
-            return false;
-        }
-    };
-
-    let best_stream = match format_context.find_best_stream(MediaType::Video) {
-        Ok(stream) => stream,
-        Err(error) => {
-            error!(?path, ?error, "failed to find video stream");
-            return false;
-        }
-    };
-
-    let codec_parameters = best_stream.codec_parameters();
-
-    if !matches!(
-        codec_parameters.format(),
-        Some(video::AudioVideoFormat::Video(VideoPixelFormat::Yuv420p))
-    ) {
-        error!(
-            format = ?codec_parameters.format(),
-            "unsupported video pixel format (planar Y'CbCr 4:2:0 is expected)",
-        );
-        return false;
-    }
-
-    true
 }
