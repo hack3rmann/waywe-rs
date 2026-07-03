@@ -1292,9 +1292,9 @@ unsafe extern "C" {
 
     /// Release exclusive access to display file descriptor
     ///
-    /// Parameters:
+    /// # Parameters:
     ///
-    ///     display The display context object
+    /// `display` - the display context object
     ///
     /// This releases the exclusive access. Useful for canceling the lock when a timed out poll returns
     /// fd not readable and we’re not going to read from the fd anytime soon.

@@ -26,7 +26,6 @@ members = [
     "crates/examples/waywe-test-scene",
     "crates/examples/shadertoy-computer-were-made-for-cubes",
     "crates/daemonize/daemonize",
-    "crates/daemonize/daemonize-tests",
 ]
 
 [workspace.package]
