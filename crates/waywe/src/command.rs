@@ -55,7 +55,11 @@ pub enum ExecuteError {
     UnexpectedDaemonResponse(DaemonResponse),
     #[error("daemon returned an error")]
     #[diagnostic(code(waywe::daemon::response_error))]
-    DaemonError(#[from] DaemonError),
+    DaemonError(
+        #[from]
+        #[diagnostic_source]
+        DaemonError,
+    ),
 }
 
 pub fn execute_current(monitor_name: Option<&str>) -> Result<(), ExecuteError> {

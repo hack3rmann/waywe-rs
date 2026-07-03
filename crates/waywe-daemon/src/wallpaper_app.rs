@@ -2,7 +2,8 @@ use crate::{
     event_loop::WallpaperTarget,
     wallpaper::{
         self, Wallpaper, WallpaperConfig, optimized::OptimizedWallpaper,
-        package_registry::PackageRegistry, transition::RunningWallpapers,
+        package_registry::PackageRegistry, preview::preview_wallpaper,
+        transition::RunningWallpapers,
     },
 };
 use calloop::channel::Sender;
@@ -528,19 +529,70 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
     async fn handle(
         &mut self,
         runtime: &mut Runtime,
-        event: WallpaperPreviewEvent,
+        WallpaperPreviewEvent {
+            path,
+            ty,
+            size,
+            sender_id,
+        }: WallpaperPreviewEvent,
     ) -> PostEventActions {
-        let response = IpcResponse {
-            body: Ok(DaemonResponse::Preview {
-                width: event.size.x,
-                height: event.size.y,
-                rgba: vec![],
-            }),
-            destination_id: event.sender_id,
-        };
-        runtime.ipc_sender.send(response).unwrap();
+        let ipc_sender = runtime.ipc_sender.clone();
+        let gpu = runtime.wgpu.clone();
+        let packages = self.package_registry.clone();
 
-        debug!(?event);
+        const MAX_PREVIEW_SIZE: u32 = 8192;
+
+        if size.x > MAX_PREVIEW_SIZE || size.y > MAX_PREVIEW_SIZE {
+            error!(
+                ?size,
+                max_size = MAX_PREVIEW_SIZE,
+                "max preview size exceeded"
+            );
+
+            let response = IpcResponse {
+                body: Err(DaemonError::ImageDimensionsTooBig {
+                    width: size.x,
+                    height: size.y,
+                    max_width: MAX_PREVIEW_SIZE,
+                    max_height: MAX_PREVIEW_SIZE,
+                }),
+                destination_id: sender_id,
+            };
+            ipc_sender.send(response).unwrap();
+        }
+
+        let config = WallpaperConfig {
+            surface_size: size,
+            surface_format: wgpu::TextureFormat::Rgba8Unorm,
+        };
+
+        runtime
+            .task_pool
+            .spawn(async move |_| {
+                let mut wallpaper =
+                    match wallpaper::create(Arc::clone(&gpu), &path, ty, config, packages).await {
+                        Ok(wallpaper) => wallpaper,
+                        Err(error) => {
+                            report_error(&ipc_sender, Some(sender_id), error.clone());
+                            return;
+                        }
+                    };
+
+                wallpaper.configure(&gpu, config);
+
+                let rgba = preview_wallpaper(&gpu, &mut wallpaper, config);
+
+                let response = IpcResponse {
+                    body: Ok(DaemonResponse::Preview {
+                        width: size.x,
+                        height: size.y,
+                        rgba,
+                    }),
+                    destination_id: sender_id,
+                };
+                ipc_sender.send(response).unwrap();
+            })
+            .await;
 
         PostEventActions::empty()
     }
@@ -551,7 +603,7 @@ fn report_error(
     destination_id: Option<ClientId>,
     error: DaemonError,
 ) {
-    error!(error = %error.chain(), "failed to create a wallpaper");
+    error!(error = %error.chain());
 
     let Some(destination_id) = destination_id else {
         return;

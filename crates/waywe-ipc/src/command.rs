@@ -1,6 +1,7 @@
 use crate::WallpaperType;
 use bincode::{Decode, Encode};
 use display_error_chain::ErrorChainExt;
+use miette::Diagnostic;
 use std::{error::Error, path::PathBuf};
 use thiserror::Error;
 
@@ -68,10 +69,22 @@ impl DaemonResponse {
     }
 }
 
-#[derive(Encode, Decode, Error, Debug, PartialEq, PartialOrd, Hash, Eq, Ord, Clone)]
+#[derive(Encode, Decode, Error, Diagnostic, Debug, PartialEq, PartialOrd, Hash, Eq, Ord, Clone)]
 pub enum DaemonError {
     #[error("{0}")]
+    #[diagnostic(code(waywe::daemon::error))]
     Generic(String),
+    #[error("image dimensions {width}x{height} are too big (max is {max_width}x{max_height})")]
+    #[diagnostic(
+        code(waywe::daemon::image_dimensions_too_big),
+        help("reduce the required image dimensions")
+    )]
+    ImageDimensionsTooBig {
+        width: u32,
+        height: u32,
+        max_width: u32,
+        max_height: u32,
+    },
 }
 
 impl DaemonError {
