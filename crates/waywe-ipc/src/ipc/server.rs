@@ -1,8 +1,10 @@
 use crate::ipc;
 use bincode::{Decode, Encode, error::DecodeError};
 use calloop::{
-    EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory, channel::Channel,
+    EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory,
+    channel::{Channel, ChannelError, Event as ChannelEvent},
 };
+use display_error_chain::ErrorChainExt;
 use rustix::{
     io::Errno,
     net::{self, AddressFamily, RecvFlags, SendFlags, SocketAddrUnix, SocketFlags, SocketType},
@@ -10,6 +12,7 @@ use rustix::{
 use slab::Slab;
 use smallvec::{SmallVec, smallvec};
 use std::{
+    fmt::Debug,
     fs::{File, TryLockError},
     io,
     marker::PhantomData,
@@ -19,7 +22,6 @@ use std::{
         unix::prelude::{BorrowedFd, RawFd},
     },
     path::Path,
-    sync::mpsc::TryRecvError,
 };
 use thiserror::Error;
 use tracing::{debug, warn};
@@ -48,11 +50,62 @@ struct Client {
     pub id: u32,
 }
 
+struct Clients<R> {
+    handles: Slab<Client>,
+    response_buf: Vec<u8>,
+    _p: PhantomData<R>,
+}
+
+impl<R> Clients<R> {
+    pub const fn new() -> Self {
+        Self {
+            handles: Slab::new(),
+            response_buf: vec![],
+            _p: PhantomData,
+        }
+    }
+
+    #[tracing::instrument(skip(self))]
+    pub fn send(&mut self, response: IpcResponse<R>)
+    where
+        R: Encode + Debug,
+    {
+        let Some(client) = self.handles.get(response.destination_id.index as usize) else {
+            return;
+        };
+        if client.id != response.destination_id.id {
+            return;
+        };
+
+        self.response_buf.clear();
+        self.response_buf
+            .extend_from_slice(bytemuck::bytes_of(&0_u32));
+
+        let n_bytes = bincode::encode_into_std_write(
+            response.body,
+            &mut self.response_buf,
+            bincode::config::standard(),
+        )
+        .unwrap();
+
+        *bytemuck::from_bytes_mut::<u32>(&mut self.response_buf[..4]) = n_bytes as u32;
+
+        if let Err(error) = net::send(&client.fd, &self.response_buf, SendFlags::DONTWAIT) {
+            warn!(error = %error.chain(), "failed to respond to an IPC client")
+        }
+    }
+}
+
+impl<R> Default for Clients<R> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct IpcServer<T, R> {
-    clients: Slab<Client>,
+    clients: Clients<R>,
     fd: OwnedFd,
     responses: Channel<IpcResponse<R>>,
-    response_buf: Vec<u8>,
     new_clients: SmallVec<[usize; 2]>,
     removed_clients: SmallVec<[usize; 2]>,
     id_generator: ClientIdGenerator,
@@ -84,7 +137,7 @@ impl<T, R> IpcServer<T, R> {
             };
 
             let id = self.id_generator.next();
-            let index = self.clients.insert(Client { fd, id });
+            let index = self.clients.handles.insert(Client { fd, id });
 
             self.new_clients.push(index);
         }
@@ -94,7 +147,7 @@ impl<T, R> IpcServer<T, R> {
     where
         T: Decode<()>,
     {
-        let client = &self.clients[client_index];
+        let client = &self.clients.handles[client_index];
 
         const MAX_LENGTH: u32 = 4096;
         let mut length = 0_u32;
@@ -121,33 +174,6 @@ impl<T, R> IpcServer<T, R> {
         let (value, _n_bytes) = bincode::decode_from_slice(&buf, bincode::config::standard())?;
 
         Ok(value)
-    }
-
-    pub fn send(&mut self, response: IpcResponse<R>)
-    where
-        R: Encode,
-    {
-        let Some(client) = self.clients.get(response.destination_id.index as usize) else {
-            return;
-        };
-        if client.id != response.destination_id.id {
-            return;
-        };
-
-        self.response_buf.clear();
-        self.response_buf
-            .extend_from_slice(bytemuck::bytes_of(&0_u32));
-
-        let n_bytes = bincode::encode_into_std_write(
-            response.body,
-            &mut self.response_buf,
-            bincode::config::standard(),
-        )
-        .unwrap();
-
-        *bytemuck::from_bytes_mut::<u32>(&mut self.response_buf[..4]) = n_bytes as u32;
-
-        _ = net::send(&client.fd, &self.response_buf, SendFlags::DONTWAIT);
     }
 
     fn acquire_file_lock() -> Result<File, TryLockError> {
@@ -209,10 +235,9 @@ impl<T, R> IpcServer<T, R> {
 
         Ok(Self {
             responses,
-            response_buf: vec![],
             new_clients: SmallVec::new_const(),
             removed_clients: SmallVec::new_const(),
-            clients: Slab::new(),
+            clients: Clients::new(),
             id_generator: ClientIdGenerator::default(),
             _lock_file: lock_file,
             fd: socket,
@@ -240,6 +265,8 @@ pub enum RecvError {
     Os(#[from] Errno),
     #[error(transparent)]
     Decode(#[from] DecodeError),
+    #[error(transparent)]
+    Channel(#[from] ChannelError),
 }
 
 #[derive(Debug, Error)]
@@ -273,15 +300,16 @@ pub struct IpcResponse<T> {
     pub destination_id: ClientId,
 }
 
-impl<T: Decode<()>, R: Encode> EventSource for IpcServer<T, R> {
+impl<T: Decode<()>, R: Encode + Debug> EventSource for IpcServer<T, R> {
     type Event = IpcEvent<T>;
     type Metadata = ();
     type Ret = ();
     type Error = RecvError;
 
+    #[tracing::instrument(skip(self, callback))]
     fn process_events<F>(
         &mut self,
-        _: Readiness,
+        readiness: Readiness,
         token: Token,
         mut callback: F,
     ) -> Result<PostAction, Self::Error>
@@ -289,6 +317,8 @@ impl<T: Decode<()>, R: Encode> EventSource for IpcServer<T, R> {
         F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
         if Some(token) == self.token {
+            debug!("accepting IPC connections");
+
             match self.accept_all() {
                 Ok(()) | Err(RecvError::Empty) => {}
                 Err(error) => return Err(error),
@@ -302,24 +332,27 @@ impl<T: Decode<()>, R: Encode> EventSource for IpcServer<T, R> {
             .iter()
             .find_map(|&(client_token, index)| (client_token == token).then_some(index))
         else {
-            loop {
-                match self.responses.try_recv() {
-                    Ok(response) => {
-                        self.send(response);
-                    }
-                    Err(TryRecvError::Empty) => break,
-                    Err(TryRecvError::Disconnected) => return Ok(PostAction::Reregister),
-                }
-            }
+            debug!("receiving from an internal response channel");
 
-            return Ok(PostAction::Continue);
+            return self
+                .responses
+                .process_events(readiness, token, |event, &mut ()| {
+                    let ChannelEvent::Msg(response) = event else {
+                        debug!("internal response pipe is disconnected");
+                        return;
+                    };
+                    self.clients.send(response);
+                })
+                .map_err(RecvError::from);
         };
+
+        debug!("receiving a request from an IPC client");
 
         loop {
             match self.try_recv(client_index) {
                 Ok(event) => {
                     let sender_id = ClientId {
-                        id: self.clients[client_index].id,
+                        id: self.clients.handles[client_index].id,
                         index: u32::try_from(client_index).unwrap(),
                     };
                     let event = IpcEvent { event, sender_id };
@@ -349,7 +382,7 @@ impl<T: Decode<()>, R: Encode> EventSource for IpcServer<T, R> {
 
         self.client_tokens.clear();
 
-        for (id, client) in &self.clients {
+        for (id, client) in &self.clients.handles {
             let token = token_factory.token();
 
             unsafe { poll.register(&client.fd, Interest::READ, Mode::Level, token)? };
@@ -373,12 +406,12 @@ impl<T: Decode<()>, R: Encode> EventSource for IpcServer<T, R> {
 
         for &id in &self.removed_clients {
             // NOTE(hack3rmann): client must be unregistered before its fd is closed
-            poll.unregister(&self.clients[id].fd)?;
+            poll.unregister(&self.clients.handles[id].fd)?;
         }
 
         for id in self.removed_clients.drain(..) {
             // Safety: client Fd dies after unregister (see note above)
-            self.clients.remove(id);
+            self.clients.handles.remove(id);
 
             let index = self
                 .client_tokens
@@ -391,7 +424,12 @@ impl<T: Decode<()>, R: Encode> EventSource for IpcServer<T, R> {
         for (stored_token, id) in &mut self.client_tokens {
             let token = token_factory.token();
 
-            poll.reregister(&self.clients[*id].fd, Interest::READ, Mode::Level, token)?;
+            poll.reregister(
+                &self.clients.handles[*id].fd,
+                Interest::READ,
+                Mode::Level,
+                token,
+            )?;
             *stored_token = token;
         }
 
@@ -399,7 +437,14 @@ impl<T: Decode<()>, R: Encode> EventSource for IpcServer<T, R> {
             let token = token_factory.token();
 
             // Safety: client Fd dies after unregister (see above)
-            unsafe { poll.register(&self.clients[id].fd, Interest::READ, Mode::Level, token)? };
+            unsafe {
+                poll.register(
+                    &self.clients.handles[id].fd,
+                    Interest::READ,
+                    Mode::Level,
+                    token,
+                )?
+            };
             self.client_tokens.push((token, id));
         }
 
@@ -412,11 +457,11 @@ impl<T: Decode<()>, R: Encode> EventSource for IpcServer<T, R> {
 
         self.responses.unregister(poll)?;
 
-        for (_id, client) in &self.clients {
+        for (_id, client) in &self.clients.handles {
             poll.unregister(&client.fd)?;
         }
 
-        self.clients.clear();
+        self.clients.handles.clear();
         self.client_tokens.clear();
 
         Ok(())
