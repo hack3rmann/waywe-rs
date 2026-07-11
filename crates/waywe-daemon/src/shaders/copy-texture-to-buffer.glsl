@@ -12,6 +12,12 @@ void main() {
     ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
     vec4 texel = texelFetch(sampler2D(image, image_sampler), coord, 0);
 
+    texel.rgb = vec3(
+        pow(texel.r, 0.4545),
+        pow(texel.g, 0.4545),
+        pow(texel.b, 0.4545)
+    );
+
     uvec4 bytes = uvec4(round(texel * 255.0));
     uint i = coord.y * textureSize(sampler2D(image, image_sampler), 0).x + coord.x;
 
