@@ -243,6 +243,7 @@ pub fn execute_preview(
     let socket = connect_daemon()?;
 
     socket.send(command)?;
+
     let response = socket.recv()??;
 
     let DaemonResponse::Preview {

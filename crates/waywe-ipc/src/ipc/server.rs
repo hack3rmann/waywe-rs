@@ -90,11 +90,7 @@ impl<R> Clients<R> {
 
         *bytemuck::from_bytes_mut::<u32>(&mut self.response_buf[..4]) = n_bytes as u32;
 
-        if let Err(error) = net::send(&client.fd, &self.response_buf, SendFlags::DONTWAIT) {
-            warn!(error = %error.chain(), "failed to respond to an IPC client")
-        }
-
-        match fd_send_all(&client.fd, &self.response_buf, SendFlags::DONTWAIT) {
+        match fd_send_all(&client.fd, &self.response_buf, SendFlags::empty()) {
             Ok(n_sent) | Err((n_sent, Errno::CONNRESET)) if n_sent != n_bytes => {
                 error!("failed to send whole response buffer, sent {n_sent} bytes of {n_bytes}");
             }
