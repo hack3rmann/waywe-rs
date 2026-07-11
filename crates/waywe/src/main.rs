@@ -5,8 +5,6 @@ pub mod package;
 pub mod progress;
 pub mod status;
 
-use std::time::Duration;
-
 use crate::{
     args::{Args, Command},
     command::{
@@ -30,7 +28,7 @@ fn main() -> miette::Result<()> {
             width,
             height,
             time,
-        } => execute_preview(&out, &path, width, height, Duration::from_millis(time))?,
+        } => execute_preview(&out, &path, width, height, time)?,
         Command::Current { monitor } => execute_current(monitor.as_deref())?,
         Command::Start { dont_wait, bin } => {
             if let Err(error) = execute_start(WaitMode::from_dont(dont_wait), bin) {

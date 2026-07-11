@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use std::{env, path::PathBuf};
+use std::{env, path::PathBuf, time::Duration};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -47,17 +47,17 @@ pub enum Command {
         /// Path to an image, video, or scene package (.ww)
         path: PathBuf,
         /// Where to store the preview
-        #[arg(long, short)]
+        #[arg(long, short, default_value = "./preview.png")]
         out: PathBuf,
         /// Width of the resulting image
-        #[arg(long)]
+        #[arg(long, default_value_t = 1920)]
         width: u32,
         /// Height of the resulting image
-        #[arg(long)]
+        #[arg(long, default_value_t = 1080)]
         height: u32,
-        /// Advances time (in milliseconds) to this value when rendering
-        #[arg(long, short, default_value_t = 0)]
-        time: u64,
+        /// Advances time (in human-readable notation, like, 420s or 700ms) to this value when rendering
+        #[arg(long, short, default_value = "0ms", value_parser = humantime::parse_duration)]
+        time: Duration,
     },
     /// Pause/Resume current wallpaper
     Pause {
