@@ -2,7 +2,7 @@ use crate::WallpaperType;
 use bincode::{Decode, Encode};
 use display_error_chain::ErrorChainExt;
 use miette::Diagnostic;
-use std::{error::Error, path::PathBuf};
+use std::{error::Error, path::PathBuf, time::Duration};
 use thiserror::Error;
 
 #[derive(Encode, Decode, Default, Debug, Clone, Copy, PartialEq, PartialOrd, Hash, Eq, Ord)]
@@ -41,6 +41,7 @@ pub enum DaemonCommand {
         path: PathBuf,
         width: u32,
         height: u32,
+        time: Duration,
     },
     Pause {
         monitor: Option<String>,

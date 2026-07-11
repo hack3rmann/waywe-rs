@@ -142,6 +142,7 @@ pub struct WallpaperPreviewEvent {
     pub ty: WallpaperType,
     pub size: UVec2,
     pub sender_id: ClientId,
+    pub time: Duration,
 }
 
 #[derive(Clone, Debug)]
@@ -533,6 +534,7 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
             ty,
             size,
             sender_id,
+            time,
         }: WallpaperPreviewEvent,
     ) -> PostEventActions {
         let gpu = runtime.wgpu.clone();
@@ -578,7 +580,7 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
                         }
                     };
 
-                wallpaper.advance_time(Duration::ZERO);
+                wallpaper.advance_time(time);
 
                 let pipeline = PreviewPipeline::new(&gpu, config);
 

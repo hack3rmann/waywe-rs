@@ -12,6 +12,7 @@ use std::{
     path::{Path, PathBuf},
     process::{self, ExitStatus, Stdio},
     string::FromUtf8Error,
+    time::Duration,
 };
 use thiserror::Error;
 use waywe_ipc::{
@@ -229,6 +230,7 @@ pub fn execute_preview(
     source: &Path,
     width: u32,
     height: u32,
+    time: Duration,
 ) -> Result<(), ExecuteError> {
     let file_kind = FileFormat::from_file(source)?.kind();
     let absolute_source = source.canonicalize()?;
@@ -241,6 +243,7 @@ pub fn execute_preview(
         path: absolute_source,
         width,
         height,
+        time,
     };
 
     let socket = connect_daemon()?;

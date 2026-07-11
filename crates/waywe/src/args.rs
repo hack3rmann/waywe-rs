@@ -55,6 +55,9 @@ pub enum Command {
         /// Height of the resulting image
         #[arg(long)]
         height: u32,
+        /// Advances time (in milliseconds) to this value when rendering
+        #[arg(long, short, default_value_t = 0)]
+        time: u64,
     },
     /// Pause/Resume current wallpaper
     Pause {
