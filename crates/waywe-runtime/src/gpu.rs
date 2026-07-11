@@ -55,7 +55,8 @@ impl Wgpu {
             | wgpu::Features::IMMEDIATES
             | wgpu::Features::BGRA8UNORM_STORAGE
             | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-            | wgpu::Features::PIPELINE_CACHE;
+            | wgpu::Features::PIPELINE_CACHE
+            | wgpu::Features::MAPPABLE_PRIMARY_BUFFERS;
 
         let memory_hints = wgpu::MemoryHints::Performance;
 
