@@ -59,8 +59,11 @@ impl<T, R> IpcClient<T, R> {
     {
         let mut n_bytes = 0_u32;
 
-        let n_bytes_read = io::read(self, bytemuck::bytes_of_mut(&mut n_bytes))?;
-        assert_eq!(n_bytes_read, mem::size_of_val(&n_bytes));
+        match io::read(self, bytemuck::bytes_of_mut(&mut n_bytes)) {
+            Ok(4) => {}
+            Ok(_other) => return Err(ClientError::Os(Errno::CONNRESET)),
+            Err(error) => return Err(ClientError::Os(error)),
+        }
 
         let mut buf: SmallVec<[u8; ipc::BUFFER_SIZE]> = smallvec![0; n_bytes as usize];
 

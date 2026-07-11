@@ -91,8 +91,11 @@ impl<R> Clients<R> {
         *bytemuck::from_bytes_mut::<u32>(&mut self.response_buf[..4]) = n_bytes as u32;
 
         match fd_send_all(&client.fd, &self.response_buf, SendFlags::empty()) {
-            Ok(n_sent) | Err((n_sent, Errno::CONNRESET)) if n_sent != n_bytes => {
-                error!("failed to send whole response buffer, sent {n_sent} bytes of {n_bytes}");
+            Ok(n_sent) | Err((n_sent, Errno::CONNRESET)) if n_sent != n_bytes + 4 => {
+                error!(
+                    "failed to send whole response buffer, sent {n_sent} bytes of {}",
+                    n_bytes + 4
+                );
             }
             Ok(_) | Err((_, Errno::CONNRESET)) => {}
             Err((_, error)) => {
