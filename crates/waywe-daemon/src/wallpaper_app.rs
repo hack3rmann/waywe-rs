@@ -9,7 +9,6 @@ use calloop::channel::Sender;
 use display_error_chain::ErrorChainExt;
 use glam::UVec2;
 use smallvec::{SmallVec, smallvec};
-use static_assertions::assert_impl_all;
 use std::{
     collections::{BTreeMap, btree_map::Entry},
     io::ErrorKind,
@@ -28,7 +27,7 @@ use waywe_ipc::{
 use waywe_runtime::{
     Runtime,
     app::App,
-    event::{EventHandler, Handle, IntoEvent, PostEventActions, TryReplicate},
+    event::{EventHandler, Handle, PostEventActions, TryReplicate},
     frame::{FrameError, FrameInfo},
     gpu::SurfaceResult,
     wayland::{MonitorId, MonitorMap, MonitorName, WaylandEvent},
@@ -145,16 +144,6 @@ pub struct WallpaperPreviewEvent {
     pub sender_id: ClientId,
 }
 
-pub struct WallpaperPreviewPreparedEvent {
-    pub wallpaper: OptimizedWallpaper,
-    pub pipeline: PreviewPipeline,
-    pub sender_id: ClientId,
-    pub size: UVec2,
-}
-assert_impl_all!(WallpaperPreviewPreparedEvent: IntoEvent);
-
-impl TryReplicate for WallpaperPreviewPreparedEvent {}
-
 #[derive(Clone, Debug)]
 pub struct WallpaperPauseEvent {
     pub target: WallpaperTarget,
@@ -169,8 +158,7 @@ impl App for WallpaperApp {
             .add_event::<NewWallpaperEvent>()
             .add_event::<WallpaperPreparedEvent>()
             .add_event::<WallpaperPauseEvent>()
-            .add_event::<WallpaperPreviewEvent>()
-            .add_event::<WallpaperPreviewPreparedEvent>();
+            .add_event::<WallpaperPreviewEvent>();
     }
 
     async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
@@ -536,37 +524,6 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
     }
 }
 
-impl Handle<WallpaperPreviewPreparedEvent> for WallpaperApp {
-    async fn handle(
-        &mut self,
-        runtime: &mut Runtime,
-        WallpaperPreviewPreparedEvent {
-            mut wallpaper,
-            pipeline,
-            sender_id,
-            size,
-        }: WallpaperPreviewPreparedEvent,
-    ) -> PostEventActions {
-        let ipc = runtime.ipc_sender.clone();
-
-        pipeline.render_async(&runtime.wgpu, &mut wallpaper, move |buffer| {
-            let rgba = buffer.get_mapped_range(..).unwrap().to_vec();
-
-            ipc.send(IpcResponse {
-                body: Ok(DaemonResponse::Preview {
-                    width: size.x,
-                    height: size.y,
-                    rgba,
-                }),
-                destination_id: sender_id,
-            })
-            .unwrap();
-        });
-
-        PostEventActions::empty()
-    }
-}
-
 impl Handle<WallpaperPreviewEvent> for WallpaperApp {
     async fn handle(
         &mut self,
@@ -578,8 +535,9 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
             sender_id,
         }: WallpaperPreviewEvent,
     ) -> PostEventActions {
-        let ipc_sender = runtime.ipc_sender.clone();
         let gpu = runtime.wgpu.clone();
+        let ipc = runtime.ipc_sender.clone();
+
         let packages = self.package_registry.clone();
 
         const MAX_PREVIEW_SIZE: u32 = 8192;
@@ -600,7 +558,7 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
                 }),
                 destination_id: sender_id,
             };
-            ipc_sender.send(response).unwrap();
+            ipc.send(response).unwrap();
         }
 
         let config = WallpaperConfig {
@@ -610,12 +568,12 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
 
         runtime
             .task_pool
-            .spawn(async move |mut emitter| {
+            .spawn(async move |_| {
                 let mut wallpaper =
                     match wallpaper::create(Arc::clone(&gpu), &path, ty, config, packages).await {
                         Ok(wallpaper) => wallpaper,
                         Err(error) => {
-                            report_error(&ipc_sender, Some(sender_id), error.clone());
+                            report_error(&ipc, Some(sender_id), error.clone());
                             return;
                         }
                     };
@@ -624,14 +582,19 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
 
                 let pipeline = PreviewPipeline::new(&gpu, config);
 
-                emitter
-                    .emit(WallpaperPreviewPreparedEvent {
-                        wallpaper,
-                        pipeline,
-                        sender_id,
-                        size,
+                pipeline.render_async(&gpu, &mut wallpaper, move |buffer| {
+                    let rgba = buffer.get_mapped_range(..).unwrap().to_vec();
+
+                    ipc.send(IpcResponse {
+                        body: Ok(DaemonResponse::Preview {
+                            width: size.x,
+                            height: size.y,
+                            rgba,
+                        }),
+                        destination_id: sender_id,
                     })
                     .unwrap();
+                });
             })
             .await;
 
