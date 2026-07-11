@@ -27,6 +27,10 @@ use std::{
     num::{NonZeroI64, NonZeroU64},
     ptr::{self, NonNull},
     slice, str,
+    sync::{
+        Mutex,
+        atomic::{AtomicBool, Ordering::Relaxed},
+    },
 };
 
 pub use acceleration::VaError;
@@ -172,9 +176,22 @@ impl FormatContext {
     /// This function isn't guaranteed to open all the codecs, so
     /// options being non-empty at return is a perfectly normal behavior.
     pub fn find_stream_info(&mut self) -> Result<(), BackendError> {
-        BackendError::result_of(unsafe {
+        static MUTEX: Mutex<()> = Mutex::new(());
+        static FIRST_INIT_DONE: AtomicBool = AtomicBool::new(false);
+
+        let _guard = (!FIRST_INIT_DONE.load(Relaxed))
+            .then(|| MUTEX.lock().unwrap_or_else(|err| err.into_inner()));
+
+        // HACK(hack3rmann): something WEIRD happens when this functions is called from multiple
+        // threads for the first time. FFmpeg docs are saying that is MUST be thread-safe. But
+        // removing the mutexes produces memory errors (unaligned tcache chunk, double-free and friends).
+        let res = BackendError::result_of(unsafe {
             avformat_find_stream_info(self.as_raw().as_ptr(), ptr::null_mut())
-        })
+        });
+
+        FIRST_INIT_DONE.store(true, Relaxed);
+
+        res
     }
 
     /// A list of all streams in the file.
