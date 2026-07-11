@@ -15,7 +15,7 @@ use std::{
     io::ErrorKind,
     path::PathBuf,
     sync::Arc,
-    time::Instant,
+    time::{Duration, Instant},
 };
 use tracing::{debug, error};
 use waywe_ipc::{
@@ -611,7 +611,7 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
         runtime
             .task_pool
             .spawn(async move |mut emitter| {
-                let wallpaper =
+                let mut wallpaper =
                     match wallpaper::create(Arc::clone(&gpu), &path, ty, config, packages).await {
                         Ok(wallpaper) => wallpaper,
                         Err(error) => {
@@ -619,6 +619,8 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
                             return;
                         }
                     };
+
+                wallpaper.advance_time(Duration::ZERO);
 
                 let pipeline = PreviewPipeline::new(&gpu, config);
 

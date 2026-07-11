@@ -248,7 +248,7 @@ pub unsafe fn import_fd_as_texture(
         device.create_texture_from_hal::<hal::api::Vulkan>(
             texture_hal,
             &wgpu_desc,
-            desc.wgpu_uses(),
+            wgpu::TextureUses::UNINITIALIZED,
         )
     }
 }

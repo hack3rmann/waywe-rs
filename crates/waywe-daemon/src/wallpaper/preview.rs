@@ -1,6 +1,6 @@
 use crate::wallpaper::{Wallpaper, optimized::OptimizedWallpaper};
 use static_assertions::assert_impl_all;
-use std::{mem, time::Duration};
+use std::mem;
 use waywe_runtime::{WallpaperConfig, gpu::Wgpu};
 
 pub struct PreviewPipeline {
@@ -23,7 +23,9 @@ impl PreviewPipeline {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: config.surface_format,
-            usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
         });
 
@@ -49,8 +51,6 @@ impl PreviewPipeline {
         wallpaper: &mut OptimizedWallpaper,
         on_success: impl FnOnce(wgpu::Buffer) + Send + 'static,
     ) {
-        wallpaper.advance_time(Duration::ZERO);
-
         let surface_view = self.surface.create_view(&Default::default());
         let mut encoder = gpu.device.create_command_encoder(&Default::default());
 

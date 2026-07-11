@@ -216,7 +216,13 @@ impl RenderWallpaper {
             )
         };
 
-        unsafe { device.create_texture_from_hal::<Vulkan>(hal_texture, &wgpu_desc, usage) }
+        unsafe {
+            device.create_texture_from_hal::<Vulkan>(
+                hal_texture,
+                &wgpu_desc,
+                wgpu::TextureUses::UNINITIALIZED,
+            )
+        }
     }
 }
 
