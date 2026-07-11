@@ -1,6 +1,6 @@
 use crate::wallpaper::{Wallpaper, optimized::OptimizedWallpaper};
 use static_assertions::assert_impl_all;
-use std::mem;
+use std::{mem, time::Duration};
 use waywe_runtime::{WallpaperConfig, gpu::Wgpu};
 
 pub struct PreviewPipeline {
@@ -49,6 +49,8 @@ impl PreviewPipeline {
         wallpaper: &mut OptimizedWallpaper,
         on_success: impl FnOnce(wgpu::Buffer) + Send + 'static,
     ) {
+        wallpaper.advance_time(Duration::ZERO);
+
         let surface_view = self.surface.create_view(&Default::default());
         let mut encoder = gpu.device.create_command_encoder(&Default::default());
 
