@@ -1,4 +1,5 @@
 use file_format::{FileFormat, Kind};
+use image::{ImageBuffer, ImageError, Rgba};
 use miette::Diagnostic;
 use rustix::{
     io::Errno,
@@ -61,6 +62,8 @@ pub enum ExecuteError {
         #[diagnostic_source]
         DaemonError,
     ),
+    #[error("failed to save image")]
+    SaveImageError(#[source] ImageError),
 }
 
 pub fn execute_current(monitor_name: Option<&str>) -> Result<(), ExecuteError> {
@@ -222,7 +225,7 @@ pub fn execute_stop(mode: WaitMode) -> Result<(), ExecuteStopError> {
 }
 
 pub fn execute_preview(
-    _output: &Path,
+    output: &Path,
     source: &Path,
     width: u32,
     height: u32,
@@ -243,7 +246,6 @@ pub fn execute_preview(
     let socket = connect_daemon()?;
 
     socket.send(command)?;
-
     let response = socket.recv()??;
 
     let DaemonResponse::Preview {
@@ -255,7 +257,11 @@ pub fn execute_preview(
         return Err(ExecuteError::UnexpectedDaemonResponse(response));
     };
 
-    tracing::debug!(?width, ?height, rgba_len = rgba.len(), "preview");
+    let image =
+        ImageBuffer::<Rgba<u8>, _>::from_raw(width, height, rgba).expect("incomplte rgba image");
+
+    // TODO(hack3rmann): JPEG and others support
+    image.save(output).map_err(ExecuteError::SaveImageError)?;
 
     Ok(())
 }

@@ -31,3 +31,4 @@ unicode-width = "0.2"
 libc.workspace = true
 bincode.workspace = true
 miette.workspace = true
+image.workspace = true

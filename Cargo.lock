@@ -4951,6 +4951,7 @@ dependencies = [
  "clap",
  "file-format",
  "flate2",
+ "image",
  "libc",
  "miette",
  "rustix",
