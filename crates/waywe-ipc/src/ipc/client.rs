@@ -5,7 +5,7 @@ use bincode::{
 };
 use rustix::{
     io::{self, Errno},
-    net::{self, AddressFamily, SocketAddrUnix, SocketFlags, SocketType, sockopt::Timeout},
+    net::{self, AddressFamily, SocketAddrUnix, SocketFlags, SocketType},
 };
 use smallvec::{SmallVec, smallvec};
 use std::{
@@ -15,7 +15,6 @@ use std::{
         fd::{AsFd, AsRawFd, OwnedFd},
         unix::prelude::{BorrowedFd, RawFd},
     },
-    time::Duration,
 };
 use thiserror::Error;
 
@@ -65,7 +64,10 @@ impl<T, R> IpcClient<T, R> {
 
         let mut buf: SmallVec<[u8; ipc::BUFFER_SIZE]> = smallvec![0; n_bytes as usize];
 
-        let n_bytes_read = io::read(self, &mut buf[..])?;
+        let n_bytes_read = match fd_read_all(self, &mut buf[..]) {
+            Ok(n_bytes) | Err((n_bytes, Errno::CONNRESET)) => n_bytes,
+            Err((_, error)) => return Err(ClientError::Os(error)),
+        };
         assert_eq!(n_bytes_read, n_bytes as usize);
 
         let (response, n_bytes_decoded) =
@@ -87,14 +89,26 @@ impl<T, R> IpcClient<T, R> {
 
         net::connect(&socket, &addr)?;
 
-        const TIMEOUT: Duration = Duration::from_secs(5);
-        net::sockopt::set_socket_timeout(&socket, Timeout::Recv, Some(TIMEOUT))?;
-
         Ok(Self {
             fd: socket,
             _p: PhantomData,
         })
     }
+}
+
+fn fd_read_all(fd: impl AsFd, buf: &mut [u8]) -> Result<usize, (usize, Errno)> {
+    let fd = fd.as_fd();
+    let mut total_read = 0;
+
+    while total_read < buf.len() {
+        match io::read(fd, &mut buf[total_read..]) {
+            Ok(0) => break,
+            Ok(n_read) => total_read += n_read,
+            Err(error) => return Err((total_read, error)),
+        }
+    }
+
+    Ok(total_read)
 }
 
 #[derive(Debug, Error)]

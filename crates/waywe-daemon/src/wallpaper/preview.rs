@@ -41,7 +41,7 @@ pub fn preview_wallpaper(
         wgpu::TexelCopyBufferInfo {
             buffer: &buffer,
             layout: wgpu::TexelCopyBufferLayout {
-                offset: 1,
+                offset: 0,
                 bytes_per_row: Some(mem::size_of::<u32>() as u32 * config.surface_size.x),
                 rows_per_image: Some(config.surface_size.y),
             },

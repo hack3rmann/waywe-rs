@@ -221,9 +221,15 @@ pub fn execute_preview(
     width: u32,
     height: u32,
 ) -> Result<(), ExecuteError> {
+    let file_kind = FileFormat::from_file(source)?.kind();
+    let absolute_source = source.canonicalize()?;
+
+    let ty =
+        file_kind_to_wall_type(file_kind).ok_or(ExecuteError::UnsupportedFileFormat(file_kind))?;
+
     let command = DaemonCommand::Preview {
-        ty: WallpaperType::Scene,
-        path: source.to_owned(),
+        ty,
+        path: absolute_source,
         width,
         height,
     };
@@ -242,7 +248,7 @@ pub fn execute_preview(
         return Err(ExecuteError::UnexpectedDaemonResponse(response));
     };
 
-    tracing::debug!(?width, ?height, ?rgba, "preview");
+    tracing::debug!(?width, ?height, rgba_len = rgba.len(), "preview");
 
     Ok(())
 }
@@ -269,6 +275,15 @@ pub fn connect_daemon() -> Result<DaemonSocket, ConnectDaemonError> {
     })
 }
 
+fn file_kind_to_wall_type(kind: Kind) -> Option<WallpaperType> {
+    Some(match kind {
+        Kind::Compressed => WallpaperType::Scene,
+        Kind::Video => WallpaperType::Video,
+        Kind::Image => WallpaperType::Image,
+        _ => return None,
+    })
+}
+
 pub fn execute_show(
     path: &Path,
     monitor_name: Option<String>,
@@ -277,23 +292,13 @@ pub fn execute_show(
     let file_kind = FileFormat::from_file(path)?.kind();
     let absolute_path = path.canonicalize()?;
 
-    let command = match file_kind {
-        Kind::Image => DaemonCommand::Show {
-            path: absolute_path,
-            monitor: monitor_name,
-            ty: WallpaperType::Image,
-        },
-        Kind::Video => DaemonCommand::Show {
-            path: absolute_path,
-            monitor: monitor_name,
-            ty: WallpaperType::Video,
-        },
-        Kind::Compressed => DaemonCommand::Show {
-            path: absolute_path,
-            monitor: monitor_name,
-            ty: WallpaperType::Scene,
-        },
-        _ => return Err(ExecuteError::UnsupportedFileFormat(file_kind)),
+    let ty =
+        file_kind_to_wall_type(file_kind).ok_or(ExecuteError::UnsupportedFileFormat(file_kind))?;
+
+    let command = DaemonCommand::Show {
+        path: absolute_path,
+        monitor: monitor_name,
+        ty,
     };
 
     let socket = connect_daemon()?;
