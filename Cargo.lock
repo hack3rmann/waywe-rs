@@ -1319,7 +1319,7 @@ version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4cd405aab171cb85d6735e5c8d9db038c17d3ca007a4d2c25f337935c3d90580"
 dependencies = [
- "humantime 2.3.0",
+ "humantime 2.4.0",
  "is-terminal",
  "log",
  "regex",
@@ -1948,9 +1948,9 @@ dependencies = [
 
 [[package]]
 name = "humantime"
-version = "2.3.0"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "135b12329e5e3ce057a9f972339ea52bc954fe1e9358ef27f95e89716fbc5424"
+checksum = "15cdd26707701c53297e2fa6afb323d55fbc1d0810c3aec078ae3ef0424c3c15"
 
 [[package]]
 name = "hyper"
@@ -4951,6 +4951,8 @@ dependencies = [
  "clap",
  "file-format",
  "flate2",
+ "humantime 2.4.0",
+ "image",
  "libc",
  "miette",
  "rustix",
@@ -5019,6 +5021,7 @@ dependencies = [
  "display-error-chain",
  "glam",
  "libc",
+ "miette",
  "rand 0.9.4",
  "rustix",
  "serde",

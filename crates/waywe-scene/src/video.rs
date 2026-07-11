@@ -33,6 +33,7 @@ use bevy_ecs::{
     prelude::*,
     system::{StaticSystemParam, SystemParamItem, lifetimeless::SRes},
 };
+use display_error_chain::ErrorChainExt;
 use glam::UVec2;
 use std::{
     ffi::CString,
@@ -511,12 +512,12 @@ impl RenderVideo {
         let surface_id = unsafe { video.frame.surface_id() };
 
         if let Err(error) = va_display.sync_surface(surface_id) {
-            panic!("failed to sync libva surface: {error:?}");
+            panic!("failed to sync libva surface: {}", error.chain());
         }
 
         let surface_handle = match va_display.export_surface_handle(surface_id) {
             Ok(handle) => handle,
-            Err(error) => panic!("failed to export surface handle: {error:?}"),
+            Err(error) => panic!("failed to export surface handle: {}", error.chain()),
         };
 
         let texture = Self::create_texture(adapter, device, surface_handle);

@@ -303,7 +303,7 @@ pub enum ImageWallpaperCreationError {
     Decode(#[from] ImageError),
 }
 
-const SCREEN_TRIANGLE: [Vec2; 3] = [
+pub const SCREEN_TRIANGLE: [Vec2; 3] = [
     Vec2::new(-1.0, -1.0),
     Vec2::new(3.0, -1.0),
     Vec2::new(-1.0, 3.0),

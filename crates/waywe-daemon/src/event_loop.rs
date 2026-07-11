@@ -242,6 +242,7 @@ impl LoopState {
                 path,
                 width,
                 height,
+                time,
             } => {
                 tracing::debug!(?ty, ?path, ?width, ?height, "preview");
 
@@ -250,6 +251,7 @@ impl LoopState {
                     ty,
                     size: UVec2::new(width, height),
                     sender_id: command.sender_id,
+                    time,
                 }
                 .into_event()
             }

@@ -2,13 +2,12 @@ pub mod image;
 pub mod render;
 pub mod video;
 
-use std::time::Duration;
-
 use super::WallpaperConfig;
 use crate::wallpaper::{
     Wallpaper,
     optimized::{image::ImageWallpaper, render::RenderWallpaper, video::VideoWallpaper},
 };
+use std::time::Duration;
 use waywe_runtime::{frame::FrameInfo, gpu::Wgpu};
 
 #[expect(clippy::large_enum_variant)]

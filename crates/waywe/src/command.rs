@@ -1,15 +1,18 @@
 use file_format::{FileFormat, Kind};
+use image::{ImageBuffer, ImageError, Rgba};
 use miette::Diagnostic;
 use rustix::{
     io::Errno,
     process::{Pid, Signal, kill_process},
 };
 use std::{
+    ffi::OsStr,
     fs::File,
     io::{self, ErrorKind, Read},
     path::{Path, PathBuf},
     process::{self, ExitStatus, Stdio},
     string::FromUtf8Error,
+    time::Duration,
 };
 use thiserror::Error;
 use waywe_ipc::{
@@ -55,7 +58,13 @@ pub enum ExecuteError {
     UnexpectedDaemonResponse(DaemonResponse),
     #[error("daemon returned an error")]
     #[diagnostic(code(waywe::daemon::response_error))]
-    DaemonError(#[from] DaemonError),
+    DaemonError(
+        #[from]
+        #[diagnostic_source]
+        DaemonError,
+    ),
+    #[error("failed to save image")]
+    SaveImageError(#[source] ImageError),
 }
 
 pub fn execute_current(monitor_name: Option<&str>) -> Result<(), ExecuteError> {
@@ -119,7 +128,7 @@ pub fn execute_pause(
     Ok(())
 }
 
-pub fn execute_start(mode: WaitMode) -> DaemonSetupResult {
+pub fn execute_start(mode: WaitMode, bin: Option<PathBuf>) -> DaemonSetupResult {
     let fifo = match mode {
         WaitMode::Wait => Some(SetupPipe::new_in("/tmp/waywe")),
         WaitMode::DontWait => None,
@@ -131,7 +140,12 @@ pub fn execute_start(mode: WaitMode) -> DaemonSetupResult {
         .into_iter()
         .flatten();
 
-    let mut child = process::Command::new("waywe-daemon")
+    let daemon_cmd = bin
+        .as_ref()
+        .map(AsRef::<OsStr>::as_ref)
+        .unwrap_or(OsStr::new("waywe-daemon"));
+
+    let mut child = process::Command::new(daemon_cmd)
         .arg("--run-in-background")
         .args(fifo_arg)
         .stdout(Stdio::null())
@@ -212,16 +226,24 @@ pub fn execute_stop(mode: WaitMode) -> Result<(), ExecuteStopError> {
 }
 
 pub fn execute_preview(
-    _output: &Path,
+    output: &Path,
     source: &Path,
     width: u32,
     height: u32,
+    time: Duration,
 ) -> Result<(), ExecuteError> {
+    let file_kind = FileFormat::from_file(source)?.kind();
+    let absolute_source = source.canonicalize()?;
+
+    let ty =
+        file_kind_to_wall_type(file_kind).ok_or(ExecuteError::UnsupportedFileFormat(file_kind))?;
+
     let command = DaemonCommand::Preview {
-        ty: WallpaperType::Scene,
-        path: source.to_owned(),
+        ty,
+        path: absolute_source,
         width,
         height,
+        time,
     };
 
     let socket = connect_daemon()?;
@@ -238,7 +260,11 @@ pub fn execute_preview(
         return Err(ExecuteError::UnexpectedDaemonResponse(response));
     };
 
-    tracing::debug!(?width, ?height, ?rgba, "preview");
+    let image =
+        ImageBuffer::<Rgba<u8>, _>::from_raw(width, height, rgba).expect("incomplte rgba image");
+
+    // TODO(hack3rmann): JPEG and others support
+    image.save(output).map_err(ExecuteError::SaveImageError)?;
 
     Ok(())
 }
@@ -265,6 +291,15 @@ pub fn connect_daemon() -> Result<DaemonSocket, ConnectDaemonError> {
     })
 }
 
+fn file_kind_to_wall_type(kind: Kind) -> Option<WallpaperType> {
+    Some(match kind {
+        Kind::Compressed => WallpaperType::Scene,
+        Kind::Video => WallpaperType::Video,
+        Kind::Image => WallpaperType::Image,
+        _ => return None,
+    })
+}
+
 pub fn execute_show(
     path: &Path,
     monitor_name: Option<String>,
@@ -273,23 +308,13 @@ pub fn execute_show(
     let file_kind = FileFormat::from_file(path)?.kind();
     let absolute_path = path.canonicalize()?;
 
-    let command = match file_kind {
-        Kind::Image => DaemonCommand::Show {
-            path: absolute_path,
-            monitor: monitor_name,
-            ty: WallpaperType::Image,
-        },
-        Kind::Video => DaemonCommand::Show {
-            path: absolute_path,
-            monitor: monitor_name,
-            ty: WallpaperType::Video,
-        },
-        Kind::Compressed => DaemonCommand::Show {
-            path: absolute_path,
-            monitor: monitor_name,
-            ty: WallpaperType::Scene,
-        },
-        _ => return Err(ExecuteError::UnsupportedFileFormat(file_kind)),
+    let ty =
+        file_kind_to_wall_type(file_kind).ok_or(ExecuteError::UnsupportedFileFormat(file_kind))?;
+
+    let command = DaemonCommand::Show {
+        path: absolute_path,
+        monitor: monitor_name,
+        ty,
     };
 
     let socket = connect_daemon()?;

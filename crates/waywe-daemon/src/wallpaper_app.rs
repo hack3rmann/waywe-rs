@@ -2,7 +2,7 @@ use crate::{
     event_loop::WallpaperTarget,
     wallpaper::{
         self, Wallpaper, WallpaperConfig, optimized::OptimizedWallpaper,
-        package_registry::PackageRegistry, transition::RunningWallpapers,
+        package_registry::PackageRegistry, preview::PreviewPipeline, transition::RunningWallpapers,
     },
 };
 use calloop::channel::Sender;
@@ -14,7 +14,7 @@ use std::{
     io::ErrorKind,
     path::PathBuf,
     sync::Arc,
-    time::Instant,
+    time::{Duration, Instant},
 };
 use tracing::{debug, error};
 use waywe_ipc::{
@@ -142,6 +142,7 @@ pub struct WallpaperPreviewEvent {
     pub ty: WallpaperType,
     pub size: UVec2,
     pub sender_id: ClientId,
+    pub time: Duration,
 }
 
 #[derive(Clone, Debug)]
@@ -528,19 +529,76 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
     async fn handle(
         &mut self,
         runtime: &mut Runtime,
-        event: WallpaperPreviewEvent,
+        WallpaperPreviewEvent {
+            path,
+            ty,
+            size,
+            sender_id,
+            time,
+        }: WallpaperPreviewEvent,
     ) -> PostEventActions {
-        let response = IpcResponse {
-            body: Ok(DaemonResponse::Preview {
-                width: event.size.x,
-                height: event.size.y,
-                rgba: vec![],
-            }),
-            destination_id: event.sender_id,
-        };
-        runtime.ipc_sender.send(response).unwrap();
+        let gpu = runtime.wgpu.clone();
+        let ipc = runtime.ipc_sender.clone();
 
-        debug!(?event);
+        let packages = self.package_registry.clone();
+
+        const MAX_PREVIEW_SIZE: u32 = 8192;
+
+        if size.x > MAX_PREVIEW_SIZE || size.y > MAX_PREVIEW_SIZE {
+            error!(
+                ?size,
+                max_size = MAX_PREVIEW_SIZE,
+                "max preview size exceeded"
+            );
+
+            let response = IpcResponse {
+                body: Err(DaemonError::ImageDimensionsTooBig {
+                    width: size.x,
+                    height: size.y,
+                    max_width: MAX_PREVIEW_SIZE,
+                    max_height: MAX_PREVIEW_SIZE,
+                }),
+                destination_id: sender_id,
+            };
+            ipc.send(response).unwrap();
+        }
+
+        let config = WallpaperConfig {
+            surface_size: size,
+            surface_format: wgpu::TextureFormat::Rgba8Unorm,
+        };
+
+        runtime
+            .task_pool
+            .spawn(async move |_| {
+                let mut wallpaper =
+                    match wallpaper::create(Arc::clone(&gpu), &path, ty, config, packages).await {
+                        Ok(wallpaper) => wallpaper,
+                        Err(error) => {
+                            report_error(&ipc, Some(sender_id), error.clone());
+                            return;
+                        }
+                    };
+
+                wallpaper.advance_time(time);
+
+                let pipeline = PreviewPipeline::new(&gpu, config);
+
+                pipeline.render_async(&gpu, &mut wallpaper, move |buffer| {
+                    let rgba = buffer.get_mapped_range(..).unwrap().to_vec();
+
+                    ipc.send(IpcResponse {
+                        body: Ok(DaemonResponse::Preview {
+                            width: size.x,
+                            height: size.y,
+                            rgba,
+                        }),
+                        destination_id: sender_id,
+                    })
+                    .unwrap();
+                });
+            })
+            .await;
 
         PostEventActions::empty()
     }
@@ -551,7 +609,7 @@ fn report_error(
     destination_id: Option<ClientId>,
     error: DaemonError,
 ) {
-    error!(error = %error.chain(), "failed to create a wallpaper");
+    error!(error = %error.chain());
 
     let Some(destination_id) = destination_id else {
         return;

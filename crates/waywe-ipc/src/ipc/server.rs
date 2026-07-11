@@ -24,7 +24,7 @@ use std::{
     path::Path,
 };
 use thiserror::Error;
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 
 #[derive(Clone, Default, PartialEq, Eq, Debug, PartialOrd, Ord, Hash)]
 struct ClientIdGenerator {
@@ -65,10 +65,10 @@ impl<R> Clients<R> {
         }
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip_all)]
     pub fn send(&mut self, response: IpcResponse<R>)
     where
-        R: Encode + Debug,
+        R: Encode,
     {
         let Some(client) = self.handles.get(response.destination_id.index as usize) else {
             return;
@@ -90,10 +90,34 @@ impl<R> Clients<R> {
 
         *bytemuck::from_bytes_mut::<u32>(&mut self.response_buf[..4]) = n_bytes as u32;
 
-        if let Err(error) = net::send(&client.fd, &self.response_buf, SendFlags::DONTWAIT) {
-            warn!(error = %error.chain(), "failed to respond to an IPC client")
+        match fd_send_all(&client.fd, &self.response_buf, SendFlags::empty()) {
+            Ok(n_sent) | Err((n_sent, Errno::CONNRESET)) if n_sent != n_bytes + 4 => {
+                error!(
+                    "failed to send whole response buffer, sent {n_sent} bytes of {}",
+                    n_bytes + 4
+                );
+            }
+            Ok(_) | Err((_, Errno::CONNRESET)) => {}
+            Err((_, error)) => {
+                warn!("failed to respond: {}", error.chain());
+            }
         }
     }
+}
+
+fn fd_send_all(fd: impl AsFd, buf: &[u8], flags: SendFlags) -> Result<usize, (usize, Errno)> {
+    let fd = fd.as_fd();
+    let mut total_sent = 0;
+
+    while total_sent < buf.len() {
+        match net::send(fd, &buf[total_sent..], flags) {
+            Ok(0) => break,
+            Ok(n_sent) => total_sent += n_sent,
+            Err(error) => return Err((total_sent, error)),
+        }
+    }
+
+    Ok(total_sent)
 }
 
 impl<R> Default for Clients<R> {
