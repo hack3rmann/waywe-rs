@@ -5,6 +5,7 @@ use rustix::{
     process::{Pid, Signal, kill_process},
 };
 use std::{
+    ffi::OsStr,
     fs::File,
     io::{self, ErrorKind, Read},
     path::{Path, PathBuf},
@@ -123,7 +124,7 @@ pub fn execute_pause(
     Ok(())
 }
 
-pub fn execute_start(mode: WaitMode) -> DaemonSetupResult {
+pub fn execute_start(mode: WaitMode, bin: Option<PathBuf>) -> DaemonSetupResult {
     let fifo = match mode {
         WaitMode::Wait => Some(SetupPipe::new_in("/tmp/waywe")),
         WaitMode::DontWait => None,
@@ -135,7 +136,12 @@ pub fn execute_start(mode: WaitMode) -> DaemonSetupResult {
         .into_iter()
         .flatten();
 
-    let mut child = process::Command::new("waywe-daemon")
+    let daemon_cmd = bin
+        .as_ref()
+        .map(AsRef::<OsStr>::as_ref)
+        .unwrap_or(OsStr::new("waywe-daemon"));
+
+    let mut child = process::Command::new(daemon_cmd)
         .arg("--run-in-background")
         .args(fifo_arg)
         .stdout(Stdio::null())

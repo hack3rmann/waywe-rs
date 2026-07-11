@@ -26,6 +26,9 @@ pub enum Command {
         /// Don't wait the daemon to start
         #[arg(long)]
         dont_wait: bool,
+        /// Path to the `waywe-daemon` binary
+        #[arg(long)]
+        bin: Option<PathBuf>,
     },
     /// Stop the daemon process
     Stop {

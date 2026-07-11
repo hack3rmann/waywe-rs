@@ -29,8 +29,8 @@ fn main() -> miette::Result<()> {
             height,
         } => execute_preview(&out, &path, width, height)?,
         Command::Current { monitor } => execute_current(monitor.as_deref())?,
-        Command::Start { dont_wait } => {
-            if let Err(error) = execute_start(WaitMode::from_dont(dont_wait)) {
+        Command::Start { dont_wait, bin } => {
+            if let Err(error) = execute_start(WaitMode::from_dont(dont_wait), bin) {
                 return Err(DaemonSetupDiagnostics::from(error).into());
             }
         }
