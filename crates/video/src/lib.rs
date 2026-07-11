@@ -184,7 +184,7 @@ impl FormatContext {
 
         // HACK(hack3rmann): something WEIRD happens when this functions is called from multiple
         // threads for the first time. FFmpeg docs are saying that is MUST be thread-safe. But
-        // removing the mutexes produses memory errors (unaligned tcache chunk, double-free and friends).
+        // removing the mutexes produces memory errors (unaligned tcache chunk, double-free and friends).
         let res = BackendError::result_of(unsafe {
             avformat_find_stream_info(self.as_raw().as_ptr(), ptr::null_mut())
         });
