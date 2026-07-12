@@ -441,16 +441,13 @@ impl Handle<WaylandEvent> for WallpaperApp {
                     Err(error) => error!(error = %error.chain(), "failed to read setup profile"),
                 }
 
-                let mut run = RunningWallpapers::new(
-                    runtime
-                        .wallpaper_config(monitor_id)
-                        .unwrap_or_else(|| panic!("no config for {monitor_id:?}")),
-                    self.config.animation.clone(),
-                );
+                let wall_config = runtime
+                    .wallpaper_config(monitor_id)
+                    .unwrap_or_else(|| panic!("no config for {monitor_id:?}"));
 
-                run.effects_builder.add_builtins(&self.config.effects);
+                let wallpapers = RunningWallpapers::new(wall_config, self.config.clone());
 
-                self.wallpapers.insert(monitor_id, run);
+                self.wallpapers.insert(monitor_id, wallpapers);
 
                 PostEventActions::empty()
             }
@@ -660,8 +657,15 @@ impl Handle<ConfigReloadEvent> for WallpaperApp {
     async fn handle(
         &mut self,
         runtime: &mut Runtime,
+        // FIXME(hack3rmann): use path
         ConfigReloadEvent { path: _, sender_id }: ConfigReloadEvent,
     ) -> PostEventActions {
+        self.config = Arc::new(Config::read());
+
+        for wall in self.wallpapers.values_mut() {
+            wall.reload_config(&runtime.wgpu, self.config.clone());
+        }
+
         runtime
             .ipc
             .send(IpcResponse {
