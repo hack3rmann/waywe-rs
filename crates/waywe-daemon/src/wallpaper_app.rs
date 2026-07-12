@@ -163,7 +163,8 @@ pub struct CurrentWallpaperEvent {
 #[derive(Clone, Debug)]
 pub struct ConfigReloadEvent {
     pub path: Option<PathBuf>,
-    pub sender_id: ClientId,
+    pub config: Option<Config>,
+    pub sender_id: Option<ClientId>,
 }
 
 impl App for WallpaperApp {
@@ -658,21 +659,27 @@ impl Handle<ConfigReloadEvent> for WallpaperApp {
         &mut self,
         runtime: &mut Runtime,
         // FIXME(hack3rmann): use path
-        ConfigReloadEvent { path: _, sender_id }: ConfigReloadEvent,
+        ConfigReloadEvent {
+            path: _,
+            config,
+            sender_id,
+        }: ConfigReloadEvent,
     ) -> PostEventActions {
-        self.config = Arc::new(Config::read());
+        self.config = Arc::new(config.unwrap_or_else(Config::read));
 
         for wall in self.wallpapers.values_mut() {
             wall.reload_config(&runtime.wgpu, self.config.clone());
         }
 
-        runtime
-            .ipc
-            .send(IpcResponse {
-                body: Ok(DaemonResponse::ConfigReloaded),
-                destination_id: sender_id,
-            })
-            .unwrap();
+        if let Some(destination_id) = sender_id {
+            runtime
+                .ipc
+                .send(IpcResponse {
+                    body: Ok(DaemonResponse::ConfigReloaded),
+                    destination_id,
+                })
+                .unwrap();
+        }
 
         PostEventActions::REDRAW
     }

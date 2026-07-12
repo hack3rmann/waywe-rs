@@ -1,6 +1,9 @@
-use crate::wallpaper_app::{
-    ConfigReloadEvent, CurrentWallpaperEvent, NewWallpaperEvent, WallpaperPauseEvent,
-    WallpaperPreviewEvent,
+use crate::{
+    config::ConfigEventSource,
+    wallpaper_app::{
+        ConfigReloadEvent, CurrentWallpaperEvent, NewWallpaperEvent, WallpaperPauseEvent,
+        WallpaperPreviewEvent,
+    },
 };
 use calloop::{
     EventLoop as CalloopEventLoop, LoopHandle, LoopSignal,
@@ -144,6 +147,16 @@ impl EventLoop {
             })
             .map_err(calloop::Error::from)?;
 
+        handle
+            .insert_source(ConfigEventSource::new(), move |config, &mut (), state| {
+                state.event_queue.add(ConfigReloadEvent {
+                    path: None,
+                    config: Some(config),
+                    sender_id: None,
+                });
+            })
+            .map_err(calloop::Error::from)?;
+
         Ok(())
     }
 }
@@ -283,7 +296,8 @@ impl LoopState {
             }
             DaemonCommand::ConfigReload { path } => ConfigReloadEvent {
                 path,
-                sender_id: command.sender_id,
+                sender_id: Some(command.sender_id),
+                config: None,
             }
             .into_event(),
         };

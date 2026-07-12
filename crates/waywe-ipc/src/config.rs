@@ -3,6 +3,7 @@ use glam::Vec2;
 use rand::distr::{Distribution as _, Uniform};
 use serde::{Deserialize, Serialize};
 use serde_dhall::StaticType;
+use smallvec::SmallVec;
 use static_assertions::assert_impl_all;
 use std::{env, path::PathBuf, time::Duration};
 use tracing::{debug, error, info};
@@ -16,6 +17,28 @@ pub struct Config {
 assert_impl_all!(Config: Send, Sync);
 
 impl Config {
+    pub fn config_paths() -> SmallVec<[PathBuf; 3]> {
+        const WAYWE: &str = "waywe";
+
+        let xdg_path = env::var_os("XDG_CONFIG_HOME").map(|xdg| {
+            let mut path = PathBuf::from(xdg);
+            path.push(WAYWE);
+            path
+        });
+
+        let home_path = env::home_dir().map(|mut home| {
+            home.extend([".config", WAYWE]);
+            home
+        });
+
+        let etc_path = Some(PathBuf::from_iter(["/etc", WAYWE]));
+
+        [xdg_path, home_path, etc_path]
+            .into_iter()
+            .flatten()
+            .collect()
+    }
+
     /// Tries to read config file from HOME paths. If fails, returns the default one.
     ///
     /// Waywe does not create the config file for you,
@@ -25,24 +48,9 @@ impl Config {
     /// 2. `$HOME/.config/waywe/config.dhall`
     /// 3. `/etc/waywe/config.dhall`
     pub fn read() -> Self {
-        const TRAILING: &str = "waywe/config.dhall";
+        for mut path in Self::config_paths() {
+            path.push("config.dhall");
 
-        let xdg_path = env::var_os("XDG_CONFIG_HOME").map(|xdg| {
-            let mut path = PathBuf::from(xdg);
-            path.push(TRAILING);
-            path
-        });
-
-        let home_path = env::home_dir().map(|mut home| {
-            home.extend([".config", TRAILING]);
-            home
-        });
-
-        let etc_path = Some(PathBuf::from_iter(["/etc", TRAILING]));
-
-        let home_paths = [xdg_path, home_path, etc_path].into_iter().flatten();
-
-        for path in home_paths {
             if !path.exists() || !path.is_file() {
                 continue;
             }
