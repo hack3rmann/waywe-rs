@@ -905,7 +905,7 @@ impl<'a> CompileOptions<'a> {
                             wrapped: unsafe { mem::zeroed() },
                         });
                         result.wrapped = scs::shaderc_include_result {
-                            source_name: CStr::from_bytes_with_nul(b"\0").unwrap().as_ptr(),
+                            source_name: c"".as_ptr(),
                             source_name_length: 0,
                             content: result.error_message.as_ptr(),
                             content_length: result.error_message.as_bytes().len(),
@@ -928,7 +928,7 @@ impl<'a> CompileOptions<'a> {
                         wrapped: unsafe { mem::zeroed() },
                     });
                     result.wrapped = scs::shaderc_include_result {
-                        source_name: CStr::from_bytes_with_nul(b"\0").unwrap().as_ptr(),
+                        source_name: c"".as_ptr(),
                         source_name_length: 0,
                         content: result.error_message.as_ptr(),
                         content_length: 0,
