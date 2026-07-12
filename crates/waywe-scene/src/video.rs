@@ -44,8 +44,8 @@ use std::{
 };
 use transmute_extra::pathbuf_into_cstring;
 use video::{
-    BackendError, Codec, CodecContext, FormatContext, Frame, MediaType, Packet, RatioI32,
-    VideoPixelFormat, acceleration::VaSurfaceHandle,
+    BackendError, Codec, CodecContext, FormatContext, Frame, FrameDuration, MediaType, Packet,
+    RatioI32, VideoPixelFormat, acceleration::VaSurfaceHandle,
 };
 use waywe_runtime::shaders::ShaderDescriptor;
 use wgpu::{hal::vulkan, wgc::api};
@@ -109,6 +109,8 @@ pub struct Video {
     /// Delay accumulated between frame updates.
     pub update_delay: Duration,
     pub n_frames_since_update: usize,
+    /// Incremented on every decoded frame; used to detect when GPU export is needed.
+    pub frame_epoch: u64,
 }
 
 impl Asset for Video {}
@@ -158,7 +160,7 @@ impl Video {
             None => FRAME_DURATION_60_FPS,
         };
 
-        Ok(Self {
+        let mut this = Self {
             format_context,
             codec_context,
             time_base,
@@ -170,18 +172,40 @@ impl Video {
             do_loop_video: true,
             update_delay: Duration::ZERO,
             n_frames_since_update: 0,
-        })
+            frame_epoch: 0,
+        };
+
+        this.next_frame();
+        this.n_frames_since_update = 1;
+
+        Ok(this)
+    }
+
+    fn frame_duration(&self) -> Duration {
+        let fallback = self.frame_time_fallback;
+
+        let Some(duration) = self
+            .frame
+            .duration_in(self.time_base)
+            .map(FrameDuration::to_duration)
+        else {
+            return fallback;
+        };
+
+        // Decoded frames can report a single time_base tick (e.g. duration=1 with
+        // stream time_base), which would advance every display frame and allocate
+        // a new GPU texture each time.
+        if duration < fallback / 2 {
+            fallback
+        } else {
+            duration
+        }
     }
 
     /// Advance this video by `delta` time
     pub fn advance_by(&mut self, delta: Duration) {
         // FIXME(hack3rmann): doesn't work for `delta > frame_time`
-        let Some(duration) = self.frame.duration_in(self.time_base) else {
-            self.next_frame();
-            self.n_frames_since_update = 0;
-            return;
-        };
-        let duration = duration.to_duration();
+        let duration = self.frame_duration();
 
         if self.update_delay + delta >= duration {
             self.next_frame();
@@ -247,6 +271,8 @@ impl Video {
                 }
             }
         }
+
+        self.frame_epoch = self.frame_epoch.wrapping_add(1);
     }
 }
 

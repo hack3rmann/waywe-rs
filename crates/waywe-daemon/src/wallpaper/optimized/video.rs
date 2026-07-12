@@ -13,6 +13,8 @@ pub const LABEL: &str = "default-video";
 pub struct VideoWallpaper {
     pub video: Video,
     pub rendered_video: Almost<RenderVideo>,
+    pub rendered_frame_epoch: u64,
+    pub bind_group: Option<wgpu::BindGroup>,
     pub pipeline: VideoPipeline,
     pub config: WallpaperConfig,
 }
@@ -26,6 +28,8 @@ impl VideoWallpaper {
         Ok(Self {
             video: Video::new(path)?,
             rendered_video: Nil,
+            rendered_frame_epoch: 0,
+            bind_group: None,
             pipeline: VideoPipeline::new(gpu, config),
             config,
         })
@@ -76,15 +80,20 @@ impl Wallpaper for VideoWallpaper {
         surface: &wgpu::TextureView,
         encoder: &mut wgpu::CommandEncoder,
     ) -> FrameInfo {
-        if self.video.n_frames_since_update == 0 || Almost::is_nil(&self.rendered_video) {
+        let needs_export = Almost::is_nil(&self.rendered_video)
+            || self.rendered_frame_epoch != self.video.frame_epoch;
+
+        if needs_export {
             self.rendered_video = Value(RenderVideo::export_from(
                 &self.video,
                 &gpu.adapter,
                 &gpu.device,
             ));
+            self.rendered_frame_epoch = self.video.frame_epoch;
+            self.bind_group = Some(self.create_bind_group(&gpu.device));
         }
 
-        let bind_group = self.create_bind_group(&gpu.device);
+        let bind_group = self.bind_group.as_ref().expect("bind group must exist");
 
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
@@ -111,7 +120,7 @@ impl Wallpaper for VideoWallpaper {
         pass.set_pipeline(&self.pipeline.pipeline);
         pass.set_vertex_buffer(0, self.pipeline.vertex_buffer.slice(..));
         pass.set_immediates(0, bytemuck::bytes_of(&size));
-        pass.set_bind_group(0, &bind_group, &[]);
+        pass.set_bind_group(0, bind_group, &[]);
 
         pass.draw(0..SCREEN_TRIANGLE.len() as u32, 0..1);
 
