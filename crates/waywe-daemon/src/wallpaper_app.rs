@@ -160,6 +160,12 @@ pub struct CurrentWallpaperEvent {
     pub sender_id: ClientId,
 }
 
+#[derive(Clone, Debug)]
+pub struct ConfigReloadEvent {
+    pub path: Option<PathBuf>,
+    pub sender_id: ClientId,
+}
+
 impl App for WallpaperApp {
     fn populate_handler(&mut self, handler: &mut EventHandler<Self>) {
         handler
@@ -168,7 +174,8 @@ impl App for WallpaperApp {
             .add_event::<WallpaperPreparedEvent>()
             .add_event::<WallpaperPauseEvent>()
             .add_event::<WallpaperPreviewEvent>()
-            .add_event::<CurrentWallpaperEvent>();
+            .add_event::<CurrentWallpaperEvent>()
+            .add_event::<ConfigReloadEvent>();
     }
 
     async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
@@ -646,6 +653,24 @@ impl Handle<CurrentWallpaperEvent> for WallpaperApp {
             .unwrap();
 
         PostEventActions::empty()
+    }
+}
+
+impl Handle<ConfigReloadEvent> for WallpaperApp {
+    async fn handle(
+        &mut self,
+        runtime: &mut Runtime,
+        ConfigReloadEvent { path: _, sender_id }: ConfigReloadEvent,
+    ) -> PostEventActions {
+        runtime
+            .ipc_sender
+            .send(IpcResponse {
+                body: Ok(DaemonResponse::ConfigReloaded),
+                destination_id: sender_id,
+            })
+            .unwrap();
+
+        PostEventActions::REDRAW
     }
 }
 

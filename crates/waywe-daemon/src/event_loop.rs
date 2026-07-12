@@ -1,5 +1,6 @@
 use crate::wallpaper_app::{
-    CurrentWallpaperEvent, NewWallpaperEvent, WallpaperPauseEvent, WallpaperPreviewEvent,
+    ConfigReloadEvent, CurrentWallpaperEvent, NewWallpaperEvent, WallpaperPauseEvent,
+    WallpaperPreviewEvent,
 };
 use calloop::{
     EventLoop as CalloopEventLoop, LoopHandle, LoopSignal,
@@ -280,6 +281,11 @@ impl LoopState {
                 }
                 .into_event()
             }
+            DaemonCommand::ConfigReload { path } => ConfigReloadEvent {
+                path,
+                sender_id: command.sender_id,
+            }
+            .into_event(),
         };
 
         self.event_queue.add_dyn(event);
