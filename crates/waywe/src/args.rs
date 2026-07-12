@@ -36,9 +36,9 @@ pub enum Command {
         #[arg(long)]
         dont_wait: bool,
     },
-    /// Get path to the current wallpaper
+    /// Get path to the currently running wallpapers for each display in JSON format
     Current {
-        /// Monitor to set wallpaper on
+        /// Filter by monitor name, print only path
         #[arg(short, long)]
         monitor: Option<String>,
     },

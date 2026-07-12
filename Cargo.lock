@@ -4956,6 +4956,7 @@ dependencies = [
  "libc",
  "miette",
  "rustix",
+ "serde_json",
  "tap",
  "tar",
  "thiserror",

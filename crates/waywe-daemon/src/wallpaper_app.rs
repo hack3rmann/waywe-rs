@@ -10,7 +10,7 @@ use display_error_chain::ErrorChainExt;
 use glam::UVec2;
 use smallvec::{SmallVec, smallvec};
 use std::{
-    collections::{BTreeMap, btree_map::Entry},
+    collections::{BTreeMap, HashMap, btree_map::Entry},
     io::ErrorKind,
     path::PathBuf,
     sync::Arc,
@@ -106,6 +106,7 @@ impl WallpaperState {
 pub struct WallpaperApp {
     pub wallpapers: MonitorMap<RunningWallpapers>,
     pub wallpaper_states: BTreeMap<MonitorName, WallpaperState>,
+    pub wallpaper_paths: BTreeMap<MonitorName, PathBuf>,
     pub config: Config,
     pub package_registry: PackageRegistry,
     pub last_instant: Option<Instant>,
@@ -121,6 +122,7 @@ impl WallpaperApp {
 }
 
 pub struct WallpaperPreparedEvent {
+    pub path: PathBuf,
     pub wallpaper: OptimizedWallpaper,
     pub monitor_id: MonitorId,
     pub sender_id: Option<ClientId>,
@@ -152,6 +154,12 @@ pub struct WallpaperPauseEvent {
     pub sender_id: ClientId,
 }
 
+#[derive(Clone, Debug)]
+pub struct CurrentWallpaperEvent {
+    pub target: WallpaperTarget,
+    pub sender_id: ClientId,
+}
+
 impl App for WallpaperApp {
     fn populate_handler(&mut self, handler: &mut EventHandler<Self>) {
         handler
@@ -159,7 +167,8 @@ impl App for WallpaperApp {
             .add_event::<NewWallpaperEvent>()
             .add_event::<WallpaperPreparedEvent>()
             .add_event::<WallpaperPauseEvent>()
-            .add_event::<WallpaperPreviewEvent>();
+            .add_event::<WallpaperPreviewEvent>()
+            .add_event::<CurrentWallpaperEvent>();
     }
 
     async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
@@ -303,6 +312,7 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
         // which can cause monitor reindexing. We should use monitor_name here instead
         let WallpaperPreparedEvent {
             mut wallpaper,
+            path,
             monitor_id,
             sender_id,
         } = event;
@@ -327,7 +337,7 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
             monitors[&monitor_id].name.clone()
         };
 
-        match self.wallpaper_states.entry(monitor_name) {
+        match self.wallpaper_states.entry(monitor_name.clone()) {
             Entry::Vacant(entry) => {
                 entry.insert(WallpaperState::ACTIVE_RUNNING);
             }
@@ -340,6 +350,8 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
                 }
             }
         }
+
+        self.wallpaper_paths.insert(monitor_name, path);
 
         if let Some(destination_id) = sender_id {
             runtime
@@ -510,6 +522,7 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
                     match wallpaper::create(gpu, &path, ty, config, packages).await {
                         Ok(wallpaper) => emitter
                             .emit(WallpaperPreparedEvent {
+                                path,
                                 wallpaper,
                                 monitor_id,
                                 sender_id,
@@ -599,6 +612,38 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
                 });
             })
             .await;
+
+        PostEventActions::empty()
+    }
+}
+
+impl Handle<CurrentWallpaperEvent> for WallpaperApp {
+    async fn handle(
+        &mut self,
+        runtime: &mut Runtime,
+        CurrentWallpaperEvent { target, sender_id }: CurrentWallpaperEvent,
+    ) -> PostEventActions {
+        let current = match target {
+            WallpaperTarget::ForMonitor(id) => {
+                let name = runtime.wayland.client_state.monitor_name(id).unwrap();
+                let path = self.wallpaper_paths[&name].clone();
+
+                HashMap::from_iter([(name.to_string(), path)])
+            }
+            WallpaperTarget::ForAll => self
+                .wallpaper_paths
+                .iter()
+                .map(|(name, path)| (name.to_string(), path.clone()))
+                .collect(),
+        };
+
+        runtime
+            .ipc_sender
+            .send(IpcResponse {
+                body: Ok(DaemonResponse::Current(current)),
+                destination_id: sender_id,
+            })
+            .unwrap();
 
         PostEventActions::empty()
     }

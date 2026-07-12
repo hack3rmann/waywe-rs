@@ -1,4 +1,6 @@
-use crate::wallpaper_app::{NewWallpaperEvent, WallpaperPauseEvent, WallpaperPreviewEvent};
+use crate::wallpaper_app::{
+    CurrentWallpaperEvent, NewWallpaperEvent, WallpaperPauseEvent, WallpaperPreviewEvent,
+};
 use calloop::{
     EventLoop as CalloopEventLoop, LoopHandle, LoopSignal,
     channel::{Channel, channel},
@@ -263,6 +265,17 @@ impl LoopState {
                 WallpaperPauseEvent {
                     target,
                     mode,
+                    sender_id: command.sender_id,
+                }
+                .into_event()
+            }
+            DaemonCommand::Current { monitor } => {
+                let Some(target) = get_target(monitor.as_deref()) else {
+                    return;
+                };
+
+                CurrentWallpaperEvent {
+                    target,
                     sender_id: command.sender_id,
                 }
                 .into_event()

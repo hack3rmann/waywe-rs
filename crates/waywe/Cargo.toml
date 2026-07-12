@@ -33,3 +33,4 @@ bincode.workspace = true
 miette.workspace = true
 image.workspace = true
 humantime = "2.4.0"
+serde_json = "1.0.150"

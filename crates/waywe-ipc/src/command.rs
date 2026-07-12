@@ -2,7 +2,7 @@ use crate::WallpaperType;
 use bincode::{Decode, Encode};
 use display_error_chain::ErrorChainExt;
 use miette::Diagnostic;
-use std::{error::Error, path::PathBuf, time::Duration};
+use std::{collections::HashMap, error::Error, path::PathBuf, time::Duration};
 use thiserror::Error;
 
 #[derive(Encode, Decode, Default, Debug, Clone, Copy, PartialEq, PartialOrd, Hash, Eq, Ord)]
@@ -47,9 +47,12 @@ pub enum DaemonCommand {
         monitor: Option<String>,
         mode: PauseMode,
     },
+    Current {
+        monitor: Option<String>,
+    },
 }
 
-#[derive(Encode, Decode, Debug, PartialEq, PartialOrd, Hash, Eq, Ord, Clone)]
+#[derive(Encode, Decode, Debug, PartialEq, Eq, Clone)]
 pub enum DaemonResponse {
     WallpaperSet,
     // TODO(hack3rmann): return pause state for each plugged monitor
@@ -59,13 +62,14 @@ pub enum DaemonResponse {
         height: u32,
         rgba: Vec<u8>,
     },
+    Current(HashMap<String, PathBuf>),
 }
 
 impl DaemonResponse {
     pub const fn is_terminal(&self) -> bool {
         matches!(
             self,
-            Self::WallpaperSet | Self::PauseDone | Self::Preview { .. }
+            Self::WallpaperSet | Self::PauseDone | Self::Preview { .. } | Self::Current(..)
         )
     }
 }

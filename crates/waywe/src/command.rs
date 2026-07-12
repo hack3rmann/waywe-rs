@@ -19,13 +19,10 @@ use waywe_ipc::{
     ClientError, DaemonCommand, DaemonSetupResult, IpcClient, WallpaperType,
     command::{DaemonError, DaemonResponse, DaemonResult, PauseMode},
     detach::{BINCODE_CONFIG, SetupPipe},
-    profile::{SetupProfile, SetupProfileError},
 };
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum ExecuteError {
-    #[error("failed to open profile file: {0}")]
-    ProfileIo(#[from] SetupProfileError),
     #[error("no wallpaper is running")]
     NoWallpaper,
     #[error("unsupported file format '{0:?}'")]
@@ -68,16 +65,25 @@ pub enum ExecuteError {
 }
 
 pub fn execute_current(monitor_name: Option<&str>) -> Result<(), ExecuteError> {
-    let mut profile = SetupProfile::read()?;
+    let socket = connect_daemon()?;
 
-    let Some(info) = (match monitor_name {
-        Some(name) => profile.monitors.remove(name),
-        None => profile.monitors.into_values().next(),
-    }) else {
-        return Err(ExecuteError::NoWallpaper);
+    socket.send(DaemonCommand::Current {
+        monitor: monitor_name.map(str::to_owned),
+    })?;
+
+    let response = socket.recv()??;
+
+    let DaemonResponse::Current(current) = response else {
+        return Err(ExecuteError::UnexpectedDaemonResponse(response));
     };
 
-    println!("{}", info.path.display());
+    if let Some(name) = monitor_name
+        && let Some(path) = current.get(name)
+    {
+        print!("{}", path.display());
+    } else {
+        serde_json::to_writer(io::stdout(), &current).unwrap();
+    }
 
     Ok(())
 }
