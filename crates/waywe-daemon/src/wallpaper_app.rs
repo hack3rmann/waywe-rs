@@ -107,7 +107,7 @@ pub struct WallpaperApp {
     pub wallpapers: MonitorMap<RunningWallpapers>,
     pub wallpaper_states: BTreeMap<MonitorName, WallpaperState>,
     pub wallpaper_paths: BTreeMap<MonitorName, PathBuf>,
-    pub config: Config,
+    pub config: Arc<Config>,
     pub package_registry: PackageRegistry,
     pub last_instant: Option<Instant>,
 }
@@ -115,7 +115,7 @@ pub struct WallpaperApp {
 impl WallpaperApp {
     pub fn from_config(config: Config) -> Self {
         Self {
-            config,
+            config: Arc::new(config),
             ..Default::default()
         }
     }
@@ -298,7 +298,7 @@ impl Handle<WallpaperPauseEvent> for WallpaperApp {
         }
 
         runtime
-            .ipc_sender
+            .ipc
             .send(IpcResponse {
                 body: Ok(DaemonResponse::PauseDone),
                 destination_id: sender_id,
@@ -362,7 +362,7 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
 
         if let Some(destination_id) = sender_id {
             runtime
-                .ipc_sender
+                .ipc
                 .send(IpcResponse {
                     body: Ok(DaemonResponse::WallpaperSet),
                     destination_id,
@@ -521,7 +521,7 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
                 .wallpaper_config(monitor_id)
                 .unwrap_or_else(|| panic!("no config for {monitor_id:?}"));
             let packages = self.package_registry.clone();
-            let ipc_sender = runtime.ipc_sender.clone();
+            let ipc = runtime.ipc.clone();
 
             runtime
                 .task_pool
@@ -535,7 +535,7 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
                                 sender_id,
                             })
                             .unwrap(),
-                        Err(error) => report_error(&ipc_sender, sender_id, error.clone()),
+                        Err(error) => report_error(&ipc, sender_id, error.clone()),
                     }
                 })
                 .await;
@@ -558,7 +558,7 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
         }: WallpaperPreviewEvent,
     ) -> PostEventActions {
         let gpu = runtime.wgpu.clone();
-        let ipc = runtime.ipc_sender.clone();
+        let ipc = runtime.ipc.clone();
 
         let packages = self.package_registry.clone();
 
@@ -645,7 +645,7 @@ impl Handle<CurrentWallpaperEvent> for WallpaperApp {
         };
 
         runtime
-            .ipc_sender
+            .ipc
             .send(IpcResponse {
                 body: Ok(DaemonResponse::Current(current)),
                 destination_id: sender_id,
@@ -663,7 +663,7 @@ impl Handle<ConfigReloadEvent> for WallpaperApp {
         ConfigReloadEvent { path: _, sender_id }: ConfigReloadEvent,
     ) -> PostEventActions {
         runtime
-            .ipc_sender
+            .ipc
             .send(IpcResponse {
                 body: Ok(DaemonResponse::ConfigReloaded),
                 destination_id: sender_id,
@@ -675,7 +675,7 @@ impl Handle<ConfigReloadEvent> for WallpaperApp {
 }
 
 fn report_error(
-    ipc_sender: &Sender<IpcResponse<DaemonResult>>,
+    ipc: &Sender<IpcResponse<DaemonResult>>,
     destination_id: Option<ClientId>,
     error: DaemonError,
 ) {
@@ -685,10 +685,9 @@ fn report_error(
         return;
     };
 
-    ipc_sender
-        .send(IpcResponse {
-            body: Err(error.clone()),
-            destination_id,
-        })
-        .unwrap();
+    ipc.send(IpcResponse {
+        body: Err(error.clone()),
+        destination_id,
+    })
+    .unwrap();
 }

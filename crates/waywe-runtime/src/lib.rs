@@ -22,20 +22,20 @@ pub struct Runtime {
     pub wgpu: Arc<Wgpu>,
     pub wayland: Wayland,
     pub task_pool: TaskPool,
-    pub ipc_sender: Sender<IpcResponse<DaemonResult>>,
+    pub ipc: Sender<IpcResponse<DaemonResult>>,
 }
 
 impl Runtime {
     pub fn new(
         wayland: Wayland,
         task_pool: TaskPool,
-        ipc_sender: Sender<IpcResponse<DaemonResult>>,
+        ipc: Sender<IpcResponse<DaemonResult>>,
     ) -> Self {
         static VIDEO_ONCE: Once = Once::new();
         VIDEO_ONCE.call_once(video::init);
 
         Self {
-            ipc_sender,
+            ipc,
             timer: Timer::default(),
             wgpu: Arc::default(),
             wayland,

@@ -5030,6 +5030,7 @@ dependencies = [
  "slab",
  "smallstr",
  "smallvec",
+ "static_assertions",
  "thiserror",
  "toml",
  "tracing",

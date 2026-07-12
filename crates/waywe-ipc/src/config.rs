@@ -3,6 +3,7 @@ use glam::Vec2;
 use rand::distr::{Distribution as _, Uniform};
 use serde::{Deserialize, Serialize};
 use serde_dhall::StaticType;
+use static_assertions::assert_impl_all;
 use std::{env, path::PathBuf, time::Duration};
 use tracing::{debug, error, info};
 
@@ -12,6 +13,7 @@ pub struct Config {
     #[serde(default)]
     pub effects: Vec<Effects>,
 }
+assert_impl_all!(Config: Send, Sync);
 
 impl Config {
     /// Tries to read config file from HOME paths. If fails, returns the default one.
@@ -26,22 +28,17 @@ impl Config {
         const TRAILING: &str = "waywe/config.dhall";
 
         let xdg_path = env::var_os("XDG_CONFIG_HOME").map(|xdg| {
-            let mut p = PathBuf::from(xdg);
-            p.push(TRAILING);
-            p
+            let mut path = PathBuf::from(xdg);
+            path.push(TRAILING);
+            path
         });
 
         let home_path = env::home_dir().map(|mut home| {
-            home.push(".config");
-            home.push(TRAILING);
+            home.extend([".config", TRAILING]);
             home
         });
 
-        let etc_path = {
-            let mut etc = PathBuf::from("/etc");
-            etc.push(TRAILING);
-            Some(etc)
-        };
+        let etc_path = Some(PathBuf::from_iter(["/etc", TRAILING]));
 
         let home_paths = [xdg_path, home_path, etc_path].into_iter().flatten();
 
