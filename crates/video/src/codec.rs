@@ -399,6 +399,14 @@ impl CodecContext {
         }
     }
 
+    pub fn set_extra_hw_frames(&mut self, count: u32) {
+        unsafe { (*self.as_raw().as_ptr()).extra_hw_frames = i32::try_from(count).unwrap() };
+    }
+
+    pub fn set_thread_count(&mut self, count: u32) {
+        unsafe { (*self.as_raw().as_ptr()).thread_count = i32::try_from(count).unwrap() };
+    }
+
     /// Initialize the [`CodecContext`] to use the given [`Codec`].
     ///
     /// Depending on the codec, you might need to set options in the codec context

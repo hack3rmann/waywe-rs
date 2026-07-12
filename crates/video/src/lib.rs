@@ -14,10 +14,11 @@ use ffmpeg_sys_next::{
     SWS_FAST_BILINEAR, SWS_FULL_CHR_H_INP, SWS_FULL_CHR_H_INT, SWS_GAUSS, SWS_LANCZOS,
     SWS_PARAM_DEFAULT, SWS_POINT, SWS_PRINT_INFO, SWS_SINC, SWS_SPLINE, SWS_SRC_V_CHR_DROP_MASK,
     SWS_SRC_V_CHR_DROP_SHIFT, SWS_X, SwsContext, av_buffer_get_ref_count, av_codec_iterate,
-    av_find_best_stream, av_frame_alloc, av_frame_free, av_frame_get_buffer, av_frame_unref,
-    av_new_packet, av_packet_alloc, av_packet_free, av_packet_ref, av_packet_unref, av_read_frame,
-    avdevice_register_all, avformat_close_input, avformat_find_stream_info, avformat_open_input,
-    avformat_seek_file, avio_seek, sws_getContext, sws_scale,
+    av_dict_free, av_dict_set, av_find_best_stream, av_frame_alloc, av_frame_free,
+    av_frame_get_buffer, av_frame_unref, av_new_packet, av_packet_alloc, av_packet_free,
+    av_packet_ref, av_packet_unref, av_read_frame, avdevice_register_all, avformat_close_input,
+    avformat_find_stream_info, avformat_open_input, avformat_seek_file, avio_seek, sws_getContext,
+    sws_scale,
 };
 use glam::UVec2;
 use std::{
@@ -149,15 +150,36 @@ impl FormatContext {
     /// If you want to use custom IO, preallocate the format context and set its pb field.
     pub fn from_input(url: &CStr) -> Result<Self, BackendError> {
         let mut context_ptr = ptr::null_mut();
+        let mut options = ptr::null_mut();
+
+        const ONE_MEGABYTE: &CStr = c"1048576";
+        const ONE_SECOND: &CStr = c"1000000";
+
+        unsafe {
+            av_dict_set(
+                &raw mut options,
+                c"probesize".as_ptr(),
+                ONE_MEGABYTE.as_ptr(),
+                0,
+            );
+            av_dict_set(
+                &raw mut options,
+                c"analyzeduration".as_ptr(),
+                ONE_SECOND.as_ptr(),
+                0,
+            );
+        }
 
         BackendError::result_of(unsafe {
             avformat_open_input(
                 &raw mut context_ptr,
                 url.as_ptr(),
                 ptr::null_mut(),
-                ptr::null_mut(),
+                &raw mut options,
             )
         })?;
+
+        unsafe { av_dict_free(&raw mut options) };
 
         let mut context = unsafe { Self::from_raw(NonNull::new_unchecked(context_ptr)) };
         context.find_stream_info()?;

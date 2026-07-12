@@ -151,6 +151,12 @@ impl Video {
         let mut codec_context =
             CodecContext::from_parameters_with_hw_accel(codec_parameters, Some(decoder))?;
 
+        // TODO(hack3rmann): add config options for that
+        //
+        // Keep the VA surface pool small: the default can retain many decoded
+        // reference frames worth of GPU memory per decoder instance.
+        codec_context.set_extra_hw_frames(2);
+        codec_context.set_thread_count(1);
         codec_context.open(decoder)?;
 
         const FRAME_DURATION_60_FPS: Duration = RatioI32::new(1, 60).unwrap().to_duration_seconds();
