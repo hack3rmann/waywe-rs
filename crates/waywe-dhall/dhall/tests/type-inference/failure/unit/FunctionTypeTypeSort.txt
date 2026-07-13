@@ -1,6 +1,1 @@
-Type error: error: Sort does not have a type
- --> <current file>:1:8
-  |
-1 | Type → Sort
-  |        ^^^^ Sort does not have a type
-  |
+TypeError { message: Custom("error: Sort does not have a type\n --> <current file>:1:8\n  |\n1 | Type → Sort\n  |        ^^^^ Sort does not have a type\n  |") }

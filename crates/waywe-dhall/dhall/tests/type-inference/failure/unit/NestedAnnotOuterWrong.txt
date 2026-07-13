@@ -1,6 +1,1 @@
-Type error: error: annot mismatch: Natural != Bool
- --> <current file>:1:2
-  |
-1 | (0 : Natural) : Bool
-  |  ^^^^^^^^^^^ annot mismatch: Natural != Bool
-  |
+TypeError { message: Custom("error: annot mismatch: Natural != Bool\n --> <current file>:1:2\n  |\n1 | (0 : Natural) : Bool\n  |  ^^^^^^^^^^^ annot mismatch: Natural != Bool\n  |") }

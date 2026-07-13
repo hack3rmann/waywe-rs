@@ -13,7 +13,7 @@ use thiserror::Error;
 use libtest_mimic::{Arguments, Trial};
 use walkdir::WalkDir;
 
-use dhall::error::Error as DhallError;
+use dhall::error::{Error as DhallError, TypeError};
 use dhall::syntax::{Expr, binary};
 use dhall::{Ctxt, Normalized, Parsed, Resolved, Typed};
 
@@ -231,6 +231,11 @@ impl TestFile {
         }
         Ok(())
     }
+    /// Check that the provided error value matches the expected debug representation.
+    pub fn compare_error(&self, err: anyhow::Error) -> Result<()> {
+        self.compare_ui(format_test_error(err))
+    }
+
     /// Check that the provided string matches the file contents. Writes to the corresponding file
     /// if it is missing.
     pub fn compare_ui(&self, x: impl Display) -> Result<()> {
@@ -295,6 +300,17 @@ struct SpecTest {
 #[derive(Debug, Clone, Error)]
 #[error("{0}")]
 struct TestError(String);
+
+/// Format an error for spec tests using its structured debug representation.
+fn format_test_error(err: anyhow::Error) -> String {
+    if let Some(err) = err.downcast_ref::<TypeError>() {
+        format!("{err:?}")
+    } else if let Some(err) = err.downcast_ref::<DhallError>() {
+        format!("{err:?}")
+    } else {
+        format!("{err:?}")
+    }
+}
 
 fn dhall_files_in_dir<'a>(
     dir: &'a Path,
@@ -608,7 +624,7 @@ fn run_test(test: &SpecTest) -> Result<()> {
                         }
                     }
                 }
-                expected.compare_ui(err)?;
+                expected.compare_error(err)?;
             }
             BinaryEncoding => {
                 let expr = expr.parse()?;
@@ -620,7 +636,7 @@ fn run_test(test: &SpecTest) -> Result<()> {
             }
             BinaryDecodingFailure => {
                 let err = unwrap_err(expr.parse())?;
-                expected.compare_ui(err)?;
+                expected.compare_error(err)?;
             }
             Printer => {
                 let parsed = expr.parse()?;
@@ -635,7 +651,7 @@ fn run_test(test: &SpecTest) -> Result<()> {
             }
             ImportFailure => {
                 let err = unwrap_err(expr.resolve(cx))?;
-                expected.compare_ui(err)?;
+                expected.compare_error(err)?;
             }
             SemanticHash => {
                 let expr = expr.normalize(cx)?.to_expr_alpha(cx);
@@ -648,7 +664,7 @@ fn run_test(test: &SpecTest) -> Result<()> {
             }
             TypeInferenceFailure => {
                 let err = unwrap_err(expr.typecheck(cx))?;
-                expected.compare_ui(err)?;
+                expected.compare_error(err)?;
             }
             Normalization => {
                 let expr = expr.normalize(cx)?;

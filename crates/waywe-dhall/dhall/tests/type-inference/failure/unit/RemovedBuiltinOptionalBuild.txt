@@ -1,6 +1,1 @@
-Type error: error: unbound variable ``Optional/build``
- --> <current file>:1:1
-  |
-1 | Optional/build
-  | ^^^^^^^^^^^^^^ not found in this scope
-  |
+TypeError { message: Custom("error: unbound variable ``Optional/build``\n --> <current file>:1:1\n  |\n1 | Optional/build\n  | ^^^^^^^^^^^^^^ not found in this scope\n  |") }

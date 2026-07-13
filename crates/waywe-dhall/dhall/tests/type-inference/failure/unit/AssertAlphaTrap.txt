@@ -1,6 +1,1 @@
-Type error: error: unbound variable `_`
- --> <current file>:1:47
-  |
-1 | assert : (\(_: Bool) -> _) === (\(x: Bool) -> _)
-  |                                               ^ not found in this scope
-  |
+TypeError { message: Custom("error: unbound variable `_`\n --> <current file>:1:47\n  |\n1 | assert : (\\(_: Bool) -> _) === (\\(x: Bool) -> _)\n  |                                               ^ not found in this scope\n  |") }

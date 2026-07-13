@@ -1,6 +1,1 @@
-Type error: error: MergeAnnotMismatch
- --> <current file>:1:1
-  |
-1 | merge { x = 0 } < x >.x : Bool
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ MergeAnnotMismatch
-  |
+TypeError { message: Custom("error: MergeAnnotMismatch\n --> <current file>:1:1\n  |\n1 | merge { x = 0 } < x >.x : Bool\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ MergeAnnotMismatch\n  |") }

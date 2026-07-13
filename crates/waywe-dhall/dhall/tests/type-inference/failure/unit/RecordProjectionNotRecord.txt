@@ -1,6 +1,1 @@
-Type error: error: ProjectionMustBeRecord
- --> <current file>:1:1
-  |
-1 | True.{ x }
-  | ^^^^^^^^^^ ProjectionMustBeRecord
-  |
+TypeError { message: Custom("error: ProjectionMustBeRecord\n --> <current file>:1:1\n  |\n1 | True.{ x }\n  | ^^^^^^^^^^ ProjectionMustBeRecord\n  |") }

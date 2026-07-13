@@ -1,6 +1,1 @@
-Type error: error: AssertMismatch
- --> <current file>:1:1
-  |
-1 | assert : -0.0 ≡ +0.0
-  | ^^^^^^^^^^^^^^^^^^^^ AssertMismatch
-  |
+TypeError { message: Custom("error: AssertMismatch\n --> <current file>:1:1\n  |\n1 | assert : -0.0 ≡ +0.0\n  | ^^^^^^^^^^^^^^^^^^^^ AssertMismatch\n  |") }

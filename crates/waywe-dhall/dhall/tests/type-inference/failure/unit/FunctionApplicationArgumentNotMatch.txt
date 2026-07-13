@@ -1,9 +1,1 @@
-Type error: error: wrong type of function argument
- --> <current file>:1:2
-  |
-1 | (λ(_ : Natural) → _) True
-  |  ^^^^^^^^^^^^^^^^^^ this expects an argument of type: Natural
-  |                      ^^^^ but this has type: Bool
-  |
-  = note: expected type `Natural`
-             found type `Bool`
+TypeError { message: Custom("error: wrong type of function argument\n --> <current file>:1:2\n  |\n1 | (λ(_ : Natural) → _) True\n  |  ^^^^^^^^^^^^^^^^^^ this expects an argument of type: Natural\n  |                      ^^^^ but this has type: Bool\n  |\n  = note: expected type `Natural`\n             found type `Bool`") }

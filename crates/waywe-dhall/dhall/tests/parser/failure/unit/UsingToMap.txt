@@ -1,6 +1,1 @@
- --> 8:27
-  |
-8 | https://example.com using toMap { Foo = "Bar" }
-  |                           ^---
-  |
-  = expected import_hashed or primitive_expression
+Parse(Error { variant: ParsingError { positives: [import_hashed, primitive_expression], negatives: [] }, location: Pos(341), line_col: Pos((8, 27)), inner: ErrorInner { path: None, line: "https://example.com using toMap { Foo = \"Bar\" }", continued_line: None, parse_attempts: None } })

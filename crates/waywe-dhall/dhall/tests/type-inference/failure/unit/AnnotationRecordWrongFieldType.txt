@@ -1,6 +1,1 @@
-Type error: error: annot mismatch: { x : Natural } != { x : Text }
- --> <current file>:1:1
-  |
-1 | { x = 1 } : { x : Text }
-  | ^^^^^^^^^ annot mismatch: { x : Natural } != { x : Text }
-  |
+TypeError { message: Custom("error: annot mismatch: { x : Natural } != { x : Text }\n --> <current file>:1:1\n  |\n1 | { x = 1 } : { x : Text }\n  | ^^^^^^^^^ annot mismatch: { x : Natural } != { x : Text }\n  |") }

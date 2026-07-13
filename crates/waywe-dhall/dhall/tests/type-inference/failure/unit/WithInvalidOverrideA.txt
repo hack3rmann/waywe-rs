@@ -1,7 +1,1 @@
-Type error: error: WithMustBeRecord
- --> <current file>:1:1
-  |
-...
-6 | { a = 1 } with a.b = 2
-  | ^^^^^^^^^^^^^^^^^^^^^^ WithMustBeRecord
-  |
+TypeError { message: Custom("error: WithMustBeRecord\n --> <current file>:6:1\n  |\n...\n6 | { a = 1 } with a.b = 2\n  | ^^^^^^^^^^^^^^^^^^^^^^ WithMustBeRecord\n  |") }

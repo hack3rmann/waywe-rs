@@ -1,6 +1,1 @@
- --> 1:15
-  |
-1 | ./testImport .hello
-  |               ^---
-  |
-  = expected path
+Parse(Error { variant: ParsingError { positives: [path], negatives: [] }, location: Pos(14), line_col: Pos((1, 15)), inner: ErrorInner { path: None, line: "./testImport .hello", continued_line: None, parse_attempts: None } })

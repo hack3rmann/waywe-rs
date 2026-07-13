@@ -1,1 +1,1 @@
-WrongFormatError("`_` variable was encoded incorrectly")
+Decode(WrongFormatError("`_` variable was encoded incorrectly"))

@@ -1,6 +1,1 @@
- --> 1:5
-  |
-1 | let assert = 2 in 1
-  |     ^---
-  |
-  = expected simple_label
+Parse(Error { variant: ParsingError { positives: [simple_label], negatives: [] }, location: Pos(4), line_col: Pos((1, 5)), inner: ErrorInner { path: None, line: "let assert = 2 in 1", continued_line: None, parse_attempts: None } })

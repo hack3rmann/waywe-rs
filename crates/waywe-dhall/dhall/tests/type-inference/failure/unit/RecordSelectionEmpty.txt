@@ -1,6 +1,1 @@
-Type error: error: MissingRecordField
- --> <current file>:1:1
-  |
-1 | {=}.x
-  | ^^^^^ MissingRecordField
-  |
+TypeError { message: Custom("error: MissingRecordField\n --> <current file>:1:1\n  |\n1 | {=}.x\n  | ^^^^^ MissingRecordField\n  |") }

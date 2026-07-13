@@ -1,6 +1,1 @@
- --> 1:9
-  |
-1 | toMap x :T
-  |         ^---
-  |
-  = expected EOI, import_alt, bool_or, natural_plus, text_append, list_append, bool_and, natural_times, bool_eq, bool_ne, combine, combine_types, equivalent, prefer, arrow, import_hashed, or primitive_expression
+Parse(Error { variant: ParsingError { positives: [EOI, import_alt, bool_or, natural_plus, text_append, list_append, bool_and, natural_times, bool_eq, bool_ne, combine, combine_types, equivalent, prefer, arrow, import_hashed, primitive_expression], negatives: [] }, location: Pos(8), line_col: Pos((1, 9)), inner: ErrorInner { path: None, line: "toMap x :T", continued_line: None, parse_attempts: None } })

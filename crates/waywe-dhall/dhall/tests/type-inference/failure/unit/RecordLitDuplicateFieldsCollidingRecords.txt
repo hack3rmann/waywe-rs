@@ -1,7 +1,1 @@
-Type error: error: DuplicateFieldName
- --> <current file>:1:22
-  |
-...
-8 | { x = { y = 0 }, x = { y = 0 } }
-  |                      ^^^^^^^^^ DuplicateFieldName
-  |
+TypeError { message: Custom("error: DuplicateFieldName\n --> <current file>:8:22\n  |\n...\n8 | { x = { y = 0 }, x = { y = 0 } }\n  |                      ^^^^^^^^^ DuplicateFieldName\n  |") }

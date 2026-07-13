@@ -1,6 +1,1 @@
-Type error: error: unbound variable ``Optional/fold``
- --> <current file>:1:1
-  |
-1 | Optional/fold
-  | ^^^^^^^^^^^^^ not found in this scope
-  |
+TypeError { message: Custom("error: unbound variable ``Optional/fold``\n --> <current file>:1:1\n  |\n1 | Optional/fold\n  | ^^^^^^^^^^^^^ not found in this scope\n  |") }

@@ -1,6 +1,1 @@
- --> 1:6
-  |
-1 | env:"\$"
-  |      ^---
-  |
-  = expected posix_environment_variable_character
+Parse(Error { variant: ParsingError { positives: [posix_environment_variable_character], negatives: [] }, location: Pos(5), line_col: Pos((1, 6)), inner: ErrorInner { path: None, line: "env:\"\\$\"", continued_line: None, parse_attempts: None } })

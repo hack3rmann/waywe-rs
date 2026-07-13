@@ -1,6 +1,1 @@
-Type error: error: InvalidListElement
- --> <current file>:1:1
-  |
-1 | [ True, 1 ]
-  | ^^^^^^^^^^^ InvalidListElement
-  |
+TypeError { message: Custom("error: InvalidListElement\n --> <current file>:1:1\n  |\n1 | [ True, 1 ]\n  | ^^^^^^^^^^^ InvalidListElement\n  |") }

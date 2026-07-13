@@ -1,6 +1,1 @@
-Type error: error: MustCombineRecord
- --> <current file>:1:1
-  |
-1 | True ⫽ {=}
-  | ^^^^^^^^^^ MustCombineRecord
-  |
+TypeError { message: Custom("error: MustCombineRecord\n --> <current file>:1:1\n  |\n1 | True ⫽ {=}\n  | ^^^^^^^^^^ MustCombineRecord\n  |") }

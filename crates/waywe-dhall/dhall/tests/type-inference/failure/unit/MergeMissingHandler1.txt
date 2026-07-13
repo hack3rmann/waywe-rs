@@ -1,6 +1,1 @@
-Type error: error: MergeVariantMissingHandler
- --> <current file>:1:1
-  |
-1 | merge {=} <x>.x
-  | ^^^^^^^^^^^^^^^ MergeVariantMissingHandler
-  |
+TypeError { message: Custom("error: MergeVariantMissingHandler\n --> <current file>:1:1\n  |\n1 | merge {=} <x>.x\n  | ^^^^^^^^^^^^^^^ MergeVariantMissingHandler\n  |") }

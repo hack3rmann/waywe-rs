@@ -1,7 +1,1 @@
-Type error: error: annot mismatch: { id : Optional Natural, name : Bool } != { id : Optional Natural, name : Text }
- --> <current file>:1:5
-  |
-...
-6 | in  Example::{ name = True }
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^ annot mismatch: { id : Optional Natural, name : Bool } != { id : Optional Natural, name : Text }
-  |
+TypeError { message: Custom("error: annot mismatch: { id : Optional Natural, name : Bool } != { id : Optional Natural, name : Text }\n --> <current file>:6:5\n  |\n...\n6 | in  Example::{ name = True }\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^ annot mismatch: { id : Optional Natural, name : Bool } != { id : Optional Natural, name : Text }\n  |") }

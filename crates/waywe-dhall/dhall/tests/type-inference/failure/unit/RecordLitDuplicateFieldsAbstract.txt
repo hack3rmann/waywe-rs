@@ -1,12 +1,1 @@
-Type error: error: DuplicateFieldName
-  --> <current file>:6:47
-   |
- 1 | {-  This test illustrates that duplicate fields need not be literals in order
- 2 |     to be properly normalized.  One or both of the duplicate fields can be
- 3 |     abstract because field duplication delegates its behavior to the `∧`
- 4 |     operator
-...
-12 | -}
-13 | λ(r : { y : Natural }) → { x = { y = 1 }, x = r }
-   |                                               ^ DuplicateFieldName
-   |
+TypeError { message: Custom("error: DuplicateFieldName\n  --> <current file>:13:47\n   |\n 1 | {-  This test illustrates that duplicate fields need not be literals in order\n 2 |     to be properly normalized.  One or both of the duplicate fields can be\n 3 |     abstract because field duplication delegates its behavior to the `∧`\n 4 |     operator\n...\n12 | -}\n13 | λ(r : { y : Natural }) → { x = { y = 1 }, x = r }\n   |                                               ^ DuplicateFieldName\n   |") }

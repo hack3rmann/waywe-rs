@@ -1,6 +1,1 @@
-Type error: error: annot mismatch: List Natural != Optional Natural
- --> <current file>:1:1
-  |
-1 | [ 1 ] : Optional Natural
-  | ^^^^^ annot mismatch: List Natural != Optional Natural
-  |
+TypeError { message: Custom("error: annot mismatch: List Natural != Optional Natural\n --> <current file>:1:1\n  |\n1 | [ 1 ] : Optional Natural\n  | ^^^^^ annot mismatch: List Natural != Optional Natural\n  |") }

@@ -1,6 +1,1 @@
- --> 1:3
-  |
-1 | { x :T }
-  |   ^---
-  |
-  = expected missing, if_, merge, NaN, Some_, toMap, assert, forall_keyword, record_type_entry, or empty_record_literal
+Parse(Error { variant: ParsingError { positives: [missing, if_, merge, NaN, Some_, toMap, assert, forall_keyword, record_type_entry, empty_record_literal], negatives: [] }, location: Pos(2), line_col: Pos((1, 3)), inner: ErrorInner { path: None, line: "{ x :T }", continued_line: None, parse_attempts: None } })

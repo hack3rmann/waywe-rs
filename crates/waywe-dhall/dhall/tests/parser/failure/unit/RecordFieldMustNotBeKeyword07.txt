@@ -1,6 +1,1 @@
- --> 1:3
-  |
-1 | { assert: Text }
-  |   ^---
-  |
-  = expected any_label_or_some or empty_record_literal
+Parse(Error { variant: ParsingError { positives: [any_label_or_some, empty_record_literal], negatives: [] }, location: Pos(2), line_col: Pos((1, 3)), inner: ErrorInner { path: None, line: "{ assert: Text }", continued_line: None, parse_attempts: None } })

@@ -1,6 +1,1 @@
-Type error: error: IfBranchMismatch
- --> <current file>:1:1
-  |
-1 | if True then 1 else ""
-  | ^^^^^^^^^^^^^^^^^^^^^^ IfBranchMismatch
-  |
+TypeError { message: Custom("error: IfBranchMismatch\n --> <current file>:1:1\n  |\n1 | if True then 1 else \"\"\n  | ^^^^^^^^^^^^^^^^^^^^^^ IfBranchMismatch\n  |") }

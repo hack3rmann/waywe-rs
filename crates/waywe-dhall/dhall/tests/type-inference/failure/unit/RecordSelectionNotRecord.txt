@@ -1,6 +1,1 @@
-Type error: error: NotARecord
- --> <current file>:1:1
-  |
-1 | True.x
-  | ^^^^^^ NotARecord
-  |
+TypeError { message: Custom("error: NotARecord\n --> <current file>:1:1\n  |\n1 | True.x\n  | ^^^^^^ NotARecord\n  |") }

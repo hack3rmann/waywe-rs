@@ -1,6 +1,1 @@
- --> 6:3
-  |
-6 | "\uFFFE"
-  |   ^---^
-  |
-  = Escape sequences can't contain non-characters
+Parse(Error { variant: CustomError { message: "Escape sequences can't contain non-characters" }, location: Span((170, 175)), line_col: Span((6, 3), (6, 8)), inner: ErrorInner { path: None, line: "\"\\uFFFE\"", continued_line: None, parse_attempts: None } })

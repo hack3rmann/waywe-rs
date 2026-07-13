@@ -1,6 +1,1 @@
-Type error: error: RecordTypeMergeRequiresRecordType
- --> <current file>:1:1
-  |
-1 | {} ⩓ Bool
-  | ^^^^^^^^^ RecordTypeMergeRequiresRecordType
-  |
+TypeError { message: Custom("error: RecordTypeMergeRequiresRecordType\n --> <current file>:1:1\n  |\n1 | {} ⩓ Bool\n  | ^^^^^^^^^ RecordTypeMergeRequiresRecordType\n  |") }

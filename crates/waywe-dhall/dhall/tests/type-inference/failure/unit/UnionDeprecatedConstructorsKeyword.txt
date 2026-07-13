@@ -1,6 +1,1 @@
-Type error: error: unbound variable `constructors`
- --> <current file>:1:1
-  |
-1 | constructors < Left : Natural | Right : Bool >
-  | ^^^^^^^^^^^^ not found in this scope
-  |
+TypeError { message: Custom("error: unbound variable `constructors`\n --> <current file>:1:1\n  |\n1 | constructors < Left : Natural | Right : Bool >\n  | ^^^^^^^^^^^^ not found in this scope\n  |") }

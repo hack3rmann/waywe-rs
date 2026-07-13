@@ -302,7 +302,10 @@ mod serde {
             .static_type_annotation()
             .parse::<bool>()
             .map_err(|e| e.to_string()),
-            Err("UnexpectedImport(Import { mode: Code, location: Local(Parent, FilePath { file_path: [\"dhall-lang\", \"tests\", \"parser\", \"success\", \"unit\", \"BoolLitTrueA.dhall\"] }), hash: None })".to_string())
+            Err(
+                "unexpected import: Import {\n    mode: Code,\n    location: Local(\n        Parent,\n        FilePath {\n            file_path: [\n                \"dhall-lang\",\n                \"tests\",\n                \"parser\",\n                \"success\",\n                \"unit\",\n                \"BoolLitTrueA.dhall\",\n            ],\n        },\n    ),\n    hash: None,\n}"
+                    .to_string()
+            )
         );
     }
 

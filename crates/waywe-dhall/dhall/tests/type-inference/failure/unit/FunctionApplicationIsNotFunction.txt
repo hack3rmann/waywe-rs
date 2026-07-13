@@ -1,6 +1,1 @@
-Type error: error: expected function, found `Bool`
- --> <current file>:1:1
-  |
-1 | True True
-  | ^^^^ function application requires a function
-  |
+TypeError { message: Custom("error: expected function, found `Bool`\n --> <current file>:1:1\n  |\n1 | True True\n  | ^^^^ function application requires a function\n  |") }

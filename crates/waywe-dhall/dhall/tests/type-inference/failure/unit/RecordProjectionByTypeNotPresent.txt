@@ -1,6 +1,1 @@
-Type error: error: ProjectionMissingEntry
- --> <current file>:1:1
-  |
-1 | { y = {=} }.( {x : Natural} )
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ProjectionMissingEntry
-  |
+TypeError { message: Custom("error: ProjectionMissingEntry\n --> <current file>:1:1\n  |\n1 | { y = {=} }.( {x : Natural} )\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ProjectionMissingEntry\n  |") }

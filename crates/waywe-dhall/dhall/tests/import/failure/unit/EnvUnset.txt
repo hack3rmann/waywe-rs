@@ -1,6 +1,1 @@
-Type error: error: error
- --> <current file>:1:1
-  |
-1 | env:DHALL_TEST_UNSET
-  | ^^^^^^^^^^^^^^^^^^^^ MissingEnvVar
-  |
+Typecheck(TypeError { message: Custom("error: error\n --> <current file>:1:1\n  |\n1 | env:DHALL_TEST_UNSET\n  | ^^^^^^^^^^^^^^^^^^^^ $DHALL_TEST_UNSET env variable is not set\n  |") })

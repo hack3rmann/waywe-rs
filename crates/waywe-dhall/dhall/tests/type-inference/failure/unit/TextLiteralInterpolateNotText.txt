@@ -1,6 +1,1 @@
-Type error: error: InvalidTextInterpolation
- --> <current file>:1:1
-  |
-1 | "${1}"
-  | ^^^^^^ InvalidTextInterpolation
-  |
+TypeError { message: Custom("error: InvalidTextInterpolation\n --> <current file>:1:1\n  |\n1 | \"${1}\"\n  | ^^^^^^ InvalidTextInterpolation\n  |") }

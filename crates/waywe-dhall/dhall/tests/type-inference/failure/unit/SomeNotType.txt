@@ -1,6 +1,1 @@
-Type error: error: InvalidOptionalType
- --> <current file>:1:1
-  |
-1 | Some Bool
-  | ^^^^^^^^^ InvalidOptionalType
-  |
+TypeError { message: Custom("error: InvalidOptionalType\n --> <current file>:1:1\n  |\n1 | Some Bool\n  | ^^^^^^^^^ InvalidOptionalType\n  |") }

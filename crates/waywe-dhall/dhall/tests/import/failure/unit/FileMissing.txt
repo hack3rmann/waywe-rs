@@ -1,6 +1,1 @@
-Type error: error: error
- --> <current file>:1:1
-  |
-1 | ./not-a-file.dhall
-  | ^^^^^^^^^^^^^^^^^^ No such file or directory (os error 2)
-  |
+Typecheck(TypeError { message: Custom("error: error\n --> <current file>:1:1\n  |\n1 | ./not-a-file.dhall\n  | ^^^^^^^^^^^^^^^^^^ No such file or directory (os error 2)\n  |") })

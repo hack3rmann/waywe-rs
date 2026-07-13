@@ -1,6 +1,1 @@
-Type error: error: Merge2ArgMustBeUnionOrOptional
- --> <current file>:1:1
-  |
-1 | merge {=} True
-  | ^^^^^^^^^^^^^^ Merge2ArgMustBeUnionOrOptional
-  |
+TypeError { message: Custom("error: Merge2ArgMustBeUnionOrOptional\n --> <current file>:1:1\n  |\n1 | merge {=} True\n  | ^^^^^^^^^^^^^^ Merge2ArgMustBeUnionOrOptional\n  |") }

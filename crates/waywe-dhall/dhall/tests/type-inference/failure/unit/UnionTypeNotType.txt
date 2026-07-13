@@ -1,6 +1,1 @@
-Type error: error: InvalidVariantType
- --> <current file>:1:7
-  |
-1 | < x : True >
-  |       ^^^^ InvalidVariantType
-  |
+TypeError { message: Custom("error: InvalidVariantType\n --> <current file>:1:7\n  |\n1 | < x : True >\n  |       ^^^^ InvalidVariantType\n  |") }

@@ -1,6 +1,1 @@
- --> 1:4
-  |
-1 | [ ,, ]
-  |    ^---
-  |
-  = expected expression
+Parse(Error { variant: ParsingError { positives: [expression], negatives: [] }, location: Pos(3), line_col: Pos((1, 4)), inner: ErrorInner { path: None, line: "[ ,, ]", continued_line: None, parse_attempts: None } })

@@ -1,6 +1,1 @@
- --> 1:11
-  |
-1 | let x = y in(e)
-  |           ^---
-  |
-  = expected import_alt, bool_or, natural_plus, text_append, list_append, bool_and, natural_times, bool_eq, bool_ne, combine, combine_types, equivalent, prefer, arrow, import_hashed, let_binding, or primitive_expression
+Parse(Error { variant: ParsingError { positives: [import_alt, bool_or, natural_plus, text_append, list_append, bool_and, natural_times, bool_eq, bool_ne, combine, combine_types, equivalent, prefer, arrow, import_hashed, let_binding, primitive_expression], negatives: [] }, location: Pos(10), line_col: Pos((1, 11)), inner: ErrorInner { path: None, line: "let x = y in(e)", continued_line: None, parse_attempts: None } })

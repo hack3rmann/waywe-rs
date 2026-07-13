@@ -1,6 +1,1 @@
-Type error: error: error
- --> <current file>:1:13
-  |
-1 | env:UNSET ? missing
-  |             ^^^^^^^ Missing
-  |
+Typecheck(TypeError { message: Custom("error: error\n --> <current file>:1:13\n  |\n1 | env:UNSET ? missing\n  |             ^^^^^^^ missing import\n  |") })

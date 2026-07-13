@@ -1,8 +1,1 @@
-Type error: error: Wrong handler input type
- --> <current file>:1:1
-  |
-1 | merge { x = λ(_ : Bool) → _ } (< x : Natural >.x 1)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ in this merge expression
-  |       ^^^^^^^^^^^^^^^^^^^^^^^ the handler for `x` expects a value of type: `Bool`
-  |                                ^^^^^^^^^^^^^^^^^^^ but the corresponding variant has type: `Natural`
-  |
+TypeError { message: Custom("error: Wrong handler input type\n --> <current file>:1:1\n  |\n1 | merge { x = λ(_ : Bool) → _ } (< x : Natural >.x 1)\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ in this merge expression\n  |       ^^^^^^^^^^^^^^^^^^^^^^^ the handler for `x` expects a value of type: `Bool`\n  |                                ^^^^^^^^^^^^^^^^^^^ but the corresponding variant has type: `Natural`\n  |") }

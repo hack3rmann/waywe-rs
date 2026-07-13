@@ -1,6 +1,1 @@
-Type error: error: error
- --> <current file>:1:45
-  |
-1 | env:UNSET1 as Text ? env:UNSET2 ? missing ? env:UNSET3
-  |                                             ^^^^^^^^^^ MissingEnvVar
-  |
+Typecheck(TypeError { message: Custom("error: error\n --> <current file>:1:45\n  |\n1 | env:UNSET1 as Text ? env:UNSET2 ? missing ? env:UNSET3\n  |                                             ^^^^^^^^^^ $UNSET3 env variable is not set\n  |") })

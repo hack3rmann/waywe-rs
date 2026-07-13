@@ -1,6 +1,1 @@
- --> 1:2
-  |
-1 | <x | x: Natural>
-  |  ^------------^
-  |
-  = Duplicate variant in union type
+Parse(Error { variant: CustomError { message: "Duplicate variant in union type" }, location: Span((1, 15)), line_col: Span((1, 2), (1, 16)), inner: ErrorInner { path: None, line: "<x | x: Natural>", continued_line: None, parse_attempts: None } })

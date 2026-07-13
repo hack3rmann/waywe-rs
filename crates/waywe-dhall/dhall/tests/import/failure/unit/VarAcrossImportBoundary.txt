@@ -1,12 +1,1 @@
-Type error: error: error
- --> <current file>:1:15
-  |
-1 | \(x: Bool) -> ../../data/importBoundary.dhall
-  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Type error: error: unbound variable `x`
- --> <current file>:1:1
-  |
-...
-3 | x
-  | ^ not found in this scope
-  |
-  |
+Typecheck(TypeError { message: Custom("error: error\n --> <current file>:1:15\n  |\n1 | \\(x: Bool) -> ../../data/importBoundary.dhall\n  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ error: unbound variable `x`\n --> <current file>:3:1\n  |\n...\n3 | x\n  | ^ not found in this scope\n  |\n  |") })
