@@ -8,10 +8,13 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Errors that can occur when deserializing Dhall data.
 #[derive(Debug, Error)]
 pub enum Error {
+    /// Dhall error
     #[error(transparent)]
     Dhall(DhallError),
     #[error("{0}")]
+    /// Error during deserializing
     Deserialize(String),
+    /// Error during serializing
     #[error("{0}")]
     Serialize(String),
 }

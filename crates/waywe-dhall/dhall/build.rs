@@ -1,5 +1,5 @@
 use std::env;
-use std::fs::{read_to_string, File};
+use std::fs::{File, read_to_string};
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 
@@ -19,10 +19,11 @@ fn convert_abnf_to_pest() -> std::io::Result<()> {
     let mut rules = abnf_to_pest::parse_abnf(&data)?;
     for line in BufReader::new(File::open(visibility_path)?).lines() {
         let line = line?;
-        if line.len() >= 2 && &line[0..2] == "# " {
-            if let Some(x) = rules.get_mut(&line[2..]) {
-                x.silent = true;
-            }
+        if line.len() >= 2
+            && &line[0..2] == "# "
+            && let Some(x) = rules.get_mut(&line[2..])
+        {
+            x.silent = true;
         }
     }
 

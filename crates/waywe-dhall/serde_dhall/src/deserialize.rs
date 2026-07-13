@@ -2,8 +2,8 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fmt;
 
-use serde::de::value::{MapAccessDeserializer, MapDeserializer, SeqDeserializer};
 use serde::de::VariantAccess as _;
+use serde::de::value::{MapAccessDeserializer, MapDeserializer, SeqDeserializer};
 
 use dhall::syntax::NumKind;
 
@@ -152,9 +152,7 @@ impl<'de: 'a, 'a> serde::Deserializer<'de> for Deserializer<'a> {
         let val = |x| Deserializer(Cow::Borrowed(x));
         match self.0.as_ref() {
             // Blindly takes keys in sorted order.
-            SimpleValue::Record(m) => {
-                visitor.visit_seq(SeqDeserializer::new(m.iter().map(|(_, v)| val(v))))
-            }
+            SimpleValue::Record(m) => visitor.visit_seq(SeqDeserializer::new(m.values().map(val))),
             _ => self.deserialize_any(visitor),
         }
     }

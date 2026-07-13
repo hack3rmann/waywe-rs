@@ -1,6 +1,6 @@
+use crate::Ctxt;
 use crate::semantics::{AlphaVar, NameEnv, Nir, NzEnv, NzVar, Type, ValEnv};
 use crate::syntax::Label;
-use crate::Ctxt;
 
 /// Environment for indexing variables.
 #[derive(Debug, Clone, Copy, Default)]

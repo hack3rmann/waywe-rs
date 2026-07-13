@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use crate::syntax::{trivial_result, Label};
+use crate::syntax::{Label, trivial_result};
 
 // Definition order must match precedence order for
 // pretty-printing to work correctly

@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use crate::error::{CacheError, Error};
 use crate::parse::parse_binary;
-use crate::syntax::{binary, Hash};
+use crate::syntax::{Hash, binary};
 use crate::{Ctxt, Typed};
 use std::fs::File;
 
@@ -92,7 +92,7 @@ fn write_cache_file<'cx>(cx: Ctxt<'cx>, path: &Path, expr: &Typed<'cx>) -> Resul
 
 fn filename_for_hash(hash: &Hash) -> String {
     match hash {
-        Hash::SHA256(sha) => format!("1220{}", hex::encode(&sha)),
+        Hash::SHA256(sha) => format!("1220{}", hex::encode(sha)),
     }
 }
 

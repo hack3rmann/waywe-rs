@@ -4,7 +4,7 @@ use std::iter::once;
 
 use crate::operations::{BinOp, OpKind};
 use crate::semantics::{
-    merge_maps, ret_kind, ret_nir, ret_op, ret_ref, Nir, NirKind, Ret, TextLit,
+    Nir, NirKind, Ret, TextLit, merge_maps, ret_kind, ret_nir, ret_op, ret_ref,
 };
 use crate::syntax::{ExprKind, Label, NumKind};
 

@@ -1,11 +1,11 @@
 use std::cmp::max;
 
-use crate::builtins::{type_of_builtin, Builtin};
+use crate::Ctxt;
+use crate::builtins::{Builtin, type_of_builtin};
 use crate::error::{ErrorBuilder, TypeError, TypeMessage};
 use crate::operations::typecheck_operation;
 use crate::semantics::{Hir, HirKind, Nir, NirKind, Tir, TyEnv, Type};
 use crate::syntax::{Const, ExprKind, InterpolatedTextContents, NumKind, Span};
-use crate::Ctxt;
 
 fn function_check(a: Const, b: Const) -> Const {
     if b == Const::Type {
@@ -69,10 +69,10 @@ fn type_one_layer<'cx>(
             let text_type = Type::from_builtin(cx, Builtin::Text);
             for contents in interpolated.iter() {
                 use InterpolatedTextContents::Expr;
-                if let Expr(x) = contents {
-                    if *x.ty() != text_type {
-                        return span_err("InvalidTextInterpolation");
-                    }
+                if let Expr(x) = contents
+                    && *x.ty() != text_type
+                {
+                    return span_err("InvalidTextInterpolation");
                 }
             }
             text_type
@@ -147,12 +147,10 @@ fn type_one_layer<'cx>(
             // An empty union type has type Type;
             // an union type with only unary variants also has type Type
             let mut k = Const::Type;
-            for t in kts.values() {
-                if let Some(t) = t {
-                    match t.ty().as_const() {
-                        Some(c) => k = max(k, c),
-                        None => return mk_span_err(t.span(), "InvalidVariantType"),
-                    }
+            for t in kts.values().flatten() {
+                match t.ty().as_const() {
+                    Some(c) => k = max(k, c),
+                    None => return mk_span_err(t.span(), "InvalidVariantType"),
                 }
             }
 
@@ -203,7 +201,7 @@ pub fn type_with<'cx, 'hir>(
             unreachable!("Hir should contain no unresolved variables")
         }
         HirKind::Expr(ExprKind::Const(Const::Sort)) => {
-            return mk_span_err(hir.span(), "Sort does not have a type")
+            return mk_span_err(hir.span(), "Sort does not have a type");
         }
         HirKind::Expr(ExprKind::Annot(x, t)) => {
             let t = match t.kind() {
@@ -254,9 +252,9 @@ pub fn type_with<'cx, 'hir>(
                 .as_ref()
                 .map(|t| type_with(env, t, None)?.eval_to_type(env))
                 .transpose()?;
-            let val = type_with(env, &val, val_annot)?;
+            let val = type_with(env, val, val_annot)?;
             let val_nf = val.eval(env);
-            let body_env = env.insert_value(&binder, val_nf, val.ty().clone());
+            let body_env = env.insert_value(binder, val_nf, val.ty().clone());
             let body = type_with(&body_env, body, None)?;
             let ty = body.ty().clone();
             Tir::from_hir(hir, ty)
@@ -268,17 +266,17 @@ pub fn type_with<'cx, 'hir>(
         }
     };
 
-    if let Some(annot) = annot {
-        if *tir.ty() != annot {
-            return mk_span_err(
-                hir.span(),
-                &format!(
-                    "annot mismatch: {} != {}",
-                    tir.ty().to_expr_tyenv(env),
-                    annot.to_expr_tyenv(env)
-                ),
-            );
-        }
+    if let Some(annot) = annot
+        && *tir.ty() != annot
+    {
+        return mk_span_err(
+            hir.span(),
+            format!(
+                "annot mismatch: {} != {}",
+                tir.ty().to_expr_tyenv(env),
+                annot.to_expr_tyenv(env)
+            ),
+        );
     }
 
     Ok(tir)

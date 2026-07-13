@@ -270,10 +270,10 @@ mod value;
 #[doc(hidden)]
 pub use dhall_proc_macros::StaticType;
 
-pub use deserialize::{from_simple_value, FromDhall};
+pub use deserialize::{FromDhall, from_simple_value};
 pub use error::{Error, Result};
-pub use options::de::{from_binary, from_binary_file, from_file, from_str, Deserializer};
-pub use options::ser::{serialize, Serializer};
+pub use options::de::{Deserializer, from_binary, from_binary_file, from_file, from_str};
+pub use options::ser::{Serializer, serialize};
 pub use serialize::ToDhall;
 pub use static_type::StaticType;
 pub use value::{NumKind, SimpleType, SimpleValue, Value};

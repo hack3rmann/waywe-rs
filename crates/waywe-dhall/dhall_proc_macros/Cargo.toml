@@ -7,7 +7,7 @@ license = "BSD-2-Clause"
 description = "Macros for dhall"
 readme = "README.md"
 repository = "https://github.com/Nadrieril/dhall-rust"
-edition = "2018"
+edition = "2024"
 
 [lib]
 proc-macro = true

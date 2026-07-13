@@ -1,6 +1,6 @@
 mod serde {
     use serde::{Deserialize, Serialize};
-    use serde_dhall::{from_str, serialize, FromDhall, StaticType, ToDhall, Value};
+    use serde_dhall::{FromDhall, StaticType, ToDhall, Value, from_str, serialize};
     use std::collections;
 
     fn assert_de<T>(s: &str, x: T)
@@ -127,10 +127,12 @@ mod serde {
         }
         assert_serde::<Bar>("< X | Y: Integer >.X", Bar::X);
 
-        assert!(from_str("< X | Y: Integer >.Y")
-            .static_type_annotation()
-            .parse::<Bar>()
-            .is_err());
+        assert!(
+            from_str("< X | Y: Integer >.Y")
+                .static_type_annotation()
+                .parse::<Bar>()
+                .is_err()
+        );
     }
 
     #[test]

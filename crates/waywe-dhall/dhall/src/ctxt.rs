@@ -3,9 +3,9 @@ use once_cell::sync::OnceCell;
 use std::marker::PhantomData;
 use std::ops::{Deref, Index};
 
+use crate::Typed;
 use crate::semantics::{Import, ImportLocation, ImportNode};
 use crate::syntax::Span;
-use crate::Typed;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 // Ctxt

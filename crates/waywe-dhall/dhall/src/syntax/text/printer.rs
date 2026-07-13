@@ -372,9 +372,9 @@ impl Display for BinOp {
 impl Display for NaiveDouble {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         let v = f64::from(*self);
-        if v == std::f64::INFINITY {
+        if v == f64::INFINITY {
             f.write_str("Infinity")
-        } else if v == std::f64::NEG_INFINITY {
+        } else if v == f64::NEG_INFINITY {
             f.write_str("-Infinity")
         } else if v.is_nan() {
             f.write_str("NaN")
@@ -427,11 +427,7 @@ impl<SubExpr: Display> Display for Import<SubExpr> {
                     Absolute => "",
                 };
                 write!(f, "{}/", prefix)?;
-                let path: String = path
-                    .file_path
-                    .iter()
-                    .map(|c| quote_if_needed(&*c))
-                    .join("/");
+                let path: String = path.file_path.iter().map(|c| quote_if_needed(c)).join("/");
                 f.write_str(&path)?;
             }
             Remote(url) => {

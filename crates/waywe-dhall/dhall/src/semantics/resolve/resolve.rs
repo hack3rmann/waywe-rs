@@ -9,10 +9,10 @@ use crate::builtins::Builtin;
 use crate::error::ErrorBuilder;
 use crate::error::{Error, ImportError};
 use crate::operations::{BinOp, OpKind};
-use crate::semantics::{mkerr, Hir, HirKind, ImportEnv, NameEnv, Type};
+use crate::semantics::{Hir, HirKind, ImportEnv, NameEnv, Type, mkerr};
 use crate::syntax;
 use crate::syntax::{
-    Expr, ExprKind, FilePath, FilePrefix, Hash, ImportMode, ImportTarget, Span, UnspannedExpr, URL,
+    Expr, ExprKind, FilePath, FilePrefix, Hash, ImportMode, ImportTarget, Span, URL, UnspannedExpr,
 };
 use crate::{Ctxt, ImportAlternativeId, ImportId, ImportResultId, Parsed, Resolved, Typed};
 
@@ -405,7 +405,7 @@ fn traverse_accumulate<'cx>(
     let cx = env.cx();
     let expr = desugar(expr);
     let kind = match expr.kind() {
-        ExprKind::Var(var) => match name_env.unlabel_var(&var) {
+        ExprKind::Var(var) => match name_env.unlabel_var(var) {
             Some(v) => HirKind::Var(v),
             None => HirKind::MissingVar(var.clone()),
         },

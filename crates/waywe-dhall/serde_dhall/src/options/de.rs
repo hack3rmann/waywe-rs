@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 
 use dhall::{Ctxt, Parsed};
 
-use crate::options::{HasAnnot, ManualAnnot, NoAnnot, StaticAnnot, TypeAnnot};
 use crate::SimpleType;
+use crate::options::{HasAnnot, ManualAnnot, NoAnnot, StaticAnnot, TypeAnnot};
 use crate::{Error, FromDhall, Result, Value};
 
 #[derive(Debug, Clone)]

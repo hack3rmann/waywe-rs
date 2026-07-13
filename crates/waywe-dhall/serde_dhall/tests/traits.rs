@@ -1,4 +1,4 @@
-use serde_dhall::{from_str, SimpleType, StaticType};
+use serde_dhall::{SimpleType, StaticType, from_str};
 
 #[test]
 fn test_static_type() {

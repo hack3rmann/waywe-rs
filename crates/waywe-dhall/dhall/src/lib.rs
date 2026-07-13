@@ -28,7 +28,7 @@ use crate::error::{Error, TypeError};
 use crate::semantics::parse;
 use crate::semantics::resolve;
 use crate::semantics::resolve::ImportLocation;
-use crate::semantics::{typecheck, typecheck_with, Hir, Nir, Tir, Type};
+use crate::semantics::{Hir, Nir, Tir, Type, typecheck, typecheck_with};
 use crate::syntax::Expr;
 
 pub use ctxt::*;

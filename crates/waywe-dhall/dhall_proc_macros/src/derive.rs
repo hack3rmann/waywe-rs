@@ -1,9 +1,9 @@
 extern crate proc_macro;
 use proc_macro::TokenStream;
 use quote::{quote, quote_spanned};
-use syn::spanned::Spanned;
 use syn::Error;
-use syn::{parse_quote, DeriveInput};
+use syn::spanned::Spanned;
+use syn::{DeriveInput, parse_quote};
 
 pub fn derive_static_type(input: TokenStream) -> TokenStream {
     TokenStream::from(match derive_static_type_inner(input) {
@@ -118,14 +118,14 @@ pub fn derive_static_type_inner(input: TokenStream) -> Result<proc_macro2::Token
             return Err(Error::new(
                 input.span(),
                 "Derive StaticType: Empty enums are not supported",
-            ))
+            ));
         }
         syn::Data::Enum(data) => derive_for_enum(data, &mut constraints)?,
         syn::Data::Union(x) => {
             return Err(Error::new(
                 x.union_token.span(),
                 "Derive StaticType: Unions are not supported",
-            ))
+            ));
         }
     };
 

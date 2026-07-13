@@ -1,19 +1,20 @@
 use anyhow::Result;
-use rand::distributions::Alphanumeric;
 use rand::Rng;
+use rand::distributions::Alphanumeric;
 use std::env;
 use std::ffi::OsString;
 use std::fmt::{Debug, Display};
-use std::fs::{create_dir_all, read_to_string, File};
+use std::fs::{File, create_dir_all, read_to_string};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+use thiserror::Error;
 
 use libtest_mimic::{Arguments, Trial};
 use walkdir::WalkDir;
 
 use dhall::error::Error as DhallError;
-use dhall::syntax::{binary, Expr};
+use dhall::syntax::{Expr, binary};
 use dhall::{Ctxt, Normalized, Parsed, Resolved, Typed};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -102,7 +103,7 @@ impl TestFile {
             TestFile::Source(_) => Parsed::parse_file(&self.path())?,
             TestFile::Binary(_) => Parsed::parse_binary_file(&self.path())?,
             TestFile::UI(_) => {
-                return Err(TestError("Can't parse a UI test file".to_string()).into())
+                return Err(TestError("Can't parse a UI test file".to_string()).into());
             }
         })
     }
@@ -138,7 +139,7 @@ impl TestFile {
                 file.write_all(&expr_data)?;
             }
             TestFile::UI(_) => {
-                return Err(TestError("Can't write an expression to a UI file".to_string()).into())
+                return Err(TestError("Can't write an expression to a UI file".to_string()).into());
             }
         }
         Ok(())
@@ -148,7 +149,9 @@ impl TestFile {
         match self {
             TestFile::UI(_) => {}
             _ => {
-                return Err(TestError("Can't write a ui string to a dhall file".to_string()).into())
+                return Err(
+                    TestError("Can't write a ui string to a dhall file".to_string()).into(),
+                );
             }
         }
         let path = self.path();
@@ -203,7 +206,7 @@ impl TestFile {
         let expr_data = binary::encode(&expr)?;
         let expected_data = {
             let mut data = Vec::new();
-            File::open(&self.path())?.read_to_end(&mut data)?;
+            File::open(self.path())?.read_to_end(&mut data)?;
             data
         };
 
@@ -289,15 +292,9 @@ struct SpecTest {
     output: TestFile,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Error)]
+#[error("{0}")]
 struct TestError(String);
-
-impl std::fmt::Display for TestError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", &self.0)
-    }
-}
-impl std::error::Error for TestError {}
 
 fn dhall_files_in_dir<'a>(
     dir: &'a Path,
@@ -310,7 +307,7 @@ fn dhall_files_in_dir<'a>(
         .filter_map(move |path| {
             let path = path.path().strip_prefix(dir).unwrap();
             let ext = path.extension()?;
-            if *ext != OsString::from(filetype.to_ext()) {
+            if ext != OsString::from(filetype.to_ext()).as_os_str() {
                 return None;
             }
             let path = path.to_string_lossy();
@@ -607,7 +604,7 @@ fn run_test(test: &SpecTest) -> Result<()> {
                         e => {
                             return Err(
                                 TestError(format!("Expected parse error, got: {:?}", e)).into()
-                            )
+                            );
                         }
                     }
                 }
@@ -681,7 +678,7 @@ fn main() {
     env::set_current_dir(root_dir.as_path()).unwrap();
 
     // Set environment variable for import tests.
-    env::set_var("DHALL_TEST_VAR", "6 * 7");
+    unsafe { env::set_var("DHALL_TEST_VAR", "6 * 7") };
 
     // Configure cache for import tests
     let dhall_cache_dir = root_dir
@@ -699,7 +696,7 @@ fn main() {
     let cache_dir = env::temp_dir().join(cache_dir);
     std::fs::create_dir_all(&cache_dir).unwrap();
     fs_extra::dir::copy(&dhall_cache_dir, &cache_dir, &Default::default()).unwrap();
-    env::set_var("XDG_CACHE_HOME", &cache_dir);
+    unsafe { env::set_var("XDG_CACHE_HOME", &cache_dir) };
 
     let dhall_home_dir = root_dir
         .join("dhall")
@@ -712,7 +709,9 @@ fn main() {
         .join("home");
 
     #[cfg(target_family = "unix")]
-    env::set_var("HOME", &dhall_home_dir);
+    unsafe {
+        env::set_var("HOME", &dhall_home_dir)
+    };
 
     #[cfg(target_family = "windows")]
     env::set_var("USERPROFILE", &dhall_home_dir);

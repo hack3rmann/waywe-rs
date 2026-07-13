@@ -358,9 +358,9 @@ impl serde::ser::Serialize for SimpleValue {
     where
         S: serde::ser::Serializer,
     {
-        use serde::ser::{SerializeMap, SerializeSeq};
         use NumKind::*;
         use SimpleValue::*;
+        use serde::ser::{SerializeMap, SerializeSeq};
 
         match self {
             Num(Bool(x)) => serializer.serialize_bool(*x),

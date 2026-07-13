@@ -14,7 +14,7 @@ pub enum Error {
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]
-    Parse(#[from] ParseError),
+    Parse(#[from] Box<ParseError>),
     #[error(transparent)]
     Decode(#[from] DecodeError),
     #[error(transparent)]

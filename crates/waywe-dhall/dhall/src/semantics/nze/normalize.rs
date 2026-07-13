@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::operations::{normalize_operation, OpKind};
+use crate::operations::{OpKind, normalize_operation};
 use crate::semantics::NzEnv;
 use crate::semantics::{Binder, Closure, Hir, HirKind, Nir, NirKind, TextLit};
 use crate::syntax::{ExprKind, InterpolatedTextContents};
@@ -17,8 +17,8 @@ pub fn apply_any<'cx>(f: &Nir<'cx>, a: Nir<'cx>) -> NirKind<'cx> {
 pub fn squash_textlit<'cx>(
     elts: impl Iterator<Item = InterpolatedTextContents<Nir<'cx>>>,
 ) -> Vec<InterpolatedTextContents<Nir<'cx>>> {
-    use std::mem::replace;
     use InterpolatedTextContents::{Expr, Text};
+    use std::mem::take;
 
     fn inner<'cx>(
         elts: impl Iterator<Item = InterpolatedTextContents<Nir<'cx>>>,
@@ -32,7 +32,7 @@ pub fn squash_textlit<'cx>(
                     NirKind::TextLit(elts2) => inner(elts2.iter().cloned(), crnt_str, ret),
                     _ => {
                         if !crnt_str.is_empty() {
-                            ret.push(Text(replace(crnt_str, String::new())))
+                            ret.push(Text(take(crnt_str)))
                         }
                         ret.push(Expr(e.clone()))
                     }
@@ -45,7 +45,7 @@ pub fn squash_textlit<'cx>(
     let mut ret = Vec::new();
     inner(elts, &mut crnt_str, &mut ret);
     if !crnt_str.is_empty() {
-        ret.push(Text(replace(&mut crnt_str, String::new())))
+        ret.push(Text(take(&mut crnt_str)))
     }
     ret
 }

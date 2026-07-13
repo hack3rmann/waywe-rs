@@ -55,8 +55,8 @@ impl Span {
     /// input between them. Assumes that the spans come from the same input. Fails if one of the
     /// spans does not point to an input location.
     pub fn union(&self, other: &Span) -> Self {
-        use std::cmp::{max, min};
         use Span::*;
+        use std::cmp::{max, min};
         match (self, other) {
             (Parsed(x), Parsed(y)) if Rc::ptr_eq(&x.input, &y.input) => Parsed(ParsedSpan {
                 input: x.input.clone(),

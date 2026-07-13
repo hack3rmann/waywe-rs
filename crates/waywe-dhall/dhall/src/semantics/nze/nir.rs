@@ -5,8 +5,8 @@ use crate::builtins::{Builtin, BuiltinClosure};
 use crate::operations::{BinOp, OpKind};
 use crate::semantics::nze::lazy;
 use crate::semantics::{
-    apply_any, normalize_hir, normalize_one_layer, squash_textlit, Binder, Hir, HirKind, NzEnv,
-    NzVar, TyEnv, Type, Universe, VarEnv,
+    Binder, Hir, HirKind, NzEnv, NzVar, TyEnv, Type, Universe, VarEnv, apply_any, normalize_hir,
+    normalize_one_layer, squash_textlit,
 };
 use crate::syntax::{Const, Expr, ExprKind, InterpolatedTextContents, Label, NumKind, Span};
 use crate::{Ctxt, ToExprOptions};
@@ -118,7 +118,7 @@ impl<'cx> Nir<'cx> {
     }
 
     pub fn as_const(&self) -> Option<Const> {
-        match &*self.kind() {
+        match self.kind() {
             NirKind::Const(c) => Some(*c),
             _ => None,
         }
@@ -126,7 +126,7 @@ impl<'cx> Nir<'cx> {
 
     /// This is what you want if you want to pattern-match on the value.
     pub fn kind(&self) -> &NirKind<'cx> {
-        &*self.0
+        &self.0
     }
 
     /// The contents of a `Nir` are immutable and shared. If however we happen to be the sole

@@ -25,7 +25,7 @@ impl std::cmp::PartialEq for Binder {
 
 impl std::fmt::Debug for Binder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Binder({})", &self.name)
+        write!(f, "Binder({})", self.name)
     }
 }
 

@@ -1,5 +1,5 @@
 use crate::error::TypeError;
-use crate::semantics::{type_with, typecheck, NameEnv, Nir, NzEnv, Tir, TyEnv};
+use crate::semantics::{NameEnv, Nir, NzEnv, Tir, TyEnv, type_with, typecheck};
 use crate::syntax::{Expr, ExprKind, Span, V};
 use crate::{Ctxt, ImportAlternativeId, ImportId, ToExprOptions};
 
@@ -48,7 +48,7 @@ impl<'cx> Hir<'cx> {
     }
 
     pub fn kind(&self) -> &HirKind<'cx> {
-        &*self.kind
+        &self.kind
     }
     pub fn span(&self) -> Span {
         self.span.clone()

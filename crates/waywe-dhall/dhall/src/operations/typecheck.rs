@@ -6,11 +6,16 @@ use crate::builtins::Builtin;
 use crate::error::{ErrorBuilder, TypeError};
 use crate::operations::{BinOp, OpKind};
 use crate::semantics::{
-    merge_maps, mk_span_err, mkerr, Binder, Closure, Hir, HirKind, Nir, NirKind, Tir, TyEnv, Type,
+    Binder, Closure, Hir, HirKind, Nir, NirKind, Tir, TyEnv, Type, merge_maps, mk_span_err, mkerr,
 };
 use crate::syntax::{Const, ExprKind, Span};
 
-fn check_rectymerge(span: &Span, env: &TyEnv<'_>, x: Nir<'_>, y: Nir<'_>) -> Result<(), TypeError> {
+fn check_rectymerge(
+    span: &Span,
+    _env: &TyEnv<'_>,
+    x: Nir<'_>,
+    y: Nir<'_>,
+) -> Result<(), TypeError> {
     let not_record_err = || match span {
         Span::DuplicateRecordFieldsSugar(_, r) => mk_span_err((**r).clone(), "DuplicateFieldName"),
         _ => mk_span_err(span.clone(), "RecordTypeMergeRequiresRecordType"),
@@ -27,7 +32,7 @@ fn check_rectymerge(span: &Span, env: &TyEnv<'_>, x: Nir<'_>, y: Nir<'_>) -> Res
     for (k, tx) in kts_x {
         if let Some(ty) = kts_y.get(k) {
             // TODO: store Type in RecordType ?
-            check_rectymerge(span, env, tx.clone(), ty.clone())?;
+            check_rectymerge(span, _env, tx.clone(), ty.clone())?;
         }
     }
     Ok(())
@@ -232,7 +237,7 @@ fn typecheck_merge<'cx>(
                                 variant_type.to_expr_tyenv(env)
                             ))
                             .format(),
-                    )
+                    );
                 }
             },
             // Union alternative without type
@@ -323,7 +328,7 @@ pub fn typecheck_operation<'cx>(
                             format!("function application requires a function",),
                         )
                         .format(),
-                    )
+                    );
                 }
             }
         }
@@ -389,7 +394,7 @@ pub fn typecheck_operation<'cx>(
                 annot_val
             } else {
                 let entry_type = kts.iter().next().unwrap().1.clone();
-                for (_, t) in kts.iter() {
+                for t in kts.values() {
                     if *t != entry_type {
                         return span_err("Every field of the record must have the same type");
                     }

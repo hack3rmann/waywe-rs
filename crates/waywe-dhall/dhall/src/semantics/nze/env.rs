@@ -1,5 +1,5 @@
-use crate::semantics::{AlphaVar, Nir, NirKind};
 use crate::Ctxt;
+use crate::semantics::{AlphaVar, Nir, NirKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NzVar {

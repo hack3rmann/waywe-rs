@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::error::{Error, ImportError};
-use crate::semantics::{check_hash, AlphaVar, Cache, ImportLocation, VarEnv};
+use crate::semantics::{AlphaVar, Cache, ImportLocation, VarEnv, check_hash};
 use crate::syntax::{Hash, Label, V};
 use crate::{Ctxt, ImportId, ImportResultId, Typed};
 
@@ -102,12 +102,13 @@ impl<'cx> ImportEnv<'cx> {
     }
 
     pub fn write_to_disk_cache(&self, hash: &Option<Hash>, result: ImportResultId<'cx>) {
-        if let Some(disk_cache) = self.disk_cache.as_ref() {
-            if let Some(hash) = hash {
-                let expr = &self.cx()[result];
-                let _ = disk_cache.insert(self.cx(), hash, expr);
-            }
-        }
+        let Some(disk_cache) = self.disk_cache.as_ref() else {
+            return;
+        };
+        let Some(hash) = hash else { return };
+
+        let expr = &self.cx()[result];
+        let _ = disk_cache.insert(self.cx(), hash, expr);
     }
 
     pub fn with_cycle_detection(

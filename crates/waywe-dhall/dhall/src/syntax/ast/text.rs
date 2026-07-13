@@ -103,16 +103,16 @@ impl<SubExpr> InterpolatedText<SubExpr> {
     }
 
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = InterpolatedTextContents<&'a SubExpr>> + 'a {
-        use std::iter::once;
         use InterpolatedTextContents::{Expr, Text};
+        use std::iter::once;
         let exprs = self.tail.iter().map(|(e, _)| Expr(e));
         let texts = self.tail.iter().map(|(_, s)| Text(s.clone()));
         once(Text(self.head.clone())).chain(itertools::interleave(exprs, texts))
     }
 
     pub fn into_iter(self) -> impl Iterator<Item = InterpolatedTextContents<SubExpr>> {
-        use std::iter::once;
         use InterpolatedTextContents::{Expr, Text};
+        use std::iter::once;
         once(Text(self.head)).chain(
             self.tail
                 .into_iter()

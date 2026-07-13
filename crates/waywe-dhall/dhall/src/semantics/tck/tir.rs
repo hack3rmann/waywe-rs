@@ -1,8 +1,8 @@
+use crate::Ctxt;
 use crate::builtins::Builtin;
 use crate::error::{ErrorBuilder, TypeError};
-use crate::semantics::{mkerr, Hir, Nir, NirKind, NzEnv, TyEnv, VarEnv};
+use crate::semantics::{Hir, Nir, NirKind, NzEnv, TyEnv, VarEnv, mkerr};
 use crate::syntax::{Const, Expr, Span};
-use crate::Ctxt;
 
 /// The type of a type. 0 is `Type`, 1 is `Kind`, etc...
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
