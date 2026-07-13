@@ -1,6 +1,6 @@
 use itertools::Itertools;
-use pest::prec_climber as pcl;
-use pest::prec_climber::PrecClimber;
+use pest::pratt_parser::{Assoc, Op, PrattParser};
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::iter::once;
 use std::rc::Rc;
@@ -103,31 +103,47 @@ fn insert_recordlit_entry(map: &mut BTreeMap<Label, Expr>, l: Label, e: Expr) {
 }
 
 lazy_static::lazy_static! {
-    static ref PRECCLIMBER: PrecClimber<Rule> = {
+    static ref PRATT_PARSER: PrattParser<Rule> = {
         use Rule::*;
-        // In order of precedence
-        let operators = vec![
-            equivalent,
-            import_alt,
-            bool_or,
-            natural_plus,
-            text_append,
-            list_append,
-            bool_and,
-            combine,
-            prefer,
-            combine_types,
-            natural_times,
-            bool_eq,
-            bool_ne,
-        ];
-        PrecClimber::new(
-            operators
-                .into_iter()
-                .map(|op| pcl::Operator::new(op, pcl::Assoc::Left))
-                .collect(),
-        )
+        // In order of precedence (lowest to highest)
+        PrattParser::new()
+            .op(Op::infix(equivalent, Assoc::Left))
+            .op(Op::infix(import_alt, Assoc::Left))
+            .op(Op::infix(bool_or, Assoc::Left))
+            .op(Op::infix(natural_plus, Assoc::Left))
+            .op(Op::infix(text_append, Assoc::Left))
+            .op(Op::infix(list_append, Assoc::Left))
+            .op(Op::infix(bool_and, Assoc::Left))
+            .op(Op::infix(combine, Assoc::Left))
+            .op(Op::infix(prefer, Assoc::Left))
+            .op(Op::infix(combine_types, Assoc::Left))
+            .op(Op::infix(natural_times, Assoc::Left))
+            .op(Op::infix(bool_eq, Assoc::Left))
+            .op(Op::infix(bool_ne, Assoc::Left))
     };
+}
+
+fn operator_expression_infix(l: Expr, op: ParseInput, r: Expr) -> ParseResult<Expr> {
+    use crate::operations::BinOp::*;
+    use Rule::*;
+    let op = match op.as_rule() {
+        import_alt => ImportAlt,
+        bool_or => BoolOr,
+        natural_plus => NaturalPlus,
+        text_append => TextAppend,
+        list_append => ListAppend,
+        bool_and => BoolAnd,
+        combine => RecursiveRecordMerge,
+        prefer => RightBiasedRecordMerge,
+        combine_types => RecursiveRecordTypeMerge,
+        natural_times => NaturalTimes,
+        bool_eq => BoolEQ,
+        bool_ne => BoolNE,
+        equivalent => Equivalence,
+        r => return Err(op.error(format!("Rule {:?} isn't an operator", r))),
+    };
+
+    Ok(spanned_union(l.span(), r.span(), Op(BinOp(op, l, r))))
 }
 
 // Generate pest parser manually because otherwise we'd need to modify something outside of OUT_DIR
@@ -681,28 +697,48 @@ impl DhallParser {
     }
 
     #[alias(expression, shortcut = true)]
-    #[prec_climb(expression, PRECCLIMBER)]
-    fn operator_expression(l: Expr, op: ParseInput, r: Expr) -> ParseResult<Expr> {
-        use crate::operations::BinOp::*;
-        use Rule::*;
-        let op = match op.as_rule() {
-            import_alt => ImportAlt,
-            bool_or => BoolOr,
-            natural_plus => NaturalPlus,
-            text_append => TextAppend,
-            list_append => ListAppend,
-            bool_and => BoolAnd,
-            combine => RecursiveRecordMerge,
-            prefer => RightBiasedRecordMerge,
-            combine_types => RecursiveRecordTypeMerge,
-            natural_times => NaturalTimes,
-            bool_eq => BoolEQ,
-            bool_ne => BoolNE,
-            equivalent => Equivalence,
-            r => return Err(op.error(format!("Rule {:?} isn't an operator", r))),
-        };
+    fn operator_expression(input: ParseInput) -> ParseResult<Expr> {
+        let user_data = input.user_data().clone();
+        let pairs = input.into_children().into_pairs();
+        let err = Rc::new(RefCell::new(None::<ParseError>));
 
-        Ok(spanned_union(l.span(), r.span(), Op(BinOp(op, l, r))))
+        let err_primary = Rc::clone(&err);
+        let user_data_primary = user_data.clone();
+        let mut parser = PRATT_PARSER
+            .map_primary(move |primary| {
+                let node =
+                    pest_consume::Node::new_with_user_data(primary, user_data_primary.clone());
+                match Self::expression(node) {
+                    Ok(expr) => expr,
+                    Err(e) => {
+                        *err_primary.borrow_mut() = Some(e);
+                        Expr::new(Num(Bool(false)), Span::Artificial)
+                    }
+                }
+            })
+            .map_infix({
+                let err = Rc::clone(&err);
+                let user_data = user_data.clone();
+                move |l, op, r| {
+                    if err.borrow().is_some() {
+                        return l;
+                    }
+                    let op_node = pest_consume::Node::new_with_user_data(op, user_data.clone());
+                    match operator_expression_infix(l, op_node, r) {
+                        Ok(expr) => expr,
+                        Err(e) => {
+                            *err.borrow_mut() = Some(e);
+                            Expr::new(Num(Bool(false)), Span::Artificial)
+                        }
+                    }
+                }
+            });
+
+        let result = parser.parse(pairs);
+        if let Some(e) = err.borrow_mut().take() {
+            return Err(e);
+        }
+        Ok(result)
     }
 
     fn Some_(_input: ParseInput) -> ParseResult<()> {
