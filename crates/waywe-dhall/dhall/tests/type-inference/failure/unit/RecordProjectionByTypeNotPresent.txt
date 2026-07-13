@@ -1,0 +1,6 @@
+Type error: error: ProjectionMissingEntry
+ --> <current file>:1:1
+  |
+1 | { y = {=} }.( {x : Natural} )
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ProjectionMissingEntry
+  |

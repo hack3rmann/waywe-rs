@@ -1,0 +1,6 @@
+Type error: error: error
+ --> <current file>:1:13
+  |
+1 | env:UNSET ? missing
+  |             ^^^^^^^ Missing
+  |

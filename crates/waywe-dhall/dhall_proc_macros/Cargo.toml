@@ -1,0 +1,22 @@
+[package]
+name = "dhall_proc_macros"
+# remember to update html_root_url
+version = "0.6.1"
+authors = ["Nadrieril <nadrieril@users.noreply.github.com>"]
+license = "BSD-2-Clause"
+description = "Macros for dhall"
+readme = "README.md"
+repository = "https://github.com/Nadrieril/dhall-rust"
+edition = "2018"
+
+[lib]
+proc-macro = true
+doctest = false
+
+[dependencies]
+quote = "1.0"
+proc-macro2 = "1.0"
+syn = "1.0"
+
+[dev-dependencies]
+version-sync = "0.9"

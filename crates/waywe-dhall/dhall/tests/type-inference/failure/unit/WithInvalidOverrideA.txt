@@ -1,0 +1,7 @@
+Type error: error: WithMustBeRecord
+ --> <current file>:1:1
+  |
+...
+6 | { a = 1 } with a.b = 2
+  | ^^^^^^^^^^^^^^^^^^^^^^ WithMustBeRecord
+  |

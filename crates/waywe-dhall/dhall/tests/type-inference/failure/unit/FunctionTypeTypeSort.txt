@@ -1,0 +1,6 @@
+Type error: error: Sort does not have a type
+ --> <current file>:1:8
+  |
+1 | Type → Sort
+  |        ^^^^ Sort does not have a type
+  |

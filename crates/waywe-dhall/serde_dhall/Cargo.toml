@@ -1,0 +1,29 @@
+[package]
+name = "serde_dhall"
+# remember to update html_root_url, README and changelog
+version = "0.13.0"
+authors = ["Nadrieril <nadrieril@users.noreply.github.com>"]
+license = "BSD-2-Clause"
+description = "Dhall support for serde"
+readme = "../README.md"
+repository = "https://github.com/Nadrieril/dhall-rust"
+keywords = ["serde", "serialization", "dhall"]
+edition = "2018"
+include = ["src/**/*"]
+
+[features]
+default = [ "reqwest" ]
+reqwest = [ "dhall/reqwest" ]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+dhall = { version = "=0.13.0", path = "../dhall",  default-features = false }
+dhall_proc_macros = { version = "=0.6.1", path = "../dhall_proc_macros" }
+doc-comment = "0.3"
+url = "2.1"
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3"
+
+[dev-dependencies]
+version-sync = "0.9"

@@ -1,0 +1,6 @@
+Type error: error: InvalidTextInterpolation
+ --> <current file>:1:1
+  |
+1 | "${1}"
+  | ^^^^^^ InvalidTextInterpolation
+  |

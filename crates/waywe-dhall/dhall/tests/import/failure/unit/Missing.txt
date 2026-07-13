@@ -1,0 +1,6 @@
+Type error: error: error
+ --> <current file>:1:1
+  |
+1 | missing
+  | ^^^^^^^ Missing
+  |

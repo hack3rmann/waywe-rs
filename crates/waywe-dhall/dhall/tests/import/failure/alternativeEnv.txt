@@ -1,0 +1,6 @@
+Type error: error: error
+ --> <current file>:1:45
+  |
+1 | env:UNSET1 as Text ? env:UNSET2 ? missing ? env:UNSET3
+  |                                             ^^^^^^^^^^ MissingEnvVar
+  |
