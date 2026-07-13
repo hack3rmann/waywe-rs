@@ -5,7 +5,7 @@ use dhall::{Ctxt, Parsed};
 
 use crate::options::{HasAnnot, ManualAnnot, NoAnnot, StaticAnnot, TypeAnnot};
 use crate::SimpleType;
-use crate::{Error, ErrorKind, FromDhall, Result, Value};
+use crate::{Error, FromDhall, Result, Value};
 
 #[derive(Debug, Clone)]
 enum Source<'a> {
@@ -370,10 +370,7 @@ impl<'a, A> Deserializer<'a, A> {
         A: TypeAnnot,
         T: FromDhall + HasAnnot<A>,
     {
-        let val = self
-            ._parse::<T>()
-            .map_err(ErrorKind::Dhall)
-            .map_err(Error)??;
+        let val = self._parse::<T>().map_err(Error::Dhall)??;
         T::from_dhall(&val)
     }
 }

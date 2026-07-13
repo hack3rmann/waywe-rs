@@ -16,6 +16,7 @@ default = [ "reqwest" ]
 reqwest = [ "dhall/reqwest" ]
 
 [dependencies]
+thiserror.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 dhall = { version = "=0.13.0", path = "../dhall",  default-features = false }
 dhall_proc_macros = { version = "=0.6.1", path = "../dhall_proc_macros" }

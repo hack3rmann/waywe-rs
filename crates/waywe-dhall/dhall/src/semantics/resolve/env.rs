@@ -116,7 +116,11 @@ impl<'cx> ImportEnv<'cx> {
         do_resolve: impl FnOnce(&mut Self) -> Result<Typed<'cx>, Error>,
     ) -> Result<Typed<'cx>, Error> {
         if self.stack.contains(&location) {
-            return Err(ImportError::ImportCycle(self.stack.clone(), location).into());
+            return Err(ImportError::ImportCycle {
+                stack: self.stack.clone(),
+                location,
+            }
+            .into());
         }
         // Push the current location on the stack
         self.stack.push(location);

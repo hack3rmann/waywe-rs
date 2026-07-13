@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use dhall::syntax::NumKind;
 
 use crate::value::SimpleValue;
-use crate::{Error, ErrorKind, Result, SimpleType, Value};
+use crate::{Error, Result, SimpleType, Value};
 use SimpleValue::*;
 
 pub trait Sealed {}
@@ -114,10 +114,9 @@ impl ser::Serializer for Serializer {
     }
 
     fn serialize_bytes(self, _v: &[u8]) -> Result<Self::Ok> {
-        Err(
-            ErrorKind::Serialize("Unsupported data for serialization: byte array".to_owned())
-                .into(),
-        )
+        Err(Error::Serialize(
+            "Unsupported data for serialization: byte array".to_owned(),
+        ))
     }
 
     fn serialize_none(self) -> Result<Self::Ok> {
@@ -141,10 +140,9 @@ impl ser::Serializer for Serializer {
     where
         T: ?Sized + ser::Serialize,
     {
-        Err(
-            ErrorKind::Serialize("Unsupported data for serialization: newtype struct".to_owned())
-                .into(),
-        )
+        Err(Error::Serialize(
+            "Unsupported data for serialization: newtype struct".to_owned(),
+        ))
     }
     fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
         Ok(StructSerializer::default())
@@ -178,10 +176,9 @@ impl ser::Serializer for Serializer {
         _variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleVariant> {
-        Err(
-            ErrorKind::Serialize("Unsupported data for serialization: tuple variant".to_owned())
-                .into(),
-        )
+        Err(Error::Serialize(
+            "Unsupported data for serialization: tuple variant".to_owned(),
+        ))
     }
     fn serialize_struct_variant(
         self,
@@ -204,10 +201,9 @@ impl ser::Serializer for Serializer {
         _name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleStruct> {
-        Err(
-            ErrorKind::Serialize("Unsupported data for serialization: tuple struct".to_owned())
-                .into(),
-        )
+        Err(Error::Serialize(
+            "Unsupported data for serialization: tuple struct".to_owned(),
+        ))
     }
 
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {

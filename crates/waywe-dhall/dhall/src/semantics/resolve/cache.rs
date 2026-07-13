@@ -42,8 +42,7 @@ impl Cache {
     pub fn new() -> Result<Cache, Error> {
         let cache_dir = default_cache_dir()?;
         if !cache_dir.exists() {
-            std::fs::create_dir_all(&cache_dir)
-                .map_err(|e| CacheError::InitialisationError { cause: e })?;
+            std::fs::create_dir_all(&cache_dir).map_err(CacheError::Init)?;
         }
         Ok(Cache { cache_dir })
     }
@@ -75,7 +74,7 @@ fn read_cache_file<'cx>(cx: Ctxt<'cx>, path: &Path, hash: &Hash) -> Result<Typed
     match hash {
         Hash::SHA256(hash) => {
             let actual_hash = crate::utils::sha256_hash(&data);
-            if hash[..] != actual_hash[..] {
+            if hash != &actual_hash {
                 return Err(CacheError::CacheHashInvalid.into());
             }
         }

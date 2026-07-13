@@ -8,7 +8,7 @@ use serde::de::VariantAccess as _;
 use dhall::syntax::NumKind;
 
 use crate::value::SimpleValue;
-use crate::{Error, ErrorKind, Value};
+use crate::{Error, Value};
 
 pub trait Sealed {}
 
@@ -95,10 +95,10 @@ where
 {
     fn from_dhall(v: &Value) -> crate::Result<Self> {
         let sval = v.to_simple_value().ok_or_else(|| {
-            Error(ErrorKind::Deserialize(format!(
+            Error::Deserialize(format!(
                 "this cannot be deserialized into the serde data model: {}",
                 v
-            )))
+            ))
         })?;
         from_simple_value(sval)
     }

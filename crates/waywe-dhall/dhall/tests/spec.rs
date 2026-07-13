@@ -13,7 +13,6 @@ use libtest_mimic::{Arguments, Trial};
 use walkdir::WalkDir;
 
 use dhall::error::Error as DhallError;
-use dhall::error::ErrorKind;
 use dhall::syntax::{binary, Expr};
 use dhall::{Ctxt, Normalized, Parsed, Resolved, Typed};
 
@@ -333,7 +332,7 @@ static UPDATE_TEST_FILES: AtomicBool = AtomicBool::new(false);
 static LOCAL_TEST_PATH: &str = "tests/";
 static TEST_PATHS: &[&str] = &["../dhall-lang/tests/", LOCAL_TEST_PATH];
 
-static FEATURES: &'static [TestFeature] = &[
+static FEATURES: &[TestFeature] = &[
     TestFeature {
         module_name: "parser_success",
         directory: "parser/success/",
@@ -602,9 +601,9 @@ fn run_test(test: &SpecTest) -> Result<()> {
                 use std::io;
                 let err = unwrap_err(expr.parse())?;
                 if let Some(err) = err.downcast_ref::<DhallError>() {
-                    match err.kind() {
-                        ErrorKind::Parse(_) => {}
-                        ErrorKind::IO(e) if e.kind() == io::ErrorKind::InvalidData => {}
+                    match err {
+                        DhallError::Parse(_) => {}
+                        DhallError::Io(e) if e.kind() == io::ErrorKind::InvalidData => {}
                         e => {
                             return Err(
                                 TestError(format!("Expected parse error, got: {:?}", e)).into()

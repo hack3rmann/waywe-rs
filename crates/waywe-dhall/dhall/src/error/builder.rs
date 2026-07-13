@@ -107,7 +107,7 @@ impl ErrorBuilder {
     }
 
     // TODO: handle multiple files
-    #[allow(clippy::drop_ref)]
+    #[allow(dropping_references)]
     pub fn format(&mut self) -> String {
         if self.consumed {
             panic!("tried to format the same ErrorBuilder twice")

@@ -82,15 +82,20 @@ impl ImportLocationKind {
             }
             ImportLocationKind::Remote(url) => {
                 let mut url = url.clone();
+
                 match prefix {
                     FilePrefix::Here => {}
                     FilePrefix::Parent => {
-                        url = url.join("..")?;
+                        url = url.join("..").map_err(ImportError::from)?;
                     }
                     FilePrefix::Absolute => panic!("error"),
                     FilePrefix::Home => panic!("error"),
                 }
-                url = url.join(&path.file_path.join("/"))?;
+
+                url = url
+                    .join(&path.file_path.join("/"))
+                    .map_err(ImportError::from)?;
+
                 ImportLocationKind::Remote(url)
             }
             ImportLocationKind::NoImport => unreachable!(),
@@ -102,10 +107,8 @@ impl ImportLocationKind {
             ImportLocationKind::Local(path) => Parsed::parse_file(path)?,
             ImportLocationKind::Remote(url) => Parsed::parse_remote(url.clone())?,
             ImportLocationKind::Env(var_name) => {
-                let val = match env::var(var_name) {
-                    Ok(val) => val,
-                    Err(_) => return Err(ImportError::MissingEnvVar.into()),
-                };
+                let val =
+                    env::var(var_name).map_err(|_| ImportError::MissingEnvVar(var_name.clone()))?;
                 Parsed::parse_str(&val)?
             }
             ImportLocationKind::Missing => return Err(ImportError::Missing.into()),
@@ -120,10 +123,9 @@ impl ImportLocationKind {
                 std::fs::read_to_string(path)?
             }
             ImportLocationKind::Remote(url) => download_http_text(url.clone())?,
-            ImportLocationKind::Env(var_name) => match env::var(var_name) {
-                Ok(val) => val,
-                Err(_) => return Err(ImportError::MissingEnvVar.into()),
-            },
+            ImportLocationKind::Env(var_name) => {
+                env::var(var_name).map_err(|_| ImportError::MissingEnvVar(var_name.clone()))?
+            }
             ImportLocationKind::Missing => return Err(ImportError::Missing.into()),
             ImportLocationKind::NoImport => unreachable!(),
         })
@@ -196,7 +198,8 @@ impl ImportLocation {
                     // TODO: allow if CORS check passes
                     return Err(ImportError::SanityCheck.into());
                 }
-                let mut url = Url::parse(&format!("{}://{}", remote.scheme, remote.authority))?;
+                let mut url = Url::parse(&format!("{}://{}", remote.scheme, remote.authority))
+                    .map_err(ImportError::from)?;
                 url.set_path(&remote.path.file_path.iter().join("/"));
                 url.set_query(remote.query.as_ref().map(String::as_ref));
                 ImportLocationKind::Remote(url)

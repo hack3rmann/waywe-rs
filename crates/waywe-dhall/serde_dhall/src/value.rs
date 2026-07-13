@@ -8,7 +8,7 @@ pub use dhall::syntax::NumKind;
 use dhall::syntax::{Expr, ExprKind, Span};
 use dhall::Ctxt;
 
-use crate::{Error, ErrorKind, FromDhall, Result, ToDhall};
+use crate::{Error, FromDhall, Result, ToDhall};
 
 #[derive(Debug, Clone)]
 enum ValueKind {
@@ -221,10 +221,10 @@ impl Value {
             }
         } else {
             let expr = x.to_hir_noenv().to_expr(cx, Default::default());
-            return Err(Error(ErrorKind::Deserialize(format!(
+            return Err(Error::Deserialize(format!(
                 "this is neither a simple type nor a simple value: {}",
                 expr
-            ))));
+            )));
         })
     }
 
@@ -329,17 +329,17 @@ impl SimpleValue {
         use SimpleValue as V;
         let hir = |k| Hir::new(HirKind::Expr(k), Span::Artificial);
         let type_error = || {
-            Error(ErrorKind::Serialize(format!(
+            Error::Serialize(format!(
                 "expected a value of type {}, found {:?}",
                 ty.unwrap().to_expr(),
                 self
-            )))
+            ))
         };
         let type_missing = || {
-            Error(ErrorKind::Serialize(format!(
+            Error::Serialize(format!(
                 "cannot serialize value without a type annotation: {:?}",
                 self
-            )))
+            ))
         };
         let kind = match (self, ty) {
             (V::Num(num @ NumKind::Bool(_)), Some(T::Bool))
@@ -499,10 +499,10 @@ impl FromDhall for Value {
 impl FromDhall for SimpleType {
     fn from_dhall(v: &Value) -> Result<Self> {
         v.to_simple_type().ok_or_else(|| {
-            Error(ErrorKind::Deserialize(format!(
+            Error::Deserialize(format!(
                 "this cannot be deserialized into a simple type: {}",
                 v
-            )))
+            ))
         })
     }
 }
