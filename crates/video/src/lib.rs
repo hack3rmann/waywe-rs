@@ -8,13 +8,8 @@ pub mod time;
 use bitflags::bitflags;
 use ffi::va;
 use ffmpeg_sys_next::{
-    AV_PROFILE_UNKNOWN, AVCodecContext, AVDiscard, AVFormatContext, AVFrame, AVMediaType, AVPacket,
-    AVPixFmtDescriptor, AVProfile, AVSEEK_FLAG_BACKWARD, AVStream, SwsContext, SwsFlags,
-    av_buffer_get_ref_count, av_codec_iterate, av_find_best_stream, av_frame_alloc, av_frame_free,
-    av_frame_get_buffer, av_frame_unref, av_new_packet, av_packet_alloc, av_packet_free,
-    av_packet_ref, av_packet_unref, av_read_frame, av_seek_frame, avcodec_flush_buffers,
-    avdevice_register_all, avformat_close_input, avformat_find_stream_info, avformat_open_input,
-    sws_getContext, sws_scale,
+  AV_NOPTS_VALUE, AV_PROFILE_UNKNOWN, AVCodecContext, AVDiscard, AVFormatContext, AVFrame, AVMediaType, AVPacket, AVPixFmtDescriptor, AVProfile, AVStream, SWS_PARAM_DEFAULT, SWS_SRC_V_CHR_DROP_MASK, SWS_SRC_V_CHR_DROP_SHIFT, SwsContext, SwsFlags::{SWS_ACCURATE_RND, SWS_AREA, SWS_BICUBIC, SWS_BICUBLIN, SWS_BILINEAR, SWS_BITEXACT, SWS_DIRECT_BGR, SWS_ERROR_DIFFUSION, SWS_FAST_BILINEAR,
+               SWS_FULL_CHR_H_INP, SWS_FULL_CHR_H_INT, SWS_GAUSS, SWS_LANCZOS, SWS_POINT, SWS_PRINT_INFO, SWS_SINC, SWS_SPLINE, SWS_X}, av_buffer_get_ref_count, av_codec_iterate, av_dict_free, av_dict_set, av_find_best_stream, av_frame_alloc, av_frame_free, av_frame_get_buffer, av_frame_unref, av_new_packet, av_packet_alloc, av_packet_free, av_packet_ref, av_packet_unref, av_read_frame, avcodec_flush_buffers, avdevice_register_all, avformat_close_input, avformat_find_stream_info, avformat_open_input, avformat_seek_file, sws_getContext, sws_scale
 };
 use glam::UVec2;
 use std::{
@@ -24,6 +19,10 @@ use std::{
     num::{NonZeroI64, NonZeroU64},
     ptr::{self, NonNull},
     slice, str,
+    sync::{
+        Mutex,
+        atomic::{AtomicBool, Ordering::Relaxed},
+    },
 };
 
 pub use acceleration::VaError;
@@ -142,15 +141,36 @@ impl FormatContext {
     /// If you want to use custom IO, preallocate the format context and set its pb field.
     pub fn from_input(url: &CStr) -> Result<Self, BackendError> {
         let mut context_ptr = ptr::null_mut();
+        let mut options = ptr::null_mut();
+
+        const ONE_MEGABYTE: &CStr = c"1048576";
+        const ONE_SECOND: &CStr = c"1000000";
+
+        unsafe {
+            av_dict_set(
+                &raw mut options,
+                c"probesize".as_ptr(),
+                ONE_MEGABYTE.as_ptr(),
+                0,
+            );
+            av_dict_set(
+                &raw mut options,
+                c"analyzeduration".as_ptr(),
+                ONE_SECOND.as_ptr(),
+                0,
+            );
+        }
 
         BackendError::result_of(unsafe {
             avformat_open_input(
                 &raw mut context_ptr,
                 url.as_ptr(),
                 ptr::null_mut(),
-                ptr::null_mut(),
+                &raw mut options,
             )
         })?;
+
+        unsafe { av_dict_free(&raw mut options) };
 
         let mut context = unsafe { Self::from_raw(NonNull::new_unchecked(context_ptr)) };
         context.find_stream_info()?;
@@ -169,9 +189,22 @@ impl FormatContext {
     /// This function isn't guaranteed to open all the codecs, so
     /// options being non-empty at return is a perfectly normal behavior.
     pub fn find_stream_info(&mut self) -> Result<(), BackendError> {
-        BackendError::result_of(unsafe {
+        static MUTEX: Mutex<()> = Mutex::new(());
+        static FIRST_INIT_DONE: AtomicBool = AtomicBool::new(false);
+
+        let _guard = (!FIRST_INIT_DONE.load(Relaxed))
+            .then(|| MUTEX.lock().unwrap_or_else(|err| err.into_inner()));
+
+        // HACK(hack3rmann): something WEIRD happens when this functions is called from multiple
+        // threads for the first time. FFmpeg docs are saying that is MUST be thread-safe. But
+        // removing the mutexes produces memory errors (unaligned tcache chunk, double-free and friends).
+        let res = BackendError::result_of(unsafe {
             avformat_find_stream_info(self.as_raw().as_ptr(), ptr::null_mut())
-        })
+        });
+
+        FIRST_INIT_DONE.store(true, Relaxed);
+
+        res
     }
 
     /// A list of all streams in the file.
@@ -290,29 +323,41 @@ impl FormatContext {
         codec_context: *mut AVCodecContext,
         index: usize,
     ) -> Result<(), BackendError> {
-        unsafe {
-            let ctx = self.as_raw().as_ptr();
-
-            if ctx.is_null() || codec_context.is_null() {
-                return Err(BackendError::INVALID_DATA);
-            }
-
-            // Seek to stream start
-            let mut ret = av_seek_frame(ctx, index as i32, 0, AVSEEK_FLAG_BACKWARD);
-
-            // Fallback for containers that dislike explicit stream seek
-            if ret < 0 {
-                ret = av_seek_frame(ctx, -1, 0, AVSEEK_FLAG_BACKWARD);
-            }
-
-            if ret < 0 {
-                return BackendError::result_of(ret);
-            }
-
-            // Reset decoder state
-            avcodec_flush_buffers(codec_context);
-            Ok(())
+        let ctx = self.as_raw().as_ptr();
+        if ctx.is_null() || codec_context.is_null() {
+            return Err(BackendError::INVALID_DATA);
         }
+
+        let stream = unsafe { (*ctx).streams.add(index).read() };
+        if stream.is_null() {
+            return Err(BackendError::INVALID_DATA);
+        }
+
+        // Stream-native start time, in the stream's own time_base —
+        // not AVFormatContext.start_time, which is AV_TIME_BASE-scaled
+        // and only meaningful when stream_index == -1.
+        let start_time = match (unsafe { *stream }).start_time {
+            AV_NOPTS_VALUE => 0,
+            t => t,
+        };
+
+        let ret = unsafe {
+            avformat_seek_file(
+                ctx,
+                index as i32,
+                i64::MIN,
+                start_time,
+                start_time,
+                0,
+            )
+        };
+
+        if ret < 0 {
+            return BackendError::result_of(ret);
+        }
+
+        unsafe { avcodec_flush_buffers(codec_context) };
+        Ok(())
     }
 }
 
@@ -1091,46 +1136,27 @@ pub struct ScalerFormat {
 bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     pub struct ScalerFlags: i32 {
-        /// < fast bilinear filtering
-        const FAST_BILINEAR = SwsFlags::SWS_FAST_BILINEAR as i32;
-        /// < bilinear filtering
-        const BILINEAR = SwsFlags::SWS_BILINEAR as i32;
-        /// < 2-tap cubic B-spline
-        const BICUBIC = SwsFlags::SWS_BICUBIC as i32;
-        /// < experimental
-        const X = SwsFlags::SWS_X as i32;
-        /// < nearest neighbor
-        const POINT = SwsFlags::SWS_POINT as i32;
-        /// < area averaging
-        const AREA = SwsFlags::SWS_AREA as i32;
-        /// < bicubic luma, bilinear chroma
-        const BICUBLIN = SwsFlags::SWS_BICUBLIN as i32;
-        /// < gaussian approximation
-        const GAUSS = SwsFlags::SWS_GAUSS as i32;
-        /// < unwindowed sinc
-        const SINC = SwsFlags::SWS_SINC as i32;
-        /// < 3-tap sinc/sinc
-        const LANCZOS = SwsFlags::SWS_LANCZOS as i32;
-        /// < cubic Keys spline
-        const SPLINE = SwsFlags::SWS_SPLINE as i32;
-        ///  Return an error on underspecified conversions. Without this flag,\n unspecified fields are defaulted to sensible values.
-        const STRICT = SwsFlags::SWS_STRICT as i32;
-        ///  Emit verbose log of scaling parameters.
-        const PRINT_INFO = SwsFlags::SWS_PRINT_INFO as i32;
-        ///  Perform full chroma upsampling when upscaling to RGB.\n\n For example, when converting 50x50 yuv420p to 100x100 rgba, setting this flag\n will scale the chroma plane from 25x25 to 100x100[...]
-        const FULL_CHR_H_INT = SwsFlags::SWS_FULL_CHR_H_INT as i32;
-        ///  Perform full chroma interpolation when downscaling RGB sources.\n\n For example, when converting a 100x100 rgba source to 50x50 yuv444p, setting\n this flag will generate a 100x100 (4:4:4[...]
-        const FULL_CHR_H_INP = SwsFlags::SWS_FULL_CHR_H_INP as i32;
-        ///  Force bit-exact output. This will prevent the use of platform-specific\n optimizations that may lead to slight difference in rounding, in favor\n of always maintaining exact bit output co[...]
-        const ACCURATE_RND = SwsFlags::SWS_ACCURATE_RND as i32;
-        ///  Force bit-exact output. This will prevent the use of platform-specific\n optimizations that may lead to slight difference in rounding, in favor\n of always maintaining exact bit output co[...]
-        const BITEXACT = SwsFlags::SWS_BITEXACT as i32;
-        ///  Allow using experimental new code paths. This may be faster, slower,\n or produce different output, with semantics subject to change at any\n point in time. For testing and debugging purp[...]
-        const UNSTABLE = SwsFlags::SWS_UNSTABLE as i32;
-        /// < This flag has no effect
-        const DIRECT_BGR = SwsFlags::SWS_DIRECT_BGR as i32;
-        /// < Set `SwsContext.dither` instead
-        const ERROR_DIFFUSION = SwsFlags::SWS_ERROR_DIFFUSION as i32;
+        const FAST_BILINEAR = SWS_FAST_BILINEAR as i32;
+        const BILINEAR = SWS_BILINEAR as i32;
+        const BICUBIC = SWS_BICUBIC as i32;
+        const X = SWS_X as i32;
+        const POINT = SWS_POINT as i32;
+        const AREA = SWS_AREA as i32;
+        const BICUBLIN = SWS_BICUBLIN as i32;
+        const GAUSS = SWS_GAUSS as i32;
+        const SINC = SWS_SINC as i32;
+        const LANCZOS = SWS_LANCZOS as i32;
+        const SPLINE = SWS_SPLINE as i32;
+        const SRC_V_CHR_DROP_MASK = SWS_SRC_V_CHR_DROP_MASK as i32;
+        const SRC_V_CHR_DROP_SHIFT = SWS_SRC_V_CHR_DROP_SHIFT as i32;
+        const PARAM_DEFAULT = SWS_PARAM_DEFAULT as i32;
+        const PRINT_INFO = SWS_PRINT_INFO as i32;
+        const FULL_CHR_H_INT = SWS_FULL_CHR_H_INT as i32;
+        const FULL_CHR_H_INP = SWS_FULL_CHR_H_INP as i32;
+        const DIRECT_BGR = SWS_DIRECT_BGR as i32;
+        const ACCURATE_RND = SWS_ACCURATE_RND as i32;
+        const BITEXACT = SWS_BITEXACT as i32;
+        const ERROR_DIFFUSION = SWS_ERROR_DIFFUSION as i32;
     }
 }
 
