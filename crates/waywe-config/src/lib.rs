@@ -1,12 +1,12 @@
-use display_error_chain::ErrorChainExt;
 use glam::Vec2;
+use miette::Diagnostic;
 use rand::distr::{Distribution as _, Uniform};
 use serde::{Deserialize, Serialize};
 use serde_dhall::StaticType;
 use smallvec::SmallVec;
 use static_assertions::assert_impl_all;
 use std::{env, path::PathBuf, time::Duration};
-use tracing::{debug, error, info};
+use thiserror::Error;
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize, StaticType)]
 pub struct Config {
@@ -26,10 +26,14 @@ impl Config {
             path
         });
 
-        let home_path = env::home_dir().map(|mut home| {
+        let mut home_path = env::home_dir().map(|mut home| {
             home.extend([".config", WAYWE]);
             home
         });
+
+        if xdg_path == home_path {
+            home_path = None;
+        }
 
         let etc_path = Some(PathBuf::from_iter(["/etc", WAYWE]));
 
@@ -47,32 +51,42 @@ impl Config {
     /// 1. `$XDG_CONFIG_HOME/waywe/config.dhall`
     /// 2. `$HOME/.config/waywe/config.dhall`
     /// 3. `/etc/waywe/config.dhall`
-    pub fn read() -> Self {
+    pub fn read() -> Result<Self, ReadConfigError> {
+        let mut errors = vec![];
+
         for mut path in Self::config_paths() {
             path.push("config.dhall");
 
-            if !path.exists() || !path.is_file() {
-                continue;
-            }
-
             match serde_dhall::from_file(&path).parse::<Config>() {
-                Ok(config) => {
-                    info!(path = %path.display(), "loaded config");
-                    debug!("config {config:#?}");
-                    return config;
-                }
-                Err(error) => {
-                    error!(error = %error.chain(), path = %path.display(), "invalid config");
-                    continue;
-                }
+                Ok(config) => return Ok(config),
+                Err(error) => errors.push(DhallErrorSource { path, error }),
             }
         }
 
-        let default = Config::default();
-        info!("loaded default config {default:#?}");
-
-        default
+        Err(ReadConfigError::ConfigUnreachable { related: errors })
     }
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[diagnostic(code(waywe::dhall::error))]
+#[error("failed to run Dhall '{path}'")]
+pub struct DhallErrorSource {
+    pub path: PathBuf,
+    #[source]
+    pub error: serde_dhall::Error,
+}
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum ReadConfigError {
+    #[error("all config search paths lead to invalid config")]
+    #[diagnostic(
+        code(waywe::config::invalid),
+        help("check config validity with `waywe validate` and check file permissions")
+    )]
+    ConfigUnreachable {
+        #[related]
+        related: Vec<DhallErrorSource>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, StaticType)]

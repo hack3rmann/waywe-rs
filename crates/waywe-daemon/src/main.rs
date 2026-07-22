@@ -9,11 +9,12 @@ use clap::Parser;
 use detach::detach;
 use display_error_chain::ErrorChainExt;
 use event_loop::EventLoop;
+use miette_diagnostic_chain::DiagnosticChain;
 use std::{io, path::PathBuf};
-use tracing::info;
+use tracing::{debug, info, warn};
 use tracing_subscriber::EnvFilter;
 use wallpaper_app::WallpaperApp;
-use waywe_ipc::config::Config;
+use waywe_config::Config;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -44,7 +45,16 @@ fn main() {
         detach().unwrap_or_report(&mut reporter);
     }
 
-    let config = Config::read();
+    let config = Config::read().unwrap_or_else(|error| {
+        warn!(
+            error = %error.diagnostic_chain(),
+            "failed to load config, falling back the the default one"
+        );
+
+        Config::default()
+    });
+    debug!(?config);
+
     let app = WallpaperApp::from_config(config);
 
     let mut event_loop = EventLoop::new(app).unwrap_or_else(|err| {

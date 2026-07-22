@@ -5,7 +5,7 @@ use crate::{
     shaders::ShaderDescriptor,
 };
 use std::mem;
-use waywe_ipc::config::BlurConfig;
+use waywe_config::BlurConfig;
 
 const LABEL: &str = "blur";
 

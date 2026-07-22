@@ -13,10 +13,11 @@ use calloop::{
 };
 use display_error_chain::ErrorChainExt;
 use glam::UVec2;
+use miette_diagnostic_chain::DiagnosticChain;
 use std::{io, vec::Drain};
 use thiserror::Error;
 use tokio::runtime::{Builder as AsyncRuntimeBuilder, Runtime as AsyncRuntime};
-use tracing::info;
+use tracing::{error, info};
 use waywe_ipc::{
     DaemonCommand, IpcServer,
     command::DaemonResult,
@@ -149,6 +150,14 @@ impl EventLoop {
 
         handle
             .insert_source(ConfigEventSource::new(), move |config, &mut (), state| {
+                let config = match config {
+                    Ok(config) => config,
+                    Err(error) => {
+                        error!(error = %error.diagnostic_chain(), "failed to reload config");
+                        return;
+                    }
+                };
+
                 state.event_queue.add(ConfigReloadEvent {
                     path: None,
                     config: Some(config),

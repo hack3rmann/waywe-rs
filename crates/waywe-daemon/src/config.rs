@@ -4,7 +4,7 @@ use calloop::{
 use inotify::{Inotify, WatchMask};
 use std::io::ErrorKind;
 use thiserror::Error;
-use waywe_ipc::config::Config;
+use waywe_config::{Config, ReadConfigError};
 
 pub struct ConfigEventSource {
     inotify: Generic<Inotify>,
@@ -46,7 +46,7 @@ impl Default for ConfigEventSource {
 pub enum ConfigWatchError {}
 
 impl EventSource for ConfigEventSource {
-    type Event = Config;
+    type Event = Result<Config, ReadConfigError>;
     type Metadata = ();
     type Ret = ();
     type Error = std::io::Error;
@@ -67,8 +67,7 @@ impl EventSource for ConfigEventSource {
             let mut events = inotify.read_events_blocking(&mut self.buf)?;
 
             if events.next().is_some() {
-                let config = Config::read();
-                callback(config, &mut ());
+                callback(Config::read(), &mut ());
             }
 
             // Drain remaining events

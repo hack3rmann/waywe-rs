@@ -8,6 +8,7 @@ use crate::{
 use calloop::channel::Sender;
 use display_error_chain::ErrorChainExt;
 use glam::UVec2;
+use miette::Report;
 use smallvec::{SmallVec, smallvec};
 use std::{
     collections::{BTreeMap, HashMap, btree_map::Entry},
@@ -17,10 +18,10 @@ use std::{
     time::{Duration, Instant},
 };
 use tracing::{debug, error};
+use waywe_config::Config;
 use waywe_ipc::{
     WallpaperType,
     command::{DaemonError, DaemonResponse, DaemonResult, PauseMode},
-    config::Config,
     ipc::server::{ClientId, IpcResponse},
     profile::{Monitor, SetupProfile, SetupProfileError},
 };
@@ -422,7 +423,7 @@ impl Handle<WaylandEvent> for WallpaperApp {
 
                 match SetupProfile::read() {
                     Ok(mut profile) => 'ok: {
-                        debug!("read setup profile {profile:#?}");
+                        debug!(?profile, "read setup profile");
 
                         let Some(info) = profile.monitors.remove(monitor_name.as_str()) else {
                             break 'ok;
@@ -665,7 +666,20 @@ impl Handle<ConfigReloadEvent> for WallpaperApp {
             sender_id,
         }: ConfigReloadEvent,
     ) -> PostEventActions {
-        self.config = Arc::new(config.unwrap_or_else(Config::read));
+        let config = match config {
+            Some(config) => config,
+            None => match Config::read() {
+                Ok(config) => config,
+                Err(error) => {
+                    let report = Report::from(error).to_string();
+                    report_error(&runtime.ipc, sender_id, DaemonError::Generic(report));
+
+                    return PostEventActions::empty();
+                }
+            },
+        };
+
+        self.config = Arc::new(config);
 
         for wall in self.wallpapers.values_mut() {
             wall.reload_config(&runtime.wgpu, self.config.clone());

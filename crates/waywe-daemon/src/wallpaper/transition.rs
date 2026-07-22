@@ -4,7 +4,7 @@ use for_sure::prelude::*;
 use glam::Vec2;
 use smallvec::SmallVec;
 use std::{collections::VecDeque, f32::consts::PI, mem, sync::Arc, time::Duration};
-use waywe_ipc::config::{
+use waywe_config::{
     Angle, AnimationConfig, AnimationDirection, AnimationStyle, CenterPosition, Config,
     Interpolation, TransitionStyle,
 };
