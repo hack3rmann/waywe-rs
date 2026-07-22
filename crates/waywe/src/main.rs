@@ -36,6 +36,13 @@ fn main() -> miette::Result<()> {
             }
         }
         Command::Stop { dont_wait } => execute_stop(WaitMode::from_dont(dont_wait))?,
+        Command::Restart { dont_wait, bin } => {
+            execute_stop(WaitMode::from_dont(dont_wait))?;
+
+            if let Err(error) = execute_start(WaitMode::from_dont(dont_wait), bin) {
+                return Err(DaemonSetupDiagnostics::from(error).into());
+            }
+        }
         Command::Show {
             path,
             monitor,

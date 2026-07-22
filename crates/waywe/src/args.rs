@@ -36,6 +36,15 @@ pub enum Command {
         #[arg(long)]
         dont_wait: bool,
     },
+    /// Start the daemon process
+    Restart {
+        /// Don't wait the daemon to start
+        #[arg(long)]
+        dont_wait: bool,
+        /// Path to the `waywe-daemon` binary
+        #[arg(long)]
+        bin: Option<PathBuf>,
+    },
     /// Get path to the currently running wallpapers for each display in JSON format
     Current {
         /// Filter by monitor name, print only path
