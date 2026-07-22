@@ -63,6 +63,16 @@ impl Config {
             }
         }
 
+        if let Some(actual_config_error_index) = errors.iter_mut().position(|source| {
+            !matches!(
+                source.error,
+                serde_dhall::Error::Dhall(dhall::error::Error::Io(_))
+            )
+        }) {
+            errors.swap(0, actual_config_error_index);
+            _ = errors.drain(1..);
+        }
+
         Err(ReadConfigError::ConfigUnreachable { related: errors })
     }
 }
@@ -359,22 +369,6 @@ mod tests {
             .static_type_annotation()
             .to_string()
             .unwrap();
-        println!("{string}");
-    }
-
-    #[test]
-    #[ignore = "used for debugging only"]
-    fn print_config_slide() {
-        let config = Config {
-            animation: AnimationConfig {
-                style: TransitionStyle::Slide {
-                    angle: Angle::Random,
-                },
-                ..AnimationConfig::default()
-            },
-            effects: vec![],
-        };
-        let string = toml::to_string(&config).unwrap();
         println!("{string}");
     }
 }

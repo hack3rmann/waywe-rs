@@ -695,6 +695,8 @@ impl Handle<ConfigReloadEvent> for WallpaperApp {
                 .unwrap();
         }
 
+        debug!(config = ?self.config, "reloaded config");
+
         PostEventActions::REDRAW
     }
 }
