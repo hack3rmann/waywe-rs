@@ -61,7 +61,7 @@ impl TaskPool {
     {
         self.spawn(async move |mut emitter| {
             let event = f().await;
-            emitter.emit(event).expect("failed to send event");
+            emitter.try_emit(event).expect("failed to send event");
         })
         .await;
     }

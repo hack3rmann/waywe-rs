@@ -6,7 +6,7 @@ use crate::{
     },
 };
 use calloop::{
-    EventLoop as CalloopEventLoop, LoopHandle, LoopSignal,
+    EventLoop as CalloopEventLoop, LoopHandle, LoopSignal, RegistrationToken,
     channel::{Channel, channel},
     signals::{Signal, Signals},
     timer::{TimeoutAction, Timer},
@@ -17,7 +17,7 @@ use miette_diagnostic_chain::DiagnosticChain;
 use std::{io, vec::Drain};
 use thiserror::Error;
 use tokio::runtime::{Builder as AsyncRuntimeBuilder, Runtime as AsyncRuntime};
-use tracing::{error, info};
+use tracing::{debug, error, info};
 use waywe_ipc::{
     DaemonCommand, IpcServer,
     command::DaemonResult,
@@ -90,9 +90,15 @@ impl EventLoop {
             tokio,
             loop_handle: handle.clone(),
             is_frame_requested: true,
+            config_watcher_token: None,
         };
 
         Self::register_sources(&handle, signals, custom_receiver, wayland, ipc_channel)?;
+
+        if !state.app.config().config.disable_hot_reload {
+            add_config_watcher_source(&mut state)?;
+        }
+
         state.process_event_queue();
 
         Ok(Self { calloop, state })
@@ -143,31 +149,70 @@ impl EventLoop {
             .map_err(calloop::Error::from)?;
 
         handle
-            .insert_source(custom_receiver, move |event, &mut (), state| {
+            .insert_source(custom_receiver, move |mut event, &mut (), state| {
+                handle_event_loop_event(&mut event, state);
                 state.event_queue.add_dyn(event);
-            })
-            .map_err(calloop::Error::from)?;
-
-        handle
-            .insert_source(ConfigEventSource::new(), move |config, &mut (), state| {
-                let config = match config {
-                    Ok(config) => config,
-                    Err(error) => {
-                        error!(error = %error.diagnostic_chain(), "failed to reload config");
-                        return;
-                    }
-                };
-
-                state.event_queue.add(ConfigReloadEvent {
-                    path: None,
-                    config: Some(config),
-                    sender_id: None,
-                });
             })
             .map_err(calloop::Error::from)?;
 
         Ok(())
     }
+}
+
+fn add_config_watcher_source(state: &mut LoopState) -> Result<(), calloop::Error> {
+    let token = state.loop_handle.insert_source(
+        ConfigEventSource::new(),
+        move |config, &mut (), state| {
+            let config = match config {
+                Ok(config) => config,
+                Err(error) => {
+                    error!(error = %error.diagnostic_chain(), "failed to reload config");
+                    return;
+                }
+            };
+
+            state.event_queue.add(ConfigReloadEvent {
+                path: None,
+                config: Some(config),
+                sender_id: None,
+            });
+        },
+    )?;
+
+    state.config_watcher_token = Some(token);
+
+    Ok(())
+}
+
+#[derive(Clone, Debug)]
+pub struct EnableConfigWatcher;
+
+#[derive(Clone, Debug)]
+pub struct DisableConfigWatcher;
+
+fn handle_event_loop_event(event: &mut Event, state: &mut LoopState) {
+    event.handle_sync(|_: EnableConfigWatcher| {
+        debug!("enabling config hot reload");
+
+        if let Err(error) = add_config_watcher_source(state) {
+            error!(error = %error.chain(), "failed to enable config watcher");
+        }
+
+        PostEventActions::empty()
+    });
+
+    event.handle_sync(|_: DisableConfigWatcher| {
+        debug!("disabling config hot reload");
+
+        let Some(token) = state.config_watcher_token.take() else {
+            error!("bug: tried to disable unexistent config watcher");
+            return PostEventActions::empty();
+        };
+
+        state.loop_handle.remove(token);
+
+        PostEventActions::empty()
+    });
 }
 
 struct LoopState {
@@ -178,6 +223,7 @@ struct LoopState {
     event_queue: EventQueue,
     tokio: AsyncRuntime,
     is_frame_requested: bool,
+    config_watcher_token: Option<RegistrationToken>,
 }
 
 impl LoopState {
@@ -269,7 +315,7 @@ impl LoopState {
                 height,
                 time,
             } => {
-                tracing::debug!(?ty, ?path, ?width, ?height, "preview");
+                debug!(?ty, ?path, ?width, ?height, "preview");
 
                 WallpaperPreviewEvent {
                     path,

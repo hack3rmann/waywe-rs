@@ -1,5 +1,5 @@
 use crate::{
-    event_loop::WallpaperTarget,
+    event_loop::{DisableConfigWatcher, EnableConfigWatcher, WallpaperTarget},
     wallpaper::{
         self, Wallpaper, WallpaperConfig, optimized::OptimizedWallpaper,
         package_registry::PackageRegistry, preview::PreviewPipeline, transition::RunningWallpapers,
@@ -271,6 +271,10 @@ impl App for WallpaperApp {
 
         Ok(frame_info)
     }
+
+    fn config(&self) -> &Config {
+        &self.config
+    }
 }
 
 impl Handle<WallpaperPauseEvent> for WallpaperApp {
@@ -421,7 +425,7 @@ impl Handle<WaylandEvent> for WallpaperApp {
                             sender_id: None,
                         };
 
-                        runtime.task_pool.emitter.emit(event).unwrap();
+                        runtime.task_pool.emitter.emit(event);
                     }
                     Err(SetupProfileError::Io(error)) if error.kind() == ErrorKind::NotFound => {
                         tracing::debug!("no setup profile present");
@@ -512,14 +516,12 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
                 .task_pool
                 .spawn(async move |mut emitter| {
                     match wallpaper::create(gpu, &path, ty, config, packages).await {
-                        Ok(wallpaper) => emitter
-                            .emit(WallpaperPreparedEvent {
-                                path,
-                                wallpaper,
-                                monitor_id,
-                                sender_id,
-                            })
-                            .unwrap(),
+                        Ok(wallpaper) => emitter.emit(WallpaperPreparedEvent {
+                            path,
+                            wallpaper,
+                            monitor_id,
+                            sender_id,
+                        }),
                         Err(error) => report_error(&ipc, sender_id, error.clone()),
                     }
                 })
@@ -661,6 +663,15 @@ impl Handle<ConfigReloadEvent> for WallpaperApp {
                 }
             },
         };
+
+        match (
+            self.config.config.disable_hot_reload,
+            config.config.disable_hot_reload,
+        ) {
+            (true, false) => runtime.task_pool.emitter.emit(EnableConfigWatcher),
+            (false, true) => runtime.task_pool.emitter.emit(DisableConfigWatcher),
+            (true, true) | (false, false) => {}
+        }
 
         self.config = Arc::new(config);
 
