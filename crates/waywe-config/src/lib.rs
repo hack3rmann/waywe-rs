@@ -18,6 +18,8 @@ pub struct Config {
     pub animation: AnimationConfig,
     #[serde(default)]
     pub effects: Vec<Effects>,
+    #[serde(default)]
+    pub config: ConfigOpts,
 }
 assert_impl_all!(Config: Send, Sync);
 
@@ -101,6 +103,11 @@ impl Config {
             },
         )
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Copy, PartialEq, Hash, StaticType)]
+pub struct ConfigOpts {
+    pub disable_hot_reload: bool,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -192,11 +199,9 @@ pub enum AnimationStyle {
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone, StaticType)]
-#[serde(rename = "Transition")]
-pub enum TransitionStyle {
+pub enum Transition {
     Circle {
-        #[serde(rename = "center")]
-        center_position: CenterPosition,
+        center: CenterPosition,
         direction: AnimationDirection,
     },
     Slide {
@@ -204,7 +209,7 @@ pub enum TransitionStyle {
     },
 }
 
-impl TransitionStyle {
+impl Transition {
     pub fn animation(&self) -> AnimationStyle {
         match self {
             Self::Circle { .. } => AnimationStyle::Circle,
@@ -213,10 +218,10 @@ impl TransitionStyle {
     }
 }
 
-impl Default for TransitionStyle {
+impl Default for Transition {
     fn default() -> Self {
         Self::Circle {
-            center_position: CenterPosition::default(),
+            center: CenterPosition::default(),
             direction: AnimationDirection::default(),
         }
     }
@@ -229,7 +234,7 @@ pub struct AnimationConfig {
     #[serde(default)]
     pub easing: Interpolation,
     #[serde(default)]
-    pub style: TransitionStyle,
+    pub style: Transition,
 }
 
 impl Default for AnimationConfig {
@@ -237,7 +242,7 @@ impl Default for AnimationConfig {
         Self {
             duration: get_default_duration(),
             easing: Interpolation::default(),
-            style: TransitionStyle::default(),
+            style: Transition::default(),
         }
     }
 }
@@ -402,10 +407,13 @@ mod tests {
     fn print_config_circle() {
         let config = Config {
             animation: AnimationConfig {
-                style: TransitionStyle::default(),
+                style: Transition::default(),
                 ..AnimationConfig::default()
             },
             effects: vec![],
+            config: ConfigOpts {
+                disable_hot_reload: true,
+            },
         };
         let string = serde_dhall::serialize(&config)
             .static_type_annotation()

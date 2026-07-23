@@ -6,7 +6,7 @@ use smallvec::SmallVec;
 use std::{collections::VecDeque, f32::consts::PI, mem, sync::Arc, time::Duration};
 use waywe_config::{
     Angle, AnimationConfig, AnimationDirection, AnimationStyle, CenterPosition, Config,
-    Interpolation, TransitionStyle,
+    Interpolation, Transition,
 };
 use waywe_runtime::{
     effects::{Effects, config::EffectsBuilder},
@@ -391,8 +391,8 @@ impl OngoingTransition {
         let duration = Duration::from_millis(config.duration);
 
         let state = match config.style {
-            TransitionStyle::Circle {
-                center_position,
+            Transition::Circle {
+                center: center_position,
                 direction,
             } => TransitionState::Circular(CircularTransition::new(
                 aspect_ratio,
@@ -400,7 +400,7 @@ impl OngoingTransition {
                 direction,
                 duration,
             )),
-            TransitionStyle::Slide { angle } => {
+            Transition::Slide { angle } => {
                 TransitionState::Slide(SlideTransition::new(aspect_ratio, angle, duration))
             }
         };
