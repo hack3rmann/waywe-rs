@@ -299,13 +299,7 @@ impl Handle<WallpaperPauseEvent> for WallpaperApp {
             }
         }
 
-        runtime
-            .ipc
-            .send(IpcResponse {
-                body: Ok(DaemonResponse::PauseDone),
-                destination_id: sender_id,
-            })
-            .unwrap();
+        send_response(&runtime.ipc, Some(sender_id), DaemonResponse::PauseDone);
 
         PostEventActions::REDRAW
     }
@@ -362,15 +356,7 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
 
         self.wallpaper_paths.insert(monitor_name, path);
 
-        if let Some(destination_id) = sender_id {
-            runtime
-                .ipc
-                .send(IpcResponse {
-                    body: Ok(DaemonResponse::WallpaperSet),
-                    destination_id,
-                })
-                .unwrap();
-        }
+        send_response(&runtime.ipc, sender_id, DaemonResponse::WallpaperSet);
 
         PostEventActions::REDRAW
     }
@@ -570,16 +556,16 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
                 "max preview size exceeded"
             );
 
-            let response = IpcResponse {
-                body: Err(DaemonError::ImageDimensionsTooBig {
+            report_error(
+                &ipc,
+                Some(sender_id),
+                DaemonError::ImageDimensionsTooBig {
                     width: size.x,
                     height: size.y,
                     max_width: MAX_PREVIEW_SIZE,
                     max_height: MAX_PREVIEW_SIZE,
-                }),
-                destination_id: sender_id,
-            };
-            ipc.send(response).unwrap();
+                },
+            );
         }
 
         let config = WallpaperConfig {
@@ -606,15 +592,15 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
                 pipeline.render_async(&gpu, &mut wallpaper, move |buffer| {
                     let rgba = buffer.get_mapped_range(..).unwrap().to_vec();
 
-                    ipc.send(IpcResponse {
-                        body: Ok(DaemonResponse::Preview {
+                    send_response(
+                        &ipc,
+                        Some(sender_id),
+                        DaemonResponse::Preview {
                             width: size.x,
                             height: size.y,
                             rgba,
-                        }),
-                        destination_id: sender_id,
-                    })
-                    .unwrap();
+                        },
+                    );
                 });
             })
             .await;
@@ -643,13 +629,11 @@ impl Handle<CurrentWallpaperEvent> for WallpaperApp {
                 .collect(),
         };
 
-        runtime
-            .ipc
-            .send(IpcResponse {
-                body: Ok(DaemonResponse::Current(current)),
-                destination_id: sender_id,
-            })
-            .unwrap();
+        send_response(
+            &runtime.ipc,
+            Some(sender_id),
+            DaemonResponse::Current(current),
+        );
 
         PostEventActions::empty()
     }
@@ -659,16 +643,15 @@ impl Handle<ConfigReloadEvent> for WallpaperApp {
     async fn handle(
         &mut self,
         runtime: &mut Runtime,
-        // FIXME(hack3rmann): use path
         ConfigReloadEvent {
-            path: _,
+            path,
             config,
             sender_id,
         }: ConfigReloadEvent,
     ) -> PostEventActions {
         let config = match config {
             Some(config) => config,
-            None => match Config::read() {
+            None => match Config::read_from(path.as_ref()) {
                 Ok(config) => config,
                 Err(error) => {
                     let report = Report::from(error).to_string();
@@ -685,20 +668,28 @@ impl Handle<ConfigReloadEvent> for WallpaperApp {
             wall.reload_config(&runtime.wgpu, self.config.clone());
         }
 
-        if let Some(destination_id) = sender_id {
-            runtime
-                .ipc
-                .send(IpcResponse {
-                    body: Ok(DaemonResponse::ConfigReloaded),
-                    destination_id,
-                })
-                .unwrap();
-        }
+        send_response(&runtime.ipc, sender_id, DaemonResponse::ConfigReloaded);
 
         debug!(config = ?self.config, "reloaded config");
 
         PostEventActions::REDRAW
     }
+}
+
+fn send_response(
+    ipc: &Sender<IpcResponse<DaemonResult>>,
+    destination_id: Option<ClientId>,
+    response: DaemonResponse,
+) {
+    let Some(destination_id) = destination_id else {
+        return;
+    };
+
+    ipc.send(IpcResponse {
+        body: Ok(response),
+        destination_id,
+    })
+    .unwrap();
 }
 
 fn report_error(

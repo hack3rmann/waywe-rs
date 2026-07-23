@@ -5,7 +5,11 @@ use serde::{Deserialize, Serialize};
 use serde_dhall::StaticType;
 use smallvec::SmallVec;
 use static_assertions::assert_impl_all;
-use std::{env, path::PathBuf, time::Duration};
+use std::{
+    env,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 use thiserror::Error;
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize, StaticType)]
@@ -43,6 +47,27 @@ impl Config {
             .collect()
     }
 
+    pub fn read_from(path: Option<impl AsRef<Path>>) -> Result<Self, ReadConfigError> {
+        match path {
+            Some(path) => Self::read(path),
+            None => Self::read_from_config_paths(),
+        }
+    }
+
+    pub fn read(path: impl AsRef<Path>) -> Result<Self, ReadConfigError> {
+        let path = path.as_ref();
+
+        serde_dhall::from_file(path)
+            .parse::<Self>()
+            .map_err(|error| DhallErrorSource {
+                path: path.to_owned(),
+                error,
+            })
+            .map_err(|error| ReadConfigError::ConfigUnreachable {
+                related: vec![error],
+            })
+    }
+
     /// Tries to read config file from HOME paths. If fails, returns the default one.
     ///
     /// Waywe does not create the config file for you,
@@ -51,13 +76,13 @@ impl Config {
     /// 1. `$XDG_CONFIG_HOME/waywe/config.dhall`
     /// 2. `$HOME/.config/waywe/config.dhall`
     /// 3. `/etc/waywe/config.dhall`
-    pub fn read() -> Result<Self, ReadConfigError> {
+    pub fn read_from_config_paths() -> Result<Self, ReadConfigError> {
         let mut errors = vec![];
 
         for mut path in Self::config_paths() {
             path.push("config.dhall");
 
-            match serde_dhall::from_file(&path).parse::<Config>() {
+            match serde_dhall::from_file(&path).parse::<Self>() {
                 Ok(config) => return Ok(config),
                 Err(error) => errors.push(DhallErrorSource { path, error }),
             }

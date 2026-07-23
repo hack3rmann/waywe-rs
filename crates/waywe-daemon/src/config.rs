@@ -67,7 +67,7 @@ impl EventSource for ConfigEventSource {
             let mut events = inotify.read_events_blocking(&mut self.buf)?;
 
             if events.next().is_some() {
-                callback(Config::read(), &mut ());
+                callback(Config::read_from_config_paths(), &mut ());
             }
 
             // Drain remaining events

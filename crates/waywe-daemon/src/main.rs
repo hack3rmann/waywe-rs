@@ -45,7 +45,7 @@ fn main() {
         detach().unwrap_or_report(&mut reporter);
     }
 
-    let config = Config::read().unwrap_or_else(|error| {
+    let config = Config::read_from_config_paths().unwrap_or_else(|error| {
         warn!(
             error = %error.diagnostic_chain(),
             "failed to load config, falling back the the default one"
