@@ -8,7 +8,7 @@ use crate::{
 use calloop::channel::Sender;
 use display_error_chain::ErrorChainExt;
 use glam::UVec2;
-use miette::Report;
+use miette_diagnostic_chain::DiagnosticChain;
 use smallvec::{SmallVec, smallvec};
 use std::{
     collections::{BTreeMap, HashMap, btree_map::Entry},
@@ -654,7 +654,7 @@ impl Handle<ConfigReloadEvent> for WallpaperApp {
             None => match Config::read_from(path.as_ref()) {
                 Ok(config) => config,
                 Err(error) => {
-                    let report = Report::from(error).to_string();
+                    let report = error.diagnostic_chain().to_string();
                     report_error(&runtime.ipc, sender_id, DaemonError::Generic(report));
 
                     return PostEventActions::empty();

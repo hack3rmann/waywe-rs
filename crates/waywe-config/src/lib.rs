@@ -6,6 +6,7 @@ use serde_dhall::StaticType;
 use smallvec::SmallVec;
 use static_assertions::assert_impl_all;
 use std::{
+    borrow::Borrow,
     env,
     path::{Path, PathBuf},
     time::Duration,
@@ -63,9 +64,7 @@ impl Config {
                 path: path.to_owned(),
                 error,
             })
-            .map_err(|error| ReadConfigError::ConfigUnreachable {
-                related: vec![error],
-            })
+            .map_err(|error| ReadConfigError::InvalidConfig(Box::new(error)))
     }
 
     /// Tries to read config file from HOME paths. If fails, returns the default one.
@@ -88,17 +87,19 @@ impl Config {
             }
         }
 
-        if let Some(actual_config_error_index) = errors.iter_mut().position(|source| {
-            !matches!(
-                source.error,
-                serde_dhall::Error::Dhall(dhall::error::Error::Io(_))
-            )
-        }) {
-            errors.swap(0, actual_config_error_index);
-            _ = errors.drain(1..);
-        }
-
-        Err(ReadConfigError::ConfigUnreachable { related: errors })
+        Err(
+            if let Some(actual_config_error_index) = errors.iter_mut().position(|source| {
+                !matches!(
+                    source.error,
+                    serde_dhall::Error::Dhall(dhall::error::Error::Io(_))
+                )
+            }) {
+                let actual_error = errors.swap_remove(actual_config_error_index);
+                ReadConfigError::InvalidConfig(Box::new(actual_error))
+            } else {
+                ReadConfigError::ConfigUnreachable { related: errors }
+            },
+        )
     }
 }
 
@@ -111,17 +112,33 @@ pub struct DhallErrorSource {
     pub error: serde_dhall::Error,
 }
 
+impl Borrow<dyn Diagnostic> for Box<DhallErrorSource> {
+    fn borrow(&self) -> &(dyn Diagnostic + 'static) {
+        &**self
+    }
+}
+
 #[derive(Debug, Error, Diagnostic)]
 pub enum ReadConfigError {
     #[error("all config search paths lead to invalid config")]
     #[diagnostic(
         code(waywe::config::invalid),
-        help("check config validity with `waywe validate` and check file permissions")
+        help("check config validity with `waywe config validate` and check file permissions")
     )]
     ConfigUnreachable {
         #[related]
         related: Vec<DhallErrorSource>,
     },
+    #[error("invalid config")]
+    #[diagnostic(
+        code(waywe::config::invalid),
+        help("check config validity with `waywe config validate`")
+    )]
+    InvalidConfig(
+        #[from]
+        #[diagnostic_source]
+        Box<DhallErrorSource>,
+    ),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, StaticType)]

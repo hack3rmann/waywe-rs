@@ -5,6 +5,7 @@ use crate::{
 use miette::Diagnostic;
 use std::path::PathBuf;
 use thiserror::Error;
+use waywe_config::{Config, ReadConfigError};
 use waywe_ipc::{
     ClientError, DaemonCommand,
     command::{DaemonError, DaemonResponse},
@@ -28,6 +29,9 @@ pub enum ConfigError {
         )
     )]
     UnexpectedDaemonResponse(DaemonResponse),
+    #[error(transparent)]
+    #[diagnostic(code(waywe::config::failed_to_read))]
+    Config(#[from] ReadConfigError),
 }
 
 pub fn execute_config(command: ConfigCommand) -> Result<(), ConfigError> {
@@ -57,6 +61,9 @@ fn execute_reload(path: Option<PathBuf>, wait_mode: WaitMode) -> Result<(), Conf
     Ok(())
 }
 
-fn execute_validate(_path: Option<PathBuf>) -> Result<(), ConfigError> {
-    todo!()
+fn execute_validate(path: Option<PathBuf>) -> Result<(), ConfigError> {
+    let config = Config::read_from(path.as_ref())?;
+    eprintln!("{config:#?}");
+
+    Ok(())
 }

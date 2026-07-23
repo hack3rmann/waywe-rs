@@ -5288,6 +5288,7 @@ dependencies = [
  "tracing-subscriber",
  "transmute-extra",
  "unicode-width 0.2.2",
+ "waywe-config",
  "waywe-ipc",
 ]
 
