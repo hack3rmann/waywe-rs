@@ -51,6 +51,8 @@ calloop.workspace = true
 inotify = "0.11.4"
 miette.workspace = true
 miette-diagnostic-chain.workspace = true
+serde_dhall.workspace = true
+dhall.workspace = true
 
 [dev-dependencies]
 libc = "0.2.171"

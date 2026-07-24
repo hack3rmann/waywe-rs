@@ -13,12 +13,12 @@ use smallvec::{SmallVec, smallvec};
 use std::{
     collections::{BTreeMap, HashMap, btree_map::Entry},
     io::ErrorKind,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant},
 };
 use tracing::{debug, error};
-use waywe_config::Config;
+use waywe_config::{Config, DhallErrorSource, ReadConfigError};
 use waywe_ipc::{
     WallpaperType,
     command::{DaemonError, DaemonResponse, DaemonResult, PauseMode},
@@ -163,6 +163,13 @@ pub struct CurrentWallpaperEvent {
 
 #[derive(Clone, Debug)]
 pub struct ConfigReloadEvent {
+    pub path: Option<PathBuf>,
+    pub config: Option<Config>,
+    pub sender_id: Option<ClientId>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ConfigReloadDebouncedEvent {
     pub path: Option<PathBuf>,
     pub config: Option<Config>,
     pub sender_id: Option<ClientId>,
@@ -641,6 +648,29 @@ impl Handle<CurrentWallpaperEvent> for WallpaperApp {
     }
 }
 
+fn loop_read_config(path: Option<&Path>, mut n_tries: usize) -> Result<Config, ReadConfigError> {
+    let is_enoent = |related: &[DhallErrorSource]| -> bool {
+        related.iter().all(|error| matches!(&error.error, serde_dhall::Error::Dhall(dhall::error::Error::Io(error)) if error.kind() == ErrorKind::NotFound))
+    };
+
+    loop {
+        let error;
+
+        match Config::read_from(path) {
+            Ok(config) => break Ok(config),
+            Err(ReadConfigError::ConfigUnreachable { related }) if is_enoent(&related) => {
+                error = ReadConfigError::ConfigUnreachable { related };
+                n_tries -= 1;
+            }
+            Err(other) => break Err(other),
+        }
+
+        if n_tries <= 1 {
+            break Err(error);
+        }
+    }
+}
+
 impl Handle<ConfigReloadEvent> for WallpaperApp {
     async fn handle(
         &mut self,
@@ -653,7 +683,7 @@ impl Handle<ConfigReloadEvent> for WallpaperApp {
     ) -> PostEventActions {
         let config = match config {
             Some(config) => config,
-            None => match Config::read_from(path.as_ref()) {
+            None => match loop_read_config(path.as_deref(), 5) {
                 Ok(config) => config,
                 Err(error) => {
                     let report = error.diagnostic_chain().to_string();
