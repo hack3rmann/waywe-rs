@@ -96,3 +96,4 @@ calloop = { version = "0.14.4", features = ["signals"] }
 smallstr = { version = "0.3.1", features = ["union"] }
 wgpu = { version = "30.0.0", features = ["glsl", "spirv"] }
 miette-diagnostic-chain = "0.1.0"
+slab = "0.4.12"

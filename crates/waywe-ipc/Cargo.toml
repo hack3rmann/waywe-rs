@@ -26,4 +26,4 @@ display-error-chain.workspace = true
 miette.workspace = true
 static_assertions.workspace = true
 rand = "0.9.1"
-slab = "0.4.12"
+slab.workspace = true

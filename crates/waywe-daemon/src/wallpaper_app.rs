@@ -31,6 +31,7 @@ use waywe_runtime::{
     event::{EventHandler, Handle, PostEventActions, TryReplicate},
     frame::{FrameError, FrameInfo},
     gpu::SurfaceResult,
+    task_pool::TaskIndex,
     wayland::{MonitorId, MonitorMap, MonitorName, WaylandEvent},
 };
 
@@ -111,6 +112,7 @@ pub struct WallpaperApp {
     pub config: Arc<Config>,
     pub package_registry: PackageRegistry,
     pub last_instant: Option<Instant>,
+    pub config_watcher_debounce_task: Option<TaskIndex>,
 }
 
 impl WallpaperApp {
@@ -164,14 +166,12 @@ pub struct CurrentWallpaperEvent {
 #[derive(Clone, Debug)]
 pub struct ConfigReloadEvent {
     pub path: Option<PathBuf>,
-    pub config: Option<Config>,
     pub sender_id: Option<ClientId>,
 }
 
 #[derive(Clone, Debug)]
 pub struct ConfigReloadDebouncedEvent {
     pub path: Option<PathBuf>,
-    pub config: Option<Config>,
     pub sender_id: Option<ClientId>,
 }
 
@@ -184,7 +184,8 @@ impl App for WallpaperApp {
             .add_event::<WallpaperPauseEvent>()
             .add_event::<WallpaperPreviewEvent>()
             .add_event::<CurrentWallpaperEvent>()
-            .add_event::<ConfigReloadEvent>();
+            .add_event::<ConfigReloadEvent>()
+            .add_event::<ConfigReloadDebouncedEvent>();
     }
 
     async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
@@ -675,23 +676,40 @@ impl Handle<ConfigReloadEvent> for WallpaperApp {
     async fn handle(
         &mut self,
         runtime: &mut Runtime,
-        ConfigReloadEvent {
-            path,
-            config,
-            sender_id,
-        }: ConfigReloadEvent,
+        ConfigReloadEvent { path, sender_id }: ConfigReloadEvent,
     ) -> PostEventActions {
-        let config = match config {
-            Some(config) => config,
-            None => match loop_read_config(path.as_deref(), 5) {
-                Ok(config) => config,
-                Err(error) => {
-                    let report = error.diagnostic_chain().to_string();
-                    report_error(&runtime.ipc, sender_id, DaemonError::Generic(report));
+        if let Some(task) = self.config_watcher_debounce_task.take() {
+            runtime.task_pool.terminate(task).await;
+        }
 
-                    return PostEventActions::empty();
-                }
-            },
+        let task = runtime
+            .task_pool
+            .spawn_event(async move || {
+                tokio::time::sleep(Duration::from_millis(200)).await;
+                ConfigReloadDebouncedEvent { path, sender_id }
+            })
+            .await;
+
+        self.config_watcher_debounce_task = Some(task);
+
+        PostEventActions::empty()
+    }
+}
+
+impl Handle<ConfigReloadDebouncedEvent> for WallpaperApp {
+    async fn handle(
+        &mut self,
+        runtime: &mut Runtime,
+        ConfigReloadDebouncedEvent { path, sender_id }: ConfigReloadDebouncedEvent,
+    ) -> PostEventActions {
+        let config = match loop_read_config(path.as_deref(), 5) {
+            Ok(config) => config,
+            Err(error) => {
+                let report = error.diagnostic_chain().to_string();
+                report_error(&runtime.ipc, sender_id, DaemonError::Generic(report));
+
+                return PostEventActions::empty();
+            }
         };
 
         match (
@@ -712,6 +730,8 @@ impl Handle<ConfigReloadEvent> for WallpaperApp {
         send_response(&runtime.ipc, sender_id, DaemonResponse::ConfigReloaded);
 
         debug!(config = ?self.config, "reloaded config");
+
+        self.config_watcher_debounce_task = None;
 
         PostEventActions::REDRAW
     }

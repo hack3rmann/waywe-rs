@@ -35,6 +35,7 @@ tokio.workspace = true
 display-error-chain.workspace = true
 calloop.workspace = true
 smallstr.workspace = true
+slab.workspace = true
 
 [features]
 spirv = ["waywe-spirv-derive/spirv"]

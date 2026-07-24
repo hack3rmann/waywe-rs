@@ -5414,6 +5414,7 @@ dependencies = [
  "raw-window-handle",
  "reusable-box",
  "rustix",
+ "slab",
  "smallstr",
  "smallvec",
  "static_assertions",

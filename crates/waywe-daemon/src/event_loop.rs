@@ -13,7 +13,6 @@ use calloop::{
 };
 use display_error_chain::ErrorChainExt;
 use glam::UVec2;
-use miette_diagnostic_chain::DiagnosticChain;
 use std::{io, vec::Drain};
 use thiserror::Error;
 use tokio::runtime::{Builder as AsyncRuntimeBuilder, Runtime as AsyncRuntime};
@@ -160,24 +159,15 @@ impl EventLoop {
 }
 
 fn add_config_watcher_source(state: &mut LoopState) -> Result<(), calloop::Error> {
-    let token = state.loop_handle.insert_source(
-        ConfigEventSource::new(),
-        move |config, &mut (), state| {
-            let config = match config {
-                Ok(config) => config,
-                Err(error) => {
-                    error!(error = %error.diagnostic_chain(), "failed to reload config");
-                    return;
-                }
-            };
-
-            state.event_queue.add(ConfigReloadEvent {
-                path: None,
-                config: Some(config),
-                sender_id: None,
-            });
-        },
-    )?;
+    let token =
+        state
+            .loop_handle
+            .insert_source(ConfigEventSource::new(), move |(), &mut (), state| {
+                state.event_queue.add(ConfigReloadEvent {
+                    path: None,
+                    sender_id: None,
+                });
+            })?;
 
     state.config_watcher_token = Some(token);
 
@@ -352,7 +342,6 @@ impl LoopState {
             DaemonCommand::ConfigReload { path } => ConfigReloadEvent {
                 path,
                 sender_id: Some(command.sender_id),
-                config: None,
             }
             .into_event(),
         };
