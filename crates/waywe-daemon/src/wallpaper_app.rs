@@ -169,12 +169,6 @@ pub struct ConfigReloadEvent {
     pub sender_id: Option<ClientId>,
 }
 
-#[derive(Clone, Debug)]
-pub struct ConfigReloadDebouncedEvent {
-    pub path: Option<PathBuf>,
-    pub sender_id: Option<ClientId>,
-}
-
 impl App for WallpaperApp {
     fn populate_handler(&mut self, handler: &mut EventHandler<Self>) {
         handler
@@ -184,8 +178,7 @@ impl App for WallpaperApp {
             .add_event::<WallpaperPauseEvent>()
             .add_event::<WallpaperPreviewEvent>()
             .add_event::<CurrentWallpaperEvent>()
-            .add_event::<ConfigReloadEvent>()
-            .add_event::<ConfigReloadDebouncedEvent>();
+            .add_event::<ConfigReloadEvent>();
     }
 
     async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
@@ -677,30 +670,6 @@ impl Handle<ConfigReloadEvent> for WallpaperApp {
         &mut self,
         runtime: &mut Runtime,
         ConfigReloadEvent { path, sender_id }: ConfigReloadEvent,
-    ) -> PostEventActions {
-        if let Some(task) = self.config_watcher_debounce_task.take() {
-            runtime.task_pool.terminate(task).await;
-        }
-
-        let task = runtime
-            .task_pool
-            .spawn_event(async move || {
-                tokio::time::sleep(Duration::from_millis(0)).await;
-                ConfigReloadDebouncedEvent { path, sender_id }
-            })
-            .await;
-
-        self.config_watcher_debounce_task = Some(task);
-
-        PostEventActions::empty()
-    }
-}
-
-impl Handle<ConfigReloadDebouncedEvent> for WallpaperApp {
-    async fn handle(
-        &mut self,
-        runtime: &mut Runtime,
-        ConfigReloadDebouncedEvent { path, sender_id }: ConfigReloadDebouncedEvent,
     ) -> PostEventActions {
         let config = match loop_read_config(path.as_deref(), 5) {
             Ok(config) => config,
