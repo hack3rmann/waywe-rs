@@ -13,12 +13,12 @@ use smallvec::{SmallVec, smallvec};
 use std::{
     collections::{BTreeMap, HashMap, btree_map::Entry},
     io::ErrorKind,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::Arc,
     time::{Duration, Instant},
 };
 use tracing::{debug, error};
-use waywe_config::{Config, DhallErrorSource, ReadConfigError};
+use waywe_config::Config;
 use waywe_ipc::{
     WallpaperType,
     command::{DaemonError, DaemonResponse, DaemonResult, PauseMode},
@@ -167,12 +167,7 @@ pub struct CurrentWallpaperEvent {
 pub struct ConfigReloadEvent {
     pub path: Option<PathBuf>,
     pub sender_id: Option<ClientId>,
-}
-
-#[derive(Clone, Debug)]
-pub struct ConfigReloadDebouncedEvent {
-    pub path: Option<PathBuf>,
-    pub sender_id: Option<ClientId>,
+    pub config: Option<Config>,
 }
 
 impl App for WallpaperApp {
@@ -184,8 +179,7 @@ impl App for WallpaperApp {
             .add_event::<WallpaperPauseEvent>()
             .add_event::<WallpaperPreviewEvent>()
             .add_event::<CurrentWallpaperEvent>()
-            .add_event::<ConfigReloadEvent>()
-            .add_event::<ConfigReloadDebouncedEvent>();
+            .add_event::<ConfigReloadEvent>();
     }
 
     async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
@@ -649,67 +643,27 @@ impl Handle<CurrentWallpaperEvent> for WallpaperApp {
     }
 }
 
-fn loop_read_config(path: Option<&Path>, mut n_tries: usize) -> Result<Config, ReadConfigError> {
-    let is_enoent = |related: &[DhallErrorSource]| -> bool {
-        related.iter().all(|error| matches!(&error.error, serde_dhall::Error::Dhall(dhall::error::Error::Io(error)) if error.kind() == ErrorKind::NotFound))
-    };
-
-    loop {
-        let error;
-
-        match Config::read_from(path) {
-            Ok(config) => break Ok(config),
-            Err(ReadConfigError::ConfigUnreachable { related }) if is_enoent(&related) => {
-                error = ReadConfigError::ConfigUnreachable { related };
-                n_tries -= 1;
-            }
-            Err(other) => break Err(other),
-        }
-
-        if n_tries <= 1 {
-            break Err(error);
-        }
-    }
-}
-
 impl Handle<ConfigReloadEvent> for WallpaperApp {
     async fn handle(
         &mut self,
         runtime: &mut Runtime,
-        ConfigReloadEvent { path, sender_id }: ConfigReloadEvent,
+        ConfigReloadEvent {
+            path,
+            sender_id,
+            config,
+        }: ConfigReloadEvent,
     ) -> PostEventActions {
-        if let Some(task) = self.config_watcher_debounce_task.take() {
-            runtime.task_pool.terminate(task).await;
-        }
+        let config = match config {
+            Some(config) => config,
+            None => match Config::read_from(path.as_ref()) {
+                Ok(config) => config,
+                Err(error) => {
+                    let report = error.diagnostic_chain().to_string();
+                    report_error(&runtime.ipc, sender_id, DaemonError::Generic(report));
 
-        let task = runtime
-            .task_pool
-            .spawn_event(async move || {
-                tokio::time::sleep(Duration::from_millis(200)).await;
-                ConfigReloadDebouncedEvent { path, sender_id }
-            })
-            .await;
-
-        self.config_watcher_debounce_task = Some(task);
-
-        PostEventActions::empty()
-    }
-}
-
-impl Handle<ConfigReloadDebouncedEvent> for WallpaperApp {
-    async fn handle(
-        &mut self,
-        runtime: &mut Runtime,
-        ConfigReloadDebouncedEvent { path, sender_id }: ConfigReloadDebouncedEvent,
-    ) -> PostEventActions {
-        let config = match loop_read_config(path.as_deref(), 5) {
-            Ok(config) => config,
-            Err(error) => {
-                let report = error.diagnostic_chain().to_string();
-                report_error(&runtime.ipc, sender_id, DaemonError::Generic(report));
-
-                return PostEventActions::empty();
-            }
+                    return PostEventActions::empty();
+                }
+            },
         };
 
         match (
