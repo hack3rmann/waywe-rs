@@ -1,5 +1,6 @@
 pub mod args;
 pub mod command;
+pub mod config;
 pub mod diagnostics;
 pub mod package;
 pub mod progress;
@@ -11,6 +12,7 @@ use crate::{
         WaitMode, execute_current, execute_pause, execute_preview, execute_show, execute_start,
         execute_stop,
     },
+    config::execute_config,
     diagnostics::DaemonSetupDiagnostics,
     package::execute_package,
 };
@@ -59,6 +61,7 @@ fn main() -> miette::Result<()> {
             WaitMode::from_dont(dont_wait),
         )?,
         Command::Package { command } => execute_package(command).into_diagnostic()?,
+        Command::Config { command } => execute_config(command)?,
     }
 
     Ok(())

@@ -85,9 +85,13 @@ pub enum Command {
     },
     /// Waywe package operations
     Package {
-        /// Package command
         #[command(subcommand)]
         command: PackageCommand,
+    },
+    /// Config operations
+    Config {
+        #[command(subcommand)]
+        command: ConfigCommand,
     },
 }
 
@@ -101,6 +105,23 @@ pub enum PackageCommand {
         /// Package path
         #[arg(long, short, default_value_t = current_workdir())]
         path: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ConfigCommand {
+    /// Validate the config file
+    Validate {
+        /// Path to the config
+        path: Option<PathBuf>,
+    },
+    /// Make the daemon reload the config file
+    Reload {
+        /// Path to the config
+        path: Option<PathBuf>,
+        /// Don't wait for the daemon to respond
+        #[arg(long)]
+        dont_wait: bool,
     },
 }
 

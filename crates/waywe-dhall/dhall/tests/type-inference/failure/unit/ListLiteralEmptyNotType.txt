@@ -1,0 +1,1 @@
+TypeError { message: Custom("error: wrong type of function argument\n --> <current file>:1:6\n  |\n1 | [] : List Type\n  |      ^^^^ this expects an argument of type: Type\n  |           ^^^^ but this has type: Kind\n  |\n  = note: expected type `Type`\n             found type `Kind`") }

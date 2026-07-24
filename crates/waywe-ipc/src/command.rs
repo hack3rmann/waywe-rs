@@ -50,12 +50,14 @@ pub enum DaemonCommand {
     Current {
         monitor: Option<String>,
     },
+    ConfigReload {
+        path: Option<PathBuf>,
+    },
 }
 
 #[derive(Encode, Decode, Debug, PartialEq, Eq, Clone)]
 pub enum DaemonResponse {
     WallpaperSet,
-    // TODO(hack3rmann): return pause state for each plugged monitor
     PauseDone,
     Preview {
         width: u32,
@@ -63,15 +65,7 @@ pub enum DaemonResponse {
         rgba: Vec<u8>,
     },
     Current(HashMap<String, PathBuf>),
-}
-
-impl DaemonResponse {
-    pub const fn is_terminal(&self) -> bool {
-        matches!(
-            self,
-            Self::WallpaperSet | Self::PauseDone | Self::Preview { .. } | Self::Current(..)
-        )
-    }
+    ConfigReloaded,
 }
 
 #[derive(Encode, Decode, Error, Diagnostic, Debug, PartialEq, PartialOrd, Hash, Eq, Ord, Clone)]

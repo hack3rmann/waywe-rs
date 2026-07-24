@@ -1,44 +1,58 @@
 use crate::event::{EventEmitter, IntoEvent};
 use display_error_chain::ErrorChainExt;
-use smallvec::{SmallVec, smallvec};
+use slab::Slab;
+use smallvec::SmallVec;
 use tokio::task::JoinHandle;
 use tracing::error;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TaskIndex(usize);
+
 pub struct TaskPool {
-    pub handles: SmallVec<[JoinHandle<()>; 1]>,
+    pub handles: Slab<JoinHandle<()>>,
     pub emitter: EventEmitter,
 }
 
 impl TaskPool {
     pub fn new(emitter: EventEmitter) -> Self {
         Self {
-            handles: smallvec![],
+            handles: Slab::new(),
             emitter,
         }
     }
 
     pub async fn erase_finished(&mut self) -> usize {
         let mut n_finished = 0;
-        let mut i = 0;
+        let mut finished = SmallVec::<[usize; 8]>::new_const();
 
-        while i < self.handles.len() {
-            while i < self.handles.len() && self.handles[i].is_finished() {
-                let handle = self.handles.swap_remove(i);
+        loop {
+            for (i, handle) in &mut self.handles {
+                if handle.is_finished() {
+                    finished.push(i);
+                }
+            }
 
-                if let Err(err) = handle.await {
-                    error!("task failed: {}", err.chain());
+            if finished.is_empty() {
+                break;
+            }
+
+            for i in finished.drain(..) {
+                let Some(handle) = self.handles.try_remove(i) else {
+                    continue;
+                };
+
+                if let Err(error) = handle.await {
+                    error!("task failed: {}", error.chain());
                 }
 
                 n_finished += 1;
             }
-
-            i += 1;
         }
 
         n_finished
     }
 
-    pub async fn spawn<F, R>(&mut self, f: F)
+    pub async fn spawn<F, R>(&mut self, f: F) -> TaskIndex
     where
         F: FnOnce(EventEmitter) -> R + Send + 'static,
         R: Future<Output = ()> + Send + 'static,
@@ -50,10 +64,10 @@ impl TaskPool {
             f(emitter).await;
         });
 
-        self.handles.push(handle);
+        TaskIndex(self.handles.insert(handle))
     }
 
-    pub async fn spawn_event<F, R, E>(&mut self, f: F)
+    pub async fn spawn_event<F, R, E>(&mut self, f: F) -> TaskIndex
     where
         F: FnOnce() -> R + Send + 'static,
         R: Future<Output = E> + Send + 'static,
@@ -61,8 +75,21 @@ impl TaskPool {
     {
         self.spawn(async move |mut emitter| {
             let event = f().await;
-            emitter.emit(event).expect("failed to send event");
+            emitter.try_emit(event).expect("failed to send event");
         })
-        .await;
+        .await
+    }
+
+    pub async fn terminate(&mut self, task_id: TaskIndex) {
+        let Some(handle) = self.handles.try_remove(task_id.0) else {
+            return;
+        };
+
+        // Try to shutdown the task gracefully
+        if handle.is_finished()
+            && let Err(error) = handle.await
+        {
+            error!("task failed: {}", error.chain());
+        }
     }
 }

@@ -1,0 +1,1 @@
+TypeError { message: Custom("error: DuplicateFieldName\n --> <current file>:7:14\n  |\n...\n7 | { x = 0, x = 0 }\n  |              ^ DuplicateFieldName\n  |") }

@@ -189,6 +189,29 @@ impl Event {
         let value = boxed_value.into_inner();
         f(value).await
     }
+
+    pub fn handle_sync<T: IntoEvent>(
+        &mut self,
+        f: impl FnOnce(T) -> PostEventActions,
+    ) -> PostEventActions {
+        // Try to replicate the event. Take the event if could not replicate
+        let replicated = self.0.as_deref().and_then(TryReplicate::try_replicate);
+
+        let Some(any_value) = replicated.or_else(|| self.0.take()) else {
+            return PostEventActions::default();
+        };
+
+        let boxed_value = match any_value.downcast::<T>() {
+            Ok(value) => value,
+            Err(other) => {
+                self.0 = Some(other);
+                return PostEventActions::default();
+            }
+        };
+
+        let value = boxed_value.into_inner();
+        f(value)
+    }
 }
 
 pub trait IntoEvent: TryReplicate {
@@ -334,7 +357,7 @@ pub struct EventEmitter {
 }
 
 impl EventEmitter {
-    pub fn emit(&mut self, event: impl IntoEvent) -> Result<(), EmitError> {
+    pub fn try_emit(&mut self, event: impl IntoEvent) -> Result<(), EmitError> {
         // NOTE(hack3rmann): to prevent data race MPCS sender must be populated first
         self.sender
             .send(event.into_event())
@@ -342,6 +365,11 @@ impl EventEmitter {
         self.writer.write_all(bytemuck::bytes_of(&EventType::Any))?;
 
         Ok(())
+    }
+
+    #[track_caller]
+    pub fn emit(&mut self, event: impl IntoEvent) {
+        self.try_emit(event).unwrap()
     }
 }
 

@@ -1,5 +1,4 @@
 pub mod command;
-pub mod config;
 pub mod detach;
 pub mod ipc;
 pub mod profile;

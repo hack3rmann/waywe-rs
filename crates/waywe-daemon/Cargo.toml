@@ -23,6 +23,7 @@ video.workspace = true
 waywe-ipc.workspace = true
 waywe-runtime.workspace = true
 waywe-scene.workspace = true
+waywe-config.workspace = true
 image.workspace = true
 smallvec.workspace = true
 clap.workspace = true
@@ -47,6 +48,11 @@ bincode.workspace = true
 display-error-chain.workspace = true
 static_assertions.workspace = true
 calloop.workspace = true
+inotify = "0.11.4"
+miette.workspace = true
+miette-diagnostic-chain.workspace = true
+serde_dhall.workspace = true
+dhall.workspace = true
 
 [dev-dependencies]
 libc = "0.2.171"

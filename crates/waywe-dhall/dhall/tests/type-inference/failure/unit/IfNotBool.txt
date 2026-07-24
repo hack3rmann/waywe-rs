@@ -1,0 +1,1 @@
+TypeError { message: Custom("error: InvalidPredicate\n --> <current file>:1:1\n  |\n1 | if 1 then 1 else 1\n  | ^^^^^^^^^^^^^^^^^^ InvalidPredicate\n  |") }

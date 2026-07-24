@@ -1,0 +1,1 @@
+TypeError { message: Custom("error: MergeHandlerTypeMismatch\n --> <current file>:1:1\n  |\n1 | merge { x = λ(_ : Bool) → _, y = λ(_ : Natural) → _ } (< x : Bool | y : Natural >.x True)\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ MergeHandlerTypeMismatch\n  |") }

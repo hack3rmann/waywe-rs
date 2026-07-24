@@ -23,9 +23,13 @@ members = [
     "crates/waywe-shader-rs/shaderc-sys",
     "crates/waywe-rendering-api",
     "crates/waywe-scene-macros",
+    "crates/waywe-config",
     "crates/examples/waywe-test-scene",
     "crates/examples/shadertoy-computer-were-made-for-cubes",
     "crates/daemonize/daemonize",
+    "crates/waywe-dhall/dhall",
+    "crates/waywe-dhall/dhall_proc_macros",
+    "crates/waywe-dhall/serde_dhall",
 ]
 
 [workspace.package]
@@ -49,9 +53,12 @@ waywe-scene = { path = "crates/waywe-scene" }
 waywe-spirv-derive = { path = "crates/waywe-spirv-derive" }
 waywe-rendering-api = { path = "crates/waywe-rendering-api" }
 waywe-scene-macros = { path = "crates/waywe-scene-macros" }
+waywe-config = { path = "crates/waywe-config" }
 daemonize = { path = "crates/daemonize/daemonize" }
 transmute-extra = { path = "crates/transmute-extra" }
 video = { path = "crates/video" }
+serde_dhall = { path = "crates/waywe-dhall/serde_dhall" }
+dhall = { path = "crates/waywe-dhall/dhall" }
 thiserror = "2.0.11"
 safe-transmute = "0.11.3"
 rayon = "1.10.0"
@@ -87,5 +94,6 @@ miette = { version = "7.6.0", features = ["fancy"] }
 display-error-chain = "0.2.2"
 calloop = { version = "0.14.4", features = ["signals"] }
 smallstr = { version = "0.3.1", features = ["union"] }
-serde_dhall = "0.13.0"
 wgpu = { version = "30.0.0", features = ["glsl", "spirv"] }
+miette-diagnostic-chain = "0.1.0"
+slab = "0.4.12"

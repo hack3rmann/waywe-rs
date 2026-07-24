@@ -1,0 +1,1 @@
+TypeError { message: Custom("error: MergeEmptyNeedsAnnotation\n --> <current file>:1:27\n  |\n1 | \\(x: <>) -> let y: Bool = merge {=} x in 1\n  |                           ^^^^^^^^^^^ MergeEmptyNeedsAnnotation\n  |") }

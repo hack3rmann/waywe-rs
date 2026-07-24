@@ -1,0 +1,1 @@
+TypeError { message: Custom("error: `toMap` applied to an empty record requires a type annotation\n --> <current file>:1:1\n  |\n1 | toMap {=}\n  | ^^^^^^^^^ `toMap` applied to an empty record requires a type annotation\n  |") }

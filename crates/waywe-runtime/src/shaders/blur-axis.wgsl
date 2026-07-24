@@ -4,7 +4,7 @@ var input: texture_2d<f32>;
 @group(0) @binding(1)
 var output: texture_storage_2d<bgra8unorm, write>;
 
-var<push_constant> axis: u32;
+var<immediate> axis: u32;
 
 fn invert_gamma(sample: vec3f) -> vec3f {
     return pow(sample, vec3f(2.2));

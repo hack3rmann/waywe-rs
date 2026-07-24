@@ -1,5 +1,5 @@
 use crate::{
-    event_loop::WallpaperTarget,
+    event_loop::{DisableConfigWatcher, EnableConfigWatcher, WallpaperTarget},
     wallpaper::{
         self, Wallpaper, WallpaperConfig, optimized::OptimizedWallpaper,
         package_registry::PackageRegistry, preview::PreviewPipeline, transition::RunningWallpapers,
@@ -8,19 +8,20 @@ use crate::{
 use calloop::channel::Sender;
 use display_error_chain::ErrorChainExt;
 use glam::UVec2;
+use miette_diagnostic_chain::DiagnosticChain;
 use smallvec::{SmallVec, smallvec};
 use std::{
     collections::{BTreeMap, HashMap, btree_map::Entry},
     io::ErrorKind,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant},
 };
 use tracing::{debug, error};
+use waywe_config::{Config, DhallErrorSource, ReadConfigError};
 use waywe_ipc::{
     WallpaperType,
     command::{DaemonError, DaemonResponse, DaemonResult, PauseMode},
-    config::Config,
     ipc::server::{ClientId, IpcResponse},
     profile::{Monitor, SetupProfile, SetupProfileError},
 };
@@ -30,6 +31,7 @@ use waywe_runtime::{
     event::{EventHandler, Handle, PostEventActions, TryReplicate},
     frame::{FrameError, FrameInfo},
     gpu::SurfaceResult,
+    task_pool::TaskIndex,
     wayland::{MonitorId, MonitorMap, MonitorName, WaylandEvent},
 };
 
@@ -107,15 +109,16 @@ pub struct WallpaperApp {
     pub wallpapers: MonitorMap<RunningWallpapers>,
     pub wallpaper_states: BTreeMap<MonitorName, WallpaperState>,
     pub wallpaper_paths: BTreeMap<MonitorName, PathBuf>,
-    pub config: Config,
+    pub config: Arc<Config>,
     pub package_registry: PackageRegistry,
     pub last_instant: Option<Instant>,
+    pub config_watcher_debounce_task: Option<TaskIndex>,
 }
 
 impl WallpaperApp {
     pub fn from_config(config: Config) -> Self {
         Self {
-            config,
+            config: Arc::new(config),
             ..Default::default()
         }
     }
@@ -160,6 +163,18 @@ pub struct CurrentWallpaperEvent {
     pub sender_id: ClientId,
 }
 
+#[derive(Clone, Debug)]
+pub struct ConfigReloadEvent {
+    pub path: Option<PathBuf>,
+    pub sender_id: Option<ClientId>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ConfigReloadDebouncedEvent {
+    pub path: Option<PathBuf>,
+    pub sender_id: Option<ClientId>,
+}
+
 impl App for WallpaperApp {
     fn populate_handler(&mut self, handler: &mut EventHandler<Self>) {
         handler
@@ -168,7 +183,9 @@ impl App for WallpaperApp {
             .add_event::<WallpaperPreparedEvent>()
             .add_event::<WallpaperPauseEvent>()
             .add_event::<WallpaperPreviewEvent>()
-            .add_event::<CurrentWallpaperEvent>();
+            .add_event::<CurrentWallpaperEvent>()
+            .add_event::<ConfigReloadEvent>()
+            .add_event::<ConfigReloadDebouncedEvent>();
     }
 
     async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
@@ -262,6 +279,10 @@ impl App for WallpaperApp {
 
         Ok(frame_info)
     }
+
+    fn config(&self) -> &Config {
+        &self.config
+    }
 }
 
 impl Handle<WallpaperPauseEvent> for WallpaperApp {
@@ -290,13 +311,7 @@ impl Handle<WallpaperPauseEvent> for WallpaperApp {
             }
         }
 
-        runtime
-            .ipc_sender
-            .send(IpcResponse {
-                body: Ok(DaemonResponse::PauseDone),
-                destination_id: sender_id,
-            })
-            .unwrap();
+        send_response(&runtime.ipc, Some(sender_id), DaemonResponse::PauseDone);
 
         PostEventActions::REDRAW
     }
@@ -353,15 +368,7 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
 
         self.wallpaper_paths.insert(monitor_name, path);
 
-        if let Some(destination_id) = sender_id {
-            runtime
-                .ipc_sender
-                .send(IpcResponse {
-                    body: Ok(DaemonResponse::WallpaperSet),
-                    destination_id,
-                })
-                .unwrap();
-        }
+        send_response(&runtime.ipc, sender_id, DaemonResponse::WallpaperSet);
 
         PostEventActions::REDRAW
     }
@@ -414,7 +421,7 @@ impl Handle<WaylandEvent> for WallpaperApp {
 
                 match SetupProfile::read() {
                     Ok(mut profile) => 'ok: {
-                        debug!("read setup profile {profile:#?}");
+                        debug!(?profile, "read setup profile");
 
                         let Some(info) = profile.monitors.remove(monitor_name.as_str()) else {
                             break 'ok;
@@ -426,7 +433,7 @@ impl Handle<WaylandEvent> for WallpaperApp {
                             sender_id: None,
                         };
 
-                        runtime.task_pool.emitter.emit(event).unwrap();
+                        runtime.task_pool.emitter.emit(event);
                     }
                     Err(SetupProfileError::Io(error)) if error.kind() == ErrorKind::NotFound => {
                         tracing::debug!("no setup profile present");
@@ -434,16 +441,13 @@ impl Handle<WaylandEvent> for WallpaperApp {
                     Err(error) => error!(error = %error.chain(), "failed to read setup profile"),
                 }
 
-                let mut run = RunningWallpapers::new(
-                    runtime
-                        .wallpaper_config(monitor_id)
-                        .unwrap_or_else(|| panic!("no config for {monitor_id:?}")),
-                    self.config.animation.clone(),
-                );
+                let wall_config = runtime
+                    .wallpaper_config(monitor_id)
+                    .unwrap_or_else(|| panic!("no config for {monitor_id:?}"));
 
-                run.effects_builder.add_builtins(&self.config.effects);
+                let wallpapers = RunningWallpapers::new(wall_config, self.config.clone());
 
-                self.wallpapers.insert(monitor_id, run);
+                self.wallpapers.insert(monitor_id, wallpapers);
 
                 PostEventActions::empty()
             }
@@ -514,21 +518,19 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
                 .wallpaper_config(monitor_id)
                 .unwrap_or_else(|| panic!("no config for {monitor_id:?}"));
             let packages = self.package_registry.clone();
-            let ipc_sender = runtime.ipc_sender.clone();
+            let ipc = runtime.ipc.clone();
 
             runtime
                 .task_pool
                 .spawn(async move |mut emitter| {
                     match wallpaper::create(gpu, &path, ty, config, packages).await {
-                        Ok(wallpaper) => emitter
-                            .emit(WallpaperPreparedEvent {
-                                path,
-                                wallpaper,
-                                monitor_id,
-                                sender_id,
-                            })
-                            .unwrap(),
-                        Err(error) => report_error(&ipc_sender, sender_id, error.clone()),
+                        Ok(wallpaper) => emitter.emit(WallpaperPreparedEvent {
+                            path,
+                            wallpaper,
+                            monitor_id,
+                            sender_id,
+                        }),
+                        Err(error) => report_error(&ipc, sender_id, error.clone()),
                     }
                 })
                 .await;
@@ -551,7 +553,7 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
         }: WallpaperPreviewEvent,
     ) -> PostEventActions {
         let gpu = runtime.wgpu.clone();
-        let ipc = runtime.ipc_sender.clone();
+        let ipc = runtime.ipc.clone();
 
         let packages = self.package_registry.clone();
 
@@ -564,16 +566,16 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
                 "max preview size exceeded"
             );
 
-            let response = IpcResponse {
-                body: Err(DaemonError::ImageDimensionsTooBig {
+            report_error(
+                &ipc,
+                Some(sender_id),
+                DaemonError::ImageDimensionsTooBig {
                     width: size.x,
                     height: size.y,
                     max_width: MAX_PREVIEW_SIZE,
                     max_height: MAX_PREVIEW_SIZE,
-                }),
-                destination_id: sender_id,
-            };
-            ipc.send(response).unwrap();
+                },
+            );
         }
 
         let config = WallpaperConfig {
@@ -600,15 +602,15 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
                 pipeline.render_async(&gpu, &mut wallpaper, move |buffer| {
                     let rgba = buffer.get_mapped_range(..).unwrap().to_vec();
 
-                    ipc.send(IpcResponse {
-                        body: Ok(DaemonResponse::Preview {
+                    send_response(
+                        &ipc,
+                        Some(sender_id),
+                        DaemonResponse::Preview {
                             width: size.x,
                             height: size.y,
                             rgba,
-                        }),
-                        destination_id: sender_id,
-                    })
-                    .unwrap();
+                        },
+                    );
                 });
             })
             .await;
@@ -637,20 +639,122 @@ impl Handle<CurrentWallpaperEvent> for WallpaperApp {
                 .collect(),
         };
 
-        runtime
-            .ipc_sender
-            .send(IpcResponse {
-                body: Ok(DaemonResponse::Current(current)),
-                destination_id: sender_id,
-            })
-            .unwrap();
+        send_response(
+            &runtime.ipc,
+            Some(sender_id),
+            DaemonResponse::Current(current),
+        );
 
         PostEventActions::empty()
     }
 }
 
+fn loop_read_config(path: Option<&Path>, mut n_tries: usize) -> Result<Config, ReadConfigError> {
+    let is_enoent = |related: &[DhallErrorSource]| -> bool {
+        related.iter().all(|error| matches!(&error.error, serde_dhall::Error::Dhall(dhall::error::Error::Io(error)) if error.kind() == ErrorKind::NotFound))
+    };
+
+    loop {
+        let error;
+
+        match Config::read_from(path) {
+            Ok(config) => break Ok(config),
+            Err(ReadConfigError::ConfigUnreachable { related }) if is_enoent(&related) => {
+                error = ReadConfigError::ConfigUnreachable { related };
+                n_tries -= 1;
+            }
+            Err(other) => break Err(other),
+        }
+
+        if n_tries <= 1 {
+            break Err(error);
+        }
+    }
+}
+
+impl Handle<ConfigReloadEvent> for WallpaperApp {
+    async fn handle(
+        &mut self,
+        runtime: &mut Runtime,
+        ConfigReloadEvent { path, sender_id }: ConfigReloadEvent,
+    ) -> PostEventActions {
+        if let Some(task) = self.config_watcher_debounce_task.take() {
+            runtime.task_pool.terminate(task).await;
+        }
+
+        let task = runtime
+            .task_pool
+            .spawn_event(async move || {
+                tokio::time::sleep(Duration::from_millis(200)).await;
+                ConfigReloadDebouncedEvent { path, sender_id }
+            })
+            .await;
+
+        self.config_watcher_debounce_task = Some(task);
+
+        PostEventActions::empty()
+    }
+}
+
+impl Handle<ConfigReloadDebouncedEvent> for WallpaperApp {
+    async fn handle(
+        &mut self,
+        runtime: &mut Runtime,
+        ConfigReloadDebouncedEvent { path, sender_id }: ConfigReloadDebouncedEvent,
+    ) -> PostEventActions {
+        let config = match loop_read_config(path.as_deref(), 5) {
+            Ok(config) => config,
+            Err(error) => {
+                let report = error.diagnostic_chain().to_string();
+                report_error(&runtime.ipc, sender_id, DaemonError::Generic(report));
+
+                return PostEventActions::empty();
+            }
+        };
+
+        match (
+            self.config.config.disable_hot_reload,
+            config.config.disable_hot_reload,
+        ) {
+            (true, false) => runtime.task_pool.emitter.emit(EnableConfigWatcher),
+            (false, true) => runtime.task_pool.emitter.emit(DisableConfigWatcher),
+            (true, true) | (false, false) => {}
+        }
+
+        self.config = Arc::new(config);
+
+        for wall in self.wallpapers.values_mut() {
+            wall.reload_config(&runtime.wgpu, self.config.clone());
+        }
+
+        send_response(&runtime.ipc, sender_id, DaemonResponse::ConfigReloaded);
+
+        debug!(config = ?self.config, "reloaded config");
+
+        self.config_watcher_debounce_task = None;
+
+        PostEventActions::REDRAW
+    }
+}
+
+fn send_response(
+    ipc: &Sender<IpcResponse<DaemonResult>>,
+    destination_id: Option<ClientId>,
+    response: DaemonResponse,
+) {
+    let Some(destination_id) = destination_id else {
+        return;
+    };
+
+    ipc.send(IpcResponse {
+        body: Ok(response),
+        destination_id,
+    })
+    .unwrap();
+}
+
 fn report_error(
-    ipc_sender: &Sender<IpcResponse<DaemonResult>>,
+    ipc: &Sender<IpcResponse<DaemonResult>>,
     destination_id: Option<ClientId>,
     error: DaemonError,
 ) {
@@ -660,10 +764,9 @@ fn report_error(
         return;
     };
 
-    ipc_sender
-        .send(IpcResponse {
-            body: Err(error.clone()),
-            destination_id,
-        })
-        .unwrap();
+    ipc.send(IpcResponse {
+        body: Err(error.clone()),
+        destination_id,
+    })
+    .unwrap();
 }

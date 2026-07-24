@@ -1,0 +1,1 @@
+TypeError { message: Custom("error: expected function, found `Bool`\n --> <current file>:1:1\n  |\n1 | True True\n  | ^^^^ function application requires a function\n  |") }

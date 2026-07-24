@@ -3,10 +3,10 @@ use bytemuck::{Pod, Zeroable};
 use for_sure::prelude::*;
 use glam::Vec2;
 use smallvec::SmallVec;
-use std::{collections::VecDeque, f32::consts::PI, mem, time::Duration};
-use waywe_ipc::config::{
-    Angle, AnimationConfig, AnimationDirection, AnimationStyle, CenterPosition, Interpolation,
-    TransitionStyle,
+use std::{collections::VecDeque, f32::consts::PI, mem, sync::Arc, time::Duration};
+use waywe_config::{
+    Angle, AnimationConfig, AnimationDirection, AnimationStyle, CenterPosition, Config,
+    Interpolation, Transition,
 };
 use waywe_runtime::{
     effects::{Effects, config::EffectsBuilder},
@@ -375,56 +375,69 @@ fn corners_with_aspect_ratio(aspect_ratio: f32) -> [Vec2; 4] {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum OngoingTransition {
+pub enum TransitionState {
     Slide(SlideTransition),
     Circular(CircularTransition),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct OngoingTransition {
+    pub easing: Interpolation,
+    pub state: TransitionState,
 }
 
 impl OngoingTransition {
     pub fn new(aspect_ratio: f32, config: &AnimationConfig) -> Self {
         let duration = Duration::from_millis(config.duration);
 
-        match config.style {
-            TransitionStyle::Circle {
-                center_position,
+        let state = match config.style {
+            Transition::Circle {
+                center: center_position,
                 direction,
-            } => Self::Circular(CircularTransition::new(
+            } => TransitionState::Circular(CircularTransition::new(
                 aspect_ratio,
                 center_position,
                 direction,
                 duration,
             )),
-            TransitionStyle::Slide { angle } => {
-                Self::Slide(SlideTransition::new(aspect_ratio, angle, duration))
+            Transition::Slide { angle } => {
+                TransitionState::Slide(SlideTransition::new(aspect_ratio, angle, duration))
             }
+        };
+
+        Self {
+            state,
+            easing: config.easing,
         }
     }
 
     pub fn advance_time(&mut self, delta: Duration) {
-        match self {
-            Self::Circular(circular) => circular.advance_time(delta),
-            Self::Slide(slide) => slide.advance_time(delta),
+        match &mut self.state {
+            TransitionState::Circular(circular) => circular.advance_time(delta),
+            TransitionState::Slide(slide) => slide.advance_time(delta),
         }
     }
 
     pub fn is_finished(&self) -> bool {
-        match self {
-            Self::Circular(circular) => circular.is_finished(),
-            Self::Slide(slide) => slide.is_finished(),
+        match &self.state {
+            TransitionState::Circular(circular) => circular.is_finished(),
+            TransitionState::Slide(slide) => slide.is_finished(),
         }
     }
 
-    pub fn state(&self, ease: Interpolation) -> AnimationState {
-        match self {
-            Self::Circular(circular) => AnimationState::Circle(circular.state(ease)),
-            Self::Slide(slide) => AnimationState::Slide(slide.state(ease)),
+    pub fn state(&self) -> AnimationState {
+        match &self.state {
+            TransitionState::Circular(circular) => {
+                AnimationState::Circle(circular.state(self.easing))
+            }
+            TransitionState::Slide(slide) => AnimationState::Slide(slide.state(self.easing)),
         }
     }
 
     pub fn animation_style(&self) -> AnimationStyle {
-        match self {
-            Self::Circular(..) => AnimationStyle::Circle,
-            Self::Slide(..) => AnimationStyle::Slide,
+        match self.state {
+            TransitionState::Circular(..) => AnimationStyle::Circle,
+            TransitionState::Slide(..) => AnimationStyle::Slide,
         }
     }
 }
@@ -594,22 +607,41 @@ pub struct RunningWallpapers {
     pub ongoing_transitions: SmallVec<[OngoingTransition; 8]>,
     pub transition_pipeline: Almost<WallpaperTransitionPipeline>,
     pub textures: Almost<WallpaperTransitionState>,
-    pub config: AnimationConfig,
+    pub config: Arc<Config>,
     pub effects_builder: EffectsBuilder,
     pub wallpaper_config: WallpaperConfig,
 }
 
 impl RunningWallpapers {
-    pub const fn new(wallpaper_config: WallpaperConfig, config: AnimationConfig) -> Self {
+    pub fn new(wallpaper_config: WallpaperConfig, config: Arc<Config>) -> Self {
+        let mut effects_builder = EffectsBuilder::new();
+        effects_builder.add_builtins(&config.effects);
+
         Self {
             executing: VecDeque::new(),
             ongoing_transitions: SmallVec::new_const(),
             transition_pipeline: Nil,
             textures: Nil,
             config,
-            effects_builder: EffectsBuilder::new(),
+            effects_builder,
             wallpaper_config,
         }
+    }
+
+    pub fn reload_config(&mut self, gpu: &Wgpu, new_config: Arc<Config>) {
+        if self.config.effects == new_config.effects {
+            self.config = new_config;
+            return;
+        }
+
+        self.effects_builder = EffectsBuilder::new();
+        self.effects_builder.add_builtins(&new_config.effects);
+
+        for wall in &mut self.executing {
+            wall.effects = self.effects_builder.build(gpu, self.wallpaper_config);
+        }
+
+        self.config = new_config;
     }
 
     pub fn enqueue_wallpaper(&mut self, gpu: &Wgpu, wallpaper: OptimizedWallpaper) {
@@ -621,7 +653,7 @@ impl RunningWallpapers {
         if self.executing.len() >= 2 {
             self.ongoing_transitions.push(OngoingTransition::new(
                 self.wallpaper_config.aspect_ratio(),
-                &self.config,
+                &self.config.animation,
             ));
         }
     }
@@ -651,7 +683,7 @@ impl RunningWallpapers {
             let pipeline = WallpaperTransitionPipeline::new(
                 gpu,
                 self.wallpaper_config,
-                self.config.style.animation(),
+                self.config.animation.style.animation(),
             );
 
             self.textures = Value(WallpaperTransitionState::new(gpu, &pipeline));
@@ -691,15 +723,12 @@ impl RunningWallpapers {
             let frame_info = wallpaper.frame(gpu, &self.textures.to, encoder);
             frame_result = frame_result.min_or_60_fps(frame_info);
 
-            let state = transition.state(self.config.easing);
-
-            if transition.animation_style() != self.config.style.animation() {
-                self.transition_pipeline
-                    .switch_shader(gpu, transition.animation_style());
-            }
-
-            self.transition_pipeline
-                .render(&self.textures, &surface_view, encoder, &state);
+            self.transition_pipeline.render(
+                &self.textures,
+                &surface_view,
+                encoder,
+                &transition.state(),
+            );
 
             // TODO(hack3rmann): we can avoid copying the texture by swapping bind groups
             // with third intermediate texture

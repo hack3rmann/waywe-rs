@@ -1,0 +1,1 @@
+TypeError { message: Custom("error: AssertMismatch\n --> <current file>:1:15\n  |\n1 | \\(_: Bool) -> assert : (\\(_: Bool) -> _) === (\\(x: Bool) -> _)\n  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ AssertMismatch\n  |") }

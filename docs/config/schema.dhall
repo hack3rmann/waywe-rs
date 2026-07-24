@@ -103,12 +103,21 @@ let Animation = {
     style: Transition,
 }
 
+--- Config file related options
+let ConfigOpts = {
+    --- Disabled hot reloading for config.dhall
+    --- Can only be re-enabled with `waywe config reload` or `waywe restart`
+    disable_hot_reload: Bool,
+}
+
 --- Waywe config values
 let Config = {
     --- Transition animation config
     animation: Animation,
     --- Postprocessing effect. Will be applied in the declaration order
     effects: List Effect,
+    --- Config file related options
+    config: ConfigOpts,
 }
 
 let defaultConfig = {
@@ -121,6 +130,9 @@ let defaultConfig = {
         }
     },
     effects = []: List Effect,
+    config = {
+        disable_hot_reload = False,
+    },
 }: Config
 
 in {
