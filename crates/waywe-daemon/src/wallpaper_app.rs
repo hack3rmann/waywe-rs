@@ -13,12 +13,12 @@ use smallvec::{SmallVec, smallvec};
 use std::{
     collections::{BTreeMap, HashMap, btree_map::Entry},
     io::ErrorKind,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::Arc,
     time::{Duration, Instant},
 };
 use tracing::{debug, error};
-use waywe_config::{Config, DhallErrorSource, ReadConfigError};
+use waywe_config::Config;
 use waywe_ipc::{
     WallpaperType,
     command::{DaemonError, DaemonResponse, DaemonResult, PauseMode},
@@ -167,6 +167,7 @@ pub struct CurrentWallpaperEvent {
 pub struct ConfigReloadEvent {
     pub path: Option<PathBuf>,
     pub sender_id: Option<ClientId>,
+    pub config: Option<Config>,
 }
 
 impl App for WallpaperApp {
@@ -642,43 +643,27 @@ impl Handle<CurrentWallpaperEvent> for WallpaperApp {
     }
 }
 
-fn loop_read_config(path: Option<&Path>, mut n_tries: usize) -> Result<Config, ReadConfigError> {
-    let is_enoent = |related: &[DhallErrorSource]| -> bool {
-        related.iter().all(|error| matches!(&error.error, serde_dhall::Error::Dhall(dhall::error::Error::Io(error)) if error.kind() == ErrorKind::NotFound))
-    };
-
-    loop {
-        let error;
-
-        match Config::read_from(path) {
-            Ok(config) => break Ok(config),
-            Err(ReadConfigError::ConfigUnreachable { related }) if is_enoent(&related) => {
-                error = ReadConfigError::ConfigUnreachable { related };
-                n_tries -= 1;
-            }
-            Err(other) => break Err(other),
-        }
-
-        if n_tries <= 1 {
-            break Err(error);
-        }
-    }
-}
-
 impl Handle<ConfigReloadEvent> for WallpaperApp {
     async fn handle(
         &mut self,
         runtime: &mut Runtime,
-        ConfigReloadEvent { path, sender_id }: ConfigReloadEvent,
+        ConfigReloadEvent {
+            path,
+            sender_id,
+            config,
+        }: ConfigReloadEvent,
     ) -> PostEventActions {
-        let config = match loop_read_config(path.as_deref(), 5) {
-            Ok(config) => config,
-            Err(error) => {
-                let report = error.diagnostic_chain().to_string();
-                report_error(&runtime.ipc, sender_id, DaemonError::Generic(report));
+        let config = match config {
+            Some(config) => config,
+            None => match Config::read_from(path.as_ref()) {
+                Ok(config) => config,
+                Err(error) => {
+                    let report = error.diagnostic_chain().to_string();
+                    report_error(&runtime.ipc, sender_id, DaemonError::Generic(report));
 
-                return PostEventActions::empty();
-            }
+                    return PostEventActions::empty();
+                }
+            },
         };
 
         match (

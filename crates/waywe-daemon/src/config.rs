@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 use thiserror::Error;
-use waywe_config::Config;
+use waywe_config::{Config, DhallErrorSource, ReadConfigError};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum State {
@@ -63,11 +63,34 @@ impl Default for ConfigEventSource {
     }
 }
 
+fn loop_read_config(mut n_tries: usize) -> Result<Config, ReadConfigError> {
+    let is_enoent = |related: &[DhallErrorSource]| -> bool {
+        related.iter().all(|error| matches!(&error.error, serde_dhall::Error::Dhall(dhall::error::Error::Io(error)) if error.kind() == ErrorKind::NotFound))
+    };
+
+    loop {
+        let error;
+
+        match Config::read_from_config_paths() {
+            Ok(config) => break Ok(config),
+            Err(ReadConfigError::ConfigUnreachable { related }) if is_enoent(&related) => {
+                error = ReadConfigError::ConfigUnreachable { related };
+                n_tries -= 1;
+            }
+            Err(other) => break Err(other),
+        }
+
+        if n_tries <= 1 {
+            break Err(error);
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum ConfigWatchError {}
 
 impl EventSource for ConfigEventSource {
-    type Event = ();
+    type Event = Result<Config, ReadConfigError>;
     type Metadata = ();
     type Ret = ();
     type Error = io::Error;
@@ -115,7 +138,7 @@ impl EventSource for ConfigEventSource {
 
         if let Some(timer) = &mut self.timer {
             let timer_action = timer.process_events(readiness, token, |_instant, &mut ()| {
-                callback((), &mut ());
+                callback(loop_read_config(5), &mut ());
                 TimeoutAction::Drop
             })?;
 
