@@ -685,7 +685,7 @@ impl Handle<ConfigReloadEvent> for WallpaperApp {
         let task = runtime
             .task_pool
             .spawn_event(async move || {
-                tokio::time::sleep(Duration::from_millis(200)).await;
+                tokio::time::sleep(Duration::from_millis(0)).await;
                 ConfigReloadDebouncedEvent { path, sender_id }
             })
             .await;

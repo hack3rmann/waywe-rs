@@ -1,18 +1,42 @@
 use calloop::{
-    EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory, generic::Generic,
+    EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory,
+    generic::Generic,
+    timer::{TimeoutAction, Timer},
 };
 use inotify::{Inotify, WatchMask};
-use std::io::ErrorKind;
+use std::{
+    io::{self, ErrorKind},
+    time::Duration,
+};
 use thiserror::Error;
 use waywe_config::Config;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum State {
+    DoNothing,
+    RegisterTimer,
+    UnregisterTimer,
+}
+
 pub struct ConfigEventSource {
+    debounce_duration: Duration,
+    state: State,
     inotify: Generic<Inotify>,
+    timer: Option<Timer>,
     buf: Vec<u8>,
 }
 
 impl ConfigEventSource {
-    pub fn new() -> Self {
+    pub fn new(debounce_duration: Duration) -> Self {
+        Self {
+            debounce_duration,
+            ..Self::default()
+        }
+    }
+}
+
+impl Default for ConfigEventSource {
+    fn default() -> Self {
         let inotify = Inotify::init().unwrap();
 
         for path in Config::config_paths() {
@@ -30,15 +54,12 @@ impl ConfigEventSource {
         }
 
         Self {
+            debounce_duration: Duration::from_millis(200),
+            state: State::DoNothing,
             inotify: Generic::new(inotify, Interest::READ, Mode::Level),
+            timer: None,
             buf: vec![0; 4096],
         }
-    }
-}
-
-impl Default for ConfigEventSource {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -49,7 +70,7 @@ impl EventSource for ConfigEventSource {
     type Event = ();
     type Metadata = ();
     type Ret = ();
-    type Error = std::io::Error;
+    type Error = io::Error;
 
     fn process_events<F>(
         &mut self,
@@ -60,34 +81,51 @@ impl EventSource for ConfigEventSource {
     where
         F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
-        self.inotify.process_events(readiness, token, |_, inotify| {
-            // Safety: inotify's Fd won't get dropped
-            let inotify = unsafe { inotify.get_mut() };
+        let generic_action = self
+            .inotify
+            .process_events(readiness, token, |_, inotify| {
+                let mut action = PostAction::Continue;
 
-            let mut events = inotify.read_events_blocking(&mut self.buf)?;
+                // Safety: inotify's Fd won't get dropped
+                let inotify = unsafe { inotify.get_mut() };
 
-            if events.next().is_some() {
-                callback((), &mut ());
-            }
+                let mut events = inotify.read_events_blocking(&mut self.buf)?;
 
-            // Drain remaining events
-            loop {
-                match inotify.read_events(&mut self.buf) {
-                    Ok(_events) => continue,
-                    Err(error)
-                        if matches!(
-                            error.kind(),
-                            ErrorKind::UnexpectedEof | ErrorKind::WouldBlock
-                        ) =>
-                    {
-                        break;
-                    }
-                    Err(other) => return Err(other),
+                if events.next().is_some() {
+                    self.state = State::RegisterTimer;
+                    action = PostAction::Reregister;
                 }
-            }
 
-            Ok(PostAction::Continue)
-        })
+                // Drain remaining events
+                loop {
+                    match inotify.read_events(&mut self.buf) {
+                        Ok(_events) => continue,
+                        Err(error)
+                            if let ErrorKind::UnexpectedEof | ErrorKind::WouldBlock =
+                                error.kind() =>
+                        {
+                            break;
+                        }
+                        Err(other) => return Err(other),
+                    }
+                }
+
+                Ok(action)
+            })?;
+
+        if let Some(timer) = &mut self.timer {
+            let timer_action = timer.process_events(readiness, token, |_instant, &mut ()| {
+                callback((), &mut ());
+                TimeoutAction::Drop
+            })?;
+
+            if timer_action == PostAction::Remove {
+                self.state = State::UnregisterTimer;
+                return Ok(PostAction::Reregister);
+            }
+        }
+
+        Ok(generic_action)
     }
 
     fn register(
@@ -103,10 +141,34 @@ impl EventSource for ConfigEventSource {
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
     ) -> calloop::Result<()> {
+        match self.state {
+            State::RegisterTimer => {
+                if let Some(mut timer) = self.timer.take() {
+                    timer.unregister(poll)?;
+                }
+
+                let mut timer = Timer::from_duration(self.debounce_duration);
+                timer.register(poll, token_factory)?;
+                self.timer = Some(timer);
+
+                self.state = State::DoNothing;
+            }
+            State::UnregisterTimer => {
+                if let Some(mut timer) = self.timer.take() {
+                    timer.unregister(poll)?;
+                }
+            }
+            State::DoNothing => {}
+        }
+
         self.inotify.reregister(poll, token_factory)
     }
 
     fn unregister(&mut self, poll: &mut Poll) -> calloop::Result<()> {
+        if let Some(timer) = &mut self.timer {
+            timer.unregister(poll)?;
+        }
+
         self.inotify.unregister(poll)
     }
 }

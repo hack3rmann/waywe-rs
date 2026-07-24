@@ -159,15 +159,15 @@ impl EventLoop {
 }
 
 fn add_config_watcher_source(state: &mut LoopState) -> Result<(), calloop::Error> {
-    let token =
-        state
-            .loop_handle
-            .insert_source(ConfigEventSource::new(), move |(), &mut (), state| {
-                state.event_queue.add(ConfigReloadEvent {
-                    path: None,
-                    sender_id: None,
-                });
-            })?;
+    let token = state.loop_handle.insert_source(
+        ConfigEventSource::default(),
+        move |(), &mut (), state| {
+            state.event_queue.add(ConfigReloadEvent {
+                path: None,
+                sender_id: None,
+            });
+        },
+    )?;
 
     state.config_watcher_token = Some(token);
 
