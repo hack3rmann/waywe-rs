@@ -101,6 +101,13 @@ pub struct TransitionCircleFragmentShader;
 )]
 pub struct TransitionSlideFragmentShader;
 
+#[derive(ShaderDescriptor)]
+#[shader(
+    path = "crates/waywe-daemon/src/shaders/transition-fadeout.glsl",
+    stage = "fragment"
+)]
+pub struct TransitionFadeoutShader;
+
 pub struct WallpaperTransitionPipeline {
     pub pipeline: wgpu::RenderPipeline,
     pub bind_group_layout: wgpu::BindGroupLayout,
@@ -134,6 +141,10 @@ impl WallpaperTransitionPipeline {
                 gpu.shader_cache
                     .get::<TransitionSlideFragmentShader>()
                     .unwrap()
+            }
+            AnimationStyle::Fadeout => {
+                gpu.require_shader::<TransitionFadeoutShader>();
+                gpu.shader_cache.get::<TransitionFadeoutShader>().unwrap()
             }
         };
 
@@ -333,6 +344,7 @@ impl WallpaperTransitionPipeline {
 pub enum AnimationState {
     Circle(CircleAnimationState),
     Slide(SlideAnimationState),
+    Fadeout(FadeoutAnimationState),
 }
 
 impl Default for AnimationState {
@@ -346,6 +358,7 @@ impl AnimationState {
         match self {
             Self::Circle(circle) => bytemuck::bytes_of(circle),
             Self::Slide(slide) => bytemuck::bytes_of(slide),
+            Self::Fadeout(fadeout) => bytemuck::bytes_of(fadeout),
         }
     }
 }
@@ -365,6 +378,12 @@ pub struct SlideAnimationState {
     pub normal: Vec2,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Default, Pod, Zeroable)]
+pub struct FadeoutAnimationState {
+    pub progress: f32,
+}
+
 fn corners_with_aspect_ratio(aspect_ratio: f32) -> [Vec2; 4] {
     [
         Vec2::new(-1.0 / aspect_ratio, -1.0),
@@ -378,6 +397,7 @@ fn corners_with_aspect_ratio(aspect_ratio: f32) -> [Vec2; 4] {
 pub enum TransitionState {
     Slide(SlideTransition),
     Circular(CircularTransition),
+    Fadeout(FadeoutTransition),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -403,6 +423,7 @@ impl OngoingTransition {
             Transition::Slide { angle } => {
                 TransitionState::Slide(SlideTransition::new(aspect_ratio, angle, duration))
             }
+            Transition::Fadeout => TransitionState::Fadeout(FadeoutTransition::new(duration)),
         };
 
         Self {
@@ -415,6 +436,7 @@ impl OngoingTransition {
         match &mut self.state {
             TransitionState::Circular(circular) => circular.advance_time(delta),
             TransitionState::Slide(slide) => slide.advance_time(delta),
+            TransitionState::Fadeout(fadeout) => fadeout.advance_time(delta),
         }
     }
 
@@ -422,6 +444,7 @@ impl OngoingTransition {
         match &self.state {
             TransitionState::Circular(circular) => circular.is_finished(),
             TransitionState::Slide(slide) => slide.is_finished(),
+            TransitionState::Fadeout(fadeout) => fadeout.is_finished(),
         }
     }
 
@@ -431,13 +454,17 @@ impl OngoingTransition {
                 AnimationState::Circle(circular.state(self.easing))
             }
             TransitionState::Slide(slide) => AnimationState::Slide(slide.state(self.easing)),
+            TransitionState::Fadeout(fadeout) => {
+                AnimationState::Fadeout(fadeout.state(self.easing))
+            }
         }
     }
 
     pub fn animation_style(&self) -> AnimationStyle {
         match self.state {
-            TransitionState::Circular(..) => AnimationStyle::Circle,
-            TransitionState::Slide(..) => AnimationStyle::Slide,
+            TransitionState::Circular(_) => AnimationStyle::Circle,
+            TransitionState::Slide(_) => AnimationStyle::Slide,
+            TransitionState::Fadeout(_) => AnimationStyle::Fadeout,
         }
     }
 }
@@ -573,6 +600,44 @@ impl CircularTransition {
             centre: self.centre(),
             radius: self.amount_with_easing(ease),
             direction: self.direction(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+pub struct FadeoutTransition {
+    pub done_fraction: f32,
+    pub animation_progress: Duration,
+    pub animation_duration: Duration,
+}
+
+impl FadeoutTransition {
+    pub fn new(duration: Duration) -> Self {
+        Self {
+            done_fraction: 0.0,
+            animation_progress: Duration::ZERO,
+            animation_duration: duration,
+        }
+    }
+
+    pub fn advance_time(&mut self, delta: Duration) {
+        self.animation_progress += delta;
+        let total = self.animation_progress.as_secs_f32() / self.animation_duration.as_secs_f32();
+        self.done_fraction = total.min(1.0);
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.done_fraction >= 1.0
+    }
+
+    #[inline]
+    pub fn amount_with_easing(&self, ease: Interpolation) -> f32 {
+        ease.get(self.done_fraction)
+    }
+
+    pub fn state(&self, ease: Interpolation) -> FadeoutAnimationState {
+        FadeoutAnimationState {
+            progress: self.amount_with_easing(ease),
         }
     }
 }
