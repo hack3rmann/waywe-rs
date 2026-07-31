@@ -101,6 +101,13 @@ pub struct TransitionCircleFragmentShader;
 )]
 pub struct TransitionSlideFragmentShader;
 
+#[derive(ShaderDescriptor)]
+#[shader(
+    path = "crates/waywe-daemon/src/shaders/transition-fadeout.glsl",
+    stage = "fragment"
+)]
+pub struct TransitionFadeoutShader;
+
 pub struct WallpaperTransitionPipeline {
     pub pipeline: wgpu::RenderPipeline,
     pub bind_group_layout: wgpu::BindGroupLayout,
@@ -135,7 +142,10 @@ impl WallpaperTransitionPipeline {
                     .get::<TransitionSlideFragmentShader>()
                     .unwrap()
             }
-            AnimationStyle::Fadeout => todo!(),
+            AnimationStyle::Fadeout => {
+                gpu.require_shader::<TransitionFadeoutShader>();
+                gpu.shader_cache.get::<TransitionFadeoutShader>().unwrap()
+            }
         };
 
         gpu.device
