@@ -70,7 +70,9 @@ let Transition = <
     --- Circle transition animation
     Circle: CircleTransition |
     --- Slide tansition animation
-    Slide: SlideTransition >
+    Slide: SlideTransition |
+    --- Fadeout transition animation
+    Fadeout >
 
 --- Post processing effect
 let Effect = <

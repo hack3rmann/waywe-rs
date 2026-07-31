@@ -196,6 +196,7 @@ pub enum AnimationStyle {
     #[default]
     Circle,
     Slide,
+    Fadeout,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone, StaticType)]
@@ -207,6 +208,7 @@ pub enum Transition {
     Slide {
         angle: Angle,
     },
+    Fadeout,
 }
 
 impl Transition {
@@ -214,6 +216,7 @@ impl Transition {
         match self {
             Self::Circle { .. } => AnimationStyle::Circle,
             Self::Slide { .. } => AnimationStyle::Slide,
+            Self::Fadeout => AnimationStyle::Fadeout,
         }
     }
 }

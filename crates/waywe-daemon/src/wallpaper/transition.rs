@@ -135,6 +135,7 @@ impl WallpaperTransitionPipeline {
                     .get::<TransitionSlideFragmentShader>()
                     .unwrap()
             }
+            AnimationStyle::Fadeout => todo!(),
         };
 
         gpu.device
@@ -403,6 +404,7 @@ impl OngoingTransition {
             Transition::Slide { angle } => {
                 TransitionState::Slide(SlideTransition::new(aspect_ratio, angle, duration))
             }
+            Transition::Fadeout => todo!(),
         };
 
         Self {
