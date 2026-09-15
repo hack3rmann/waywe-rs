@@ -6,7 +6,7 @@ use crate::{
 use smallvec::SmallVec;
 use static_assertions::assert_obj_safe;
 use std::ops::Deref;
-use waywe_ipc::config::Effects as BuiltinEffects;
+use waywe_config::Effects as BuiltinEffects;
 
 #[derive(Default)]
 pub struct EffectsBuilder {

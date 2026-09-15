@@ -1,68 +1,95 @@
-use crate::event::EventEmitter;
-use smallvec::{SmallVec, smallvec};
-use std::{
-    any::Any,
-    fmt::{self, Display},
-    thread::{self, JoinHandle},
-};
+use crate::event::{EventEmitter, IntoEvent};
+use display_error_chain::ErrorChainExt;
+use slab::Slab;
+use smallvec::SmallVec;
+use tokio::task::JoinHandle;
 use tracing::error;
 
-struct PrettyPanicPayload<'s>(pub &'s (dyn Any + Send + 'static));
-
-impl Display for PrettyPanicPayload<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = if let Some(s) = self.0.downcast_ref::<&str>() {
-            s
-        } else if let Some(s) = self.0.downcast_ref::<&String>() {
-            s
-        } else {
-            "unknown panic payload"
-        };
-
-        f.write_str(s)
-    }
-}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TaskIndex(usize);
 
 pub struct TaskPool {
-    pub handles: SmallVec<[JoinHandle<()>; 1]>,
+    pub handles: Slab<JoinHandle<()>>,
     pub emitter: EventEmitter,
 }
 
 impl TaskPool {
     pub fn new(emitter: EventEmitter) -> Self {
         Self {
-            handles: smallvec![],
+            handles: Slab::new(),
             emitter,
         }
     }
 
-    pub fn erase_finished(&mut self) -> usize {
+    pub async fn erase_finished(&mut self) -> usize {
         let mut n_finished = 0;
-        let mut i = 0;
+        let mut finished = SmallVec::<[usize; 8]>::new_const();
 
-        while i < self.handles.len() {
-            while i < self.handles.len() && self.handles[i].is_finished() {
-                let handle = self.handles.swap_remove(i);
+        loop {
+            for (i, handle) in &mut self.handles {
+                if handle.is_finished() {
+                    finished.push(i);
+                }
+            }
 
-                if let Err(panic_payload) = handle.join() {
-                    error!("task failed: {}", PrettyPanicPayload(&panic_payload));
+            if finished.is_empty() {
+                break;
+            }
+
+            for i in finished.drain(..) {
+                let Some(handle) = self.handles.try_remove(i) else {
+                    continue;
+                };
+
+                if let Err(error) = handle.await {
+                    error!("task failed: {}", error.chain());
                 }
 
                 n_finished += 1;
             }
-
-            i += 1;
         }
 
         n_finished
     }
 
-    pub fn spawn(&mut self, f: impl FnOnce(EventEmitter) + Send + 'static) {
-        self.erase_finished();
+    pub async fn spawn<F, R>(&mut self, f: F) -> TaskIndex
+    where
+        F: FnOnce(EventEmitter) -> R + Send + 'static,
+        R: Future<Output = ()> + Send + 'static,
+    {
+        self.erase_finished().await;
 
         let emitter = self.emitter.clone();
-        let handle = thread::spawn(move || f(emitter));
+        let handle = tokio::spawn(async move {
+            f(emitter).await;
+        });
 
-        self.handles.push(handle);
+        TaskIndex(self.handles.insert(handle))
+    }
+
+    pub async fn spawn_event<F, R, E>(&mut self, f: F) -> TaskIndex
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Future<Output = E> + Send + 'static,
+        E: IntoEvent,
+    {
+        self.spawn(async move |mut emitter| {
+            let event = f().await;
+            emitter.try_emit(event).expect("failed to send event");
+        })
+        .await
+    }
+
+    pub async fn terminate(&mut self, task_id: TaskIndex) {
+        let Some(handle) = self.handles.try_remove(task_id.0) else {
+            return;
+        };
+
+        // Try to shutdown the task gracefully
+        if handle.is_finished()
+            && let Err(error) = handle.await
+        {
+            error!("task failed: {}", error.chain());
+        }
     }
 }

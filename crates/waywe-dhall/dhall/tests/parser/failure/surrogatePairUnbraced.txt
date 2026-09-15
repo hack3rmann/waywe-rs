@@ -1,0 +1,1 @@
+Parse(Error { variant: CustomError { message: "Escape sequences can't contain surrogate pairs" }, location: Span((139, 144)), line_col: Span((5, 3), (5, 8)), inner: ErrorInner { path: None, line: "\"\\uD800\"", continued_line: None, parse_attempts: None } })

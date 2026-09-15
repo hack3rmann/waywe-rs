@@ -13,7 +13,7 @@ pub struct TransmuteVecError;
 /// - Returns error if either length or capacity of the vector are not a multiple of 4
 /// - Reinterprets bytes of the vector if it is properly aligned for u32 and manually constructs u32s otherwise
 pub fn transmute_vec_u8_to_vec_u32(mut src: Vec<u8>) -> Result<Vec<u32>, TransmuteVecError> {
-    if src.len() % 4 != 0 || src.capacity() % 4 != 0 {
+    if !src.len().is_multiple_of(4) || !src.capacity().is_multiple_of(4) {
         return Err(TransmuteVecError);
     }
 

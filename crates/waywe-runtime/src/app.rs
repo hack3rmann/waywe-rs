@@ -1,11 +1,12 @@
 use crate::{
     Runtime,
-    event::{DynEventHandler, Event, EventHandler},
+    event::{DynEventHandler, Event, EventHandler, PostEventActions},
     frame::{FrameError, FrameInfo},
 };
 use futures_util::Future;
 use reusable_box::{ReusableBox, ReusedBoxFuture};
 use std::{any::Any, ptr::NonNull};
+use waywe_config::Config;
 
 pub trait App: Any + Send + Sync {
     fn populate_handler(&mut self, handler: &mut EventHandler<Self>);
@@ -19,6 +20,8 @@ pub trait App: Any + Send + Sync {
     fn exit(&mut self, runtime: &mut Runtime) -> impl Future<Output = ()> + Send {
         async {}
     }
+
+    fn config(&self) -> &Config;
 }
 
 pub trait ReusableApp: Any + Send + Sync {
@@ -33,6 +36,8 @@ pub trait ReusableApp: Any + Send + Sync {
         runtime: &'f mut Runtime,
         futures: &'f mut ReusableBox,
     ) -> ReusedBoxFuture<'f, ()>;
+
+    fn config(&self) -> &Config;
 }
 
 impl<A: App> ReusableApp for A {
@@ -50,6 +55,10 @@ impl<A: App> ReusableApp for A {
         futures: &'f mut ReusableBox,
     ) -> ReusedBoxFuture<'f, ()> {
         futures.store_future(App::exit(self, runtime))
+    }
+
+    fn config(&self) -> &Config {
+        App::config(self)
     }
 }
 
@@ -71,9 +80,13 @@ impl DynApp {
         }
     }
 
-    pub async fn handle_event(&mut self, runtime: &mut Runtime, event: &mut Event) {
+    pub async fn handle_event(
+        &mut self,
+        runtime: &mut Runtime,
+        event: &mut Event,
+    ) -> PostEventActions {
         let layer_ptr = unsafe { NonNull::new_unchecked((&raw mut *self.app).cast::<()>()) };
-        unsafe { self.handler.execute_all(layer_ptr, runtime, event) }.await;
+        unsafe { self.handler.execute_all(layer_ptr, runtime, event) }.await
     }
 
     pub async fn frame(&mut self, runtime: &mut Runtime) -> Result<FrameInfo, FrameError> {
@@ -82,5 +95,9 @@ impl DynApp {
 
     pub async fn exit(&mut self, runtime: &mut Runtime) {
         self.app.exit(runtime, &mut self.futures).await;
+    }
+
+    pub fn config(&self) -> &Config {
+        self.app.config()
     }
 }

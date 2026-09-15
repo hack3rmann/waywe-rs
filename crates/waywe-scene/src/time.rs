@@ -12,7 +12,7 @@
 //! - [`update_time`]: System that updates the time resource each frame
 
 use bevy_ecs::prelude::*;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// Time tracking resource.
 ///
@@ -20,8 +20,6 @@ use std::time::{Duration, Instant};
 /// which is essential for animations and consistent updates.
 #[derive(Resource)]
 pub struct Time {
-    /// The previous frame's timestamp.
-    pub prev: Instant,
     /// Total elapsed time since the start.
     pub elapsed: Duration,
     /// Time elapsed since the last frame.
@@ -29,30 +27,17 @@ pub struct Time {
 }
 
 impl Time {
-    pub fn update(&mut self) {
-        let now = Instant::now();
-        let delta = now.duration_since(self.prev);
-
+    pub fn update(&mut self, delta: Duration) {
         self.delta = delta;
         self.elapsed += delta;
-        self.prev = now;
     }
 }
 
 impl Default for Time {
     fn default() -> Self {
         Self {
-            prev: Instant::now(),
             elapsed: Duration::ZERO,
             delta: Duration::ZERO,
         }
     }
-}
-
-/// System to update the time resource.
-///
-/// This system should be added to the update schedule to keep
-/// the time resource current.
-pub fn update_time(mut time: ResMut<Time>) {
-    time.update();
 }

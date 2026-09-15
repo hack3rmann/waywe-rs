@@ -1,49 +1,68 @@
 pub mod args;
 pub mod command;
+pub mod config;
+pub mod diagnostics;
+pub mod package;
+pub mod progress;
+pub mod status;
 
 use crate::{
     args::{Args, Command},
-    command::{execute_current, execute_pause, execute_preview, execute_show, execute_start},
+    command::{
+        WaitMode, execute_current, execute_pause, execute_preview, execute_show, execute_start,
+        execute_stop,
+    },
+    config::execute_config,
+    diagnostics::DaemonSetupDiagnostics,
+    package::execute_package,
 };
-use anyhow::{Context as _, bail};
 use clap::Parser as _;
-use rustix::io::Errno;
-use waywe_ipc::{DaemonCommand, IpcSocket, ipc::Client};
+use miette::IntoDiagnostic;
+use waywe_ipc::command::PauseMode;
 
-fn main() -> anyhow::Result<()> {
+fn main() -> miette::Result<()> {
     tracing_subscriber::fmt::init();
-    video::init();
 
-    let daemon_command = match Args::parse().command {
-        Command::Preview { out, monitor } => {
-            execute_preview(&out, monitor.as_deref())?;
-            return Ok(());
+    match Args::parse().command {
+        Command::Preview {
+            out,
+            path,
+            width,
+            height,
+            time,
+        } => execute_preview(&out, &path, width, height, time)?,
+        Command::Current { monitor } => execute_current(monitor.as_deref())?,
+        Command::Start { dont_wait, bin } => {
+            if let Err(error) = execute_start(WaitMode::from_dont(dont_wait), bin) {
+                return Err(DaemonSetupDiagnostics::from(error).into());
+            }
         }
-        Command::Current { monitor } => {
-            execute_current(monitor.as_deref())?;
-            return Ok(());
-        }
-        Command::Start => {
-            execute_start();
-            return Ok(());
-        }
-        Command::Show { path, monitor } => execute_show(&path, monitor)?,
-        Command::Pause { monitor } => execute_pause(monitor)?,
-    };
+        Command::Stop { dont_wait } => execute_stop(WaitMode::from_dont(dont_wait))?,
+        Command::Restart { dont_wait, bin } => {
+            execute_stop(WaitMode::from_dont(dont_wait))?;
 
-    let socket = match IpcSocket::<Client, DaemonCommand>::connect() {
-        Ok(socket) => socket,
-        Err(Errno::CONNREFUSED) => {
-            bail!("no waywe-daemon is running");
+            if let Err(error) = execute_start(WaitMode::from_dont(dont_wait), bin) {
+                return Err(DaemonSetupDiagnostics::from(error).into());
+            }
         }
-        Err(error) => {
-            bail!("failed to connect to waywe-daemon: {error}");
-        }
-    };
-
-    socket
-        .send(daemon_command)
-        .context("failed to set a command to the daemon")?;
+        Command::Show {
+            path,
+            monitor,
+            dont_wait,
+        } => execute_show(&path, monitor, WaitMode::from_dont(dont_wait))?,
+        Command::Pause {
+            monitor,
+            on,
+            off,
+            dont_wait,
+        } => execute_pause(
+            monitor,
+            PauseMode::from_on_off(on, off),
+            WaitMode::from_dont(dont_wait),
+        )?,
+        Command::Package { command } => execute_package(command).into_diagnostic()?,
+        Command::Config { command } => execute_config(command)?,
+    }
 
     Ok(())
 }

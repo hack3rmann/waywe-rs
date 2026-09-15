@@ -1,0 +1,1 @@
+Parse(Error { variant: ParsingError { positives: [missing, if_, merge, NaN, Some_, toMap, assert, forall_keyword], negatives: [] }, location: Pos(4), line_col: Pos((1, 5)), inner: ErrorInner { path: None, line: "let x :T = y in e", continued_line: None, parse_attempts: None } })

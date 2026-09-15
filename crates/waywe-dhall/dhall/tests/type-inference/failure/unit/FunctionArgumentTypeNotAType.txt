@@ -1,0 +1,1 @@
+TypeError { message: Custom("error: Expected a type, found: `1`\n --> <current file>:1:7\n  |\n1 | λ(_ : 1) → _\n  |       ^ this has type: `Natural`\n  |\n  = help: An expression in type position must have type `Type`, `Kind` or `Sort`") }

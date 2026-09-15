@@ -3,15 +3,10 @@ use bytemuck::{Pod, Zeroable};
 use for_sure::prelude::*;
 use glam::Vec2;
 use smallvec::SmallVec;
-use std::{
-    collections::VecDeque,
-    f32::consts::PI,
-    mem,
-    time::{Duration, Instant},
-};
-use waywe_ipc::config::{
-    Angle, Animation, AnimationConfig, AnimationDirection, AnimationStyle, CenterPosition,
-    Interpolation,
+use std::{collections::VecDeque, f32::consts::PI, mem, sync::Arc, time::Duration};
+use waywe_config::{
+    Angle, AnimationConfig, AnimationDirection, AnimationStyle, CenterPosition, Config,
+    Interpolation, Transition,
 };
 use waywe_runtime::{
     effects::{Effects, config::EffectsBuilder},
@@ -106,6 +101,13 @@ pub struct TransitionCircleFragmentShader;
 )]
 pub struct TransitionSlideFragmentShader;
 
+#[derive(ShaderDescriptor)]
+#[shader(
+    path = "crates/waywe-daemon/src/shaders/transition-fadeout.glsl",
+    stage = "fragment"
+)]
+pub struct TransitionFadeoutShader;
+
 pub struct WallpaperTransitionPipeline {
     pub pipeline: wgpu::RenderPipeline,
     pub bind_group_layout: wgpu::BindGroupLayout,
@@ -140,6 +142,10 @@ impl WallpaperTransitionPipeline {
                     .get::<TransitionSlideFragmentShader>()
                     .unwrap()
             }
+            AnimationStyle::Fadeout => {
+                gpu.require_shader::<TransitionFadeoutShader>();
+                gpu.shader_cache.get::<TransitionFadeoutShader>().unwrap()
+            }
         };
 
         gpu.device
@@ -153,7 +159,7 @@ impl WallpaperTransitionPipeline {
                         constants: &[],
                         zero_initialize_workgroup_memory: false,
                     },
-                    buffers: &[wgpu::VertexBufferLayout {
+                    buffers: &[Some(wgpu::VertexBufferLayout {
                         array_stride: mem::size_of_val(&SCREEN_TRIANGLE[0]) as u64,
                         step_mode: wgpu::VertexStepMode::Vertex,
                         attributes: &[wgpu::VertexAttribute {
@@ -161,7 +167,7 @@ impl WallpaperTransitionPipeline {
                             offset: 0,
                             shader_location: 0,
                         }],
-                    }],
+                    })],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &fragment_shader,
@@ -338,6 +344,7 @@ impl WallpaperTransitionPipeline {
 pub enum AnimationState {
     Circle(CircleAnimationState),
     Slide(SlideAnimationState),
+    Fadeout(FadeoutAnimationState),
 }
 
 impl Default for AnimationState {
@@ -351,6 +358,7 @@ impl AnimationState {
         match self {
             Self::Circle(circle) => bytemuck::bytes_of(circle),
             Self::Slide(slide) => bytemuck::bytes_of(slide),
+            Self::Fadeout(fadeout) => bytemuck::bytes_of(fadeout),
         }
     }
 }
@@ -370,6 +378,12 @@ pub struct SlideAnimationState {
     pub normal: Vec2,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Default, Pod, Zeroable)]
+pub struct FadeoutAnimationState {
+    pub progress: f32,
+}
+
 fn corners_with_aspect_ratio(aspect_ratio: f32) -> [Vec2; 4] {
     [
         Vec2::new(-1.0 / aspect_ratio, -1.0),
@@ -380,56 +394,77 @@ fn corners_with_aspect_ratio(aspect_ratio: f32) -> [Vec2; 4] {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum OngoingTransition {
+pub enum TransitionState {
     Slide(SlideTransition),
     Circular(CircularTransition),
+    Fadeout(FadeoutTransition),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct OngoingTransition {
+    pub easing: Interpolation,
+    pub state: TransitionState,
 }
 
 impl OngoingTransition {
     pub fn new(aspect_ratio: f32, config: &AnimationConfig) -> Self {
-        let duration = Duration::from_millis(config.duration_milliseconds);
+        let duration = Duration::from_millis(config.duration);
 
-        match config.animation {
-            Animation::Circle {
-                center_position,
+        let state = match config.style {
+            Transition::Circle {
+                center: center_position,
                 direction,
-            } => Self::Circular(CircularTransition::new(
+            } => TransitionState::Circular(CircularTransition::new(
                 aspect_ratio,
                 center_position,
                 direction,
                 duration,
             )),
-            Animation::Slide { angle } => {
-                Self::Slide(SlideTransition::new(aspect_ratio, angle, duration))
+            Transition::Slide { angle } => {
+                TransitionState::Slide(SlideTransition::new(aspect_ratio, angle, duration))
             }
+            Transition::Fadeout => TransitionState::Fadeout(FadeoutTransition::new(duration)),
+        };
+
+        Self {
+            state,
+            easing: config.easing,
         }
     }
 
-    pub fn update(&mut self) {
-        match self {
-            Self::Circular(circular) => circular.update(),
-            Self::Slide(slide) => slide.update(),
+    pub fn advance_time(&mut self, delta: Duration) {
+        match &mut self.state {
+            TransitionState::Circular(circular) => circular.advance_time(delta),
+            TransitionState::Slide(slide) => slide.advance_time(delta),
+            TransitionState::Fadeout(fadeout) => fadeout.advance_time(delta),
         }
     }
 
     pub fn is_finished(&self) -> bool {
-        match self {
-            Self::Circular(circular) => circular.is_finished(),
-            Self::Slide(slide) => slide.is_finished(),
+        match &self.state {
+            TransitionState::Circular(circular) => circular.is_finished(),
+            TransitionState::Slide(slide) => slide.is_finished(),
+            TransitionState::Fadeout(fadeout) => fadeout.is_finished(),
         }
     }
 
-    pub fn state(&self, ease: Interpolation) -> AnimationState {
-        match self {
-            Self::Circular(circular) => AnimationState::Circle(circular.state(ease)),
-            Self::Slide(slide) => AnimationState::Slide(slide.state(ease)),
+    pub fn state(&self) -> AnimationState {
+        match &self.state {
+            TransitionState::Circular(circular) => {
+                AnimationState::Circle(circular.state(self.easing))
+            }
+            TransitionState::Slide(slide) => AnimationState::Slide(slide.state(self.easing)),
+            TransitionState::Fadeout(fadeout) => {
+                AnimationState::Fadeout(fadeout.state(self.easing))
+            }
         }
     }
 
     pub fn animation_style(&self) -> AnimationStyle {
-        match self {
-            Self::Circular(..) => AnimationStyle::Circle,
-            Self::Slide(..) => AnimationStyle::Slide,
+        match self.state {
+            TransitionState::Circular(_) => AnimationStyle::Circle,
+            TransitionState::Slide(_) => AnimationStyle::Slide,
+            TransitionState::Fadeout(_) => AnimationStyle::Fadeout,
         }
     }
 }
@@ -439,7 +474,7 @@ pub struct SlideTransition {
     /// Amount of work done in 0..=1 (normalized time)
     pub done_fraction: f32,
     pub scale: f32,
-    pub start_time: Instant,
+    pub animation_progress: Duration,
     pub animation_duration: Duration,
     pub position: Vec2,
     pub normal: Vec2,
@@ -461,15 +496,16 @@ impl SlideTransition {
         Self {
             done_fraction: 0.0,
             scale,
-            start_time: Instant::now(),
+            animation_progress: Duration::ZERO,
             animation_duration: duraition,
             normal,
             position,
         }
     }
 
-    pub fn update(&mut self) {
-        let total = self.start_time.elapsed().as_secs_f32() / self.animation_duration.as_secs_f32();
+    pub fn advance_time(&mut self, delta: Duration) {
+        self.animation_progress += delta;
+        let total = self.animation_progress.as_secs_f32() / self.animation_duration.as_secs_f32();
         self.done_fraction = total.min(1.0);
     }
 
@@ -495,7 +531,7 @@ pub struct CircularTransition {
     /// Amount of work done in 0..=1 (normalized time)
     pub done_fraction: f32,
     pub scale: f32,
-    pub start_time: Instant,
+    pub animation_progress: Duration,
     pub animation_duration: Duration,
     pub direction: AnimationDirection,
     pub centre: Vec2,
@@ -522,7 +558,7 @@ impl CircularTransition {
         Self {
             done_fraction: 0.0,
             scale,
-            start_time: Instant::now(),
+            animation_progress: Duration::ZERO,
             animation_duration: duration,
             direction,
             centre,
@@ -533,8 +569,9 @@ impl CircularTransition {
         self.centre
     }
 
-    pub fn update(&mut self) {
-        let total = self.start_time.elapsed().as_secs_f32() / self.animation_duration.as_secs_f32();
+    pub fn advance_time(&mut self, delta: Duration) {
+        self.animation_progress += delta;
+        let total = self.animation_progress.as_secs_f32() / self.animation_duration.as_secs_f32();
         self.done_fraction = total.min(1.0);
     }
 
@@ -563,6 +600,44 @@ impl CircularTransition {
             centre: self.centre(),
             radius: self.amount_with_easing(ease),
             direction: self.direction(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+pub struct FadeoutTransition {
+    pub done_fraction: f32,
+    pub animation_progress: Duration,
+    pub animation_duration: Duration,
+}
+
+impl FadeoutTransition {
+    pub fn new(duration: Duration) -> Self {
+        Self {
+            done_fraction: 0.0,
+            animation_progress: Duration::ZERO,
+            animation_duration: duration,
+        }
+    }
+
+    pub fn advance_time(&mut self, delta: Duration) {
+        self.animation_progress += delta;
+        let total = self.animation_progress.as_secs_f32() / self.animation_duration.as_secs_f32();
+        self.done_fraction = total.min(1.0);
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.done_fraction >= 1.0
+    }
+
+    #[inline]
+    pub fn amount_with_easing(&self, ease: Interpolation) -> f32 {
+        ease.get(self.done_fraction)
+    }
+
+    pub fn state(&self, ease: Interpolation) -> FadeoutAnimationState {
+        FadeoutAnimationState {
+            progress: self.amount_with_easing(ease),
         }
     }
 }
@@ -597,22 +672,41 @@ pub struct RunningWallpapers {
     pub ongoing_transitions: SmallVec<[OngoingTransition; 8]>,
     pub transition_pipeline: Almost<WallpaperTransitionPipeline>,
     pub textures: Almost<WallpaperTransitionState>,
-    pub config: AnimationConfig,
+    pub config: Arc<Config>,
     pub effects_builder: EffectsBuilder,
     pub wallpaper_config: WallpaperConfig,
 }
 
 impl RunningWallpapers {
-    pub const fn new(wallpaper_config: WallpaperConfig, config: AnimationConfig) -> Self {
+    pub fn new(wallpaper_config: WallpaperConfig, config: Arc<Config>) -> Self {
+        let mut effects_builder = EffectsBuilder::new();
+        effects_builder.add_builtins(&config.effects);
+
         Self {
             executing: VecDeque::new(),
             ongoing_transitions: SmallVec::new_const(),
             transition_pipeline: Nil,
             textures: Nil,
             config,
-            effects_builder: EffectsBuilder::new(),
+            effects_builder,
             wallpaper_config,
         }
+    }
+
+    pub fn reload_config(&mut self, gpu: &Wgpu, new_config: Arc<Config>) {
+        if self.config.effects == new_config.effects {
+            self.config = new_config;
+            return;
+        }
+
+        self.effects_builder = EffectsBuilder::new();
+        self.effects_builder.add_builtins(&new_config.effects);
+
+        for wall in &mut self.executing {
+            wall.effects = self.effects_builder.build(gpu, self.wallpaper_config);
+        }
+
+        self.config = new_config;
     }
 
     pub fn enqueue_wallpaper(&mut self, gpu: &Wgpu, wallpaper: OptimizedWallpaper) {
@@ -624,20 +718,20 @@ impl RunningWallpapers {
         if self.executing.len() >= 2 {
             self.ongoing_transitions.push(OngoingTransition::new(
                 self.wallpaper_config.aspect_ratio(),
-                &self.config,
+                &self.config.animation,
             ));
         }
     }
 
     pub fn remove_finished(&mut self) {
-        let n_unfinished = self
+        let n_finished = self
             .ongoing_transitions
             .iter()
             .take_while(|t| t.is_finished())
             .count();
 
-        _ = self.ongoing_transitions.drain(..n_unfinished);
-        _ = self.executing.drain(..n_unfinished);
+        _ = self.ongoing_transitions.drain(..n_finished);
+        _ = self.executing.drain(..n_finished);
 
         if self.executing.len() <= 1 {
             self.transition_pipeline = Nil;
@@ -654,7 +748,7 @@ impl RunningWallpapers {
             let pipeline = WallpaperTransitionPipeline::new(
                 gpu,
                 self.wallpaper_config,
-                self.config.animation.style(),
+                self.config.animation.style.animation(),
             );
 
             self.textures = Value(WallpaperTransitionState::new(gpu, &pipeline));
@@ -691,20 +785,15 @@ impl RunningWallpapers {
         let mut frame_result = first.frame(gpu, &self.textures.from, encoder);
 
         for (wallpaper, transition) in wallpapers.zip(&mut self.ongoing_transitions) {
-            transition.update();
-
             let frame_info = wallpaper.frame(gpu, &self.textures.to, encoder);
             frame_result = frame_result.min_or_60_fps(frame_info);
 
-            let state = transition.state(self.config.easing);
-
-            if transition.animation_style() != self.config.animation.style() {
-                self.transition_pipeline
-                    .switch_shader(gpu, transition.animation_style());
-            }
-
-            self.transition_pipeline
-                .render(&self.textures, &surface_view, encoder, &state);
+            self.transition_pipeline.render(
+                &self.textures,
+                &surface_view,
+                encoder,
+                &transition.state(),
+            );
 
             // TODO(hack3rmann): we can avoid copying the texture by swapping bind groups
             // with third intermediate texture
@@ -751,5 +840,15 @@ impl Wallpaper for RunningWallpapers {
         encoder: &mut wgpu::CommandEncoder,
     ) -> FrameInfo {
         self.render(gpu, surface.texture(), encoder).unwrap()
+    }
+
+    fn advance_time(&mut self, delta: Duration) {
+        for transition in &mut self.ongoing_transitions {
+            transition.advance_time(delta);
+        }
+
+        for effected in &mut self.executing {
+            effected.wallpaper.advance_time(delta);
+        }
     }
 }

@@ -1,244 +1,341 @@
 use file_format::{FileFormat, Kind};
-use image::{DynamicImage, ImageError, ImageReader, RgbImage};
+use image::{ImageBuffer, ImageError, Rgba};
+use miette::Diagnostic;
+use rustix::{
+    io::Errno,
+    process::{Pid, Signal, kill_process},
+};
 use std::{
-    ffi::CStr,
-    io,
+    ffi::OsStr,
+    fs::File,
+    io::{self, ErrorKind, Read},
     path::{Path, PathBuf},
-    process::{self, Stdio},
+    process::{self, ExitStatus, Stdio},
+    string::FromUtf8Error,
+    time::Duration,
 };
 use thiserror::Error;
-use tracing::error;
-use transmute_extra::pathbuf_into_cstring;
-use video::{
-    BackendError, Codec, CodecContext, FormatContext, Frame, MediaType, ScalerFlags, ScalerFormat,
-    SoftwareScaler, VideoPixelFormat,
-};
 use waywe_ipc::{
-    DaemonCommand, WallpaperType,
-    profile::{SetupProfile, SetupProfileError},
+    ClientError, DaemonCommand, DaemonSetupResult, IpcClient, WallpaperType,
+    command::{DaemonError, DaemonResponse, DaemonResult, PauseMode},
+    detach::{BINCODE_CONFIG, SetupPipe},
 };
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum ExecuteError {
-    #[error("failed to open profile file: {0}")]
-    ProfileIo(#[from] SetupProfileError),
     #[error("no wallpaper is running")]
     NoWallpaper,
     #[error("unsupported file format '{0:?}'")]
     UnsupportedFileFormat(Kind),
     #[error(transparent)]
-    VideoOpen(#[from] BackendError),
-    #[error(transparent)]
     Io(#[from] io::Error),
-    #[error(transparent)]
-    Image(#[from] ImageError),
     #[error("video '{path}' is invalid")]
     InvalidVideo { path: PathBuf },
+    #[error("cargo build failed with status {status}")]
+    CargoBuild { status: ExitStatus },
+    #[error("'{path}' is not a valid wallpaper crate (no Cargo.toml)")]
+    InvalidPackageRoot { path: PathBuf },
+    #[error("'{manifest}' is not a dylib wallpaper crate")]
+    NotADylibCrate { manifest: PathBuf },
+    #[error("built dylib not found at '{path}'")]
+    DylibNotFound { path: PathBuf },
+    #[error(transparent)]
+    CargoMetadata(#[from] cargo_metadata::Error),
+    #[error(transparent)]
+    ConnectDaemon(#[from] ConnectDaemonError),
+    #[error(transparent)]
+    Ipc(#[from] ClientError),
+    #[error("unexpected daemon response {0:#?}")]
+    #[diagnostic(
+        code(waywe::unexpected_daemon_response),
+        help(
+            "this is a bug, please create a GitHub issue: https://github.com/hack3rmann/waywe-rs/issues/new"
+        )
+    )]
+    UnexpectedDaemonResponse(DaemonResponse),
+    #[error("daemon returned an error")]
+    #[diagnostic(code(waywe::daemon::response_error))]
+    DaemonError(
+        #[from]
+        #[diagnostic_source]
+        DaemonError,
+    ),
+    #[error("failed to save image")]
+    SaveImageError(#[source] ImageError),
 }
 
 pub fn execute_current(monitor_name: Option<&str>) -> Result<(), ExecuteError> {
-    let mut profile = SetupProfile::read()?;
+    let socket = connect_daemon()?;
 
-    let Some(info) = (match monitor_name {
-        Some(name) => profile.monitors.remove(name),
-        None => profile.monitors.into_values().next(),
-    }) else {
-        return Err(ExecuteError::NoWallpaper);
+    socket.send(DaemonCommand::Current {
+        monitor: monitor_name.map(str::to_owned),
+    })?;
+
+    let response = socket.recv()??;
+
+    let DaemonResponse::Current(current) = response else {
+        return Err(ExecuteError::UnexpectedDaemonResponse(response));
     };
 
-    println!("{}", info.path.display());
+    if let Some(name) = monitor_name
+        && let Some(path) = current.get(name)
+    {
+        print!("{}", path.display());
+    } else {
+        serde_json::to_writer(io::stdout(), &current).unwrap();
+    }
 
     Ok(())
 }
 
-pub fn execute_start() {
-    let mut child = process::Command::new("waywe-daemon")
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum WaitMode {
+    #[default]
+    Wait,
+    DontWait,
+}
+
+impl WaitMode {
+    pub const fn from_dont(dont_wait: bool) -> Self {
+        if dont_wait {
+            Self::DontWait
+        } else {
+            Self::Wait
+        }
+    }
+
+    pub const fn daemon_arg(self) -> Option<&'static str> {
+        match self {
+            WaitMode::Wait => Some("--wait"),
+            WaitMode::DontWait => None,
+        }
+    }
+}
+
+pub fn execute_pause(
+    monitor: Option<String>,
+    mode: PauseMode,
+    wait_mode: WaitMode,
+) -> Result<(), ExecuteError> {
+    let socket = connect_daemon()?;
+
+    socket.send(DaemonCommand::Pause { monitor, mode })?;
+
+    if wait_mode == WaitMode::DontWait {
+        return Ok(());
+    }
+
+    let response = socket.recv()??;
+
+    if response != DaemonResponse::PauseDone {
+        return Err(ExecuteError::UnexpectedDaemonResponse(response));
+    }
+
+    Ok(())
+}
+
+pub fn execute_start(mode: WaitMode, bin: Option<PathBuf>) -> DaemonSetupResult {
+    let fifo = match mode {
+        WaitMode::Wait => Some(SetupPipe::new_in("/tmp/waywe")),
+        WaitMode::DontWait => None,
+    };
+
+    let fifo_arg = fifo
+        .as_ref()
+        .map(|fifo| ["--init-signal-fifo", fifo.path.as_path().to_str().unwrap()])
+        .into_iter()
+        .flatten();
+
+    let daemon_cmd = bin
+        .as_ref()
+        .map(AsRef::<OsStr>::as_ref)
+        .unwrap_or(OsStr::new("waywe-daemon"));
+
+    let mut child = process::Command::new(daemon_cmd)
         .arg("--run-in-background")
+        .args(fifo_arg)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .unwrap();
 
-    child.wait().unwrap();
+    let mut fifo_file = fifo.as_ref().map(SetupPipe::read);
+
+    let result: DaemonSetupResult = if let Some(fifo) = &mut fifo_file {
+        bincode::decode_from_std_read(fifo, BINCODE_CONFIG).unwrap()
+    } else {
+        Ok(())
+    };
+
+    let _status = child.wait().unwrap();
+
+    result
 }
 
-pub fn execute_preview(result_path: &Path, monitor_name: Option<&str>) -> Result<(), ExecuteError> {
-    let mut profile = SetupProfile::read()?;
+#[derive(Debug, Error, Diagnostic)]
+pub enum ExecuteStopError {
+    #[error("failed to open daemon pid file")]
+    OpenPidFile(#[source] io::Error),
+    #[error("failed to read daemon pid file")]
+    ReadPidFile(#[source] io::Error),
+    #[error("pid file contains invalid characters")]
+    #[diagnostic(
+        code(waywe::corrupted_state),
+        help("maybe the daemon state is corruped")
+    )]
+    InvalidPidCharacters(#[from] FromUtf8Error),
+    #[error("invalid PID '{0}'")]
+    #[diagnostic(
+        code(waywe::corrupted_state),
+        help("maybe the daemon state is corruped")
+    )]
+    InvalidPid(String),
+    #[error("failed to lock PID file")]
+    LockPidFile(#[source] io::Error),
+}
 
-    let Some(info) = (match monitor_name {
-        Some(name) => profile.monitors.remove(name),
-        None => profile.monitors.into_values().next(),
-    }) else {
-        return Err(ExecuteError::NoWallpaper);
+pub fn execute_stop(mode: WaitMode) -> Result<(), ExecuteStopError> {
+    let mut pid_file = match File::open("/tmp/waywe/daemon.pid") {
+        Ok(file) => file,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(ExecuteStopError::OpenPidFile(error)),
     };
 
-    let image = match info.wallpaper_type {
-        WallpaperType::Scene => todo!("scene"),
-        WallpaperType::Video => {
-            let c_path = pathbuf_into_cstring(info.path.clone());
+    let mut pid_bytes = Vec::with_capacity(64);
+    pid_file
+        .read_to_end(&mut pid_bytes)
+        .map_err(ExecuteStopError::ReadPidFile)?;
 
-            let mut format_context = FormatContext::from_input(&c_path)?;
-            let best_stream = format_context.find_best_stream(MediaType::Video)?;
-            let best_stream_index = best_stream.index();
-            let codec_parameters = best_stream.codec_parameters();
+    let pid_str = String::from_utf8(pid_bytes)?;
+    let pid_str = pid_str.trim();
+    let pid_raw = pid_str
+        .parse::<i32>()
+        .map_err(|_| ExecuteStopError::InvalidPid(pid_str.to_owned()))?;
+    let pid =
+        Pid::from_raw(pid_raw).ok_or_else(|| ExecuteStopError::InvalidPid(pid_str.to_owned()))?;
 
-            let Some(decoder) = Codec::find_decoder_for_id(codec_parameters.codec_id()) else {
-                return Err(ExecuteError::VideoOpen(BackendError::DECODER_NOT_FOUND));
-            };
+    match kill_process(pid, Signal::TERM) {
+        Ok(()) => {}
+        // no such process
+        Err(Errno::SRCH) => return Ok(()),
+        Err(errno) => panic!("{errno}"),
+    }
 
-            let mut codec_context =
-                CodecContext::from_parameters(codec_parameters, Some(decoder)).unwrap();
-            codec_context.open(decoder).unwrap();
+    if mode == WaitMode::DontWait {
+        return Ok(());
+    }
 
-            let frame = loop {
-                let packet = format_context.read_any_packet().unwrap();
-
-                if packet.stream_index() != best_stream_index {
-                    continue;
-                }
-
-                codec_context.send_packet(&packet).unwrap();
-
-                let mut frame = Frame::new();
-
-                match codec_context.receive_frame(&mut frame) {
-                    Ok(()) => break frame,
-                    Err(BackendError::EAGAIN) => continue,
-                    Err(error) => return Err(error.into()),
-                }
-            };
-
-            let mut scaler = SoftwareScaler::new(
-                ScalerFormat {
-                    size: frame.size(),
-                    format: frame.format().unwrap(),
-                },
-                ScalerFormat {
-                    // TODO(hack3rmann): scale appropriately
-                    size: frame.size(),
-                    format: VideoPixelFormat::Rgb24,
-                },
-                ScalerFlags::BILINEAR,
-            )
-            .unwrap();
-
-            let mut scaled_frame = Frame::new();
-            scaler.run(&frame, &mut scaled_frame).unwrap();
-
-            let image = RgbImage::from_vec(
-                scaled_frame.width(),
-                scaled_frame.height(),
-                scaled_frame.data(0).to_owned(),
-            )
-            .expect("buffer size expected to be `width * height * pixel_size`");
-
-            DynamicImage::ImageRgb8(image)
-        }
-        WallpaperType::Image => {
-            let reader = ImageReader::open(&info.path)?;
-            reader.decode()?
-        }
-    };
-
-    image.save(result_path)?;
+    pid_file.lock().map_err(ExecuteStopError::LockPidFile)?;
+    pid_file.unlock().map_err(ExecuteStopError::LockPidFile)?;
 
     Ok(())
+}
+
+pub fn execute_preview(
+    output: &Path,
+    source: &Path,
+    width: u32,
+    height: u32,
+    time: Duration,
+) -> Result<(), ExecuteError> {
+    let file_kind = FileFormat::from_file(source)?.kind();
+    let absolute_source = source.canonicalize()?;
+
+    let ty =
+        file_kind_to_wall_type(file_kind).ok_or(ExecuteError::UnsupportedFileFormat(file_kind))?;
+
+    let command = DaemonCommand::Preview {
+        ty,
+        path: absolute_source,
+        width,
+        height,
+        time,
+    };
+
+    let socket = connect_daemon()?;
+
+    socket.send(command)?;
+    let response = socket.recv()??;
+
+    let DaemonResponse::Preview {
+        width,
+        height,
+        rgba,
+    } = response
+    else {
+        return Err(ExecuteError::UnexpectedDaemonResponse(response));
+    };
+
+    let image =
+        ImageBuffer::<Rgba<u8>, _>::from_raw(width, height, rgba).expect("incomplte rgba image");
+
+    // TODO(hack3rmann): JPEG and others support
+    image.save(output).map_err(ExecuteError::SaveImageError)?;
+
+    Ok(())
+}
+
+pub type DaemonSocket = IpcClient<DaemonCommand, DaemonResult>;
+
+#[derive(Error, Debug, Diagnostic)]
+pub enum ConnectDaemonError {
+    #[error("no waywe-daemon is running")]
+    #[diagnostic(
+        code(waywe::daemon::not_running),
+        help("start the daemon first: `waywe start`")
+    )]
+    NotRunning(#[source] Errno),
+    #[error("unexpected OS error")]
+    #[diagnostic(code(waywe::daemon::connect_failed))]
+    OtherOs(#[from] Errno),
+}
+
+pub fn connect_daemon() -> Result<DaemonSocket, ConnectDaemonError> {
+    DaemonSocket::connect().map_err(|errno| match errno {
+        Errno::CONNREFUSED | Errno::NOENT => ConnectDaemonError::NotRunning(errno),
+        _ => ConnectDaemonError::OtherOs(errno),
+    })
+}
+
+fn file_kind_to_wall_type(kind: Kind) -> Option<WallpaperType> {
+    Some(match kind {
+        Kind::Compressed => WallpaperType::Scene,
+        Kind::Video => WallpaperType::Video,
+        Kind::Image => WallpaperType::Image,
+        _ => return None,
+    })
 }
 
 pub fn execute_show(
     path: &Path,
     monitor_name: Option<String>,
-) -> Result<DaemonCommand, ExecuteError> {
+    wait_mode: WaitMode,
+) -> Result<(), ExecuteError> {
     let file_kind = FileFormat::from_file(path)?.kind();
+    let absolute_path = path.canonicalize()?;
 
-    Ok(match file_kind {
-        Kind::Image => {
-            let reader = ImageReader::open(path)?.with_guessed_format()?;
-            let _image = reader.decode()?;
-            let absolute_path = path.canonicalize()?;
+    let ty =
+        file_kind_to_wall_type(file_kind).ok_or(ExecuteError::UnsupportedFileFormat(file_kind))?;
 
-            DaemonCommand::SetImage {
-                path: absolute_path,
-                monitor: monitor_name,
-            }
-        }
-        Kind::Video => {
-            let absolute_path = path.canonicalize()?;
-
-            if !is_video_path_valid(absolute_path.clone()) {
-                return Err(ExecuteError::InvalidVideo {
-                    path: absolute_path,
-                });
-            }
-
-            DaemonCommand::SetVideo {
-                path: absolute_path,
-                monitor: monitor_name,
-            }
-        }
-        Kind::Executable => {
-            let absolute_path = path.canonicalize()?;
-
-            DaemonCommand::SetScene {
-                path: absolute_path,
-                monitor: monitor_name,
-            }
-        }
-        _ => return Err(ExecuteError::UnsupportedFileFormat(file_kind)),
-    })
-}
-
-pub fn execute_pause(monitor_name: Option<String>) -> Result<DaemonCommand, ExecuteError> {
-    Ok(DaemonCommand::Pause {
+    let command = DaemonCommand::Show {
+        path: absolute_path,
         monitor: monitor_name,
-    })
-}
-
-fn is_video_path_valid(path: PathBuf) -> bool {
-    if !path.exists() {
-        error!(?path, "file does not exist");
-        return false;
-    }
-
-    let path = transmute_extra::pathbuf_into_cstring(path);
-
-    if !is_video_valid(&path) {
-        error!(?path, "video is invalid");
-        return false;
-    }
-
-    true
-}
-
-fn is_video_valid(path: &CStr) -> bool {
-    let format_context = match FormatContext::from_input(path) {
-        Ok(context) => context,
-        Err(error) => {
-            error!(?path, ?error, "failed to open file");
-            return false;
-        }
+        ty,
     };
 
-    let best_stream = match format_context.find_best_stream(MediaType::Video) {
-        Ok(stream) => stream,
-        Err(error) => {
-            error!(?path, ?error, "failed to find video stream");
-            return false;
-        }
-    };
+    let socket = connect_daemon()?;
 
-    let codec_parameters = best_stream.codec_parameters();
+    socket.send(command)?;
 
-    if !matches!(
-        codec_parameters.format(),
-        Some(video::AudioVideoFormat::Video(VideoPixelFormat::Yuv420p))
-    ) {
-        error!(
-            format = ?codec_parameters.format(),
-            "unsupported video pixel format (planar Y'CbCr 4:2:0 is expected)",
-        );
-        return false;
+    if wait_mode == WaitMode::DontWait {
+        return Ok(());
     }
 
-    true
+    let response = socket.recv()??;
+
+    if response != DaemonResponse::WallpaperSet {
+        return Err(ExecuteError::UnexpectedDaemonResponse(response));
+    }
+
+    Ok(())
 }

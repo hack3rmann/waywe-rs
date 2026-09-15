@@ -3,7 +3,7 @@ use tracing::debug;
 use wayland_sys::{count_arguments_from_message_signature, wl_interface, wl_message};
 
 mod protocols {
-    wayland_scanner::include_wl_interfaces!("wayland-protocols/wayland.xml");
+    wayland_scanner::include_wl_interfaces!("resources/wayland-protocols/wayland.xml");
 }
 
 unsafe fn check_wl_messages_arrays_are_the_same(

@@ -2,4 +2,5 @@ target
 crates/extractor/scene.pkg
 crates/extractor/assets
 crates/deploy-tool/releases
+crates/examples/waywe-test-scene/assets
 logs

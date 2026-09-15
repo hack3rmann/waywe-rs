@@ -1,0 +1,1 @@
+Parse(Error { variant: ParsingError { positives: [], negatives: [builtin] }, location: Pos(212), line_col: Pos((6, 5)), inner: ErrorInner { path: None, line: "let Bool : Natural = 1 in Bool", continued_line: None, parse_attempts: None } })

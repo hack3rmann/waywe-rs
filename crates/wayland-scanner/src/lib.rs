@@ -13,7 +13,7 @@ use proc_macro::TokenStream;
 /// extern crate wayland_sys;
 ///
 /// mod protocols {
-///     wayland_scanner::include_wl_interfaces!("wayland-protocols/wayland.xml");
+///     wayland_scanner::include_wl_interfaces!("resources/wayland-protocols/wayland.xml");
 /// }
 ///
 /// # fn _asserts() {

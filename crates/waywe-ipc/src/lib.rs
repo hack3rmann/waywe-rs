@@ -1,12 +1,13 @@
 pub mod command;
-pub mod config;
-pub mod epoll;
+pub mod detach;
 pub mod ipc;
 pub mod profile;
-pub mod signals;
 pub mod wallpaper;
 
 pub use command::DaemonCommand;
-pub use epoll::Epoll;
-pub use ipc::{IpcSocket, RecvError, SendError};
+pub use detach::{DaemonSetupError, DaemonSetupResult};
+pub use ipc::{
+    client::{ClientError, IpcClient},
+    server::{IpcServer, RecvError},
+};
 pub use wallpaper::WallpaperType;

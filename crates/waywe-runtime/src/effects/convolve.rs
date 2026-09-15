@@ -6,7 +6,7 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use std::{mem, num::NonZeroU64};
-use waywe_ipc::config::ConvolveConfig;
+use waywe_config::ConvolveConfig;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
 const LABEL: &str = "convolve";

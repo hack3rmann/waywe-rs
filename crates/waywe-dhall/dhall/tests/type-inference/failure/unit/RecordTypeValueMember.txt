@@ -1,0 +1,1 @@
+TypeError { message: Custom("error: InvalidFieldType\n --> <current file>:1:7\n  |\n1 | { x : True }\n  |       ^^^^ InvalidFieldType\n  |") }

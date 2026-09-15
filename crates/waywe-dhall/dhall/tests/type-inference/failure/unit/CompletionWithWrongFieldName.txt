@@ -1,0 +1,1 @@
+TypeError { message: Custom("error: annot mismatch: { id : Optional Natural, nam : Text, name : Text } != { id : Optional Natural, name : Text }\n --> <current file>:6:5\n  |\n...\n6 | in  Example::{ nam = \"John Doe\" }\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ annot mismatch: { id : Optional Natural, nam : Text, name : Text } != { id : Optional Natural, name : Text }\n  |") }

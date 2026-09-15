@@ -1,0 +1,1 @@
+Typecheck(TypeError { message: Custom("error: error\n --> <current file>:1:1\n  |\n1 | https://test.dhall-lang.org/nonexistent-file.dhall\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ error: unbound variable `Not`\n --> <current file>:1:6\n  |\n1 | 404: Not Found\n  |      ^^^ not found in this scope\n  |\n  |") })

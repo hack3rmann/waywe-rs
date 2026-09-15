@@ -1,0 +1,1 @@
+TypeError { message: Custom("error: InvalidListType\n --> <current file>:1:1\n  |\n1 | [] : Optional Bool\n  | ^^^^^^^^^^^^^^^^^^ InvalidListType\n  |") }

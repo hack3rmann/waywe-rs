@@ -2,7 +2,7 @@ use crate::wallpaper::{Wallpaper, WallpaperConfig};
 use bytemuck::{Pod, Zeroable};
 use glam::{UVec2, Vec2};
 use image::{ImageBuffer, ImageError, Rgba};
-use std::{io, mem};
+use std::{io, mem, time::Duration};
 use thiserror::Error;
 use waywe_runtime::{frame::FrameInfo, gpu::Wgpu};
 use waywe_spirv_derive::ShaderDescriptor;
@@ -125,7 +125,7 @@ impl ImageWallpaper {
                         constants: &[],
                         zero_initialize_workgroup_memory: false,
                     },
-                    buffers: &[wgpu::VertexBufferLayout {
+                    buffers: &[Some(wgpu::VertexBufferLayout {
                         array_stride: mem::size_of_val(&SCREEN_TRIANGLE[0]) as u64,
                         step_mode: wgpu::VertexStepMode::Vertex,
                         attributes: &[wgpu::VertexAttribute {
@@ -133,7 +133,7 @@ impl ImageWallpaper {
                             offset: 0,
                             shader_location: 0,
                         }],
-                    }],
+                    })],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &gpu.shader_cache.get::<ImageFragment>().unwrap(),
@@ -197,7 +197,7 @@ impl ImageWallpaper {
                         constants: &[],
                         zero_initialize_workgroup_memory: false,
                     },
-                    buffers: &[wgpu::VertexBufferLayout {
+                    buffers: &[Some(wgpu::VertexBufferLayout {
                         array_stride: mem::size_of_val(&SCREEN_TRIANGLE[0]) as u64,
                         step_mode: wgpu::VertexStepMode::Vertex,
                         attributes: &[wgpu::VertexAttribute {
@@ -205,7 +205,7 @@ impl ImageWallpaper {
                             offset: 0,
                             shader_location: 0,
                         }],
-                    }],
+                    })],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &gpu.shader_cache.get::<ImageFragment>().unwrap(),
@@ -291,6 +291,8 @@ impl Wallpaper for ImageWallpaper {
             target_frame_time: None,
         }
     }
+
+    fn advance_time(&mut self, _delta: Duration) {}
 }
 
 #[derive(Debug, Error)]
@@ -301,7 +303,7 @@ pub enum ImageWallpaperCreationError {
     Decode(#[from] ImageError),
 }
 
-const SCREEN_TRIANGLE: [Vec2; 3] = [
+pub const SCREEN_TRIANGLE: [Vec2; 3] = [
     Vec2::new(-1.0, -1.0),
     Vec2::new(3.0, -1.0),
     Vec2::new(-1.0, 3.0),

@@ -1,0 +1,1 @@
+TypeError { message: Custom("error: annot mismatch: Bool != Natural\n --> <current file>:1:19\n  |\n1 | let x : Natural = True in True\n  |                   ^^^^ annot mismatch: Bool != Natural\n  |") }

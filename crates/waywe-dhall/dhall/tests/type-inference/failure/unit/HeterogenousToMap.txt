@@ -1,0 +1,1 @@
+TypeError { message: Custom("error: Every field of the record must have the same type\n --> <current file>:1:1\n  |\n1 | toMap { foo= 1, bar= \"Bar\" }\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Every field of the record must have the same type\n  |") }

@@ -408,15 +408,21 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
 
         let method_arg = match argument.ty {
             ArgType::Object => {
+                let expect = quote! { expect("failed to get the proxy object from the storage") };
                 if !argument.allow_null {
                     quote! {
                         ::std::option::Option::Some(
-                            storage.get_proxy(self. #argument_name ).unwrap()
+                            storage.get_proxy(self. #argument_name ).#expect
                         )
                     }
                 } else {
                     quote! {
-                        self. #argument_name .map(|id| storage.get_proxy(id).unwrap())
+                        match self. #argument_name {
+                            ::std::option::Option::None => ::std::option::Option::None,
+                            ::std::option::Option::Some(__id) => ::std::option::Option::Some(
+                                storage.get_proxy(__id).#expect,
+                            ),
+                        }
                     }
                 }
             }
@@ -500,6 +506,7 @@ fn request_to_impl(interface: &Interface, request: &Message, index: usize) -> To
             const CHILD_TYPE: ::std::option::Option<super::super::super::WlObjectType>
                 = #outgoing_interface_value ;
 
+            #[track_caller]
             fn build_message<'m, S: crate::sys::object::dispatch::State>(
                 self,
                 buf: &'m mut impl crate::sys::wire::WlMessageBuffer,

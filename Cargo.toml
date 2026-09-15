@@ -15,7 +15,6 @@ members = [
     "crates/wayland-sys",
     "crates/waywe",
     "crates/waywe-daemon",
-    "crates/waywe-default-wallpapers",
     "crates/waywe-ipc",
     "crates/waywe-runtime",
     "crates/waywe-scene",
@@ -24,12 +23,17 @@ members = [
     "crates/waywe-shader-rs/shaderc-sys",
     "crates/waywe-rendering-api",
     "crates/waywe-scene-macros",
+    "crates/waywe-config",
     "crates/examples/waywe-test-scene",
     "crates/examples/shadertoy-computer-were-made-for-cubes",
+    "crates/daemonize/daemonize",
+    "crates/waywe-dhall/dhall",
+    "crates/waywe-dhall/dhall_proc_macros",
+    "crates/waywe-dhall/serde_dhall",
 ]
 
 [workspace.package]
-version = "0.0.15"
+version = "0.0.16"
 edition = "2024"
 license = "MIT"
 rust-version = "1.89"
@@ -46,12 +50,15 @@ wayland-sys = { path = "crates/wayland-sys" }
 waywe-ipc = { path = "crates/waywe-ipc" }
 waywe-runtime = { path = "crates/waywe-runtime" }
 waywe-scene = { path = "crates/waywe-scene" }
-waywe-default-wallpapers = { path = "crates/waywe-default-wallpapers" }
 waywe-spirv-derive = { path = "crates/waywe-spirv-derive" }
 waywe-rendering-api = { path = "crates/waywe-rendering-api" }
 waywe-scene-macros = { path = "crates/waywe-scene-macros" }
+waywe-config = { path = "crates/waywe-config" }
+daemonize = { path = "crates/daemonize/daemonize" }
 transmute-extra = { path = "crates/transmute-extra" }
 video = { path = "crates/video" }
+serde_dhall = { path = "crates/waywe-dhall/serde_dhall" }
+dhall = { path = "crates/waywe-dhall/dhall" }
 thiserror = "2.0.11"
 safe-transmute = "0.11.3"
 rayon = "1.10.0"
@@ -63,7 +70,7 @@ paste = "1.0.15"
 smallvec = { version = "1.14.0", features = ["union", "serde", "const_generics", "const_new", "write"] }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 glam = { version = "0.30.3", features = ["bytemuck", "serde"] }
-rustix = { version = "0.38.44", features = ["fs", "net", "process", "mm", "shm", "event"] }
+rustix = { version = "1.1.4", features = ["fs", "net", "process", "mm", "shm", "event", "pipe"] }
 bytemuck = { version = "1.21.0", features = ["extern_crate_alloc", "derive"] }
 libc = "0.2.170"
 image = "0.25.6"
@@ -75,9 +82,18 @@ toml = "0.8.23"
 fxhash = "0.2.1"
 box_into_inner = "0.1.0"
 futures-util = { version = "0.3.31", features = ["alloc"] }
-derive_more = { version = "2.0.1", features = ["full"] }
 abi_stable = "0.11.3"
 bevy_ecs = "0.17.2"
-wgpu = { version = "29.0.3", features = ["glsl", "spirv"] }
 ash = "0.38.0"
 pollster = "0.4.0"
+uuid = { version = "1.23.3", features = ["v7"] }
+flate2 = "1.1.9"
+tar = "0.4.46"
+tap = "1.0.1"
+miette = { version = "7.6.0", features = ["fancy"] }
+display-error-chain = "0.2.2"
+calloop = { version = "0.14.4", features = ["signals"] }
+smallstr = { version = "0.3.1", features = ["union"] }
+wgpu = { version = "30.0.0", features = ["glsl", "spirv"] }
+miette-diagnostic-chain = "0.1.0"
+slab = "0.4.12"

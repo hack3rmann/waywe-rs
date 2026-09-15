@@ -3,9 +3,10 @@ use glam::{UVec2, Vec2};
 use std::{
     mem::{self, MaybeUninit},
     panic,
-    time::Instant,
+    time::Duration,
 };
 use waywe_rendering_api::{
+    VecExt,
     api::{OpaqueRenderer, OpaqueRendererDesc, RenderSurfaceFd, Renderer},
     ffi::PanicPayload,
     import_fd_as_texture,
@@ -52,6 +53,7 @@ impl Gpu {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 force_fallback_adapter: false,
                 compatible_surface: None,
+                apply_limit_buckets: false,
             })
             .await
             .expect("failed to request adapter");
@@ -79,7 +81,8 @@ impl Gpu {
 
 pub struct ShaderToyRenderer {
     gpu: Gpu,
-    surface: Option<wgpu::Texture>,
+    surfaces: Vec<wgpu::Texture>,
+    submissions: Vec<Option<wgpu::SubmissionIndex>>,
     wallpaper: ShaderWallpaper,
 }
 
@@ -90,16 +93,28 @@ impl ShaderToyRenderer {
         Self {
             wallpaper: ShaderWallpaper::new(&gpu, config),
             gpu,
-            surface: None,
+            surfaces: vec![],
+            submissions: vec![],
         }
     }
 }
 
 impl Renderer for ShaderToyRenderer {
     fn render(&mut self) -> FrameInfo {
-        let Some(surface) = self.surface.as_ref() else {
+        let Some(surface) = self.surfaces.first() else {
             panic!("no surface is set");
         };
+
+        if let Some(index) = self.submissions.first_mut().and_then(Option::take) {
+            self.gpu
+                .device
+                .poll(wgpu::PollType::Wait {
+                    submission_index: Some(index),
+                    timeout: None,
+                })
+                .unwrap();
+        }
+
         let surface_view = surface.create_view(&Default::default());
 
         let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
@@ -107,18 +122,12 @@ impl Renderer for ShaderToyRenderer {
         self.wallpaper.frame(&surface_view, &mut encoder);
 
         let index = self.gpu.queue.submit([encoder.finish()]);
-        self.gpu
-            .device
-            .poll(wgpu::PollType::Wait {
-                submission_index: Some(index),
-                timeout: None,
-            })
-            .unwrap();
+        self.submissions[0] = Some(index);
 
         FrameInfo::new_60_fps()
     }
 
-    fn set_surface(&mut self, surface: RenderSurfaceFd) {
+    fn set_surface(&mut self, surface: RenderSurfaceFd, index: u32) {
         let surface = unsafe {
             import_fd_as_texture(
                 &self.gpu.device,
@@ -133,9 +142,19 @@ impl Renderer for ShaderToyRenderer {
             surface_format: surface.format(),
         };
 
-        self.surface = Some(surface);
+        self.surfaces.set_or_push(index as usize, surface);
+        self.submissions.set_or_push(index as usize, None);
 
         self.wallpaper.configure(&self.gpu, config);
+    }
+
+    fn cycle_buffers(&mut self) {
+        self.surfaces.rotate_left(1);
+        self.submissions.rotate_left(1);
+    }
+
+    fn advance_time(&mut self, delta: Duration) {
+        self.wallpaper.advance_time(delta);
     }
 }
 
@@ -186,7 +205,7 @@ pub const SCREEN_QUAD: [Vertex; 6] = [
 ];
 
 pub struct ShaderWallpaper {
-    pub start: Option<Instant>,
+    pub time: Duration,
     pub vertex_shader: wgpu::ShaderModule,
     pub fragment_shader: wgpu::ShaderModule,
     pub vertices: wgpu::Buffer,
@@ -229,7 +248,7 @@ impl ShaderWallpaper {
         );
 
         Self {
-            start: None,
+            time: Duration::ZERO,
             vertex_shader,
             fragment_shader,
             pipeline_layout,
@@ -257,7 +276,7 @@ impl ShaderWallpaper {
                         constants: &[],
                         zero_initialize_workgroup_memory: false,
                     },
-                    buffers: &[wgpu::VertexBufferLayout {
+                    buffers: &[Some(wgpu::VertexBufferLayout {
                         array_stride: mem::size_of::<Vertex>() as u64,
                         step_mode: wgpu::VertexStepMode::Vertex,
                         attributes: &[wgpu::VertexAttribute {
@@ -265,7 +284,7 @@ impl ShaderWallpaper {
                             offset: 0,
                             shader_location: 0,
                         }],
-                    }],
+                    })],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: fragment_shader,
@@ -301,8 +320,6 @@ impl ShaderWallpaper {
     }
 
     pub fn frame(&mut self, surface: &wgpu::TextureView, encoder: &mut wgpu::CommandEncoder) {
-        let start = *self.start.get_or_insert_with(Instant::now);
-
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("computer-were-made-for-cubes-render-pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -331,7 +348,7 @@ impl ShaderWallpaper {
             0,
             bytemuck::bytes_of(&PushConst {
                 resolution,
-                time: start.elapsed().as_secs_f32(),
+                time: self.time.as_secs_f32(),
             }),
         );
 
@@ -350,5 +367,9 @@ impl ShaderWallpaper {
         }
 
         self.config = config;
+    }
+
+    pub fn advance_time(&mut self, delta: Duration) {
+        self.time += delta;
     }
 }

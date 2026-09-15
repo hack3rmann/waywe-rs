@@ -1,13 +1,10 @@
 use crate::wallpaper::{Wallpaper, WallpaperConfig, optimized::image::FullscreenVertex};
 use for_sure::prelude::*;
 use glam::Vec2;
-use std::{mem, path::PathBuf};
+use std::{mem, path::PathBuf, time::Duration};
 use video::{BackendError, FrameDuration};
 use waywe_runtime::{frame::FrameInfo, gpu::Wgpu};
-use waywe_scene::{
-    time::Time,
-    video::{RenderVideo, Video},
-};
+use waywe_scene::video::{RenderVideo, Video};
 use waywe_spirv_derive::ShaderDescriptor;
 use wgpu::util::DeviceExt;
 
@@ -16,9 +13,10 @@ pub const LABEL: &str = "default-video";
 pub struct VideoWallpaper {
     pub video: Video,
     pub rendered_video: Almost<RenderVideo>,
+    pub rendered_frame_epoch: u64,
+    pub bind_group: Option<wgpu::BindGroup>,
     pub pipeline: VideoPipeline,
     pub config: WallpaperConfig,
-    pub time: Time,
 }
 
 impl VideoWallpaper {
@@ -30,8 +28,9 @@ impl VideoWallpaper {
         Ok(Self {
             video: Video::new(path)?,
             rendered_video: Nil,
+            rendered_frame_epoch: 0,
+            bind_group: None,
             pipeline: VideoPipeline::new(gpu, config),
-            time: Time::default(),
             config,
         })
     }
@@ -81,18 +80,20 @@ impl Wallpaper for VideoWallpaper {
         surface: &wgpu::TextureView,
         encoder: &mut wgpu::CommandEncoder,
     ) -> FrameInfo {
-        self.time.update();
-        self.video.advance_by(self.time.delta);
+        let needs_export = Almost::is_nil(&self.rendered_video)
+            || self.rendered_frame_epoch != self.video.frame_epoch;
 
-        if self.video.n_frames_since_update == 0 || Almost::is_nil(&self.rendered_video) {
+        if needs_export {
             self.rendered_video = Value(RenderVideo::export_from(
                 &self.video,
                 &gpu.adapter,
                 &gpu.device,
             ));
+            self.rendered_frame_epoch = self.video.frame_epoch;
+            self.bind_group = Some(self.create_bind_group(&gpu.device));
         }
 
-        let bind_group = self.create_bind_group(&gpu.device);
+        let bind_group = self.bind_group.as_ref().expect("bind group must exist");
 
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
@@ -119,7 +120,7 @@ impl Wallpaper for VideoWallpaper {
         pass.set_pipeline(&self.pipeline.pipeline);
         pass.set_vertex_buffer(0, self.pipeline.vertex_buffer.slice(..));
         pass.set_immediates(0, bytemuck::bytes_of(&size));
-        pass.set_bind_group(0, &bind_group, &[]);
+        pass.set_bind_group(0, bind_group, &[]);
 
         pass.draw(0..SCREEN_TRIANGLE.len() as u32, 0..1);
 
@@ -133,6 +134,10 @@ impl Wallpaper for VideoWallpaper {
         FrameInfo {
             target_frame_time: Some(duration),
         }
+    }
+
+    fn advance_time(&mut self, delta: Duration) {
+        self.video.advance_by(delta);
     }
 }
 
@@ -243,7 +248,7 @@ impl VideoPipeline {
                         constants: &[],
                         zero_initialize_workgroup_memory: false,
                     },
-                    buffers: &[wgpu::VertexBufferLayout {
+                    buffers: &[Some(wgpu::VertexBufferLayout {
                         array_stride: mem::size_of_val(&SCREEN_TRIANGLE[0]) as u64,
                         step_mode: wgpu::VertexStepMode::Vertex,
                         attributes: &[wgpu::VertexAttribute {
@@ -251,7 +256,7 @@ impl VideoPipeline {
                             offset: 0,
                             shader_location: 0,
                         }],
-                    }],
+                    })],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &gpu.shader_cache.get::<VideoFragment>().unwrap(),

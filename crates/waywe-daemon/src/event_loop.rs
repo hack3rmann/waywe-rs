@@ -1,209 +1,287 @@
-use crate::wallpaper_app::{NewWallpaperEvent, WallpaperPauseEvent};
-use rustix::io::Errno;
-use std::{
-    io,
-    os::fd::AsFd as _,
-    sync::{Once, atomic::Ordering, mpsc::TryRecvError},
-    vec::Drain,
+use crate::{
+    config::ConfigEventSource,
+    wallpaper_app::{
+        ConfigReloadEvent, CurrentWallpaperEvent, NewWallpaperEvent, WallpaperPauseEvent,
+        WallpaperPreviewEvent,
+    },
 };
-use tokio::runtime::Builder as AsyncRuntimeBuilder;
-use tracing::{debug, error};
+use calloop::{
+    EventLoop as CalloopEventLoop, LoopHandle, LoopSignal, RegistrationToken,
+    channel::{Channel, channel},
+    signals::{Signal, Signals},
+    timer::{TimeoutAction, Timer},
+};
+use display_error_chain::ErrorChainExt;
+use glam::UVec2;
+use miette_diagnostic_chain::DiagnosticChain;
+use std::{io, vec::Drain};
+use thiserror::Error;
+use tokio::runtime::{Builder as AsyncRuntimeBuilder, Runtime as AsyncRuntime};
+use tracing::{debug, error, info};
 use waywe_ipc::{
-    DaemonCommand, WallpaperType,
-    epoll::{Epoll, PolledFds},
-    ipc::{IpcSocket, RecvError, Server},
-    signals,
+    DaemonCommand, IpcServer,
+    command::DaemonResult,
+    ipc::server::{CreateServerError, IpcEvent, IpcResponse},
 };
 use waywe_runtime::{
-    ControlFlow, Runtime,
+    Runtime,
     app::{App, DynApp},
-    event::{AbsorbError, Event, EventReceiver, IntoEvent},
-    frame::FrameError,
+    event::{Event, EventReceiver, IntoEvent, PostEventActions},
+    frame::{FrameError, FrameInfo},
     task_pool::TaskPool,
-    wayland::{MonitorId, Wayland},
+    wayland::{MonitorId, Wayland, WaylandEventSource},
 };
 
+#[derive(Debug, Error)]
+pub enum CreateEventLoopError {
+    #[error("failed to create event queue")]
+    CrateEventQueue(#[source] io::Error),
+    #[error(transparent)]
+    Ipc(#[from] CreateServerError),
+    #[error("failed to create calloop event loop")]
+    Calloop(#[from] calloop::Error),
+}
+
 pub struct EventLoop {
-    // NOTE(hack3rmann): app should be dropped first to release all the resources from the runtime
-    app: DynApp,
-    runtime: Runtime,
-    event_queue: EventQueue,
-    epoll: Epoll,
+    calloop: CalloopEventLoop<'static, LoopState>,
+    state: LoopState,
 }
 
 impl EventLoop {
-    pub fn new(app: impl App) -> Self {
-        static SIGNALS_ONCE: Once = Once::new();
-        SIGNALS_ONCE.call_once(signals::setup);
+    pub fn new(app: impl App) -> Result<Self, CreateEventLoopError> {
+        // NOTE(hack3rmann): `Signals::new` blocks given signals from the current thread
+        // It's important that we create this before spawning any thread, so the child thread
+        // will ingerit the blocked signals
+        let signals = Signals::new(&[
+            Signal::SIGINT,
+            Signal::SIGQUIT,
+            Signal::SIGHUP,
+            Signal::SIGTERM,
+        ])?;
 
+        let tokio = AsyncRuntimeBuilder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("failed to create tokio runtime");
+
+        let (mut event_queue, custom_receiver) =
+            EventQueue::new().map_err(CreateEventLoopError::CrateEventQueue)?;
+        let event_emitter = custom_receiver.make_emitter().unwrap();
+
+        let (ipc_sender, ipc_channel) = channel();
+        let wayland = Wayland::default();
+        let task_pool = TaskPool::new(event_emitter);
+        let runtime = Runtime::new(wayland.clone(), task_pool, ipc_sender);
         let app = DynApp::new(app);
 
-        let event_queue = match EventQueue::new() {
-            Ok(queue) => queue,
-            Err(error) => panic!("failed to create event queue: {error:?}"),
-        };
+        runtime.wayland.drain_stored_events(|event| {
+            event_queue.add(event);
+        });
 
-        let wayland = Wayland::new(event_queue.custom_receiver.make_emitter().unwrap());
+        let calloop = CalloopEventLoop::try_new().map_err(CreateEventLoopError::Calloop)?;
+        let loop_signal = calloop.get_signal();
+        let handle = calloop.handle();
 
-        let task_pool = TaskPool::new(event_queue.custom_receiver.make_emitter().unwrap());
-
-        let runtime = Runtime::new(wayland, ControlFlow::Busy, task_pool);
-
-        let fds = [
-            runtime.wayland.display.as_fd(),
-            runtime.ipc.as_fd(),
-            event_queue.custom_receiver.pipe_fd(),
-        ];
-
-        let epoll = match Epoll::new(fds) {
-            Ok(epoll) => epoll,
-            Err(error) => panic!("failed to create epoll: {error:?}"),
-        };
-
-        Self {
-            runtime,
+        let mut state = LoopState {
+            loop_signal,
             app,
+            runtime,
             event_queue,
-            epoll,
+            tokio,
+            loop_handle: handle.clone(),
+            is_frame_requested: true,
+            config_watcher_token: None,
+        };
+
+        Self::register_sources(&handle, signals, custom_receiver, wayland, ipc_channel)?;
+
+        if !state.app.config().config.disable_hot_reload {
+            add_config_watcher_source(&mut state)?;
         }
-    }
 
-    async fn run_async(&mut self) {
-        self.runtime.timer.mark_event_loop_start_time();
+        state.process_event_queue();
 
-        let mut polled_fds = PolledFds::with_capacity(1);
-
-        'event_loop: loop {
-            self.runtime.timer.mark_frame_start();
-
-            match self.runtime.control_flow {
-                ControlFlow::Busy => {}
-                ControlFlow::Idle => {
-                    self.runtime.timer.mark_block_start();
-
-                    match self.epoll.wait(&mut polled_fds, None) {
-                        Ok(()) | Err(Errno::INTR) => {}
-                        Err(error) => {
-                            error!(?error, "failed to sleep on multiple sockets");
-                        }
-                    }
-
-                    // Dispatch all wayland events first
-                    if polled_fds.contains(&self.runtime.wayland.display) {
-                        self.runtime.wayland.display_roundtrip();
-                        continue;
-                    }
-
-                    self.runtime.timer.mark_block_end();
-                }
-                ControlFlow::ShouldStop => {
-                    debug!("shutting down daemon");
-                    break 'event_loop;
-                }
-            }
-
-            if signals::SHOULD_EXIT.load(Ordering::Relaxed) {
-                debug!("caught stop signal");
-                break 'event_loop;
-            }
-
-            self.runtime.task_pool.erase_finished();
-            self.runtime.wayland.display_roundtrip();
-
-            if let Err(error) = self.event_queue.populate_events_from_custom()
-                && !matches!(error, AbsorbError::TryRecv(TryRecvError::Empty))
-            {
-                error!(?error, "failed to populate custom events");
-            }
-
-            if let Err(error) = self
-                .event_queue
-                .populate_from_cli(&self.runtime.wayland, &self.runtime.ipc)
-            {
-                error!(?error, "can not recv from waywe-cli");
-            }
-
-            for mut event in self.event_queue.drain() {
-                self.app.handle_event(&mut self.runtime, &mut event).await;
-            }
-
-            let info = match self.app.frame(&mut self.runtime).await {
-                Ok(info) => info,
-                Err(FrameError::StopRequested) => break 'event_loop,
-                Err(FrameError::Skip | FrameError::NoWorkToDo) => continue 'event_loop,
-            };
-
-            if let Some(target_frame_time) = info.target_frame_time {
-                self.runtime.timer.sleep_enough(target_frame_time);
-            } else {
-                self.runtime.control_flow.idle();
-            }
-        } // loop
-
-        self.app.exit(&mut self.runtime).await;
+        Ok(Self { calloop, state })
     }
 
     pub fn run(&mut self) {
-        let async_runtime = AsyncRuntimeBuilder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
+        self.state.runtime.timer.mark_event_loop_start_time();
 
-        async_runtime.block_on(self.run_async());
+        self.calloop
+            .run(None, &mut self.state, move |state| {
+                state.event_loop_frame();
+            })
+            .unwrap_or_else(|err| panic!("failed to run event loop: {}", err.chain()));
+
+        self.state.tokio.block_on(async {
+            self.state.app.exit(&mut self.state.runtime).await;
+        });
+    }
+
+    fn register_sources(
+        handle: &LoopHandle<'static, LoopState>,
+        signals: Signals,
+        custom_receiver: EventReceiver,
+        wayland: Wayland,
+        ipc_channel: Channel<IpcResponse<DaemonResult>>,
+    ) -> Result<(), CreateEventLoopError> {
+        handle
+            .insert_source(signals, |event, &mut (), state| {
+                info!(signal = ?event.signal(), "caught stop signal");
+                state.loop_signal.stop();
+            })
+            .map_err(calloop::Error::from)?;
+
+        handle
+            .insert_source(
+                WaylandEventSource::new(wayland),
+                move |event, &mut (), state| {
+                    state.event_queue.add(event);
+                },
+            )
+            .map_err(calloop::Error::from)?;
+
+        let ipc = IpcServer::<DaemonCommand, DaemonResult>::new(ipc_channel)?;
+        handle
+            .insert_source(ipc, move |command, &mut (), state| {
+                state.handle_daemon_command(command);
+            })
+            .map_err(calloop::Error::from)?;
+
+        handle
+            .insert_source(custom_receiver, move |mut event, &mut (), state| {
+                handle_event_loop_event(&mut event, state);
+                state.event_queue.add_dyn(event);
+            })
+            .map_err(calloop::Error::from)?;
+
+        Ok(())
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum WallpaperTarget {
-    #[default]
-    ForAll,
-    ForMonitor(MonitorId),
+fn add_config_watcher_source(state: &mut LoopState) -> Result<(), calloop::Error> {
+    let token = state.loop_handle.insert_source(
+        ConfigEventSource::default(),
+        move |config, &mut (), state| {
+            let config = match config {
+                Ok(config) => config,
+                Err(error) => {
+                    error!(error = %error.diagnostic_chain(), "read config after inotify event");
+                    return;
+                }
+            };
+
+            state.event_queue.add(ConfigReloadEvent {
+                path: None,
+                sender_id: None,
+                config: Some(config),
+            });
+        },
+    )?;
+
+    state.config_watcher_token = Some(token);
+
+    Ok(())
 }
 
-pub struct EventQueue {
-    pub events: Vec<Event>,
-    pub custom_receiver: EventReceiver,
-}
+#[derive(Clone, Debug)]
+pub struct EnableConfigWatcher;
 
-impl EventQueue {
-    pub fn new() -> Result<Self, io::Error> {
-        Ok(Self {
-            events: vec![],
-            custom_receiver: EventReceiver::new()?,
-        })
-    }
+#[derive(Clone, Debug)]
+pub struct DisableConfigWatcher;
 
-    pub fn add(&mut self, event: impl IntoEvent) {
-        self.events.push(event.into_event());
-    }
+fn handle_event_loop_event(event: &mut Event, state: &mut LoopState) {
+    event.handle_sync(|_: EnableConfigWatcher| {
+        debug!("enabling config hot reload");
 
-    pub fn drain(&mut self) -> Drain<'_, Event> {
-        self.events.drain(..)
-    }
-
-    pub fn populate_events_from_custom(&mut self) -> Result<(), AbsorbError> {
-        loop {
-            match self.custom_receiver.try_recv() {
-                Ok(value) => self.events.push(value),
-                Err(AbsorbError::WouldBlock) => return Ok(()),
-                Err(error) => return Err(error),
-            }
+        if let Err(error) = add_config_watcher_source(state) {
+            error!(error = %error.chain(), "failed to enable config watcher");
         }
-    }
 
-    pub fn populate_from_cli(
-        &mut self,
-        wayland: &Wayland,
-        cli: &IpcSocket<Server, DaemonCommand>,
-    ) -> Result<(), RecvError> {
-        let command = match cli.try_recv() {
-            Ok(command) => command,
-            Err(RecvError::Empty) => return Ok(()),
-            Err(error) => return Err(error),
+        PostEventActions::empty()
+    });
+
+    event.handle_sync(|_: DisableConfigWatcher| {
+        debug!("disabling config hot reload");
+
+        let Some(token) = state.config_watcher_token.take() else {
+            error!("bug: tried to disable unexistent config watcher");
+            return PostEventActions::empty();
         };
 
-        // TODO(hack3rmann): do actions for the monitors that are not plugged yet
-        let get_target = |monitor_name: Option<&str>| {
+        state.loop_handle.remove(token);
+
+        PostEventActions::empty()
+    });
+}
+
+struct LoopState {
+    loop_signal: LoopSignal,
+    loop_handle: LoopHandle<'static, Self>,
+    app: DynApp,
+    runtime: Runtime,
+    event_queue: EventQueue,
+    tokio: AsyncRuntime,
+    is_frame_requested: bool,
+    config_watcher_token: Option<RegistrationToken>,
+}
+
+impl LoopState {
+    fn process_event_queue(&mut self) {
+        self.tokio.block_on(async {
+            self.runtime.task_pool.erase_finished().await;
+
+            for mut event in self.event_queue.drain() {
+                let actions = self.app.handle_event(&mut self.runtime, &mut event).await;
+
+                if actions.contains(PostEventActions::REDRAW) {
+                    self.is_frame_requested = true;
+                }
+            }
+        });
+    }
+
+    fn event_loop_frame(&mut self) {
+        self.process_event_queue();
+
+        if !self.is_frame_requested {
+            return;
+        }
+
+        self.runtime.timer.mark_frame_start();
+
+        let info = self.tokio.block_on(self.app.frame(&mut self.runtime));
+
+        match info {
+            Ok(FrameInfo {
+                target_frame_time: Some(target),
+            }) => {
+                let delay = self.runtime.timer.next_frame_delay(target);
+
+                self.loop_handle
+                    .insert_source(Timer::from_duration(delay), |_, &mut (), state| {
+                        state.is_frame_requested = true;
+                        TimeoutAction::Drop
+                    })
+                    .unwrap();
+            }
+            Err(FrameError::StopRequested) => {
+                self.loop_signal.stop();
+            }
+            Ok(FrameInfo {
+                target_frame_time: None,
+            })
+            | Err(FrameError::NoWorkToDo) => {
+                // go sleep mode
+            }
+        }
+
+        self.is_frame_requested = false;
+    }
+
+    fn handle_daemon_command(&mut self, command: IpcEvent<DaemonCommand>) {
+        let wayland = self.runtime.wayland.clone();
+        let get_target = move |monitor_name: Option<&str>| {
             let Some(name) = monitor_name else {
                 return Some(WallpaperTarget::ForAll);
             };
@@ -216,49 +294,98 @@ impl EventQueue {
             Some(target)
         };
 
-        match command {
-            DaemonCommand::SetVideo { path, monitor } => {
+        let event = match command.event {
+            DaemonCommand::Show { path, monitor, ty } => {
                 let Some(target) = get_target(monitor.as_deref()) else {
-                    return Ok(());
+                    return;
                 };
 
-                self.add(NewWallpaperEvent {
+                NewWallpaperEvent {
                     path,
-                    ty: WallpaperType::Video,
+                    ty,
                     target,
-                });
+                    sender_id: Some(command.sender_id),
+                }
+                .into_event()
             }
-            DaemonCommand::SetImage { path, monitor } => {
-                let Some(target) = get_target(monitor.as_deref()) else {
-                    return Ok(());
-                };
+            DaemonCommand::Preview {
+                ty,
+                path,
+                width,
+                height,
+                time,
+            } => {
+                debug!(?ty, ?path, ?width, ?height, "preview");
 
-                self.add(NewWallpaperEvent {
+                WallpaperPreviewEvent {
                     path,
-                    ty: WallpaperType::Image,
-                    target,
-                });
+                    ty,
+                    size: UVec2::new(width, height),
+                    sender_id: command.sender_id,
+                    time,
+                }
+                .into_event()
             }
-            DaemonCommand::SetScene { path, monitor } => {
+            DaemonCommand::Pause { monitor, mode } => {
                 let Some(target) = get_target(monitor.as_deref()) else {
-                    return Ok(());
+                    return;
                 };
 
-                self.add(NewWallpaperEvent {
-                    path,
-                    ty: WallpaperType::Scene,
+                WallpaperPauseEvent {
                     target,
-                });
+                    mode,
+                    sender_id: command.sender_id,
+                }
+                .into_event()
             }
-            DaemonCommand::Pause { monitor } => {
+            DaemonCommand::Current { monitor } => {
                 let Some(target) = get_target(monitor.as_deref()) else {
-                    return Ok(());
+                    return;
                 };
 
-                self.add(WallpaperPauseEvent { target });
+                CurrentWallpaperEvent {
+                    target,
+                    sender_id: command.sender_id,
+                }
+                .into_event()
             }
+            DaemonCommand::ConfigReload { path } => ConfigReloadEvent {
+                path,
+                sender_id: Some(command.sender_id),
+                config: None,
+            }
+            .into_event(),
         };
 
-        Ok(())
+        self.event_queue.add_dyn(event);
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum WallpaperTarget {
+    #[default]
+    ForAll,
+    ForMonitor(MonitorId),
+}
+
+pub struct EventQueue {
+    events: Vec<Event>,
+}
+
+impl EventQueue {
+    pub fn new() -> Result<(Self, EventReceiver), io::Error> {
+        Ok((Self { events: vec![] }, EventReceiver::new()?))
+    }
+
+    pub fn add(&mut self, event: impl IntoEvent) {
+        self.add_dyn(event.into_event());
+    }
+
+    pub fn add_dyn(&mut self, event: Event) {
+        self.events.push(event);
+    }
+
+    pub fn drain(&mut self) -> Drain<'_, Event> {
+        self.events.drain(..)
     }
 }

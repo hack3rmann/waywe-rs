@@ -33,6 +33,7 @@ use bevy_ecs::{
     prelude::*,
     system::{StaticSystemParam, SystemParamItem, lifetimeless::SRes},
 };
+use display_error_chain::ErrorChainExt;
 use glam::UVec2;
 use std::{
     ffi::CString,
@@ -43,8 +44,8 @@ use std::{
 };
 use transmute_extra::pathbuf_into_cstring;
 use video::{
-    BackendError, Codec, CodecContext, FormatContext, Frame, MediaType, Packet, RatioI32,
-    VideoPixelFormat, acceleration::VaSurfaceHandle,
+    BackendError, Codec, CodecContext, FormatContext, Frame, FrameDuration, MediaType, Packet,
+    RatioI32, VideoPixelFormat, acceleration::VaSurfaceHandle,
 };
 use waywe_runtime::shaders::ShaderDescriptor;
 use wgpu::{hal::vulkan, wgc::api};
@@ -108,6 +109,8 @@ pub struct Video {
     /// Delay accumulated between frame updates.
     pub update_delay: Duration,
     pub n_frames_since_update: usize,
+    /// Incremented on every decoded frame; used to detect when GPU export is needed.
+    pub frame_epoch: u64,
 }
 
 impl Asset for Video {}
@@ -148,6 +151,12 @@ impl Video {
         let mut codec_context =
             CodecContext::from_parameters_with_hw_accel(codec_parameters, Some(decoder))?;
 
+        // TODO(hack3rmann): add config options for that
+        //
+        // Keep the VA surface pool small: the default can retain many decoded
+        // reference frames worth of GPU memory per decoder instance.
+        codec_context.set_extra_hw_frames(2);
+        codec_context.set_thread_count(1);
         codec_context.open(decoder)?;
 
         const FRAME_DURATION_60_FPS: Duration = RatioI32::new(1, 60).unwrap().to_duration_seconds();
@@ -157,7 +166,7 @@ impl Video {
             None => FRAME_DURATION_60_FPS,
         };
 
-        Ok(Self {
+        let mut this = Self {
             format_context,
             codec_context,
             time_base,
@@ -169,18 +178,40 @@ impl Video {
             do_loop_video: true,
             update_delay: Duration::ZERO,
             n_frames_since_update: 0,
-        })
+            frame_epoch: 0,
+        };
+
+        this.next_frame();
+        this.n_frames_since_update = 1;
+
+        Ok(this)
+    }
+
+    fn frame_duration(&self) -> Duration {
+        let fallback = self.frame_time_fallback;
+
+        let Some(duration) = self
+            .frame
+            .duration_in(self.time_base)
+            .map(FrameDuration::to_duration)
+        else {
+            return fallback;
+        };
+
+        // Decoded frames can report a single time_base tick (e.g. duration=1 with
+        // stream time_base), which would advance every display frame and allocate
+        // a new GPU texture each time.
+        if duration < fallback / 2 {
+            fallback
+        } else {
+            duration
+        }
     }
 
     /// Advance this video by `delta` time
     pub fn advance_by(&mut self, delta: Duration) {
         // FIXME(hack3rmann): doesn't work for `delta > frame_time`
-        let Some(duration) = self.frame.duration_in(self.time_base) else {
-            self.next_frame();
-            self.n_frames_since_update = 0;
-            return;
-        };
-        let duration = duration.to_duration();
+        let duration = self.frame_duration();
 
         if self.update_delay + delta >= duration {
             self.next_frame();
@@ -246,6 +277,8 @@ impl Video {
                 }
             }
         }
+
+        self.frame_epoch = self.frame_epoch.wrapping_add(1);
     }
 }
 
@@ -451,6 +484,8 @@ impl RenderVideo {
                 .unwrap()
         };
 
+        let usage = wgpu::TextureUses::RESOURCE;
+
         let texture_desc = wgpu::hal::TextureDescriptor {
             label: Some("video-texture"),
             size: wgpu::Extent3d {
@@ -462,7 +497,7 @@ impl RenderVideo {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::NV12,
-            usage: wgpu::TextureUses::RESOURCE,
+            usage,
             memory_flags: wgpu::hal::MemoryFlags::PREFER_COHERENT,
             view_formats: vec![],
         };
@@ -495,6 +530,7 @@ impl RenderVideo {
                     usage: wgpu::TextureUsages::TEXTURE_BINDING,
                     view_formats: &[],
                 },
+                usage,
             )
         }
     }
@@ -508,12 +544,12 @@ impl RenderVideo {
         let surface_id = unsafe { video.frame.surface_id() };
 
         if let Err(error) = va_display.sync_surface(surface_id) {
-            panic!("failed to sync libva surface: {error:?}");
+            panic!("failed to sync libva surface: {}", error.chain());
         }
 
         let surface_handle = match va_display.export_surface_handle(surface_id) {
             Ok(handle) => handle,
-            Err(error) => panic!("failed to export surface handle: {error:?}"),
+            Err(error) => panic!("failed to export surface handle: {}", error.chain()),
         };
 
         let texture = Self::create_texture(adapter, device, surface_handle);

@@ -1,5 +1,5 @@
 use crate::api::{FfiFrameInfo, RenderSurfaceFd, Renderer};
-use abi_stable::std_types::{ROption, RString};
+use abi_stable::std_types::{RDuration, ROption, RString};
 use std::{any::Any, ffi::c_void, mem::MaybeUninit, panic, ptr};
 
 pub(crate) type RenderFn = unsafe extern "C" fn(
@@ -7,8 +7,16 @@ pub(crate) type RenderFn = unsafe extern "C" fn(
     frame_info: &mut MaybeUninit<FfiFrameInfo>,
 ) -> PanicPayload;
 
-pub(crate) type SetSurfaceFn =
-    unsafe extern "C" fn(renderer: *mut c_void, surface: RenderSurfaceFd) -> PanicPayload;
+pub(crate) type AdvanceTimeFn =
+    unsafe extern "C" fn(renderer: *mut c_void, delta: RDuration) -> PanicPayload;
+
+pub(crate) type SetSurfaceFn = unsafe extern "C" fn(
+    renderer: *mut c_void,
+    surface: RenderSurfaceFd,
+    index: u32,
+) -> PanicPayload;
+
+pub(crate) type CycleBuffersFn = unsafe extern "C" fn(renderer: *mut c_void) -> PanicPayload;
 
 pub(crate) type DropFn = unsafe extern "C" fn(renderer: *mut c_void) -> PanicPayload;
 
@@ -33,6 +41,20 @@ impl PanicPayload {
                 Self::EMPTY
             }
             Err(payload) => payload.into(),
+        }
+    }
+
+    pub fn as_str(&self) -> Option<&str> {
+        match &self.0 {
+            ROption::RSome(payload) => Some(payload.as_str()),
+            ROption::RNone => None,
+        }
+    }
+
+    pub fn into_string(self) -> Option<String> {
+        match self.0 {
+            ROption::RSome(payload) => Some(payload.into_string()),
+            ROption::RNone => None,
         }
     }
 }
@@ -83,13 +105,33 @@ pub(crate) unsafe extern "C" fn render<T: Renderer>(
     })
 }
 
-pub(crate) unsafe extern "C" fn set_surface<T: Renderer>(
+pub(crate) unsafe extern "C" fn advance_time<T: Renderer>(
     renderer: *mut c_void,
-    surface: RenderSurfaceFd,
+    delta: RDuration,
 ) -> PanicPayload {
     panic::catch_unwind(move || {
         let this = unsafe { renderer.cast::<T>().as_mut().unwrap_unchecked() };
-        this.set_surface(surface);
+        this.advance_time(delta.into());
+    })
+    .into()
+}
+
+pub(crate) unsafe extern "C" fn set_surface<T: Renderer>(
+    renderer: *mut c_void,
+    surface: RenderSurfaceFd,
+    index: u32,
+) -> PanicPayload {
+    panic::catch_unwind(move || {
+        let this = unsafe { renderer.cast::<T>().as_mut().unwrap_unchecked() };
+        this.set_surface(surface, index);
+    })
+    .into()
+}
+
+pub(crate) unsafe extern "C" fn cycle_buffers<T: Renderer>(renderer: *mut c_void) -> PanicPayload {
+    panic::catch_unwind(move || {
+        let this = unsafe { renderer.cast::<T>().as_mut().unwrap_unchecked() };
+        this.cycle_buffers();
     })
     .into()
 }

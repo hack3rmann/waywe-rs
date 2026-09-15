@@ -7,10 +7,10 @@ ECS framework for building dynamic `waywe` wallpapers. Built on
 [Bevy ECS](https://bevyengine.org/) with components and systems for images, video,
 meshes, sprites, transforms, and cursor interaction.
 
-Scene wallpapers are dynamic libraries loaded by the daemon. Your type must have
-`#[derive(Scene)]` — this generates the `waywe_ffi_create_opaque_renderer` FFI symbol
-required by the rendering API. Without it you would need to write that function
-manually (see [`waywe-rendering-api`](../waywe-rendering-api)).
+Scene wallpapers are dynamic libraries packaged as `.ww` archives and loaded by the
+daemon. Your type must have `#[derive(Scene)]` -- this generates the
+`waywe_ffi_create_opaque_renderer` FFI symbol required by the rendering API. Without it
+you would need to write that function manually (see [`waywe-rendering-api`](../waywe-rendering-api)).
 
 ## Architecture
 
@@ -81,12 +81,22 @@ fn animate(time: Res<Time>, mut query: Query<&mut Transform>) {
 }
 ```
 
-### 3. Build and run
+### 3. Add assets (optional)
+
+Put runtime files (images, videos, meshes, etc.) in an `assets/` directory next to
+`Cargo.toml`. They are bundled into the package and resolved at runtime from the
+unpacked package root via the `WorkingDir` resource and `AssetServer`.
+
+### 4. Package and run
 
 ```shell
-cargo build --release -p my-wallpaper
-waywe show target/release/libmy_wallpaper.so
+waywe package build --path path/to/my-wallpaper
+waywe show target/release/my-wallpaper.ww
 ```
+
+`waywe package build` compiles the dylib, renames it to `wallpaper.so` inside the
+archive, and includes all files from `assets/`. The output `.ww` file is written to
+`target/<profile>/`.
 
 ## Core concepts
 
@@ -128,9 +138,19 @@ Assets live in the main world's `Assets<T>` storage and are extracted to
 `RenderAssets<T>` in the render world each frame. Use `AssetHandle<T>` for
 type-safe references.
 
+Place files under `assets/` in your crate so `waywe package build` includes them.
+At runtime the daemon unpacks the `.ww` archive and sets `WorkingDir` to the package
+root; load paths relative to `assets/`:
+
 ```rust
-let handle = images.add(Image::from_path("texture.png")?);
+let mut path = PathBuf::from(world.resource::<WorkingDir>().0.as_str());
+path.push("assets");
+path.push("texture.png");
+let handle = images.add(Image::from_path(path)?);
 ```
+
+Or use `AssetServer::load("texture.png")` after adding `AssetServerPlugin`.
+It will resolve all paths relative to the asset directory automatically.
 
 ### Frame rate
 
@@ -174,13 +194,14 @@ and are compiled at build time.
 
 ## FFI integration
 
-When loaded by the daemon, `waywe_scene::ffi::create_opaque_renderer` creates a
-`SceneRenderer` that:
+When loaded from a `.ww` package, the daemon unpacks the archive and calls
+`waywe_scene::ffi::create_opaque_renderer`, which creates a `SceneRenderer` that:
 
 1. Initializes its own `Gpu` (separate `wgpu` device from the daemon)
-2. Builds your `WallpaperBuilder` implementation
-3. Imports the daemon's render surface via FD on `set_surface`
-4. Runs the dual-world frame loop and returns `FrameInfo`
+2. Sets `WorkingDir` to the unpacked package root (where `assets/` lives)
+3. Builds your `WallpaperBuilder` implementation
+4. Imports the daemon's render surface via FD on `set_surface`
+5. Runs the dual-world frame loop and returns `FrameInfo`
 
 With `#[derive(Scene)]` you do not write any FFI code yourself. For custom renderers
 that skip the ECS layer, use [`waywe-rendering-api`](../waywe-rendering-api) directly
@@ -192,8 +213,8 @@ See [`waywe-test-scene`](../examples/waywe-test-scene) for a full scene with mul
 meshes, images, videos, and animation systems.
 
 ```shell
-cargo build --release -p waywe-test-scene
-waywe show target/release/libwaywe_test_scene.so
+waywe package build --path crates/examples/waywe-test-scene
+waywe show target/release/waywe-test-scene.ww
 ```
 
 ## Custom renderers without ECS

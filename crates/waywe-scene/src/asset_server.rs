@@ -1,6 +1,6 @@
 use super::wallpaper::Wallpaper;
 use crate::{
-    PostStartup, PreUpdate,
+    PostStartup, PreUpdate, WorkingDir,
     assets::{Asset, Assets, AssetsExtract},
     plugin::Plugin,
     render::SceneExtract,
@@ -30,7 +30,9 @@ pub struct AssetServerPlugin;
 
 impl Plugin for AssetServerPlugin {
     fn build(&self, wallpaper: &mut Wallpaper) {
-        let server = AssetServer::default();
+        let working_dir = PathBuf::from(wallpaper.main.resource::<WorkingDir>().0.as_str());
+
+        let server = AssetServer::new(working_dir);
 
         let server_set = (
             AssetServerSet::ServerPrepareComplete,
@@ -138,8 +140,14 @@ impl AssetIdGenerator {
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AssetId(pub u64);
 
-#[derive(Resource, Debug, Default, Clone)]
+#[derive(Resource, Debug, Clone)]
 pub struct AssetServer(Arc<AssetServerInner>);
+
+impl AssetServer {
+    pub fn new(package_root: PathBuf) -> Self {
+        Self(Arc::new(AssetServerInner::new(package_root)))
+    }
+}
 
 impl Deref for AssetServer {
     type Target = AssetServerInner;
@@ -179,6 +187,7 @@ impl fmt::Debug for DynamicAsset {
 
 #[derive(Debug)]
 pub struct AssetServerInner {
+    package_root: PathBuf,
     id_generator: AssetIdGenerator,
     loaded_assets: Mutex<HashMap<AssetKey, DynamicAsset>>,
     jobs: Mutex<HashMap<AssetKey, JoinHandle<DynamicAsset>>>,
@@ -186,10 +195,11 @@ pub struct AssetServerInner {
 }
 
 impl AssetServerInner {
-    pub fn new() -> Self {
+    pub fn new(package_root: PathBuf) -> Self {
         let id_generator = AssetIdGenerator::new();
 
         Self {
+            package_root,
             id_generator,
             loaded_assets: Mutex::default(),
             jobs: Mutex::default(),
@@ -235,8 +245,10 @@ impl AssetServerInner {
         Assets::new(self.id_generator.clone())
     }
 
-    pub fn load<A: Asset + Load>(&self, path: impl Into<PathBuf>) -> AssetHandle<A> {
-        let path = path.into();
+    pub fn load<A: Asset + Load>(&self, asset_path: impl AsRef<Path>) -> AssetHandle<A> {
+        let mut path = self.package_root.join("assets");
+        path.push(asset_path);
+
         let id = self.id_generator.next_id();
 
         {
@@ -276,12 +288,6 @@ impl AssetServerInner {
             let (id, asset) = dyn_asset.downcast_into::<A>().unwrap();
             assets.insert(id, asset);
         }
-    }
-}
-
-impl Default for AssetServerInner {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

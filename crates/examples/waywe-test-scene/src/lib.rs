@@ -6,11 +6,11 @@
 //!
 //! # Usage
 //!
-//! Build and load as a scene wallpaper:
+//! Package and load as a scene wallpaper:
 //!
 //! ```shell
-//! cargo build --release -p waywe-test-scene
-//! waywe show target/release/libwaywe_test_scene.so
+//! waywe package build --path crates/examples/waywe-test-scene
+//! waywe show target/release/waywe-test-scene.ww
 //! ```
 //!
 //! The scene includes:
@@ -21,15 +21,15 @@
 
 use bevy_ecs::prelude::*;
 use smallvec::{SmallVec, smallvec};
-use std::time::Duration;
-use waywe_scene::prelude::*;
+use std::{path::PathBuf, time::Duration};
+use waywe_scene::{WorkingDir, prelude::*};
 
 mod assets {
-    pub const IMAGE: &str = env!("WAYWE_TEST_SCENE_IMAGE");
-    pub const IMAGE2: &str = env!("WAYWE_TEST_SCENE_IMAGE2");
-    pub const VIDEO: &str = env!("WAYWE_TEST_SCENE_VIDEO");
-    pub const VIDEO2: &str = env!("WAYWE_TEST_SCENE_VIDEO2");
-    pub const VIDEO3: &str = env!("WAYWE_TEST_SCENE_VIDEO3");
+    pub const IMAGE: &str = "test-image.jpg";
+    pub const IMAGE2: &str = "test-image2.jpg";
+    pub const VIDEO: &str = "test-video.mp4";
+    pub const VIDEO2: &str = "test-video2.mp4";
+    pub const VIDEO3: &str = "test-video3.mp4";
 }
 
 /// A test wallpaper with multiple meshes and animations.
@@ -99,22 +99,25 @@ impl FromWorld for TestAssets {
     /// This creates meshes, loads images and videos, and sets up materials
     /// for use in the test wallpaper.
     fn from_world(world: &mut World) -> Self {
+        let mut assets_path = PathBuf::from(world.resource::<WorkingDir>().0.as_str());
+        assets_path.push("assets");
+
         let mut meshes = world.resource_mut::<Assets<Mesh>>();
         let quad_mesh = meshes.add(Mesh::rect(Vec2::ONE));
 
         let mut videos = world.resource_mut::<Assets<Video>>();
 
-        let video1 = Video::new(assets::VIDEO).unwrap();
+        let video1 = Video::new(assets_path.join(assets::VIDEO)).unwrap();
         let video1_aspect_ratio = video1.frame_aspect_ratio();
         let video1_handle = videos.add(video1);
 
-        let video2 = Video::new(assets::VIDEO2).unwrap();
+        let video2 = Video::new(assets_path.join(assets::VIDEO2)).unwrap();
         let video2_aspect_ratio = video2.frame_aspect_ratio();
         let video2_handle = videos.add(video2);
 
         let mut images = world.resource_mut::<Assets<Image>>();
 
-        let image = ::image::ImageReader::open(assets::IMAGE)
+        let image = ::image::ImageReader::open(assets_path.join(assets::IMAGE))
             .unwrap()
             .decode()
             .unwrap()

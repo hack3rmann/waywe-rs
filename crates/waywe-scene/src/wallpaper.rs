@@ -15,17 +15,16 @@
 
 use crate::{
     DummyWorld, FrameRateSetting, MainWorld, Monitor, PostExtract, PostStartup, PostUpdate,
-    PreUpdate, Startup, Time, Update, WallpaperConfig, WallpaperFlags,
+    PreUpdate, Startup, Time, Update, WallpaperConfig, WallpaperFlags, WorkingDir,
     gpu::Gpu,
     guess_framerate,
     mesh::{CommandEncoder, SurfaceView},
     plugin::PluginGroup,
     render::{EntityMap, Render, RenderGpu, RenderSet, SceneExtract},
     subapp::EcsApp,
-    time::update_time,
 };
 use bevy_ecs::prelude::*;
-use std::{mem, sync::Arc, thread};
+use std::{mem, sync::Arc, thread, time::Duration};
 use waywe_runtime::{frame::FrameInfo, wayland::MonitorId};
 
 /// Main wallpaper controller.
@@ -57,7 +56,6 @@ impl Wallpaper {
             )
                 .chain(),
         );
-        render_schedule.add_systems(update_time.in_set(RenderSet::Update));
 
         render
             .init_resource::<Time>()
@@ -72,22 +70,21 @@ impl Wallpaper {
     }
 
     /// Create the main world with appropriate systems and resources.
-    pub fn make_main(monitor: Monitor, config: WallpaperConfig) -> EcsApp {
+    pub fn make_main(monitor: Monitor, config: WallpaperConfig, working_dir: String) -> EcsApp {
         let mut main = EcsApp::default();
         let mut flags = WallpaperFlags::empty();
 
-        if !matches!(config.framerate, FrameRateSetting::NoUpdate) {
-            let mut update = Schedule::new(Update);
-            update.add_systems(update_time);
-            main.add_schedule(update)
+        if config.framerate == FrameRateSetting::NoUpdate {
+            flags |= WallpaperFlags::NO_UPDATE;
+        } else {
+            main.add_schedule(Schedule::new(Update))
                 .add_schedule(Schedule::new(PreUpdate))
                 .add_schedule(Schedule::new(PostUpdate));
-        } else {
-            flags |= WallpaperFlags::NO_UPDATE;
         }
 
         main.insert_resource(config.framerate)
             .insert_resource(monitor)
+            .insert_resource(WorkingDir(working_dir))
             .insert_resource(flags)
             .init_resource::<Time>()
             .init_resource::<DummyWorld>()
@@ -99,11 +96,11 @@ impl Wallpaper {
     }
 
     /// Create a new wallpaper for a specific monitor.
-    pub fn new(gpu: Arc<Gpu>, monitor: Monitor) -> Self {
+    pub fn new(gpu: Arc<Gpu>, monitor: Monitor, working_dir: String) -> Self {
         Self {
             render: Self::make_render(gpu, monitor),
             // TODO(hack3rmann): allow custom config
-            main: Self::make_main(monitor, WallpaperConfig::default()),
+            main: Self::make_main(monitor, WallpaperConfig::default(), working_dir),
         }
     }
 
@@ -132,6 +129,12 @@ impl Wallpaper {
     pub fn add_plugins(&mut self, plugins: impl PluginGroup) -> &mut Self {
         plugins.add_to_app(self);
         self
+    }
+
+    /// Update time in both worlds
+    pub fn advance_time(&mut self, delta: Duration) {
+        self.main.resource_mut::<Time>().update(delta);
+        self.render.resource_mut::<Time>().update(delta);
     }
 }
 

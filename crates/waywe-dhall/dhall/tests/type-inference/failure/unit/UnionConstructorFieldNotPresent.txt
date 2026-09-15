@@ -1,0 +1,1 @@
+TypeError { message: Custom("error: MissingUnionField\n --> <current file>:1:1\n  |\n1 | < x : Bool >.y\n  | ^^^^^^^^^^^^^^ MissingUnionField\n  |") }

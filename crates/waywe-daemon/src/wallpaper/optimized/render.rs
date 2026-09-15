@@ -1,7 +1,12 @@
-use crate::wallpaper::Wallpaper;
+use crate::wallpaper::{
+    Wallpaper,
+    package_registry::{PackageRegistry, WallpaperPackage},
+};
+use abi_stable::std_types::RString;
 use ash::vk;
 use libloading::Library;
-use std::{mem::MaybeUninit, path::Path};
+use std::{array, mem::MaybeUninit, path::PathBuf, sync::Arc, time::Duration};
+use thiserror::Error;
 use waywe_rendering_api::{
     FfiTextureDescriptor,
     api::{
@@ -14,47 +19,83 @@ use waywe_rendering_api::{
 use waywe_runtime::{WallpaperConfig, frame::FrameInfo, gpu::Wgpu};
 use wgpu::wgc::api::Vulkan;
 
+pub const N_RENDER_SURFACES: usize = 2;
+
 pub struct RenderWallpaper {
-    // NOTE(hack3rmann): `renderer` must be dropped before `_lib`
+    // NOTE(hack3rmann): `renderer` must be dropped before `_lib` and `package`
     renderer: OpaqueRenderer,
     _lib: Library,
-    surface: wgpu::Texture,
+    surfaces: [wgpu::Texture; N_RENDER_SURFACES],
     config: WallpaperConfig,
+    _package: Arc<WallpaperPackage>,
 }
 
 unsafe impl Send for RenderWallpaper {}
 unsafe impl Sync for RenderWallpaper {}
 
-impl RenderWallpaper {
-    pub fn load(path: impl AsRef<Path>, gpu: &Wgpu, config: WallpaperConfig) -> Self {
-        let lib = unsafe { Library::new(path.as_ref()) }.unwrap();
+#[derive(Debug, Error)]
+pub enum RenderWallpaperLoadError {
+    #[error(transparent)]
+    Dll(#[from] libloading::Error),
+    #[error("create_opaque_renderer panicked: {0}")]
+    CreateOpaqueRendererPanicked(String),
+}
 
-        let create_opaque_renderer = unsafe {
-            lib.get::<CreateOpaqueRendererFn>(CREATE_OPAQUE_RENDERER_NAME)
-                .unwrap()
-        };
+impl RenderWallpaper {
+    pub fn load(
+        path: impl Into<PathBuf>,
+        gpu: &Wgpu,
+        config: WallpaperConfig,
+        packages: PackageRegistry,
+    ) -> Result<Self, RenderWallpaperLoadError> {
+        let package = packages.inflate(path);
+
+        let lib = unsafe { Library::new(&package.wallpaper_path)? };
+
+        let create_opaque_renderer =
+            unsafe { lib.get::<CreateOpaqueRendererFn>(CREATE_OPAQUE_RENDERER_NAME)? };
 
         let mut renderer = MaybeUninit::uninit();
 
-        let panic = create_opaque_renderer(&OpaqueRendererDesc { config }, &mut renderer);
-        panic.propagate_if_any();
+        let panic = create_opaque_renderer(
+            &OpaqueRendererDesc {
+                config,
+                working_directory: RString::from(package.package_path.to_string_lossy().as_ref()),
+                surface_buffer_count: 1,
+            },
+            &mut renderer,
+        );
+
+        if let Some(payload) = panic.into_string() {
+            return Err(RenderWallpaperLoadError::CreateOpaqueRendererPanicked(
+                payload,
+            ));
+        }
 
         let mut renderer = unsafe { renderer.assume_init() };
 
-        let surface_desc = Self::surface_desc(config);
-        let surface = Self::create_texture(&gpu.device, config);
+        let surfaces = array::from_fn(|i| {
+            let surface_desc = Self::surface_desc(config);
+            let surface = Self::create_texture(&gpu.device, config);
 
-        renderer.set_surface(RenderSurfaceFd {
-            fd: unsafe { texture_export_fd(&gpu.device, &surface) },
-            desc: FfiTextureDescriptor::from(surface_desc),
+            renderer.set_surface(
+                RenderSurfaceFd {
+                    fd: unsafe { texture_export_fd(&gpu.device, &surface) },
+                    desc: FfiTextureDescriptor::from(surface_desc),
+                },
+                i as u32,
+            );
+
+            surface
         });
 
-        Self {
+        Ok(Self {
             renderer,
             _lib: lib,
-            surface,
+            surfaces,
             config,
-        }
+            _package: package,
+        })
     }
 
     fn surface_desc(config: WallpaperConfig) -> wgpu::TextureDescriptor<'static> {
@@ -152,6 +193,8 @@ impl RenderWallpaper {
         let memory = unsafe { raw_device.allocate_memory(&alloc_info, None) }.unwrap();
         unsafe { raw_device.bind_image_memory(vk_image, memory, 0) }.unwrap();
 
+        let usage = wgpu::TextureUses::COLOR_TARGET | wgpu::TextureUses::COPY_SRC;
+
         let hal_desc = wgpu::hal::TextureDescriptor {
             label: wgpu_desc.label,
             size: wgpu_desc.size,
@@ -159,7 +202,7 @@ impl RenderWallpaper {
             sample_count: 1,
             dimension: wgpu_desc.dimension,
             format: wgpu_desc.format,
-            usage: wgpu::TextureUses::COLOR_TARGET | wgpu::TextureUses::COPY_SRC,
+            usage,
             memory_flags: wgpu::hal::MemoryFlags::empty(),
             view_formats: vec![],
         };
@@ -173,7 +216,13 @@ impl RenderWallpaper {
             )
         };
 
-        unsafe { device.create_texture_from_hal::<Vulkan>(hal_texture, &wgpu_desc) }
+        unsafe {
+            device.create_texture_from_hal::<Vulkan>(
+                hal_texture,
+                &wgpu_desc,
+                wgpu::TextureUses::UNINITIALIZED,
+            )
+        }
     }
 }
 
@@ -183,12 +232,19 @@ impl Wallpaper for RenderWallpaper {
             return;
         }
 
-        let desc = Self::surface_desc(config);
-        self.surface = Self::create_texture(&gpu.device, config);
+        self.surfaces = array::from_fn(|i| {
+            let surface_desc = Self::surface_desc(config);
+            let surface = Self::create_texture(&gpu.device, config);
 
-        self.renderer.set_surface(RenderSurfaceFd {
-            fd: unsafe { texture_export_fd(&gpu.device, &self.surface) },
-            desc: FfiTextureDescriptor::from(desc),
+            self.renderer.set_surface(
+                RenderSurfaceFd {
+                    fd: unsafe { texture_export_fd(&gpu.device, &surface) },
+                    desc: FfiTextureDescriptor::from(surface_desc),
+                },
+                i as u32,
+            );
+
+            surface
         });
 
         self.config = config;
@@ -200,24 +256,21 @@ impl Wallpaper for RenderWallpaper {
         surface: &wgpu::TextureView,
         encoder: &mut wgpu::CommandEncoder,
     ) -> FrameInfo {
-        let dst_size = surface.texture().size();
-        let src_size = self.surface.size();
-
-        // NOTE(hack3rmann): Swapchain and export surface can be out of sync for a frame during resize.
-        let min_size = wgpu::Extent3d {
-            width: src_size.width.min(dst_size.width),
-            height: src_size.height.min(dst_size.height),
-            depth_or_array_layers: 1,
-        };
-
         let info = self.renderer.render();
 
         encoder.copy_texture_to_texture(
-            self.surface.as_image_copy(),
+            self.surfaces[0].as_image_copy(),
             surface.texture().as_image_copy(),
-            min_size,
+            surface.texture().size(),
         );
 
+        self.renderer.cycle_buffers();
+        self.surfaces.rotate_left(1);
+
         info
+    }
+
+    fn advance_time(&mut self, delta: Duration) {
+        self.renderer.advance_time(delta);
     }
 }

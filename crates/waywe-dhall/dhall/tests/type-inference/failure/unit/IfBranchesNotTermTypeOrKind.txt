@@ -1,0 +1,1 @@
+TypeError { message: Custom("error: IfBranchMustBeTermTypeOrKind\n --> <current file>:1:1\n  |\n1 | if True then Kind else Kind\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^ IfBranchMustBeTermTypeOrKind\n  |") }

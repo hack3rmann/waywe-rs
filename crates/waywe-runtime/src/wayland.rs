@@ -1,25 +1,28 @@
-use crate::event::EventEmitter;
+use calloop::{
+    EventIterator, EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory,
+};
 use glam::UVec2;
 use raw_window_handle::{
     HasDisplayHandle as _, RawDisplayHandle, RawWindowHandle, WaylandWindowHandle,
 };
+use rustix::io::Errno;
+use smallstr::SmallString;
 use std::{
     collections::{BTreeMap, HashMap},
     ffi::CStr,
+    ops::Deref,
     pin::Pin,
-    sync::{
-        Arc, Mutex, RwLock,
-        atomic::{AtomicBool, Ordering::*},
-    },
+    sync::{Arc, Mutex, RwLock},
 };
+use thiserror::Error;
 use wayland_client::{
     interface::{
-        WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlOutputNameEvent,
-        WlPointerEvent, WlRegionAddRequest, WlRegionDestroyRequest, WlRegistryEvent,
-        WlRegistryGlobalEvent, WlRegistryGlobalRemoveEvent, WlSeatCapabilitiesEvent,
-        WlSeatCapability, WlSeatGetPointerRequest, WlSurfaceCommitRequest,
-        WlSurfaceSetBufferScaleRequest, WlSurfaceSetOpaqueRegionRequest,
-        ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellLayer,
+        WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlOutputMode,
+        WlOutputModeEvent, WlOutputNameEvent, WlPointerEvent, WlRegionAddRequest,
+        WlRegionDestroyRequest, WlRegistryEvent, WlRegistryGlobalEvent,
+        WlRegistryGlobalRemoveEvent, WlSeatCapabilitiesEvent, WlSeatCapability,
+        WlSeatGetPointerRequest, WlSurfaceCommitRequest, WlSurfaceSetBufferScaleRequest,
+        WlSurfaceSetOpaqueRegionRequest, ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellLayer,
         ZwlrLayerSurfaceAckConfigureRequest, ZwlrLayerSurfaceAnchor,
         ZwlrLayerSurfaceConfigureEvent, ZwlrLayerSurfaceKeyboardInteractivity,
         ZwlrLayerSurfaceSetAnchorRequest, ZwlrLayerSurfaceSetExclusiveZoneRequest,
@@ -41,19 +44,20 @@ use wayland_client::{
 #[derive(Clone, Debug, PartialEq)]
 pub enum WaylandEvent {
     ResizeRequested { monitor_id: MonitorId, size: UVec2 },
-    MonitorPlugged { id: MonitorId },
-    MonitorUnplugged { id: MonitorId, name: Arc<str> },
+    MonitorPlugged { id: MonitorId, name: MonitorName },
+    MonitorUnplugged { id: MonitorId, name: MonitorName },
     // TODO(hack3rmann): implement approach from <https://github.com/cjacker/wl-find-cursor/blob/main/main.c>
     CursorMoved { position: UVec2 },
 }
 
 pub type MonitorId = WlObjectId;
 pub type MonitorMap<T> = BTreeMap<MonitorId, T>;
+pub type MonitorName = SmallString<[u8; 32]>;
 
 #[derive(Default, Debug)]
 pub struct MonitorInfo {
-    pub size: Option<UVec2>,
-    pub name: Option<Arc<str>>,
+    pub size: UVec2,
+    pub name: MonitorName,
     pub output: WlObjectHandle<Output>,
     pub surface: WlObjectHandle<Surface>,
     pub layer_surface: WlObjectHandle<LayerSurface>,
@@ -65,37 +69,23 @@ pub struct Globals {
     pub layer_shell: WlObjectHandle<LayerShell>,
 }
 
+#[derive(Default)]
 pub struct ClientState {
-    pub events: Mutex<EventEmitter>,
+    pub stored_events: Mutex<Vec<WaylandEvent>>,
     pub monitors: RwLock<MonitorMap<MonitorInfo>>,
-    pub monitor_names: RwLock<HashMap<Arc<str>, MonitorId>>,
+    pub monitor_names: RwLock<HashMap<MonitorName, MonitorId>>,
     pub globals: Option<Globals>,
-    pub resize_requested: AtomicBool,
 }
 
 impl ClientState {
-    pub fn new(events: EventEmitter) -> Self {
-        Self {
-            events: Mutex::new(events),
-            monitors: RwLock::new(MonitorMap::default()),
-            monitor_names: RwLock::new(HashMap::default()),
-            globals: None,
-            resize_requested: AtomicBool::new(false),
-        }
-    }
-
     pub fn monitor_size(&self, id: MonitorId) -> Option<UVec2> {
-        self.monitors
-            .read()
-            .unwrap()
-            .get(&id)
-            .and_then(|info| info.size)
+        let monitors = self.monitors.read().unwrap();
+        monitors.get(&id).map(|info| info.size)
     }
 
-    pub fn monitor_name(&self, id: MonitorId) -> Option<Arc<str>> {
+    pub fn monitor_name(&self, id: MonitorId) -> Option<MonitorName> {
         let monitors = self.monitors.read().unwrap();
-        let monitor = monitors.get(&id).unwrap();
-        Some(Arc::clone(monitor.name.as_ref()?))
+        Some(monitors.get(&id)?.name.clone())
     }
 
     pub fn monitor_id(&self, name: &str) -> Option<MonitorId> {
@@ -196,8 +186,8 @@ impl Dispatch for Pointer {
             motion.surface_y.to_int().cast_unsigned(),
         );
 
-        let mut events = state.events.lock().unwrap();
-        events.emit(WaylandEvent::CursorMoved { position }).unwrap();
+        let mut events = state.stored_events.lock().unwrap();
+        events.push(WaylandEvent::CursorMoved { position });
     }
 }
 
@@ -226,6 +216,7 @@ impl Dispatch for Surface {
 }
 
 pub struct LayerSurface {
+    pub is_initial_configure_done: bool,
     pub monitor_id: MonitorId,
     pub handle: WlObjectHandle<Self>,
     pub surface: WlObjectHandle<Surface>,
@@ -256,42 +247,25 @@ impl Dispatch for LayerSurface {
 
         let size = UVec2::new(width, height);
 
-        state.resize_requested.store(
-            state.monitor_size(self.monitor_id) != Some(UVec2::ZERO)
-                && state.monitor_size(self.monitor_id) != Some(size),
-            Release,
-        );
-
         {
             let mut monitors = state.monitors.write().unwrap();
+            let mut events = state.stored_events.lock().unwrap();
             let monitor = monitors.get_mut(&self.monitor_id).unwrap();
 
-            // this is resize if and only if monitor is ininialized
-            // and size is changed indeed
-            match monitor.size {
-                Some(prev_size) if prev_size != size => {
-                    state
-                        .events
-                        .lock()
-                        .unwrap()
-                        .emit(WaylandEvent::ResizeRequested {
-                            monitor_id: self.monitor_id,
-                            size,
-                        })
-                        .unwrap();
-                }
-                Some(_same_size) => {}
-                None => {
-                    let mut events = state.events.lock().unwrap();
-                    events
-                        .emit(WaylandEvent::MonitorPlugged {
-                            id: self.monitor_id,
-                        })
-                        .unwrap();
-                }
-            }
+            let is_resized = monitor.size != size;
+            monitor.size = size;
 
-            monitor.size = Some(size);
+            if !self.is_initial_configure_done {
+                events.push(WaylandEvent::MonitorPlugged {
+                    id: self.monitor_id,
+                    name: monitor.name.clone(),
+                });
+            } else if is_resized {
+                events.push(WaylandEvent::ResizeRequested {
+                    monitor_id: self.monitor_id,
+                    size,
+                });
+            }
         }
 
         let mut buf = WlStackMessageBuffer::new();
@@ -316,8 +290,8 @@ impl Dispatch for LayerSurface {
             WlRegionAddRequest {
                 x: 0,
                 y: 0,
-                width: width.cast_signed(),
-                height: height.cast_signed(),
+                width: size.x.cast_signed(),
+                height: size.y.cast_signed(),
             },
         );
 
@@ -335,6 +309,8 @@ impl Dispatch for LayerSurface {
 
         self.surface
             .request(&mut buf, &storage.as_ref(), WlSurfaceCommitRequest);
+
+        self.is_initial_configure_done = true;
     }
 }
 
@@ -357,6 +333,146 @@ impl HasObjectType for Region {
 
 pub struct Output {
     pub monitor_id: MonitorId,
+    pub output_id: WlObjectId,
+    pub size: Option<UVec2>,
+    pub name: Option<MonitorName>,
+    pub is_init_done: bool,
+}
+
+impl Output {
+    pub const fn new(monitor_id: MonitorId, output_id: WlObjectId) -> Self {
+        Self {
+            monitor_id,
+            output_id,
+            size: None,
+            name: None,
+            is_init_done: false,
+        }
+    }
+
+    pub fn handle_name(&mut self, event: WlOutputNameEvent) {
+        // Safety: name is an ASCII string which is a valid utf-8 string
+        let name = unsafe { str::from_utf8_unchecked(event.name.to_bytes()) };
+        self.name = Some(MonitorName::from_str(name));
+    }
+
+    pub fn handle_mode(&mut self, event: WlOutputModeEvent) {
+        if !event.flags.contains(WlOutputMode::CURRENT) {
+            return;
+        }
+
+        self.size = Some(UVec2::new(
+            u32::try_from(event.width).unwrap(),
+            u32::try_from(event.height).unwrap(),
+        ));
+    }
+
+    pub fn try_init_info(
+        &mut self,
+        state: &ClientState,
+        storage: &mut WlObjectStorage<ClientState>,
+    ) {
+        if self.is_init_done {
+            return;
+        }
+
+        let Some(globals) = state.globals else { return };
+        let Some(size) = self.size else { return };
+        let Some(name) = self.name.clone() else {
+            return;
+        };
+
+        {
+            let mut names = state.monitor_names.write().unwrap();
+            names.insert(name.clone(), self.monitor_id);
+        }
+
+        let mut buf = WlStackMessageBuffer::new();
+        let mut storage = Pin::new(storage);
+
+        let surface: WlObjectHandle<Surface> = globals.compositor.create_object(
+            &mut buf,
+            storage.as_mut(),
+            WlCompositorCreateSurfaceRequest,
+        );
+
+        let monitor_id = self.monitor_id;
+        let layer_surface: WlObjectHandle<LayerSurface> = globals.layer_shell.create_object_with(
+            &mut buf,
+            storage.as_mut(),
+            ZwlrLayerShellGetLayerSurfaceRequest {
+                surface: surface.id(),
+                output: Some(self.output_id),
+                layer: ZwlrLayerShellLayer::Background,
+                namespace: WLR_NAMESPACE,
+            },
+            move |proxy| LayerSurface {
+                is_initial_configure_done: false,
+                monitor_id,
+                handle: WlObjectHandle::new(proxy.id()),
+                surface,
+                compositor: globals.compositor,
+            },
+        );
+
+        layer_surface.request(
+            &mut buf,
+            &storage,
+            ZwlrLayerSurfaceSetAnchorRequest {
+                anchor: ZwlrLayerSurfaceAnchor::all(),
+            },
+        );
+
+        layer_surface.request(
+            &mut buf,
+            &storage,
+            ZwlrLayerSurfaceSetExclusiveZoneRequest { zone: -1 },
+        );
+
+        layer_surface.request(
+            &mut buf,
+            &storage,
+            ZwlrLayerSurfaceSetMarginRequest {
+                top: 0,
+                right: 0,
+                bottom: 0,
+                left: 0,
+            },
+        );
+
+        layer_surface.request(
+            &mut buf,
+            &storage,
+            ZwlrLayerSurfaceSetKeyboardInteractivityRequest {
+                keyboard_interactivity: ZwlrLayerSurfaceKeyboardInteractivity::None,
+            },
+        );
+
+        surface.request(
+            &mut buf,
+            &storage,
+            WlSurfaceSetBufferScaleRequest { scale: 1 },
+        );
+
+        surface.request(&mut buf, &storage, WlSurfaceCommitRequest);
+
+        {
+            let mut monitors = state.monitors.write().unwrap();
+
+            monitors.insert(
+                self.monitor_id,
+                MonitorInfo {
+                    output: WlObjectHandle::new(self.output_id),
+                    surface,
+                    layer_surface,
+                    size,
+                    name,
+                },
+            );
+        }
+
+        self.is_init_done = true;
+    }
 }
 
 impl HasObjectType for Output {
@@ -369,125 +485,38 @@ impl Dispatch for Output {
     fn dispatch(
         &mut self,
         state: &Self::State,
-        _storage: &mut WlObjectStorage<Self::State>,
+        storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
-        let Some(WlOutputNameEvent { name }) = message.as_event() else {
-            return;
-        };
+        if let Some(event) = message.as_event::<WlOutputNameEvent>() {
+            self.handle_name(event);
+        } else if let Some(event) = message.as_event::<WlOutputModeEvent>() {
+            self.handle_mode(event);
+        }
 
-        // Safety: name is an ASCII string which is a valid utf-8 string
-        let name = Arc::from(unsafe { str::from_utf8_unchecked(name.to_bytes()) });
-
-        let mut monitors = state.monitors.write().unwrap();
-        let monitor = monitors.get_mut(&self.monitor_id).unwrap();
-        monitor.name = Some(Arc::clone(&name));
-
-        let mut names = state.monitor_names.write().unwrap();
-        names.insert(name, self.monitor_id);
+        self.try_init_info(state, storage);
     }
 }
-
 pub fn handle_output(
     registry: WlObjectHandle<WlRegistry<ClientState>>,
-    state: &ClientState,
-    storage: Pin<&mut WlObjectStorage<ClientState>>,
+    mut storage: Pin<&mut WlObjectStorage<ClientState>>,
     monitor_id: WlObjectId,
 ) {
-    let Some(globals) = state.globals else {
-        return;
-    };
-
     let mut buf = WlStackMessageBuffer::new();
-    let mut storage = Pin::new(storage);
 
-    let output = registry
-        .bind_from_fn_by_id(&mut buf, storage.as_mut(), monitor_id, |_, _, _| Output {
+    registry
+        .bind_from_fn_by_id(
+            &mut buf,
+            storage.as_mut(),
             monitor_id,
-        })
+            move |_, _, proxy| Output::new(monitor_id, proxy.id()),
+        )
         .unwrap();
-
-    let surface: WlObjectHandle<Surface> = globals.compositor.create_object(
-        &mut buf,
-        storage.as_mut(),
-        WlCompositorCreateSurfaceRequest,
-    );
-
-    let layer_surface: WlObjectHandle<LayerSurface> = globals.layer_shell.create_object_with(
-        &mut buf,
-        storage.as_mut(),
-        ZwlrLayerShellGetLayerSurfaceRequest {
-            surface: surface.id(),
-            output: Some(output.id()),
-            layer: ZwlrLayerShellLayer::Background,
-            namespace: WLR_NAMESPACE,
-        },
-        move |proxy| LayerSurface {
-            monitor_id,
-            handle: WlObjectHandle::new(proxy.id()),
-            surface,
-            compositor: globals.compositor,
-        },
-    );
-
-    layer_surface.request(
-        &mut buf,
-        &storage,
-        ZwlrLayerSurfaceSetAnchorRequest {
-            anchor: ZwlrLayerSurfaceAnchor::all(),
-        },
-    );
-
-    layer_surface.request(
-        &mut buf,
-        &storage,
-        ZwlrLayerSurfaceSetExclusiveZoneRequest { zone: -1 },
-    );
-
-    layer_surface.request(
-        &mut buf,
-        &storage,
-        ZwlrLayerSurfaceSetMarginRequest {
-            top: 0,
-            right: 0,
-            bottom: 0,
-            left: 0,
-        },
-    );
-
-    layer_surface.request(
-        &mut buf,
-        &storage,
-        ZwlrLayerSurfaceSetKeyboardInteractivityRequest {
-            keyboard_interactivity: ZwlrLayerSurfaceKeyboardInteractivity::None,
-        },
-    );
-
-    surface.request(
-        &mut buf,
-        &storage,
-        WlSurfaceSetBufferScaleRequest { scale: 1 },
-    );
-
-    surface.request(&mut buf, &storage, WlSurfaceCommitRequest);
-
-    let mut monitors = state.monitors.write().unwrap();
-
-    monitors.insert(
-        monitor_id,
-        MonitorInfo {
-            output,
-            surface,
-            layer_surface,
-            size: None,
-            name: None,
-        },
-    );
 }
 
 pub(crate) fn handle_global(
     registry: &mut WlRegistry<ClientState>,
-    state: &ClientState,
+    _: &ClientState,
     storage: &mut WlObjectStorage<ClientState>,
     global: WlRegistryGlobalEvent<'_>,
 ) {
@@ -497,7 +526,7 @@ pub(crate) fn handle_global(
 
     let monitor_id = unsafe { WlObjectId::new_unchecked(global.name) };
 
-    handle_output(registry.handle(), state, Pin::new(storage), monitor_id);
+    handle_output(registry.handle(), Pin::new(storage), monitor_id);
 }
 
 pub(crate) fn handle_global_remove(
@@ -519,9 +548,9 @@ pub(crate) fn handle_global_remove(
         return;
     };
 
-    if let Some(name) = info.name.as_ref().cloned() {
+    {
         let mut names = state.monitor_names.write().unwrap();
-        _ = names.remove(&name);
+        _ = names.remove(&info.name);
     }
 
     storage.release(info.output).unwrap();
@@ -529,13 +558,11 @@ pub(crate) fn handle_global_remove(
     storage.release(info.layer_surface).unwrap();
 
     {
-        let mut events = state.events.lock().unwrap();
-        events
-            .emit(WaylandEvent::MonitorUnplugged {
-                id: monitor_id,
-                name: info.name.unwrap(),
-            })
-            .unwrap();
+        let mut events = state.stored_events.lock().unwrap();
+        events.push(WaylandEvent::MonitorUnplugged {
+            id: monitor_id,
+            name: info.name,
+        });
     }
 }
 
@@ -573,14 +600,14 @@ pub struct MonitorSurface {
     pub layer_surface: WlObjectHandle<LayerSurface>,
 }
 
-pub struct Wayland {
+pub struct WaylandInner {
     pub client_state: Pin<Box<ClientState>>,
     pub main_queue: RwLock<Pin<Box<WlEventQueue<ClientState>>>>,
     pub display: WlDisplay<ClientState>,
     pub registry: WlObjectHandle<WlRegistry<ClientState>>,
 }
 
-impl Wayland {
+impl WaylandInner {
     pub fn display_roundtrip(&self) {
         let mut main_queue = self.main_queue.write().unwrap();
 
@@ -588,8 +615,45 @@ impl Wayland {
             .roundtrip(main_queue.as_mut(), self.client_state.as_ref());
     }
 
-    pub fn new(events: EventEmitter) -> Self {
-        let mut client_state = Box::pin(ClientState::new(events));
+    pub fn dispatch_pending(&self) -> usize {
+        let mut total_dispatched = 0;
+
+        let mut main_queue = self.main_queue.write().unwrap();
+
+        loop {
+            let n_dispatched = self
+                .display
+                .dispatch_pending(main_queue.as_mut(), self.client_state.as_ref());
+
+            if n_dispatched == 0 {
+                break;
+            }
+
+            total_dispatched += n_dispatched;
+        }
+
+        total_dispatched
+    }
+
+    #[track_caller]
+    pub fn prepare_poll(&self) -> usize {
+        let mut main_queue = self.main_queue.write().unwrap();
+
+        self.display
+            .prepare_poll(main_queue.as_mut(), self.client_state.as_ref())
+            .expect("failed to prepare poll")
+    }
+
+    pub fn unprepare_poll(&self) {
+        self.display.cancel_read();
+    }
+
+    pub fn flush(&self) -> Result<usize, Errno> {
+        self.display.flush()
+    }
+
+    pub fn new() -> Self {
+        let mut client_state = Box::pin(ClientState::default());
         let display = WlDisplay::connect(client_state.as_ref()).unwrap();
         let mut queue = Box::pin(display.take_main_queue().unwrap());
 
@@ -620,15 +684,11 @@ impl Wayland {
             layer_shell,
         });
 
-        let n_outputs = storage.object_data(registry).count_of(WlObjectType::Output);
+        const N_INIT_ROUNDTRIPS: usize = 2;
 
-        for output_index in 0..n_outputs {
-            let monitor_id = storage
-                .object_data(registry)
-                .name_of_index(WlObjectType::Output, output_index)
-                .unwrap();
-
-            handle_output(registry, &client_state, storage.as_mut(), monitor_id);
+        // NOTE(hack3rmann): try to do the intial setup before anything else
+        for _ in 0..N_INIT_ROUNDTRIPS {
+            display.roundtrip(queue.as_mut(), client_state.as_ref());
         }
 
         Self {
@@ -641,5 +701,142 @@ impl Wayland {
 
     pub fn raw_display_handle(&self) -> RawDisplayHandle {
         self.display.display_handle().unwrap().as_raw()
+    }
+
+    pub fn drain_stored_events(&self, mut handle: impl FnMut(WaylandEvent)) {
+        let mut events = self.client_state.stored_events.lock().unwrap();
+
+        for event in events.drain(..) {
+            handle(event);
+        }
+    }
+
+    pub fn process_events(&self, mut handle: impl FnMut(WaylandEvent)) {
+        self.drain_stored_events(&mut handle);
+    }
+}
+
+impl Default for WaylandInner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct Wayland(Arc<WaylandInner>);
+
+impl Deref for Wayland {
+    type Target = WaylandInner;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+pub struct WaylandEventSource {
+    wayland: Wayland,
+    token: Option<Token>,
+}
+
+impl WaylandEventSource {
+    pub const fn new(wayland: Wayland) -> Self {
+        Self {
+            wayland,
+            token: None,
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum WaylandProcessEventsError {
+    #[error("WlDisplay::flush failed")]
+    FlushFailed(#[from] Errno),
+}
+
+impl EventSource for WaylandEventSource {
+    type Event = WaylandEvent;
+    type Metadata = ();
+    type Ret = ();
+    type Error = WaylandProcessEventsError;
+
+    const NEEDS_EXTRA_LIFECYCLE_EVENTS: bool = true;
+
+    fn process_events<F>(
+        &mut self,
+        _: Readiness,
+        _: Token,
+        mut callback: F,
+    ) -> Result<PostAction, Self::Error>
+    where
+        F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+    {
+        self.wayland.dispatch_pending();
+        self.wayland
+            .drain_stored_events(|event| callback(event, &mut ()));
+
+        match self.wayland.flush() {
+            Ok(_) | Err(Errno::AGAIN) => {}
+            Err(error) => panic!("failed to flush display: {error}"),
+        }
+
+        Ok(PostAction::Continue)
+    }
+
+    fn register(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> calloop::Result<()> {
+        let token = token_factory.token();
+        self.token = Some(token);
+
+        unsafe { poll.register(&self.wayland.display, Interest::READ, Mode::Level, token) }
+    }
+
+    fn reregister(
+        &mut self,
+        poll: &mut Poll,
+        token_factory: &mut TokenFactory,
+    ) -> calloop::Result<()> {
+        let token = token_factory.token();
+        self.token = Some(token);
+
+        poll.reregister(&self.wayland.display, Interest::READ, Mode::Level, token)
+    }
+
+    fn unregister(&mut self, poll: &mut Poll) -> calloop::Result<()> {
+        poll.unregister(&self.wayland.display)
+    }
+
+    fn before_sleep(&mut self) -> calloop::Result<Option<(Readiness, Token)>> {
+        let n_dispatched = self.wayland.prepare_poll();
+
+        if n_dispatched == 0 {
+            return Ok(None);
+        }
+
+        let readiness = Readiness {
+            readable: false,
+            writable: false,
+            error: false,
+        };
+
+        Ok(self.token.map(|t| (readiness, t)))
+    }
+
+    fn before_handle_events(&mut self, events: EventIterator<'_>) {
+        let contains_us = events
+            .into_iter()
+            .any(|(readiness, token)| readiness.readable && self.token == Some(token));
+
+        if !contains_us {
+            self.wayland.unprepare_poll();
+            return;
+        }
+
+        match self.wayland.display.read_events() {
+            Ok(()) | Err(Errno::AGAIN) => {}
+            Err(error) => panic!("failed to read events: {error}"),
+        }
     }
 }

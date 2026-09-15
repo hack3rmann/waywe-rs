@@ -14,12 +14,24 @@ path = "src/main.rs"
 [dependencies]
 clap.workspace = true
 waywe-ipc.workspace = true
-video.workspace = true
+waywe-config.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 rustix.workspace = true
-image.workspace = true
 transmute-extra.workspace = true
 thiserror.workspace = true
-anyhow = "1.0.99"
 file-format = { version = "0.28.0", features = ["reader-mp4"] }
+tar.workspace = true
+flate2.workspace = true
+tap.workspace = true
+cargo_metadata = "0.19"
+anstream = "1.0"
+anstyle = "1.0"
+anstyle-progress = "0.1"
+unicode-width = "0.2"
+libc.workspace = true
+bincode.workspace = true
+miette.workspace = true
+image.workspace = true
+humantime = "2.4.0"
+serde_json = "1.0.150"

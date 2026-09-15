@@ -5,7 +5,7 @@ use crate::{
     shaders::ShaderDescriptor,
 };
 use std::mem;
-use waywe_ipc::config::BlurConfig;
+use waywe_config::BlurConfig;
 
 const LABEL: &str = "blur";
 
@@ -33,7 +33,7 @@ impl DownsamplePipeline {
             mip_level_count: n_levels + 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: config.surface_format,
+            format: config.surface_format.remove_srgb_suffix(),
             usage: wgpu::TextureUsages::STORAGE_BINDING
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_SRC
@@ -66,7 +66,7 @@ impl DownsamplePipeline {
                             visibility: wgpu::ShaderStages::COMPUTE,
                             ty: wgpu::BindingType::StorageTexture {
                                 access: wgpu::StorageTextureAccess::WriteOnly,
-                                format: config.surface_format,
+                                format: config.surface_format.remove_srgb_suffix(),
                                 view_dimension: wgpu::TextureViewDimension::D2,
                             },
                             count: None,
@@ -179,7 +179,7 @@ impl BlurPipeline {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: config.surface_format,
+            format: config.surface_format.remove_srgb_suffix(),
             usage: wgpu::TextureUsages::STORAGE_BINDING
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_SRC
@@ -208,7 +208,7 @@ impl BlurPipeline {
                             visibility: wgpu::ShaderStages::COMPUTE,
                             ty: wgpu::BindingType::StorageTexture {
                                 access: wgpu::StorageTextureAccess::WriteOnly,
-                                format: config.surface_format,
+                                format: config.surface_format.remove_srgb_suffix(),
                                 view_dimension: wgpu::TextureViewDimension::D2,
                             },
                             count: None,
@@ -331,7 +331,7 @@ impl UpsamplePipeline {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: config.surface_format,
+            format: config.surface_format.remove_srgb_suffix(),
             usage: wgpu::TextureUsages::STORAGE_BINDING
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_SRC
@@ -366,7 +366,7 @@ impl UpsamplePipeline {
                             visibility: wgpu::ShaderStages::COMPUTE,
                             ty: wgpu::BindingType::StorageTexture {
                                 access: wgpu::StorageTextureAccess::WriteOnly,
-                                format: config.surface_format,
+                                format: config.surface_format.remove_srgb_suffix(),
                                 view_dimension: wgpu::TextureViewDimension::D2,
                             },
                             count: None,

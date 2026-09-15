@@ -1,0 +1,1 @@
+TypeError { message: Custom("error: Sort does not have a type\n --> <current file>:1:8\n  |\n1 | Kind → Sort\n  |        ^^^^ Sort does not have a type\n  |") }

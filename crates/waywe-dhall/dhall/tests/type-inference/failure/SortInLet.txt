@@ -1,0 +1,1 @@
+TypeError { message: Custom("error: Sort does not have a type\n --> <current file>:1:9\n  |\n1 | let x = Sort in 0\n  |         ^^^^ Sort does not have a type\n  |") }
