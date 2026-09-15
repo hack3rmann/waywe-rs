@@ -1201,7 +1201,7 @@ dependencies = [
 
 [[package]]
 name = "deploy-tool"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "anyhow",
  "clap 4.6.4",
@@ -1356,7 +1356,7 @@ checksum = "117240f60069e65410b3ae1bb213295bd828f707b5bec6596a1afc8793ce0cbc"
 
 [[package]]
 name = "dxt"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "rayon",
  "safe-transmute",
@@ -1499,7 +1499,7 @@ dependencies = [
 
 [[package]]
 name = "extractor"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "anyhow",
  "bitflags 2.13.1",
@@ -3506,7 +3506,7 @@ dependencies = [
 
 [[package]]
 name = "project-parser"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "chumsky",
  "thiserror",
@@ -4178,7 +4178,7 @@ dependencies = [
 
 [[package]]
 name = "shadertoy-computer-were-made-for-cubes"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "bytemuck",
  "glam",
@@ -4815,7 +4815,7 @@ dependencies = [
 
 [[package]]
 name = "transmute-extra"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "thiserror",
 ]
@@ -4915,7 +4915,7 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
 name = "unite-json"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "clap 4.6.4",
  "serde_json",
@@ -5049,7 +5049,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "video"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "bitflags 2.13.1",
  "ffmpeg-sys-next",
@@ -5194,7 +5194,7 @@ checksum = "c31d56021e873866c968588ed85ccdf56db5c426e44afdb4618c39895104b920"
 
 [[package]]
 name = "wayland-client"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "bitflags 2.13.1",
  "fxhash",
@@ -5210,12 +5210,12 @@ dependencies = [
  "tracing-test",
  "va_list",
  "wayland-scanner",
- "wayland-sys 0.0.15",
+ "wayland-sys 0.0.16",
 ]
 
 [[package]]
 name = "wayland-scanner"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "convert_case 0.8.0",
  "paste",
@@ -5227,23 +5227,23 @@ dependencies = [
  "thiserror",
  "tracing",
  "tracing-subscriber",
- "wayland-sys 0.0.15",
+ "wayland-sys 0.0.16",
  "xml_serde",
 ]
 
 [[package]]
 name = "wayland-server"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "rustix",
  "thiserror",
  "tracing",
- "wayland-sys 0.0.15",
+ "wayland-sys 0.0.16",
 ]
 
 [[package]]
 name = "wayland-sys"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "libc",
  "static_assertions",
@@ -5265,7 +5265,7 @@ dependencies = [
 
 [[package]]
 name = "waywe"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "anstream",
  "anstyle",
@@ -5294,7 +5294,7 @@ dependencies = [
 
 [[package]]
 name = "waywe-config"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "dhall",
  "display-error-chain",
@@ -5311,7 +5311,7 @@ dependencies = [
 
 [[package]]
 name = "waywe-daemon"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "abi_stable",
  "ash",
@@ -5350,7 +5350,7 @@ dependencies = [
  "video",
  "wayland-client",
  "wayland-server",
- "wayland-sys 0.0.15",
+ "wayland-sys 0.0.16",
  "waywe-config",
  "waywe-ipc",
  "waywe-rendering-api",
@@ -5362,7 +5362,7 @@ dependencies = [
 
 [[package]]
 name = "waywe-ipc"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "bincode",
  "bytemuck",
@@ -5387,7 +5387,7 @@ dependencies = [
 
 [[package]]
 name = "waywe-rendering-api"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "abi_stable",
  "ash",
@@ -5397,7 +5397,7 @@ dependencies = [
 
 [[package]]
 name = "waywe-runtime"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "ash",
  "bitflags 2.13.1",
@@ -5431,7 +5431,7 @@ dependencies = [
 
 [[package]]
 name = "waywe-scene"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "ash",
  "bevy_ecs",
@@ -5460,7 +5460,7 @@ dependencies = [
 
 [[package]]
 name = "waywe-scene-macros"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5469,7 +5469,7 @@ dependencies = [
 
 [[package]]
 name = "waywe-spirv-derive"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5479,7 +5479,7 @@ dependencies = [
 
 [[package]]
 name = "waywe-test-scene"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "bevy_ecs",
  "image",
