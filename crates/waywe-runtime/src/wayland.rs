@@ -22,8 +22,9 @@ use wayland_client::{
         WlRegionDestroyRequest, WlRegistryEvent, WlRegistryGlobalEvent,
         WlRegistryGlobalRemoveEvent, WlSeatCapabilitiesEvent, WlSeatCapability,
         WlSeatGetPointerRequest, WlSurfaceCommitRequest, WlSurfaceSetBufferScaleRequest,
-        WlSurfaceSetOpaqueRegionRequest, ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellLayer,
-        ZwlrLayerSurfaceAckConfigureRequest, ZwlrLayerSurfaceAnchor,
+        WlSurfaceSetOpaqueRegionRequest, WpFractionalScaleManagerGetFractionalScaleRequest,
+        WpFractionalScalePreferredScaleEvent, ZwlrLayerShellGetLayerSurfaceRequest,
+        ZwlrLayerShellLayer, ZwlrLayerSurfaceAckConfigureRequest, ZwlrLayerSurfaceAnchor,
         ZwlrLayerSurfaceConfigureEvent, ZwlrLayerSurfaceKeyboardInteractivity,
         ZwlrLayerSurfaceSetAnchorRequest, ZwlrLayerSurfaceSetExclusiveZoneRequest,
         ZwlrLayerSurfaceSetKeyboardInteractivityRequest, ZwlrLayerSurfaceSetMarginRequest,
@@ -61,12 +62,14 @@ pub struct MonitorInfo {
     pub output: WlObjectHandle<Output>,
     pub surface: WlObjectHandle<Surface>,
     pub layer_surface: WlObjectHandle<LayerSurface>,
+    pub fractional_scale: Option<WlObjectHandle<FractionalScale>>,
 }
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct Globals {
     pub compositor: WlObjectHandle<Compositor>,
     pub layer_shell: WlObjectHandle<LayerShell>,
+    pub fractional_scale_manager: Option<WlObjectHandle<FractionalScaleManager>>,
 }
 
 #[derive(Default)]
@@ -154,6 +157,42 @@ impl Dispatch for Seat {
                 .create_object(&mut buf, storage.as_mut(), WlSeatGetPointerRequest);
 
         self.pointer = Some(pointer)
+    }
+}
+
+#[derive(Default)]
+pub struct FractionalScaleManager;
+
+impl HasObjectType for FractionalScaleManager {
+    const OBJECT_TYPE: WlObjectType = WlObjectType::WpFractionalScaleManagerV1;
+}
+
+impl Dispatch for FractionalScaleManager {
+    type State = ClientState;
+    const ALLOW_EMPTY_DISPATCH: bool = true;
+}
+
+#[derive(Default)]
+pub struct FractionalScale;
+
+impl HasObjectType for FractionalScale {
+    const OBJECT_TYPE: WlObjectType = WlObjectType::WpFractionalScaleV1;
+}
+
+impl Dispatch for FractionalScale {
+    type State = ClientState;
+
+    fn dispatch(
+        &mut self,
+        _: &Self::State,
+        _: &mut WlObjectStorage<Self::State>,
+        event: WlMessage<'_>,
+    ) {
+        let Some(WpFractionalScalePreferredScaleEvent { scale }) = event.as_event() else {
+            return;
+        };
+
+        tracing::debug!(scale, "fractional_scale");
     }
 }
 
@@ -415,6 +454,17 @@ impl Output {
             },
         );
 
+        let fractional_scale: Option<WlObjectHandle<FractionalScale>> =
+            globals.fractional_scale_manager.map(|m| {
+                m.create_object(
+                    &mut buf,
+                    storage.as_mut(),
+                    WpFractionalScaleManagerGetFractionalScaleRequest {
+                        surface: surface.id(),
+                    },
+                )
+            });
+
         layer_surface.request(
             &mut buf,
             &storage,
@@ -467,6 +517,7 @@ impl Output {
                     layer_surface,
                     size,
                     name,
+                    fractional_scale,
                 },
             );
         }
@@ -556,6 +607,10 @@ pub(crate) fn handle_global_remove(
     storage.release(info.output).unwrap();
     storage.release(info.surface).unwrap();
     storage.release(info.layer_surface).unwrap();
+
+    if let Some(frac_scale) = info.fractional_scale {
+        storage.release(frac_scale).unwrap();
+    }
 
     {
         let mut events = state.stored_events.lock().unwrap();
@@ -679,9 +734,13 @@ impl WaylandInner {
 
         let _seat = registry.bind::<Seat>(&mut buf, storage.as_mut()).unwrap();
 
+        let fractional_scale_manager =
+            registry.bind::<FractionalScaleManager>(&mut buf, storage.as_mut());
+
         client_state.globals = Some(Globals {
             compositor,
             layer_shell,
+            fractional_scale_manager,
         });
 
         const N_INIT_ROUNDTRIPS: usize = 2;
