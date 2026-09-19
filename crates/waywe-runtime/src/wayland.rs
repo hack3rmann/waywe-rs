@@ -23,8 +23,9 @@ use wayland_client::{
         WlRegistryGlobalRemoveEvent, WlSeatCapabilitiesEvent, WlSeatCapability,
         WlSeatGetPointerRequest, WlSurfaceCommitRequest, WlSurfaceSetBufferScaleRequest,
         WlSurfaceSetOpaqueRegionRequest, WpFractionalScaleManagerGetFractionalScaleRequest,
-        WpFractionalScalePreferredScaleEvent, ZwlrLayerShellGetLayerSurfaceRequest,
-        ZwlrLayerShellLayer, ZwlrLayerSurfaceAckConfigureRequest, ZwlrLayerSurfaceAnchor,
+        WpFractionalScalePreferredScaleEvent, WpViewportSetDestinationRequest,
+        WpViewporterGetViewportRequest, ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellLayer,
+        ZwlrLayerSurfaceAckConfigureRequest, ZwlrLayerSurfaceAnchor,
         ZwlrLayerSurfaceConfigureEvent, ZwlrLayerSurfaceKeyboardInteractivity,
         ZwlrLayerSurfaceSetAnchorRequest, ZwlrLayerSurfaceSetExclusiveZoneRequest,
         ZwlrLayerSurfaceSetKeyboardInteractivityRequest, ZwlrLayerSurfaceSetMarginRequest,
@@ -62,6 +63,7 @@ pub struct MonitorInfo {
     pub output: WlObjectHandle<Output>,
     pub surface: WlObjectHandle<Surface>,
     pub layer_surface: WlObjectHandle<LayerSurface>,
+    pub viewport: WlObjectHandle<Viewport>,
     pub fractional_scale: Option<WlObjectHandle<FractionalScale>>,
 }
 
@@ -69,6 +71,7 @@ pub struct MonitorInfo {
 pub struct Globals {
     pub compositor: WlObjectHandle<Compositor>,
     pub layer_shell: WlObjectHandle<LayerShell>,
+    pub viewporter: WlObjectHandle<Viewporter>,
     pub fractional_scale_manager: Option<WlObjectHandle<FractionalScaleManager>>,
 }
 
@@ -158,6 +161,30 @@ impl Dispatch for Seat {
 
         self.pointer = Some(pointer)
     }
+}
+
+#[derive(Default)]
+pub struct Viewporter;
+
+impl HasObjectType for Viewporter {
+    const OBJECT_TYPE: WlObjectType = WlObjectType::WpViewporter;
+}
+
+impl Dispatch for Viewporter {
+    type State = ClientState;
+    const ALLOW_EMPTY_DISPATCH: bool = true;
+}
+
+#[derive(Default)]
+pub struct Viewport;
+
+impl HasObjectType for Viewport {
+    const OBJECT_TYPE: WlObjectType = WlObjectType::WpViewport;
+}
+
+impl Dispatch for Viewport {
+    type State = ClientState;
+    const ALLOW_EMPTY_DISPATCH: bool = true;
 }
 
 #[derive(Default)]
@@ -454,6 +481,14 @@ impl Output {
             },
         );
 
+        let viewport: WlObjectHandle<Viewport> = globals.viewporter.create_object(
+            &mut buf,
+            storage.as_mut(),
+            WpViewporterGetViewportRequest {
+                surface: surface.id(),
+            },
+        );
+
         let fractional_scale: Option<WlObjectHandle<FractionalScale>> =
             globals.fractional_scale_manager.map(|m| {
                 m.create_object(
@@ -504,6 +539,15 @@ impl Output {
             WlSurfaceSetBufferScaleRequest { scale: 1 },
         );
 
+        viewport.request(
+            &mut buf,
+            &storage,
+            WpViewportSetDestinationRequest {
+                width: size.x.cast_signed(),
+                height: size.y.cast_signed(),
+            },
+        );
+
         surface.request(&mut buf, &storage, WlSurfaceCommitRequest);
 
         {
@@ -517,6 +561,7 @@ impl Output {
                     layer_surface,
                     size,
                     name,
+                    viewport,
                     fractional_scale,
                 },
             );
@@ -607,6 +652,7 @@ pub(crate) fn handle_global_remove(
     storage.release(info.output).unwrap();
     storage.release(info.surface).unwrap();
     storage.release(info.layer_surface).unwrap();
+    storage.release(info.viewport).unwrap();
 
     if let Some(frac_scale) = info.fractional_scale {
         storage.release(frac_scale).unwrap();
@@ -734,12 +780,17 @@ impl WaylandInner {
 
         let _seat = registry.bind::<Seat>(&mut buf, storage.as_mut()).unwrap();
 
+        let viewporter = registry
+            .bind::<Viewporter>(&mut buf, storage.as_mut())
+            .unwrap();
+
         let fractional_scale_manager =
             registry.bind::<FractionalScaleManager>(&mut buf, storage.as_mut());
 
         client_state.globals = Some(Globals {
             compositor,
             layer_shell,
+            viewporter,
             fractional_scale_manager,
         });
 
