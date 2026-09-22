@@ -10,6 +10,7 @@ use smallstr::SmallString;
 use std::{
     collections::{BTreeMap, HashMap},
     ffi::CStr,
+    fmt, mem,
     ops::Deref,
     pin::Pin,
     sync::{Arc, Mutex, RwLock},
@@ -56,11 +57,43 @@ pub type MonitorId = WlObjectId;
 pub type MonitorMap<T> = BTreeMap<MonitorId, T>;
 pub type MonitorName = SmallString<[u8; 32]>;
 
-#[derive(Default, Debug)]
+#[repr(transparent)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Scale(u32);
+
+impl Scale {
+    pub const ONE: Self = Self(120);
+
+    pub const fn new(frac_120: u32) -> Self {
+        Self(frac_120)
+    }
+
+    pub const fn value(self) -> f32 {
+        self.0 as f32 / 120.0
+    }
+
+    pub fn to_phisical(self, logical_size: UVec2) -> UVec2 {
+        self.0 * logical_size / 120
+    }
+
+    pub fn to_logical(self, phisical_size: UVec2) -> UVec2 {
+        120 * phisical_size / self.0
+    }
+}
+
+impl fmt::Debug for Scale {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}/120", self.0)
+    }
+}
+
+#[derive(Default, Debug, Clone)]
 pub struct MonitorInfo {
-    pub size: UVec2,
+    pub phisical_size: UVec2,
+    pub logical_size: UVec2,
+    pub scale: Option<Scale>,
     pub name: MonitorName,
-    pub output: WlObjectHandle<Output>,
+    pub output: WlObjectHandle<OldOutput>,
     pub surface: WlObjectHandle<Surface>,
     pub layer_surface: WlObjectHandle<LayerSurface>,
     pub viewport: WlObjectHandle<Viewport>,
@@ -86,7 +119,7 @@ pub struct ClientState {
 impl ClientState {
     pub fn monitor_size(&self, id: MonitorId) -> Option<UVec2> {
         let monitors = self.monitors.read().unwrap();
-        monitors.get(&id).map(|info| info.size)
+        monitors.get(&id).map(|info| info.phisical_size)
     }
 
     pub fn monitor_name(&self, id: MonitorId) -> Option<MonitorName> {
@@ -102,6 +135,18 @@ impl ClientState {
     pub fn aspect_ratio(&self, id: MonitorId) -> Option<f32> {
         let size = self.monitor_size(id)?;
         Some(size.x as f32 / size.y as f32)
+    }
+
+    pub fn commit_monitor(&self, id: MonitorId, info: MonitorInfo) {
+        {
+            let mut names = self.monitor_names.write().unwrap();
+            names.insert(info.name.clone(), id);
+        }
+
+        {
+            let mut monitors = self.monitors.write().unwrap();
+            monitors.insert(id, info.clone());
+        }
     }
 }
 
@@ -200,7 +245,9 @@ impl Dispatch for FractionalScaleManager {
 }
 
 #[derive(Default)]
-pub struct FractionalScale;
+pub struct FractionalScale {
+    output: WlObjectHandle<Output>,
+}
 
 impl HasObjectType for FractionalScale {
     const OBJECT_TYPE: WlObjectType = WlObjectType::WpFractionalScaleV1;
@@ -211,15 +258,17 @@ impl Dispatch for FractionalScale {
 
     fn dispatch(
         &mut self,
-        _: &Self::State,
-        _: &mut WlObjectStorage<Self::State>,
+        state: &Self::State,
+        storage: &mut WlObjectStorage<Self::State>,
         event: WlMessage<'_>,
     ) {
         let Some(WpFractionalScalePreferredScaleEvent { scale }) = event.as_event() else {
             return;
         };
 
-        tracing::debug!(scale, "fractional_scale");
+        storage.with_object(self.output, move |storage, output| {
+            output.set_scale(Scale::new(scale)).update(state, storage);
+        });
     }
 }
 
@@ -236,7 +285,7 @@ impl Dispatch for Pointer {
     fn dispatch(
         &mut self,
         state: &Self::State,
-        _storage: &mut WlObjectStorage<Self::State>,
+        _: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
         let Some(event) = message.as_event::<WlPointerEvent>() else {
@@ -282,11 +331,7 @@ impl Dispatch for Surface {
 }
 
 pub struct LayerSurface {
-    pub is_initial_configure_done: bool,
-    pub monitor_id: MonitorId,
-    pub handle: WlObjectHandle<Self>,
-    pub surface: WlObjectHandle<Surface>,
-    pub compositor: WlObjectHandle<Compositor>,
+    pub output: WlObjectHandle<Output>,
 }
 
 impl HasObjectType for LayerSurface {
@@ -311,72 +356,11 @@ impl Dispatch for LayerSurface {
             return;
         };
 
-        let size = UVec2::new(width, height);
-
-        {
-            let mut monitors = state.monitors.write().unwrap();
-            let mut events = state.stored_events.lock().unwrap();
-            let monitor = monitors.get_mut(&self.monitor_id).unwrap();
-
-            let is_resized = monitor.size != size;
-            monitor.size = size;
-
-            if !self.is_initial_configure_done {
-                events.push(WaylandEvent::MonitorPlugged {
-                    id: self.monitor_id,
-                    name: monitor.name.clone(),
-                });
-            } else if is_resized {
-                events.push(WaylandEvent::ResizeRequested {
-                    monitor_id: self.monitor_id,
-                    size,
-                });
-            }
-        }
-
-        let mut buf = WlStackMessageBuffer::new();
-
-        self.handle.request(
-            &mut buf,
-            storage,
-            ZwlrLayerSurfaceAckConfigureRequest { serial },
-        );
-
-        let mut storage = Pin::new(storage);
-
-        let region: WlObjectHandle<Region> = self.compositor.create_object(
-            &mut buf,
-            storage.as_mut(),
-            WlCompositorCreateRegionRequest,
-        );
-
-        region.request(
-            &mut buf,
-            &storage.as_ref(),
-            WlRegionAddRequest {
-                x: 0,
-                y: 0,
-                width: size.x.cast_signed(),
-                height: size.y.cast_signed(),
-            },
-        );
-
-        self.surface.request(
-            &mut buf,
-            &storage.as_ref(),
-            WlSurfaceSetOpaqueRegionRequest {
-                region: Some(region.id()),
-            },
-        );
-
-        region.request(&mut buf, &storage.as_ref(), WlRegionDestroyRequest);
-
-        storage.as_mut().release(region).unwrap();
-
-        self.surface
-            .request(&mut buf, &storage.as_ref(), WlSurfaceCommitRequest);
-
-        self.is_initial_configure_done = true;
+        storage.with_object(self.output, move |storage, output| {
+            output
+                .set_surface_configure(serial, UVec2::new(width, height))
+                .update(state, storage);
+        });
     }
 }
 
@@ -397,21 +381,406 @@ impl HasObjectType for Region {
     const OBJECT_TYPE: WlObjectType = WlObjectType::Region;
 }
 
-pub struct Output {
+#[derive(Clone, Copy, Debug)]
+struct WaylandScale {
+    value: Scale,
+    object: WlObjectHandle<FractionalScale>,
+}
+
+enum Output {
+    Active {
+        monitor_id: MonitorId,
+        name: MonitorName,
+        logical_size: UVec2,
+        scale: Option<WaylandScale>,
+        output: WlObjectHandle<Self>,
+        surface: WlObjectHandle<Surface>,
+        layer: WlObjectHandle<LayerSurface>,
+        viewport: WlObjectHandle<Viewport>,
+    },
+    AwaitingOutputInfo {
+        monitor_id: MonitorId,
+        output: WlObjectHandle<Self>,
+        name: Option<MonitorName>,
+        logical_size: Option<UVec2>,
+    },
+    AwaitingConfigure {
+        monitor_id: MonitorId,
+        name: MonitorName,
+        logical_size: UVec2,
+        scale: Option<Scale>,
+        output: WlObjectHandle<Self>,
+        surface: WlObjectHandle<Surface>,
+        layer: WlObjectHandle<LayerSurface>,
+        viewport: WlObjectHandle<Viewport>,
+        fractional_scale: Option<WlObjectHandle<FractionalScale>>,
+        serial: Option<u32>,
+    },
+    AwaitingScale {
+        monitor_id: MonitorId,
+        name: MonitorName,
+        logical_size: UVec2,
+        scale: Option<Scale>,
+        output: WlObjectHandle<Self>,
+        surface: WlObjectHandle<Surface>,
+        layer: WlObjectHandle<LayerSurface>,
+        viewport: WlObjectHandle<Viewport>,
+        fractional_scale: WlObjectHandle<FractionalScale>,
+    },
+}
+
+impl Output {
+    pub const fn new(monitor_id: MonitorId, output: WlObjectHandle<Self>) -> Self {
+        Self::AwaitingOutputInfo {
+            monitor_id,
+            output,
+            name: None,
+            logical_size: None,
+        }
+    }
+
+    pub fn set_name(&mut self, name: MonitorName) -> &mut Self {
+        match self {
+            Self::Active { name: old_name, .. }
+            | Self::AwaitingConfigure { name: old_name, .. } => *old_name = name,
+            Self::AwaitingScale { name: old_name, .. } => *old_name = name,
+            Self::AwaitingOutputInfo { name: old_name, .. } => *old_name = Some(name),
+        }
+
+        self
+    }
+
+    pub fn set_size(&mut self, size: UVec2) -> &mut Self {
+        match self {
+            Self::Active { logical_size, .. }
+            | Self::AwaitingConfigure { logical_size, .. }
+            | Self::AwaitingScale { logical_size, .. } => *logical_size = size,
+            Self::AwaitingOutputInfo { logical_size, .. } => *logical_size = Some(size),
+        }
+
+        self
+    }
+
+    pub fn set_surface_configure(&mut self, serial: u32, size: UVec2) -> &mut Self {
+        let Self::AwaitingConfigure {
+            serial: this_serial,
+            logical_size: this_size,
+            ..
+        } = self
+        else {
+            return self;
+        };
+        *this_serial = Some(serial);
+        *this_size = size;
+
+        self
+    }
+
+    pub fn set_scale(&mut self, scale: Scale) -> &mut Self {
+        match self {
+            Self::Active {
+                scale: Some(wl_scale),
+                ..
+            } => wl_scale.value = scale,
+            Self::AwaitingScale {
+                scale: old_scale, ..
+            }
+            | Self::AwaitingConfigure {
+                scale: old_scale, ..
+            } => *old_scale = Some(scale),
+            _ => {}
+        }
+
+        self
+    }
+
+    pub fn update(&mut self, state: &ClientState, storage: &mut WlObjectStorage<ClientState>) {
+        match *self {
+            Self::AwaitingOutputInfo {
+                monitor_id,
+                output,
+                name: Some(ref mut name),
+                logical_size: Some(logical_size),
+            } => {
+                let Some(globals) = state.globals else { return };
+
+                let mut buf = WlStackMessageBuffer::new();
+                let mut storage = Pin::new(storage);
+
+                let surface: WlObjectHandle<Surface> = globals.compositor.create_object(
+                    &mut buf,
+                    storage.as_mut(),
+                    WlCompositorCreateSurfaceRequest,
+                );
+
+                let layer_surface: WlObjectHandle<LayerSurface> =
+                    globals.layer_shell.create_object_with(
+                        &mut buf,
+                        storage.as_mut(),
+                        ZwlrLayerShellGetLayerSurfaceRequest {
+                            surface: surface.id(),
+                            output: Some(output.id()),
+                            layer: ZwlrLayerShellLayer::Background,
+                            namespace: WLR_NAMESPACE,
+                        },
+                        move |_| LayerSurface { output },
+                    );
+
+                let viewport: WlObjectHandle<Viewport> = globals.viewporter.create_object(
+                    &mut buf,
+                    storage.as_mut(),
+                    WpViewporterGetViewportRequest {
+                        surface: surface.id(),
+                    },
+                );
+
+                let fractional_scale: Option<WlObjectHandle<FractionalScale>> =
+                    globals.fractional_scale_manager.map(|m| {
+                        m.create_object(
+                            &mut buf,
+                            storage.as_mut(),
+                            WpFractionalScaleManagerGetFractionalScaleRequest {
+                                surface: surface.id(),
+                            },
+                        )
+                    });
+
+                layer_surface.request(
+                    &mut buf,
+                    &storage,
+                    ZwlrLayerSurfaceSetAnchorRequest {
+                        anchor: ZwlrLayerSurfaceAnchor::all(),
+                    },
+                );
+
+                layer_surface.request(
+                    &mut buf,
+                    &storage,
+                    ZwlrLayerSurfaceSetExclusiveZoneRequest { zone: -1 },
+                );
+
+                layer_surface.request(
+                    &mut buf,
+                    &storage,
+                    ZwlrLayerSurfaceSetMarginRequest {
+                        top: 0,
+                        right: 0,
+                        bottom: 0,
+                        left: 0,
+                    },
+                );
+
+                layer_surface.request(
+                    &mut buf,
+                    &storage,
+                    ZwlrLayerSurfaceSetKeyboardInteractivityRequest {
+                        keyboard_interactivity: ZwlrLayerSurfaceKeyboardInteractivity::None,
+                    },
+                );
+
+                surface.request(
+                    &mut buf,
+                    &storage,
+                    WlSurfaceSetBufferScaleRequest { scale: 1 },
+                );
+
+                viewport.request(
+                    &mut buf,
+                    &storage,
+                    WpViewportSetDestinationRequest {
+                        width: logical_size.x.cast_signed(),
+                        height: logical_size.y.cast_signed(),
+                    },
+                );
+
+                surface.request(&mut buf, &storage, WlSurfaceCommitRequest);
+
+                *self = Self::AwaitingConfigure {
+                    serial: None,
+                    monitor_id,
+                    name: mem::take(name),
+                    logical_size,
+                    scale: None,
+                    output,
+                    surface,
+                    viewport,
+                    layer: layer_surface,
+                    fractional_scale,
+                };
+            }
+            Self::AwaitingConfigure {
+                monitor_id,
+                ref mut name,
+                logical_size,
+                scale,
+                output,
+                surface,
+                layer,
+                viewport,
+                fractional_scale,
+                serial: Some(serial),
+            } => {
+                let Some(globals) = state.globals else { return };
+
+                let mut buf = WlStackMessageBuffer::new();
+
+                layer.request(
+                    &mut buf,
+                    storage,
+                    ZwlrLayerSurfaceAckConfigureRequest { serial },
+                );
+
+                let mut storage = Pin::new(storage);
+
+                let region: WlObjectHandle<Region> = globals.compositor.create_object(
+                    &mut buf,
+                    storage.as_mut(),
+                    WlCompositorCreateRegionRequest,
+                );
+
+                region.request(
+                    &mut buf,
+                    &storage.as_ref(),
+                    WlRegionAddRequest {
+                        x: 0,
+                        y: 0,
+                        width: logical_size.x.cast_signed(),
+                        height: logical_size.y.cast_signed(),
+                    },
+                );
+
+                surface.request(
+                    &mut buf,
+                    &storage.as_ref(),
+                    WlSurfaceSetOpaqueRegionRequest {
+                        region: Some(region.id()),
+                    },
+                );
+
+                region.request(&mut buf, &storage.as_ref(), WlRegionDestroyRequest);
+
+                storage.as_mut().release(region).unwrap();
+
+                surface.request(&mut buf, &storage.as_ref(), WlSurfaceCommitRequest);
+
+                *self = match (fractional_scale, scale) {
+                    (None, _) => Self::Active {
+                        monitor_id,
+                        name: mem::take(name),
+                        logical_size,
+                        scale: None,
+                        output,
+                        surface,
+                        layer,
+                        viewport,
+                    },
+                    (Some(object), Some(value)) => Self::Active {
+                        monitor_id,
+                        name: mem::take(name),
+                        logical_size,
+                        scale: Some(WaylandScale { object, value }),
+                        output,
+                        surface,
+                        layer,
+                        viewport,
+                    },
+                    (Some(fractional_scale), None) => Self::AwaitingScale {
+                        monitor_id,
+                        name: mem::take(name),
+                        logical_size,
+                        scale,
+                        output,
+                        surface,
+                        layer,
+                        viewport,
+                        fractional_scale,
+                    },
+                };
+            }
+            Self::AwaitingScale {
+                monitor_id,
+                ref mut name,
+                logical_size,
+                scale: Some(scale),
+                output,
+                surface,
+                layer,
+                viewport,
+                fractional_scale,
+            } => {
+                *self = Self::Active {
+                    monitor_id,
+                    name: mem::take(name),
+                    logical_size,
+                    scale: Some(WaylandScale {
+                        value: scale,
+                        object: fractional_scale,
+                    }),
+                    output,
+                    surface,
+                    layer,
+                    viewport,
+                };
+            }
+            _ => {}
+        }
+    }
+}
+
+impl HasObjectType for Output {
+    const OBJECT_TYPE: WlObjectType = WlObjectType::Output;
+}
+
+impl Dispatch for Output {
+    type State = ClientState;
+
+    fn dispatch(
+        &mut self,
+        state: &Self::State,
+        storage: &mut WlObjectStorage<Self::State>,
+        message: WlMessage<'_>,
+    ) {
+        if let Some(event) = message.as_event::<WlOutputNameEvent>() {
+            let name = unsafe { str::from_utf8_unchecked(event.name.to_bytes()) };
+            self.set_name(MonitorName::from_str(name));
+        } else if let Some(event) = message.as_event::<WlOutputModeEvent>() {
+            if !event.flags.contains(WlOutputMode::CURRENT) {
+                return;
+            }
+
+            let Ok(width) = u32::try_from(event.width) else {
+                return;
+            };
+            let Ok(height) = u32::try_from(event.height) else {
+                return;
+            };
+
+            self.set_size(UVec2::new(width, height));
+        }
+
+        self.update(state, storage);
+    }
+}
+
+pub struct OldOutput {
     pub monitor_id: MonitorId,
     pub output_id: WlObjectId,
     pub size: Option<UVec2>,
     pub name: Option<MonitorName>,
+    pub monitor_info: Option<MonitorInfo>,
+    pub scale: Option<Scale>,
     pub is_init_done: bool,
 }
 
-impl Output {
+impl OldOutput {
     pub const fn new(monitor_id: MonitorId, output_id: WlObjectId) -> Self {
         Self {
             monitor_id,
             output_id,
             size: None,
             name: None,
+            monitor_info: None,
+            scale: None,
             is_init_done: false,
         }
     }
@@ -433,25 +802,49 @@ impl Output {
         ));
     }
 
-    pub fn try_init_info(
+    pub fn try_init_with_scale(
         &mut self,
         state: &ClientState,
-        storage: &mut WlObjectStorage<ClientState>,
+        _: &mut WlObjectStorage<ClientState>,
+        _: Scale,
     ) {
         if self.is_init_done {
             return;
         }
 
+        let Some(mut info) = self.monitor_info.as_ref().cloned() else {
+            return;
+        };
+        let Some(scale) = self.scale else {
+            return;
+        };
+
+        info.scale = Some(scale);
+        info.phisical_size = scale.to_phisical(info.logical_size);
+
+        state.commit_monitor(self.monitor_id, info);
+
+        self.is_init_done = true;
+    }
+
+    pub fn try_create_surface(
+        &mut self,
+        state: &ClientState,
+        storage: &mut WlObjectStorage<ClientState>,
+    ) {
+        if self.monitor_info.is_some() {
+            return;
+        }
+
         let Some(globals) = state.globals else { return };
-        let Some(size) = self.size else { return };
+        let Some(logical_size) = self.size else {
+            return;
+        };
         let Some(name) = self.name.clone() else {
             return;
         };
 
-        {
-            let mut names = state.monitor_names.write().unwrap();
-            names.insert(name.clone(), self.monitor_id);
-        }
+        let phisical_size = logical_size;
 
         let mut buf = WlStackMessageBuffer::new();
         let mut storage = Pin::new(storage);
@@ -462,7 +855,7 @@ impl Output {
             WlCompositorCreateSurfaceRequest,
         );
 
-        let monitor_id = self.monitor_id;
+        let output_id = self.output_id;
         let layer_surface: WlObjectHandle<LayerSurface> = globals.layer_shell.create_object_with(
             &mut buf,
             storage.as_mut(),
@@ -472,12 +865,8 @@ impl Output {
                 layer: ZwlrLayerShellLayer::Background,
                 namespace: WLR_NAMESPACE,
             },
-            move |proxy| LayerSurface {
-                is_initial_configure_done: false,
-                monitor_id,
-                handle: WlObjectHandle::new(proxy.id()),
-                surface,
-                compositor: globals.compositor,
+            move |_| LayerSurface {
+                output: WlObjectHandle::new(output_id),
             },
         );
 
@@ -543,39 +932,39 @@ impl Output {
             &mut buf,
             &storage,
             WpViewportSetDestinationRequest {
-                width: size.x.cast_signed(),
-                height: size.y.cast_signed(),
+                width: logical_size.x.cast_signed(),
+                height: logical_size.y.cast_signed(),
             },
         );
 
         surface.request(&mut buf, &storage, WlSurfaceCommitRequest);
 
-        {
-            let mut monitors = state.monitors.write().unwrap();
+        let info = MonitorInfo {
+            output: WlObjectHandle::new(self.output_id),
+            scale: None,
+            surface,
+            layer_surface,
+            logical_size,
+            phisical_size,
+            name,
+            viewport,
+            fractional_scale,
+        };
 
-            monitors.insert(
-                self.monitor_id,
-                MonitorInfo {
-                    output: WlObjectHandle::new(self.output_id),
-                    surface,
-                    layer_surface,
-                    size,
-                    name,
-                    viewport,
-                    fractional_scale,
-                },
-            );
-        }
-
+        // if fractional_scale.is_none() {
+        state.commit_monitor(self.monitor_id, info.clone());
         self.is_init_done = true;
+        // }
+
+        self.monitor_info = Some(info);
     }
 }
 
-impl HasObjectType for Output {
+impl HasObjectType for OldOutput {
     const OBJECT_TYPE: WlObjectType = WlObjectType::Output;
 }
 
-impl Dispatch for Output {
+impl Dispatch for OldOutput {
     type State = ClientState;
 
     fn dispatch(
@@ -590,9 +979,10 @@ impl Dispatch for Output {
             self.handle_mode(event);
         }
 
-        self.try_init_info(state, storage);
+        self.try_create_surface(state, storage);
     }
 }
+
 pub fn handle_output(
     registry: WlObjectHandle<WlRegistry<ClientState>>,
     mut storage: Pin<&mut WlObjectStorage<ClientState>>,
@@ -605,7 +995,7 @@ pub fn handle_output(
             &mut buf,
             storage.as_mut(),
             monitor_id,
-            move |_, _, proxy| Output::new(monitor_id, proxy.id()),
+            move |_, _, proxy| OldOutput::new(monitor_id, proxy.id()),
         )
         .unwrap();
 }

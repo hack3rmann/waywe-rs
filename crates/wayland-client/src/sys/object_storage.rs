@@ -231,6 +231,21 @@ impl<S> WlObjectStorage<S> {
             .map(|_| ())
     }
 
+    pub fn with_object<T: Dispatch<State = S>, R>(
+        &mut self,
+        handle: WlObjectHandle<T>,
+        f: impl FnOnce(&mut Self, &mut WlObject<T>) -> R,
+    ) -> Option<R> {
+        let mut object = self.objects.remove(&handle.id())?;
+        let data = object.object.downcast_mut::<T>()?;
+
+        let result = f(self, data);
+
+        _ = self.objects.insert(handle.id(), object);
+
+        Some(result)
+    }
+
     /// Acquires object's data so no one can access its data for
     /// the entire duration of the `f` call.
     ///
