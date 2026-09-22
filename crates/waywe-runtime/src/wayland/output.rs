@@ -2,7 +2,7 @@ use crate::wayland::{
     ClientState, Globals, MonitorId, MonitorName, Region, Viewport, WLR_NAMESPACE, WaylandEvent,
 };
 use glam::UVec2;
-use std::{fmt, mem, pin::Pin};
+use std::{fmt, mem, num::NonZeroU32, pin::Pin};
 use wayland_client::{
     interface::{
         WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlOutputEvent,
@@ -26,25 +26,28 @@ use wayland_client::{
 
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Scale(u32);
+pub struct Scale(NonZeroU32);
 
 impl Scale {
-    pub const ONE: Self = Self(120);
+    pub const ONE: Self = Self(NonZeroU32::new(120).unwrap());
 
     pub const fn new(frac_120: u32) -> Self {
-        Self(frac_120)
+        Self(match NonZeroU32::new(frac_120) {
+            Some(value) => value,
+            None => NonZeroU32::new(120).unwrap(),
+        })
     }
 
     pub const fn value(self) -> f32 {
-        self.0 as f32 / 120.0
+        self.0.get() as f32 / 120.0
     }
 
     pub fn to_phisical(self, logical_size: UVec2) -> UVec2 {
-        self.0 * logical_size / 120
+        self.0.get() * logical_size / 120
     }
 
     pub fn to_logical(self, phisical_size: UVec2) -> UVec2 {
-        120 * phisical_size / self.0
+        120 * phisical_size / self.0.get()
     }
 }
 
