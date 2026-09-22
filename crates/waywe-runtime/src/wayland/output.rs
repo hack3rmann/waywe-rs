@@ -174,14 +174,14 @@ pub struct WaylandScale {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct OutputTransactionBuilder {
+pub struct OutputTransaction {
     is_create: bool,
     is_remove: bool,
     configure: Option<(u32, UVec2)>,
     scale: Option<Scale>,
 }
 
-impl OutputTransactionBuilder {
+impl OutputTransaction {
     pub const EMPTY: Self = Self {
         is_create: false,
         is_remove: false,
@@ -206,20 +206,20 @@ impl OutputTransactionBuilder {
         self.is_remove = true;
     }
 
-    pub fn commit(&mut self) -> Option<OutputTransaction> {
+    pub fn commit(&mut self) -> Option<OutputAction> {
         let result = match *self {
             Self {
                 is_create: true, ..
-            } => OutputTransaction::Create,
+            } => OutputAction::Create,
             Self {
                 is_remove: true, ..
-            } => OutputTransaction::Remove,
+            } => OutputAction::Remove,
             Self {
                 is_create: false,
                 is_remove: false,
                 configure: Some((serial, size)),
                 scale,
-            } => OutputTransaction::Configure {
+            } => OutputAction::Configure {
                 serial,
                 size,
                 scale,
@@ -233,7 +233,7 @@ impl OutputTransactionBuilder {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum OutputTransaction {
+pub enum OutputAction {
     Create,
     Remove,
     Configure {
@@ -247,7 +247,7 @@ pub enum OutputTransaction {
 pub enum Output {
     Active {
         info: MonitorInfo,
-        transaction: OutputTransactionBuilder,
+        transaction: OutputTransaction,
     },
     AwaitingOutputInfo {
         monitor_id: MonitorId,
@@ -284,7 +284,7 @@ impl Output {
     pub fn active(info: MonitorInfo) -> Self {
         Self::Active {
             info,
-            transaction: OutputTransactionBuilder::CREATE,
+            transaction: OutputTransaction::CREATE,
         }
     }
 
@@ -636,7 +636,7 @@ impl Output {
         };
 
         match transaction {
-            OutputTransaction::Create => {
+            OutputAction::Create => {
                 {
                     let mut monitors = state.monitors.write().unwrap();
                     monitors.insert(info.monitor_id, info.clone());
@@ -655,7 +655,7 @@ impl Output {
                     });
                 }
             }
-            OutputTransaction::Remove => {
+            OutputAction::Remove => {
                 {
                     let mut monitors = state.monitors.write().unwrap();
                     monitors.remove(&info.monitor_id);
@@ -682,7 +682,7 @@ impl Output {
                     });
                 }
             }
-            OutputTransaction::Configure {
+            OutputAction::Configure {
                 serial,
                 size,
                 scale,
