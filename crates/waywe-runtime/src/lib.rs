@@ -46,7 +46,7 @@ impl Runtime {
     pub fn wallpaper_config(&self, monitor_id: MonitorId) -> Option<WallpaperConfig> {
         let surface_size = {
             let monitors = self.wayland.client_state.monitors.read().unwrap();
-            monitors.get(&monitor_id)?.phisical_size
+            monitors.get(&monitor_id)?.phisical_size()
         };
         let surface_format = {
             let surfaces = self.wgpu.surfaces.read().unwrap();

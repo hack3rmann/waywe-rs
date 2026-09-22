@@ -371,7 +371,10 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
 impl Handle<WaylandEvent> for WallpaperApp {
     async fn handle(&mut self, runtime: &mut Runtime, event: WaylandEvent) -> PostEventActions {
         match event {
-            WaylandEvent::ResizeRequested { monitor_id, size } => {
+            WaylandEvent::ResizeRequested {
+                monitor_id,
+                phisical_size: size,
+            } => {
                 runtime.wgpu.resize_surface(monitor_id, size);
 
                 let monitor_name = runtime
