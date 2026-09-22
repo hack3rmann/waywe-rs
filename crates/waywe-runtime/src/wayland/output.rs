@@ -1,18 +1,16 @@
 use crate::wayland::{
-    ClientState, Globals, MonitorId, MonitorName, Region, Viewport, WLR_NAMESPACE,
+    ClientState, Globals, MonitorId, MonitorName, Region, Viewport, WLR_NAMESPACE, WaylandEvent,
 };
 use glam::UVec2;
-use smallvec::{SmallVec, smallvec};
 use std::{fmt, mem, pin::Pin};
-use tracing::{debug, debug_span};
 use wayland_client::{
     interface::{
-        WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlOutputMode,
-        WlOutputModeEvent, WlOutputNameEvent, WlRegionAddRequest, WlRegionDestroyRequest,
-        WlSurfaceCommitRequest, WlSurfaceSetBufferScaleRequest, WlSurfaceSetOpaqueRegionRequest,
-        WpFractionalScaleManagerGetFractionalScaleRequest, WpFractionalScalePreferredScaleEvent,
-        WpViewportSetDestinationRequest, WpViewporterGetViewportRequest,
-        ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellLayer,
+        WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlOutputEvent,
+        WlOutputMode, WlOutputModeEvent, WlOutputNameEvent, WlRegionAddRequest,
+        WlRegionDestroyRequest, WlSurfaceCommitRequest, WlSurfaceSetBufferScaleRequest,
+        WlSurfaceSetOpaqueRegionRequest, WpFractionalScaleManagerGetFractionalScaleRequest,
+        WpFractionalScalePreferredScaleEvent, WpViewportSetDestinationRequest,
+        WpViewporterGetViewportRequest, ZwlrLayerShellGetLayerSurfaceRequest, ZwlrLayerShellLayer,
         ZwlrLayerSurfaceAckConfigureRequest, ZwlrLayerSurfaceAnchor,
         ZwlrLayerSurfaceConfigureEvent, ZwlrLayerSurfaceKeyboardInteractivity,
         ZwlrLayerSurfaceSetAnchorRequest, ZwlrLayerSurfaceSetExclusiveZoneRequest,
@@ -25,8 +23,6 @@ use wayland_client::{
         wire::{WlMessage, WlStackMessageBuffer},
     },
 };
-
-use super::WaylandEvent;
 
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -177,19 +173,81 @@ pub struct WaylandScale {
     pub viewport: WlObjectHandle<Viewport>,
 }
 
-#[derive(Debug)]
-pub enum OutputUpdate {
+#[derive(Debug, Clone, Copy)]
+pub struct OutputTransactionBuilder {
+    is_create: bool,
+    is_remove: bool,
+    configure: Option<(u32, UVec2)>,
+    scale: Option<Scale>,
+}
+
+impl OutputTransactionBuilder {
+    pub const EMPTY: Self = Self {
+        is_create: false,
+        is_remove: false,
+        configure: None,
+        scale: None,
+    };
+
+    pub const CREATE: Self = Self {
+        is_create: true,
+        ..Self::EMPTY
+    };
+
+    pub fn set_scale(&mut self, scale: Scale) {
+        self.scale = Some(scale);
+    }
+
+    pub fn set_configure(&mut self, serial: u32, size: UVec2) {
+        self.configure = Some((serial, size));
+    }
+
+    pub fn set_remove(&mut self) {
+        self.is_remove = true;
+    }
+
+    pub fn commit(&mut self) -> Option<OutputTransaction> {
+        let result = match *self {
+            Self {
+                is_create: true, ..
+            } => OutputTransaction::Create,
+            Self {
+                is_remove: true, ..
+            } => OutputTransaction::Remove,
+            Self {
+                is_create: false,
+                is_remove: false,
+                configure: Some((serial, size)),
+                scale,
+            } => OutputTransaction::Configure {
+                serial,
+                size,
+                scale,
+            },
+            _ => return None,
+        };
+
+        *self = Self::EMPTY;
+        Some(result)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum OutputTransaction {
     Create,
-    Size(UVec2),
-    Configure { size: UVec2, serial: u32 },
-    Scale(Scale),
+    Remove,
+    Configure {
+        serial: u32,
+        size: UVec2,
+        scale: Option<Scale>,
+    },
 }
 
 #[derive(Debug)]
 pub enum Output {
     Active {
         info: MonitorInfo,
-        updates: SmallVec<[OutputUpdate; 1]>,
+        transaction: OutputTransactionBuilder,
     },
     AwaitingOutputInfo {
         monitor_id: MonitorId,
@@ -226,7 +284,7 @@ impl Output {
     pub fn active(info: MonitorInfo) -> Self {
         Self::Active {
             info,
-            updates: smallvec![OutputUpdate::Create],
+            transaction: OutputTransactionBuilder::CREATE,
         }
     }
 
@@ -237,6 +295,15 @@ impl Output {
             name: None,
             logical_size: None,
         }
+    }
+
+    pub fn set_remove(&mut self) -> &mut Self {
+        let Self::Active { transaction, .. } = self else {
+            return self;
+        };
+
+        transaction.set_remove();
+        self
     }
 
     pub fn set_name(&mut self, name: MonitorName) -> &mut Self {
@@ -252,7 +319,7 @@ impl Output {
 
     pub fn set_size(&mut self, size: UVec2) -> &mut Self {
         match self {
-            Self::Active { updates, .. } => updates.push(OutputUpdate::Size(size)),
+            Self::Active { .. } => unimplemented!("monitor resize without configure"),
             Self::AwaitingConfigure { logical_size, .. }
             | Self::AwaitingScale { logical_size, .. } => *logical_size = size,
             Self::AwaitingOutputInfo { logical_size, .. } => *logical_size = Some(size),
@@ -263,9 +330,7 @@ impl Output {
 
     pub fn set_surface_configure(&mut self, serial: u32, size: UVec2) -> &mut Self {
         match self {
-            Output::Active { updates, .. } => {
-                updates.push(OutputUpdate::Configure { size, serial })
-            }
+            Output::Active { transaction, .. } => transaction.set_configure(serial, size),
             Output::AwaitingConfigure {
                 serial: old_serial,
                 logical_size: old_size,
@@ -282,7 +347,7 @@ impl Output {
 
     pub fn set_scale(&mut self, scale: Scale) -> &mut Self {
         match self {
-            Self::Active { updates, .. } => updates.push(OutputUpdate::Scale(scale)),
+            Self::Active { transaction, .. } => transaction.set_scale(scale),
             Self::AwaitingScale {
                 scale: old_scale, ..
             }
@@ -300,6 +365,7 @@ impl Output {
         globals: &Globals,
         layer: WlObjectHandle<LayerSurface>,
         surface: WlObjectHandle<Surface>,
+        scale: Option<WaylandScale>,
         serial: u32,
         logical_size: UVec2,
     ) {
@@ -317,14 +383,17 @@ impl Output {
             WlCompositorCreateRegionRequest,
         );
 
+        let width = logical_size.x.cast_signed();
+        let height = logical_size.y.cast_signed();
+
         region.request(
             &mut buf,
             &storage.as_ref(),
             WlRegionAddRequest {
                 x: 0,
                 y: 0,
-                width: logical_size.x.cast_signed(),
-                height: logical_size.y.cast_signed(),
+                width,
+                height,
             },
         );
 
@@ -336,6 +405,14 @@ impl Output {
             },
         );
 
+        if let Some(scale) = scale {
+            scale.viewport.request(
+                &mut buf,
+                &storage.as_ref(),
+                WpViewportSetDestinationRequest { width, height },
+            );
+        }
+
         region.request(&mut buf, &storage.as_ref(), WlRegionDestroyRequest);
 
         storage.as_mut().release(region).unwrap();
@@ -344,8 +421,6 @@ impl Output {
     }
 
     pub fn update(&mut self, state: &ClientState, storage: &mut WlObjectStorage<ClientState>) {
-        let _span = debug_span!("Output::update", output = ?self).entered();
-
         match *self {
             Self::AwaitingOutputInfo {
                 monitor_id,
@@ -379,12 +454,13 @@ impl Output {
 
                 let fractional_scale: Option<WlObjectHandle<FractionalScale>> =
                     globals.fractional_scale_manager.map(|m| {
-                        m.create_object(
+                        m.create_object_with(
                             &mut buf,
                             storage.as_mut(),
                             WpFractionalScaleManagerGetFractionalScaleRequest {
                                 surface: surface.id(),
                             },
+                            move |_| FractionalScale { output },
                         )
                     });
 
@@ -450,8 +526,6 @@ impl Output {
 
                 surface.request(&mut buf, &storage, WlSurfaceCommitRequest);
 
-                debug!("changed to configure");
-
                 *self = Self::AwaitingConfigure {
                     serial: None,
                     monitor_id,
@@ -484,6 +558,7 @@ impl Output {
                     &globals,
                     layer,
                     surface,
+                    None,
                     serial,
                     logical_size,
                 );
@@ -523,8 +598,6 @@ impl Output {
                         viewport,
                     },
                 };
-
-                debug!(output = ?self, "changed");
             }
             Self::AwaitingScale {
                 monitor_id,
@@ -554,87 +627,93 @@ impl Output {
             _ => {}
         }
 
-        debug!(output = ?self, "iterating events");
-
-        let Self::Active { info, updates } = self else {
+        let Self::Active { info, transaction } = self else {
             return;
         };
 
-        for update in updates.drain(..) {
-            match update {
-                OutputUpdate::Create => {
-                    {
-                        let mut monitors = state.monitors.write().unwrap();
-                        monitors.insert(info.monitor_id, info.clone());
-                    }
+        let Some(transaction) = transaction.commit() else {
+            return;
+        };
 
-                    {
-                        let mut names = state.monitor_names.write().unwrap();
-                        names.insert(info.name.clone(), info.monitor_id);
-                    }
-
-                    {
-                        let mut events = state.stored_events.lock().unwrap();
-                        events.push(WaylandEvent::MonitorPlugged {
-                            id: info.monitor_id,
-                            name: info.name.clone(),
-                        });
-                    }
+        match transaction {
+            OutputTransaction::Create => {
+                {
+                    let mut monitors = state.monitors.write().unwrap();
+                    monitors.insert(info.monitor_id, info.clone());
                 }
-                OutputUpdate::Configure { size, serial } => {
-                    let old_size = info.logical_size;
-                    info.logical_size = size;
 
-                    let Some(globals) = state.globals else {
-                        continue;
-                    };
-
-                    Self::handle_configure(
-                        Pin::new(storage),
-                        &globals,
-                        info.layer,
-                        info.surface,
-                        serial,
-                        size,
-                    );
-
-                    if old_size != size {
-                        debug!("emitting ResizeRequested");
-
-                        let mut events = state.stored_events.lock().unwrap();
-                        events.push(WaylandEvent::ResizeRequested {
-                            monitor_id: info.monitor_id,
-                            phisical_size: info.phisical_size(),
-                        });
-                    }
+                {
+                    let mut names = state.monitor_names.write().unwrap();
+                    names.insert(info.name.clone(), info.monitor_id);
                 }
-                OutputUpdate::Size(size) => {
-                    let old_size = info.logical_size;
-                    info.logical_size = size;
 
-                    if old_size != size {
-                        let mut events = state.stored_events.lock().unwrap();
-                        events.push(WaylandEvent::ResizeRequested {
-                            monitor_id: info.monitor_id,
-                            phisical_size: info.phisical_size(),
-                        });
-                    }
+                {
+                    let mut events = state.stored_events.lock().unwrap();
+                    events.push(WaylandEvent::MonitorPlugged {
+                        id: info.monitor_id,
+                        name: info.name.clone(),
+                    });
                 }
-                OutputUpdate::Scale(scale) => {
-                    let Some(info_scale) = info.scale.as_mut() else {
-                        continue;
-                    };
+            }
+            OutputTransaction::Remove => {
+                {
+                    let mut monitors = state.monitors.write().unwrap();
+                    monitors.remove(&info.monitor_id);
+                }
 
-                    let old_scale = info_scale.value;
-                    info_scale.value = scale;
+                {
+                    let mut names = state.monitor_names.write().unwrap();
+                    names.remove(&info.name);
+                }
 
-                    if old_scale != scale {
-                        let mut events = state.stored_events.lock().unwrap();
-                        events.push(WaylandEvent::ResizeRequested {
-                            monitor_id: info.monitor_id,
-                            phisical_size: info.phisical_size(),
-                        });
-                    }
+                storage.release(info.surface).unwrap();
+                storage.release(info.layer).unwrap();
+
+                if let Some(scale) = info.scale {
+                    storage.release(scale.object).unwrap();
+                    storage.release(scale.viewport).unwrap();
+                }
+
+                {
+                    let mut events = state.stored_events.lock().unwrap();
+                    events.push(WaylandEvent::MonitorUnplugged {
+                        id: info.monitor_id,
+                        name: info.name.clone(),
+                    });
+                }
+            }
+            OutputTransaction::Configure {
+                serial,
+                size,
+                scale,
+            } => {
+                let old_phisical_size = info.phisical_size();
+
+                info.logical_size = size;
+                if let (Some(old), Some(new_scale)) = (&mut info.scale, scale) {
+                    old.value = new_scale;
+                }
+
+                let Some(globals) = state.globals else {
+                    return;
+                };
+
+                Self::handle_configure(
+                    Pin::new(storage),
+                    &globals,
+                    info.layer,
+                    info.surface,
+                    info.scale,
+                    serial,
+                    size,
+                );
+
+                if old_phisical_size != info.phisical_size() {
+                    let mut events = state.stored_events.lock().unwrap();
+                    events.push(WaylandEvent::ResizeRequested {
+                        monitor_id: info.monitor_id,
+                        phisical_size: info.phisical_size(),
+                    });
                 }
             }
         }
@@ -654,22 +733,28 @@ impl Dispatch for Output {
         storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
-        if let Some(event) = message.as_event::<WlOutputNameEvent>() {
-            let name = unsafe { str::from_utf8_unchecked(event.name.to_bytes()) };
-            self.set_name(MonitorName::from_str(name));
-        } else if let Some(event) = message.as_event::<WlOutputModeEvent>() {
-            if !event.flags.contains(WlOutputMode::CURRENT) {
-                return;
+        let Some(event) = message.as_event::<WlOutputEvent>() else {
+            return;
+        };
+
+        match event {
+            WlOutputEvent::Mode(WlOutputModeEvent {
+                width,
+                height,
+                flags,
+                ..
+            }) => {
+                if !flags.contains(WlOutputMode::CURRENT) {
+                    return;
+                }
+
+                self.set_size(UVec2::new(width.cast_unsigned(), height.cast_unsigned()));
             }
-
-            let Ok(width) = u32::try_from(event.width) else {
-                return;
-            };
-            let Ok(height) = u32::try_from(event.height) else {
-                return;
-            };
-
-            self.set_size(UVec2::new(width, height));
+            WlOutputEvent::Name(WlOutputNameEvent { name }) => {
+                let name_str = unsafe { str::from_utf8_unchecked(name.to_bytes()) };
+                self.set_name(MonitorName::from_str(name_str));
+            }
+            _ => return,
         }
 
         self.update(state, storage);

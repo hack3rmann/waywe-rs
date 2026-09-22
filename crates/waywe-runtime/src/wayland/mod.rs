@@ -285,33 +285,17 @@ pub(crate) fn handle_global_remove(
     }
 
     let monitor_id = global_name;
-    let mut monitors = state.monitors.write().unwrap();
-
-    let Some(info) = monitors.remove(&monitor_id) else {
+    let Some(output) = ({
+        let monitors = state.monitors.read().unwrap();
+        monitors.get(&monitor_id).map(|i| i.output)
+    }) else {
         return;
     };
 
-    {
-        let mut names = state.monitor_names.write().unwrap();
-        _ = names.remove(&info.name);
-    }
-
-    storage.release(info.output).unwrap();
-    storage.release(info.surface).unwrap();
-    storage.release(info.layer).unwrap();
-
-    if let Some(scale) = info.scale {
-        storage.release(scale.object).unwrap();
-        storage.release(scale.viewport).unwrap();
-    }
-
-    {
-        let mut events = state.stored_events.lock().unwrap();
-        events.push(WaylandEvent::MonitorUnplugged {
-            id: monitor_id,
-            name: info.name,
-        });
-    }
+    storage.with_object(output, |storage, output| {
+        output.set_remove().update(state, storage);
+    });
+    storage.release(output).unwrap();
 }
 
 pub(crate) fn registry_dispatch(
