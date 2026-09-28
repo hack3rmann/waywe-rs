@@ -556,12 +556,21 @@ impl Output {
             } => {
                 let Some(globals) = state.globals else { return };
 
+                let wl_scale = match (scale, viewport, fractional_scale) {
+                    (Some(value), Some(viewport), Some(object)) => Some(WaylandScale {
+                        value,
+                        object,
+                        viewport,
+                    }),
+                    _ => None,
+                };
+
                 Self::handle_configure(
                     Pin::new(storage),
                     &globals,
                     layer,
                     surface,
-                    None,
+                    wl_scale,
                     serial,
                     logical_size,
                 );
