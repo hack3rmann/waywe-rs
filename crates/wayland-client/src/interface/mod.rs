@@ -8,6 +8,7 @@ pub mod generated {
         "resources/wayland-protocols/wayland.xml",
         "resources/wayland-protocols/stable/xdg-shell/xdg-shell.xml",
         "resources/wayland-protocols/stable/viewporter/viewporter.xml",
+        "resources/wayland-protocols/staging/fractional-scale/fractional-scale-v1.xml",
         "resources/wayland-protocols/wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml",
     ]);
 }

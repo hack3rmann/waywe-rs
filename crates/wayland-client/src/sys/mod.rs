@@ -21,4 +21,8 @@ pub mod protocol {
     include_wl_interfaces!(
         "resources/wayland-protocols/wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml"
     );
+
+    include_wl_interfaces!(
+        "resources/wayland-protocols/staging/fractional-scale/fractional-scale-v1.xml"
+    );
 }

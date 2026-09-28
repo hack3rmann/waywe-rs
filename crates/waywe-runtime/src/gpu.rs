@@ -1,7 +1,7 @@
-use super::wayland::{MonitorId, MonitorInfo, MonitorMap, SurfaceExtension};
+use super::wayland::{MonitorId, MonitorMap, SurfaceExtension};
 use crate::{
     shaders::{ShaderCache, ShaderDescriptor},
-    wayland::Wayland,
+    wayland::{Wayland, output::MonitorInfo},
 };
 use ash::vk;
 use glam::UVec2;
