@@ -56,6 +56,21 @@ impl Tasks {
             tasks: self,
         }
     }
+
+    pub fn spawn_blocking<F>(&mut self, f: F) -> TaskOperations<'_>
+    where
+        F: FnOnce(EventEmitter) + Send + 'static,
+    {
+        self.erase_finished();
+
+        let emitter = self.emitter.clone();
+        let handle = self.set.spawn_blocking(move || f(emitter));
+
+        TaskOperations {
+            handle,
+            tasks: self,
+        }
+    }
 }
 
 pub struct TaskOperations<'t> {

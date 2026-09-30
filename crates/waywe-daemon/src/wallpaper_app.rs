@@ -518,8 +518,8 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
 
             runtime
                 .tasks
-                .spawn(async move |mut emitter| {
-                    match wallpaper::create(gpu, &path, ty, config, packages).await {
+                .spawn_blocking(move |mut emitter| {
+                    match wallpaper::create(gpu, &path, ty, config, packages) {
                         Ok(wallpaper) => emitter.emit(WallpaperPreparedEvent {
                             path,
                             wallpaper,
@@ -584,9 +584,9 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
 
         runtime
             .tasks
-            .spawn(async move |_| {
+            .spawn_blocking(move |_| {
                 let mut wallpaper =
-                    match wallpaper::create(Arc::clone(&gpu), &path, ty, config, packages).await {
+                    match wallpaper::create(Arc::clone(&gpu), &path, ty, config, packages) {
                         Ok(wallpaper) => wallpaper,
                         Err(error) => {
                             report_error(&ipc, Some(sender_id), error);

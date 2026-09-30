@@ -18,7 +18,7 @@ use waywe_runtime::{frame::FrameInfo, gpu::Wgpu};
 
 pub use waywe_runtime::WallpaperConfig;
 
-pub async fn create(
+pub fn create(
     gpu: Arc<Wgpu>,
     path: &Path,
     ty: WallpaperType,
