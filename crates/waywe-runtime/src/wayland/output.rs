@@ -662,7 +662,6 @@ impl Output {
                 {
                     let mut events = state.stored_events.lock().unwrap();
                     events.push(WaylandEvent::MonitorPlugged {
-                        id: info.monitor_id,
                         name: info.name.clone(),
                     });
                 }
@@ -689,7 +688,6 @@ impl Output {
                 {
                     let mut events = state.stored_events.lock().unwrap();
                     events.push(WaylandEvent::MonitorUnplugged {
-                        id: info.monitor_id,
                         name: info.name.clone(),
                     });
                 }
@@ -723,7 +721,7 @@ impl Output {
                 if old_phisical_size != info.phisical_size() {
                     let mut events = state.stored_events.lock().unwrap();
                     events.push(WaylandEvent::ResizeRequested {
-                        monitor_id: info.monitor_id,
+                        monitor_name: info.name.clone(),
                         phisical_size: info.phisical_size(),
                     });
                 }

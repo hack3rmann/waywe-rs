@@ -41,15 +41,13 @@ use wayland_client::{
 #[derive(Clone, Debug, PartialEq)]
 pub enum WaylandEvent {
     ResizeRequested {
-        monitor_id: MonitorId,
+        monitor_name: MonitorName,
         phisical_size: UVec2,
     },
     MonitorPlugged {
-        id: MonitorId,
         name: MonitorName,
     },
     MonitorUnplugged {
-        id: MonitorId,
         name: MonitorName,
     },
     // TODO(hack3rmann): implement approach from <https://github.com/cjacker/wl-find-cursor/blob/main/main.c>
@@ -59,7 +57,7 @@ pub enum WaylandEvent {
 }
 
 pub type MonitorId = WlObjectId;
-pub type MonitorMap<T> = BTreeMap<MonitorId, T>;
+pub type MonitorMap<T> = BTreeMap<MonitorName, T>;
 pub type MonitorName = SmallString<[u8; 24]>;
 
 #[derive(Default, Debug, Clone, Copy)]
@@ -73,20 +71,20 @@ pub struct Globals {
 #[derive(Default)]
 pub struct ClientState {
     pub stored_events: Mutex<Vec<WaylandEvent>>,
-    pub monitors: RwLock<MonitorMap<MonitorInfo>>,
-    pub monitor_names: RwLock<HashMap<MonitorName, MonitorId>>,
+    pub monitors: RwLock<HashMap<MonitorId, MonitorInfo>>,
+    pub monitor_names: RwLock<MonitorMap<MonitorId>>,
     pub globals: Option<Globals>,
 }
 
 impl ClientState {
-    pub fn monitor_name(&self, id: MonitorId) -> Option<MonitorName> {
-        let monitors = self.monitors.read().unwrap();
-        Some(monitors.get(&id)?.name.clone())
-    }
+    pub fn monitor_info(&self, name: &str) -> MonitorInfo {
+        let id = {
+            let names = self.monitor_names.read().unwrap();
+            names[name]
+        };
 
-    pub fn monitor_id(&self, name: &str) -> Option<MonitorId> {
-        let names = self.monitor_names.read().unwrap();
-        names.get(name).copied()
+        let monitors = self.monitors.read().unwrap();
+        monitors[&id].clone()
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::wayland::{MonitorId, Wayland};
+use crate::wayland::Wayland;
 use calloop::channel::Sender;
 use glam::UVec2;
 use gpu::Wgpu;
@@ -39,14 +39,14 @@ impl Runtime {
         }
     }
 
-    pub fn wallpaper_config(&self, monitor_id: MonitorId) -> Option<WallpaperConfig> {
+    pub fn wallpaper_config(&self, monitor_name: &str) -> Option<WallpaperConfig> {
         let surface_size = {
-            let monitors = self.wayland.client_state.monitors.read().unwrap();
-            monitors.get(&monitor_id)?.phisical_size()
+            let info = self.wayland.client_state.monitor_info(monitor_name);
+            info.phisical_size()
         };
         let surface_format = {
             let surfaces = self.wgpu.surfaces.read().unwrap();
-            surfaces.get(&monitor_id)?.format
+            surfaces.get(monitor_name)?.format
         };
 
         Some(WallpaperConfig {
