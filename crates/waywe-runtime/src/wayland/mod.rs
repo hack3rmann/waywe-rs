@@ -79,11 +79,6 @@ pub struct ClientState {
 }
 
 impl ClientState {
-    pub fn monitor_size(&self, id: MonitorId) -> Option<UVec2> {
-        let monitors = self.monitors.read().unwrap();
-        monitors.get(&id).map(MonitorInfo::phisical_size)
-    }
-
     pub fn monitor_name(&self, id: MonitorId) -> Option<MonitorName> {
         let monitors = self.monitors.read().unwrap();
         Some(monitors.get(&id)?.name.clone())
@@ -92,23 +87,6 @@ impl ClientState {
     pub fn monitor_id(&self, name: &str) -> Option<MonitorId> {
         let names = self.monitor_names.read().unwrap();
         names.get(name).copied()
-    }
-
-    pub fn aspect_ratio(&self, id: MonitorId) -> Option<f32> {
-        let size = self.monitor_size(id)?;
-        Some(size.x as f32 / size.y as f32)
-    }
-
-    pub fn commit_monitor(&self, id: MonitorId, info: MonitorInfo) {
-        {
-            let mut names = self.monitor_names.write().unwrap();
-            names.insert(info.name.clone(), id);
-        }
-
-        {
-            let mut monitors = self.monitors.write().unwrap();
-            monitors.insert(id, info.clone());
-        }
     }
 }
 

@@ -295,10 +295,8 @@ impl Handle<WallpaperPauseEvent> for WallpaperApp {
                     state.kind = state.kind.altered(mode);
                 }
             }
-            WallpaperTarget::ForMonitor(id) => {
-                let name = runtime.wayland.client_state.monitor_name(id).unwrap();
+            WallpaperTarget::ForMonitor(name) => {
                 let state = self.wallpaper_states.get_mut(&name).unwrap();
-
                 state.kind = state.kind.altered(mode);
             }
         }
@@ -424,7 +422,7 @@ impl Handle<WaylandEvent> for WallpaperApp {
                         let event = NewWallpaperEvent {
                             path: info.path,
                             ty: info.wallpaper_type,
-                            target: WallpaperTarget::ForMonitor(monitor_id),
+                            target: WallpaperTarget::ForMonitor(monitor_name),
                             sender_id: None,
                         };
 
@@ -485,7 +483,10 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
                 let monitors = runtime.wayland.client_state.monitors.read().unwrap();
                 monitors.keys().copied().collect()
             }
-            WallpaperTarget::ForMonitor(id) => smallvec![id],
+            WallpaperTarget::ForMonitor(name) => {
+                let monitors = runtime.wayland.client_state.monitor_names.read().unwrap();
+                monitors.get(&name).copied().into_iter().collect()
+            }
         };
 
         for monitor_id in monitor_ids {
@@ -631,10 +632,8 @@ impl Handle<CurrentWallpaperEvent> for WallpaperApp {
         CurrentWallpaperEvent { target, sender_id }: CurrentWallpaperEvent,
     ) -> PostEventActions {
         let current = match target {
-            WallpaperTarget::ForMonitor(id) => {
-                let name = runtime.wayland.client_state.monitor_name(id).unwrap();
+            WallpaperTarget::ForMonitor(name) => {
                 let path = self.wallpaper_paths[&name].clone();
-
                 HashMap::from_iter([(name.to_string(), path)])
             }
             WallpaperTarget::ForAll => self

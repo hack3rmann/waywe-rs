@@ -95,14 +95,7 @@ impl Wgpu {
         let monitors = wayland.client_state.monitors.read().unwrap();
         let info = &monitors[&monitor_id];
 
-        let surface = create_surface(
-            &self.instance,
-            &self.adapter,
-            &self.device,
-            wayland,
-            info,
-            monitor_id,
-        );
+        let surface = create_surface(&self.instance, &self.adapter, &self.device, wayland, info);
 
         let mut surfaces = self.surfaces.write().unwrap();
         surfaces.insert(monitor_id, surface);
@@ -155,7 +148,6 @@ impl Wgpu {
                         &self.device,
                         wayland,
                         monitor_info,
-                        monitor_id,
                     );
 
                     *info = new_info;
@@ -259,7 +251,6 @@ fn create_surface(
     device: &wgpu::Device,
     wayland: &Wayland,
     info: &MonitorInfo,
-    id: MonitorId,
 ) -> Surface {
     let handle = {
         let queue = wayland.main_queue.read().unwrap();
@@ -279,13 +270,11 @@ fn create_surface(
             .unwrap()
     };
 
-    let screen_size = wayland.client_state.monitor_size(id).unwrap();
-
     let Some(format) = surface.get_capabilities(adapter).formats.first().copied() else {
         panic!("no surface format supported");
     };
 
-    let config = get_surface_config(&surface, adapter, screen_size);
+    let config = get_surface_config(&surface, adapter, info.phisical_size());
 
     surface.configure(device, &config);
 

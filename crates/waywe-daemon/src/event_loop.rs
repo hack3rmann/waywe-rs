@@ -29,7 +29,7 @@ use waywe_runtime::{
     event::{Event, EventReceiver, IntoEvent, PostEventActions},
     frame::{FrameError, FrameInfo},
     tasks::Tasks,
-    wayland::{MonitorId, Wayland, WaylandEventSource},
+    wayland::{MonitorName, Wayland, WaylandEventSource},
 };
 
 #[derive(Debug, Error)]
@@ -280,34 +280,19 @@ impl LoopState {
     }
 
     fn handle_daemon_command(&mut self, command: IpcEvent<DaemonCommand>) {
-        let wayland = self.runtime.wayland.clone();
-        let get_target = move |monitor_name: Option<&str>| {
-            let Some(name) = monitor_name else {
-                return Some(WallpaperTarget::ForAll);
-            };
-
-            let target = wayland
-                .client_state
-                .monitor_id(name)
-                .map(WallpaperTarget::ForMonitor)?;
-
-            Some(target)
+        let get_target = move |monitor_name: Option<&str>| match monitor_name {
+            Some(name) => WallpaperTarget::ForMonitor(MonitorName::from_str(name)),
+            None => WallpaperTarget::ForAll,
         };
 
         let event = match command.event {
-            DaemonCommand::Show { path, monitor, ty } => {
-                let Some(target) = get_target(monitor.as_deref()) else {
-                    return;
-                };
-
-                NewWallpaperEvent {
-                    path,
-                    ty,
-                    target,
-                    sender_id: Some(command.sender_id),
-                }
-                .into_event()
+            DaemonCommand::Show { path, monitor, ty } => NewWallpaperEvent {
+                path,
+                ty,
+                target: get_target(monitor.as_deref()),
+                sender_id: Some(command.sender_id),
             }
+            .into_event(),
             DaemonCommand::Preview {
                 ty,
                 path,
@@ -326,29 +311,17 @@ impl LoopState {
                 }
                 .into_event()
             }
-            DaemonCommand::Pause { monitor, mode } => {
-                let Some(target) = get_target(monitor.as_deref()) else {
-                    return;
-                };
-
-                WallpaperPauseEvent {
-                    target,
-                    mode,
-                    sender_id: command.sender_id,
-                }
-                .into_event()
+            DaemonCommand::Pause { monitor, mode } => WallpaperPauseEvent {
+                target: get_target(monitor.as_deref()),
+                mode,
+                sender_id: command.sender_id,
             }
-            DaemonCommand::Current { monitor } => {
-                let Some(target) = get_target(monitor.as_deref()) else {
-                    return;
-                };
-
-                CurrentWallpaperEvent {
-                    target,
-                    sender_id: command.sender_id,
-                }
-                .into_event()
+            .into_event(),
+            DaemonCommand::Current { monitor } => CurrentWallpaperEvent {
+                target: get_target(monitor.as_deref()),
+                sender_id: command.sender_id,
             }
+            .into_event(),
             DaemonCommand::ConfigReload { path } => ConfigReloadEvent {
                 path,
                 sender_id: Some(command.sender_id),
@@ -361,11 +334,11 @@ impl LoopState {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum WallpaperTarget {
     #[default]
     ForAll,
-    ForMonitor(MonitorId),
+    ForMonitor(MonitorName),
 }
 
 pub struct EventQueue {
