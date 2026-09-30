@@ -28,7 +28,7 @@ use waywe_runtime::{
     app::{App, DynApp},
     event::{Event, EventReceiver, IntoEvent, PostEventActions},
     frame::{FrameError, FrameInfo},
-    task_pool::TaskPool,
+    tasks::Tasks,
     wayland::{MonitorId, Wayland, WaylandEventSource},
 };
 
@@ -70,7 +70,7 @@ impl EventLoop {
 
         let (ipc_sender, ipc_channel) = channel();
         let wayland = Wayland::default();
-        let task_pool = TaskPool::new(event_emitter);
+        let task_pool = Tasks::new(event_emitter);
         let runtime = Runtime::new(wayland.clone(), task_pool, ipc_sender);
         let app = DynApp::new(app);
 
@@ -229,7 +229,7 @@ struct LoopState {
 impl LoopState {
     fn process_event_queue(&mut self) {
         self.tokio.block_on(async {
-            self.runtime.task_pool.erase_finished().await;
+            self.runtime.tasks.erase_finished();
 
             for mut event in self.event_queue.drain() {
                 let actions = self.app.handle_event(&mut self.runtime, &mut event).await;
