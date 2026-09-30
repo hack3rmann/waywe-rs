@@ -3,7 +3,7 @@ use calloop::channel::Sender;
 use glam::UVec2;
 use gpu::Wgpu;
 use std::sync::{Arc, Once};
-use task_pool::TaskPool;
+use tasks::Tasks;
 use timer::Timer;
 use waywe_ipc::{command::DaemonResult, ipc::server::IpcResponse};
 
@@ -13,7 +13,7 @@ pub mod event;
 pub mod frame;
 pub mod gpu;
 pub mod shaders;
-pub mod task_pool;
+pub mod tasks;
 pub mod timer;
 pub mod wayland;
 
@@ -21,16 +21,12 @@ pub struct Runtime {
     pub timer: Timer,
     pub wgpu: Arc<Wgpu>,
     pub wayland: Wayland,
-    pub task_pool: TaskPool,
+    pub tasks: Tasks,
     pub ipc: Sender<IpcResponse<DaemonResult>>,
 }
 
 impl Runtime {
-    pub fn new(
-        wayland: Wayland,
-        task_pool: TaskPool,
-        ipc: Sender<IpcResponse<DaemonResult>>,
-    ) -> Self {
+    pub fn new(wayland: Wayland, tasks: Tasks, ipc: Sender<IpcResponse<DaemonResult>>) -> Self {
         static VIDEO_ONCE: Once = Once::new();
         VIDEO_ONCE.call_once(video::init);
 
@@ -39,7 +35,7 @@ impl Runtime {
             timer: Timer::default(),
             wgpu: Arc::default(),
             wayland,
-            task_pool,
+            tasks,
         }
     }
 

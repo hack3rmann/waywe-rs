@@ -31,7 +31,6 @@ use waywe_runtime::{
     event::{EventHandler, Handle, PostEventActions, TryReplicate},
     frame::{FrameError, FrameInfo},
     gpu::SurfaceResult,
-    task_pool::TaskIndex,
     wayland::{MonitorId, MonitorMap, MonitorName, WaylandEvent},
 };
 
@@ -112,7 +111,6 @@ pub struct WallpaperApp {
     pub config: Arc<Config>,
     pub package_registry: PackageRegistry,
     pub last_instant: Option<Instant>,
-    pub config_watcher_debounce_task: Option<TaskIndex>,
 }
 
 impl WallpaperApp {
@@ -430,7 +428,7 @@ impl Handle<WaylandEvent> for WallpaperApp {
                             sender_id: None,
                         };
 
-                        runtime.task_pool.emitter.emit(event);
+                        runtime.tasks.emitter.emit(event);
                     }
                     Err(SetupProfileError::Io(error)) if error.kind() == ErrorKind::NotFound => {
                         tracing::debug!("no setup profile present");
@@ -516,9 +514,10 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
                 .unwrap_or_else(|| panic!("no config for {monitor_id:?}"));
             let packages = self.package_registry.clone();
             let ipc = runtime.ipc.clone();
+            let error_ipc = runtime.ipc.clone();
 
             runtime
-                .task_pool
+                .tasks
                 .spawn(async move |mut emitter| {
                     match wallpaper::create(gpu, &path, ty, config, packages).await {
                         Ok(wallpaper) => emitter.emit(WallpaperPreparedEvent {
@@ -530,7 +529,9 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
                         Err(error) => report_error(&ipc, sender_id, error.clone()),
                     }
                 })
-                .await;
+                .on_error(move |error| {
+                    report_error(&error_ipc, sender_id, DaemonError::from_generic(error));
+                });
         }
 
         PostEventActions::empty()
@@ -551,6 +552,7 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
     ) -> PostEventActions {
         let gpu = runtime.wgpu.clone();
         let ipc = runtime.ipc.clone();
+        let error_ipc = runtime.ipc.clone();
 
         let packages = self.package_registry.clone();
 
@@ -581,13 +583,13 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
         };
 
         runtime
-            .task_pool
+            .tasks
             .spawn(async move |_| {
                 let mut wallpaper =
                     match wallpaper::create(Arc::clone(&gpu), &path, ty, config, packages).await {
                         Ok(wallpaper) => wallpaper,
                         Err(error) => {
-                            report_error(&ipc, Some(sender_id), error.clone());
+                            report_error(&ipc, Some(sender_id), error);
                             return;
                         }
                     };
@@ -610,7 +612,13 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
                     );
                 });
             })
-            .await;
+            .on_error(move |error| {
+                report_error(
+                    &error_ipc,
+                    Some(sender_id),
+                    DaemonError::from_generic(error),
+                );
+            });
 
         PostEventActions::empty()
     }
@@ -673,8 +681,8 @@ impl Handle<ConfigReloadEvent> for WallpaperApp {
             self.config.config.disable_hot_reload,
             config.config.disable_hot_reload,
         ) {
-            (true, false) => runtime.task_pool.emitter.emit(EnableConfigWatcher),
-            (false, true) => runtime.task_pool.emitter.emit(DisableConfigWatcher),
+            (true, false) => runtime.tasks.emitter.emit(EnableConfigWatcher),
+            (false, true) => runtime.tasks.emitter.emit(DisableConfigWatcher),
             (true, true) | (false, false) => {}
         }
 
@@ -687,8 +695,6 @@ impl Handle<ConfigReloadEvent> for WallpaperApp {
         send_response(&runtime.ipc, sender_id, DaemonResponse::ConfigReloaded);
 
         debug!(config = ?self.config, "reloaded config");
-
-        self.config_watcher_debounce_task = None;
 
         PostEventActions::REDRAW
     }
