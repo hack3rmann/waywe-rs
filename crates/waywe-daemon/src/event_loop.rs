@@ -14,7 +14,7 @@ use calloop::{
 use display_error_chain::ErrorChainExt;
 use glam::UVec2;
 use miette_diagnostic_chain::DiagnosticChain;
-use std::{io, vec::Drain};
+use std::{io, sync::Arc, vec::Drain};
 use thiserror::Error;
 use tokio::runtime::{Builder as AsyncRuntimeBuilder, Runtime as AsyncRuntime};
 use tracing::{debug, error, info};
@@ -28,9 +28,9 @@ use waywe_runtime::{
     app::{App, DynApp},
     event::{Event, EventReceiver, IntoEvent, PostEventActions},
     frame::{FrameError, FrameInfo},
-    platform::{PlatformEventSource, WaywePlatform},
+    platform::WaywePlatform,
     tasks::Tasks,
-    wayland::{MonitorName, Wayland, WaylandEventSource},
+    wayland::MonitorName,
 };
 
 #[derive(Debug, Error)]
@@ -49,7 +49,7 @@ pub struct EventLoop {
 }
 
 impl EventLoop {
-    pub fn new(app: impl App) -> Result<Self, CreateEventLoopError> {
+    pub fn new(app: impl App, platform: impl WaywePlatform) -> Result<Self, CreateEventLoopError> {
         // NOTE(hack3rmann): `Signals::new` blocks given signals from the current thread
         // It's important that we create this before spawning any thread, so the child thread
         // will ingerit the blocked signals
@@ -69,13 +69,14 @@ impl EventLoop {
             EventQueue::new().map_err(CreateEventLoopError::CrateEventQueue)?;
         let event_emitter = custom_receiver.make_emitter().unwrap();
 
+        let platform = Arc::new(platform) as Arc<dyn WaywePlatform>;
+
         let (ipc_sender, ipc_channel) = channel();
-        let wayland = Wayland::default();
         let task_pool = Tasks::new(event_emitter);
-        let runtime = Runtime::new(wayland.clone(), task_pool, ipc_sender);
+        let runtime = Runtime::new(platform.clone(), task_pool, ipc_sender);
         let app = DynApp::new(app);
 
-        runtime.wayland.drain_stored_events(|event| {
+        runtime.platform.drain_stored_events(&mut |event| {
             event_queue.add(event);
         });
 
@@ -94,7 +95,13 @@ impl EventLoop {
             config_watcher_token: None,
         };
 
-        Self::register_sources(&handle, signals, custom_receiver, wayland, ipc_channel)?;
+        Self::register_sources(
+            &handle,
+            signals,
+            custom_receiver,
+            platform.as_ref(),
+            ipc_channel,
+        )?;
 
         if !state.app.config().config.disable_hot_reload {
             add_config_watcher_source(&mut state)?;
@@ -123,7 +130,7 @@ impl EventLoop {
         handle: &LoopHandle<'static, LoopState>,
         signals: Signals,
         custom_receiver: EventReceiver,
-        wayland: Wayland,
+        platform: &dyn WaywePlatform,
         ipc_channel: Channel<IpcResponse<DaemonResult>>,
     ) -> Result<(), CreateEventLoopError> {
         handle
@@ -134,7 +141,7 @@ impl EventLoop {
             .map_err(calloop::Error::from)?;
 
         handle
-            .insert_source(wayland.event_source(), move |event, &mut (), state| {
+            .insert_source(platform.event_source(), move |event, &mut (), state| {
                 state.event_queue.add(event);
             })
             .map_err(calloop::Error::from)?;

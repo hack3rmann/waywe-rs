@@ -31,7 +31,7 @@ use waywe_runtime::{
     event::{EventHandler, Handle, PostEventActions, TryReplicate},
     frame::{FrameError, FrameInfo},
     gpu::SurfaceResult,
-    platform::PlatformEvent,
+    platform::{PlatformEvent, SurfaceInfo},
     wayland::{MonitorMap, MonitorName},
 };
 
@@ -112,6 +112,7 @@ pub struct WallpaperApp {
     pub config: Arc<Config>,
     pub package_registry: PackageRegistry,
     pub last_instant: Option<Instant>,
+    pub monitors: MonitorMap<SurfaceInfo>,
 }
 
 impl WallpaperApp {
@@ -199,9 +200,11 @@ impl App for WallpaperApp {
                 continue;
             }
 
+            let monitor_info = &self.monitors[monitor_name.as_str()];
+
             let (needs_reconfigure, surface) = match runtime
                 .wgpu
-                .get_current_surface(&runtime.wayland, monitor_name)
+                .get_current_surface(runtime.platform.as_ref(), monitor_info)
             {
                 SurfaceResult::Ok(texture) => (false, texture),
                 SurfaceResult::Reconfigure(texture) => (true, texture),
@@ -309,8 +312,6 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
         runtime: &mut Runtime,
         event: WallpaperPreparedEvent,
     ) -> PostEventActions {
-        // FIXME(hack3rmann): monitor unplug + plug can occur while preparing a wallpaper,
-        // which can cause monitor reindexing. We should use monitor_name here instead
         let WallpaperPreparedEvent {
             mut wallpaper,
             path,
@@ -318,8 +319,10 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
             sender_id,
         } = event;
 
+        let monitor_info = &self.monitors[monitor_name.as_str()];
+
         // NOTE(hack3rmann): wallpaper may be prepared after monitor is disconnected
-        let Some(config) = runtime.wallpaper_config(&monitor_name) else {
+        let Some(config) = runtime.wallpaper_config(monitor_info) else {
             return PostEventActions::empty();
         };
 
@@ -390,9 +393,12 @@ impl Handle<PlatformEvent> for WallpaperApp {
                 PostEventActions::REDRAW
             }
             PlatformEvent::MonitorPlugged { info } => {
+                self.monitors
+                    .insert(info.monitor_name.clone(), info.clone());
+
                 runtime
                     .wgpu
-                    .register_surface(&runtime.wayland, info.monitor_name.clone());
+                    .register_surface(runtime.platform.as_ref(), &info);
 
                 debug!(?info, "new monitor detected");
 
@@ -421,7 +427,7 @@ impl Handle<PlatformEvent> for WallpaperApp {
                 }
 
                 let wall_config = runtime
-                    .wallpaper_config(&info.monitor_name)
+                    .wallpaper_config(&info)
                     .unwrap_or_else(|| panic!("no config for '{}'", info.monitor_name));
 
                 let wallpapers = RunningWallpapers::new(wall_config, self.config.clone());
@@ -431,6 +437,8 @@ impl Handle<PlatformEvent> for WallpaperApp {
                 PostEventActions::empty()
             }
             PlatformEvent::MonitorUnplugged { monitor_name: name } => {
+                self.monitors.remove(name.as_str());
+
                 debug!(%name, "unplugged a monitor");
 
                 _ = self.wallpapers.remove(&name);
@@ -462,10 +470,7 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
         } = event;
 
         let monitor_names: SmallVec<[_; 4]> = match target {
-            WallpaperTarget::ForAll => {
-                let monitors = runtime.wayland.client_state.monitors.read().unwrap();
-                monitors.values().map(|i| i.name.clone()).collect()
-            }
+            WallpaperTarget::ForAll => self.monitors.keys().cloned().collect(),
             WallpaperTarget::ForMonitor(name) => smallvec![name],
         };
 
@@ -485,8 +490,10 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
                 error!(?error, "failed to save setup profile");
             }
 
+            let monitor_info = &self.monitors[monitor_name.as_str()];
+
             let config = runtime
-                .wallpaper_config(&monitor_name)
+                .wallpaper_config(monitor_info)
                 .unwrap_or_else(|| panic!("no config for {monitor_name:?}"));
             let packages = self.package_registry.clone();
             let ipc = runtime.ipc.clone();

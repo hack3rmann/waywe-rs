@@ -25,7 +25,7 @@ use crate::{
 };
 use bevy_ecs::prelude::*;
 use std::{mem, sync::Arc, thread, time::Duration};
-use waywe_runtime::{frame::FrameInfo, wayland::MonitorId};
+use waywe_runtime::frame::FrameInfo;
 
 /// Main wallpaper controller.
 ///
@@ -227,12 +227,6 @@ impl PreparedWallpaper {
             },
         }
     }
-}
-
-/// Configuration for building a wallpaper.
-pub struct WallpaperBuildConfig {
-    /// The monitor ID to render to.
-    pub monitor_id: MonitorId,
 }
 
 /// Trait for building custom wallpapers.

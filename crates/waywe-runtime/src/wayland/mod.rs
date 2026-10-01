@@ -20,7 +20,6 @@ use std::{
     pin::Pin,
     sync::{Arc, Mutex, RwLock},
 };
-use thiserror::Error;
 use wayland_client::{
     interface::{
         WlPointerEvent, WlRegistryEvent, WlRegistryGlobalEvent, WlRegistryGlobalRemoveEvent,
@@ -402,18 +401,6 @@ impl WaylandInner {
     pub fn raw_display_handle(&self) -> RawDisplayHandle {
         self.display.display_handle().unwrap().as_raw()
     }
-
-    pub fn drain_stored_events(&self, mut handle: impl FnMut(PlatformEvent)) {
-        let mut events = self.client_state.stored_events.lock().unwrap();
-
-        for event in events.drain(..) {
-            handle(event);
-        }
-    }
-
-    pub fn process_events(&self, mut handle: impl FnMut(PlatformEvent)) {
-        self.drain_stored_events(&mut handle);
-    }
 }
 
 impl Default for WaylandInner {
@@ -433,7 +420,7 @@ impl Deref for Wayland {
     }
 }
 
-pub struct WaylandSurface {
+struct WaylandSurface {
     wayland: Wayland,
     surface: WlObjectHandle<Surface>,
 }
@@ -480,6 +467,14 @@ impl WaywePlatform for Wayland {
     fn event_source(&self) -> Box<dyn PlatformEventSource> {
         Box::new(WaylandEventSource::new(self.clone()))
     }
+
+    fn drain_stored_events(&self, handle: &mut dyn FnMut(PlatformEvent)) {
+        let mut events = self.client_state.stored_events.lock().unwrap();
+
+        for event in events.drain(..) {
+            handle(event);
+        }
+    }
 }
 
 pub struct WaylandEventSource {
@@ -494,12 +489,6 @@ impl WaylandEventSource {
             token: None,
         }
     }
-}
-
-#[derive(Debug, Error)]
-pub enum WaylandProcessEventsError {
-    #[error("WlDisplay::flush failed")]
-    FlushFailed(#[from] Errno),
 }
 
 impl PlatformEventSource for WaylandEventSource {

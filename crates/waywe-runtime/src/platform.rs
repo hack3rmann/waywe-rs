@@ -8,6 +8,7 @@ use wgpu::SurfaceTarget;
 pub trait WaywePlatform: Send + Sync + 'static {
     fn get_surface(&self, monitor_name: &str) -> SurfaceTarget<'static>;
     fn event_source(&self) -> Box<dyn PlatformEventSource>;
+    fn drain_stored_events(&self, handle: &mut dyn FnMut(PlatformEvent));
 }
 assert_obj_safe!(WaywePlatform);
 

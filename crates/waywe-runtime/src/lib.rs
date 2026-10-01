@@ -1,4 +1,4 @@
-use crate::wayland::Wayland;
+use crate::platform::{SurfaceInfo, WaywePlatform};
 use calloop::channel::Sender;
 use glam::UVec2;
 use gpu::Wgpu;
@@ -21,13 +21,17 @@ pub mod wayland;
 pub struct Runtime {
     pub timer: Timer,
     pub wgpu: Arc<Wgpu>,
-    pub wayland: Wayland,
+    pub platform: Arc<dyn WaywePlatform>,
     pub tasks: Tasks,
     pub ipc: Sender<IpcResponse<DaemonResult>>,
 }
 
 impl Runtime {
-    pub fn new(wayland: Wayland, tasks: Tasks, ipc: Sender<IpcResponse<DaemonResult>>) -> Self {
+    pub fn new(
+        platform: Arc<dyn WaywePlatform>,
+        tasks: Tasks,
+        ipc: Sender<IpcResponse<DaemonResult>>,
+    ) -> Self {
         static VIDEO_ONCE: Once = Once::new();
         VIDEO_ONCE.call_once(video::init);
 
@@ -35,23 +39,19 @@ impl Runtime {
             ipc,
             timer: Timer::default(),
             wgpu: Arc::default(),
-            wayland,
+            platform,
             tasks,
         }
     }
 
-    pub fn wallpaper_config(&self, monitor_name: &str) -> Option<WallpaperConfig> {
-        let surface_size = {
-            let info = self.wayland.client_state.monitor_info(monitor_name);
-            info.phisical_size()
-        };
+    pub fn wallpaper_config(&self, info: &SurfaceInfo) -> Option<WallpaperConfig> {
         let surface_format = {
             let surfaces = self.wgpu.surfaces.read().unwrap();
-            surfaces.get(monitor_name)?.format
+            surfaces.get(&info.monitor_name)?.format
         };
 
         Some(WallpaperConfig {
-            surface_size,
+            surface_size: info.phisical_size,
             surface_format,
         })
     }
