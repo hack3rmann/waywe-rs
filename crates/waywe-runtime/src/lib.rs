@@ -16,7 +16,6 @@ pub mod platform;
 pub mod shaders;
 pub mod tasks;
 pub mod timer;
-pub mod wayland;
 
 pub struct Runtime {
     pub timer: Timer,

@@ -31,8 +31,7 @@ use waywe_runtime::{
     event::{EventHandler, Handle, PostEventActions, TryReplicate},
     frame::{FrameError, FrameInfo},
     gpu::SurfaceResult,
-    platform::{PlatformEvent, SurfaceInfo},
-    wayland::{MonitorMap, MonitorName},
+    platform::{MonitorMap, MonitorName, PlatformEvent, SurfaceInfo},
 };
 
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

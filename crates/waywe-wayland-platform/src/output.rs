@@ -1,9 +1,6 @@
-use crate::{
-    platform::{PlatformEvent, SurfaceInfo},
-    wayland::{ClientState, Globals, MonitorId, MonitorName, Region, Viewport, WLR_NAMESPACE},
-};
+use crate::{ClientState, Globals, MonitorId, Region, Viewport, WLR_NAMESPACE};
 use glam::UVec2;
-use std::{fmt, mem, num::NonZeroU32, pin::Pin};
+use std::{mem, pin::Pin};
 use wayland_client::{
     interface::{
         WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlOutputEvent,
@@ -24,45 +21,7 @@ use wayland_client::{
         wire::{WlMessage, WlStackMessageBuffer},
     },
 };
-
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Scale(NonZeroU32);
-
-impl Scale {
-    pub const ONE: Self = Self(NonZeroU32::new(120).unwrap());
-
-    pub const fn new(frac_120: u32) -> Self {
-        Self(match NonZeroU32::new(frac_120) {
-            Some(value) => value,
-            None => NonZeroU32::new(120).unwrap(),
-        })
-    }
-
-    pub const fn value(self) -> f32 {
-        self.0.get() as f32 / 120.0
-    }
-
-    pub fn to_phisical(self, logical_size: UVec2) -> UVec2 {
-        self.0.get() * logical_size / 120
-    }
-
-    pub fn to_logical(self, phisical_size: UVec2) -> UVec2 {
-        120 * phisical_size / self.0.get()
-    }
-}
-
-impl Default for Scale {
-    fn default() -> Self {
-        Self::ONE
-    }
-}
-
-impl fmt::Debug for Scale {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}/120", self.0)
-    }
-}
+use waywe_runtime::platform::{MonitorName, PlatformEvent, Scale, SurfaceInfo};
 
 #[derive(Default, Debug, Clone)]
 pub struct MonitorInfo {

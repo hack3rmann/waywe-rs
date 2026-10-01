@@ -1,6 +1,5 @@
-use super::wayland::MonitorMap;
 use crate::{
-    platform::{SurfaceInfo, WaywePlatform},
+    platform::{MonitorMap, SurfaceInfo, WaywePlatform},
     shaders::{ShaderCache, ShaderDescriptor},
 };
 use ash::vk;

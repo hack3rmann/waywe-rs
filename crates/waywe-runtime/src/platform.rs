@@ -1,9 +1,51 @@
-use crate::wayland::{MonitorName, output::Scale};
 use calloop::{EventIterator, EventSource, Poll, PostAction, Readiness, Token, TokenFactory};
 use glam::UVec2;
+use smallstr::SmallString;
 use static_assertions::assert_obj_safe;
-use std::error::Error;
+use std::{collections::BTreeMap, error::Error, fmt, num::NonZeroU32};
 use wgpu::SurfaceTarget;
+
+pub type MonitorMap<T> = BTreeMap<MonitorName, T>;
+pub type MonitorName = SmallString<[u8; 24]>;
+
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Scale(NonZeroU32);
+
+impl Scale {
+    pub const ONE: Self = Self(NonZeroU32::new(120).unwrap());
+
+    pub const fn new(frac_120: u32) -> Self {
+        Self(match NonZeroU32::new(frac_120) {
+            Some(value) => value,
+            None => NonZeroU32::new(120).unwrap(),
+        })
+    }
+
+    pub const fn value(self) -> f32 {
+        self.0.get() as f32 / 120.0
+    }
+
+    pub fn to_phisical(self, logical_size: UVec2) -> UVec2 {
+        self.0.get() * logical_size / 120
+    }
+
+    pub fn to_logical(self, phisical_size: UVec2) -> UVec2 {
+        120 * phisical_size / self.0.get()
+    }
+}
+
+impl Default for Scale {
+    fn default() -> Self {
+        Self::ONE
+    }
+}
+
+impl fmt::Debug for Scale {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}/120", self.0)
+    }
+}
 
 pub trait WaywePlatform: Send + Sync + 'static {
     fn get_surface(&self, monitor_name: &str) -> SurfaceTarget<'static>;

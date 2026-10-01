@@ -15,7 +15,7 @@ use tracing::{debug, info, warn};
 use tracing_subscriber::EnvFilter;
 use wallpaper_app::WallpaperApp;
 use waywe_config::Config;
-use waywe_runtime::wayland::Wayland;
+use waywe_wayland_platform::Wayland;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]

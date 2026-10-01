@@ -15,7 +15,6 @@ waywe-ipc.workspace = true
 waywe-spirv-derive.workspace = true
 waywe-config.workspace = true
 for-sure = "0.1.1"
-raw-window-handle = "0.6.2"
 bitflags.workspace = true
 smallvec.workspace = true
 tracing.workspace = true
@@ -26,7 +25,6 @@ rustix.workspace = true
 thiserror.workspace = true
 box_into_inner.workspace = true
 video.workspace = true
-wayland-client.workspace = true
 futures-util.workspace = true
 derive_more = { version = "2.0.1", features = ["full"] }
 static_assertions.workspace = true

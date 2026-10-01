@@ -1,9 +1,6 @@
 pub mod output;
 
-use crate::{
-    platform::{PlatformEvent, PlatformEventSource, WaywePlatform},
-    wayland::output::{FractionalScaleManager, LayerSurface, MonitorInfo, Surface, handle_output},
-};
+use crate::output::{FractionalScaleManager, LayerSurface, MonitorInfo, Surface, handle_output};
 use calloop::{EventIterator, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
 use glam::UVec2;
 use raw_window_handle::{
@@ -11,9 +8,8 @@ use raw_window_handle::{
     RawWindowHandle, WaylandWindowHandle, WindowHandle,
 };
 use rustix::io::Errno;
-use smallstr::SmallString;
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::HashMap,
     error::Error,
     ffi::CStr,
     ops::Deref,
@@ -37,10 +33,9 @@ use wayland_client::{
         wire::{WlMessage, WlStackMessageBuffer},
     },
 };
+use waywe_runtime::platform::{MonitorMap, PlatformEvent, PlatformEventSource, WaywePlatform};
 
 pub type MonitorId = WlObjectId;
-pub type MonitorMap<T> = BTreeMap<MonitorName, T>;
-pub type MonitorName = SmallString<[u8; 24]>;
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct Globals {

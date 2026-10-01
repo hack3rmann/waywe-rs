@@ -28,9 +28,8 @@ use waywe_runtime::{
     app::{App, DynApp},
     event::{Event, EventReceiver, IntoEvent, PostEventActions},
     frame::{FrameError, FrameInfo},
-    platform::WaywePlatform,
+    platform::{MonitorName, WaywePlatform},
     tasks::Tasks,
-    wayland::MonitorName,
 };
 
 #[derive(Debug, Error)]
