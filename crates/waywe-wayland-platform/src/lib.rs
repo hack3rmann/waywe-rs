@@ -1,6 +1,6 @@
-pub mod output;
+mod output;
 
-use crate::output::{FractionalScaleManager, LayerSurface, MonitorInfo, Surface, handle_output};
+use crate::output::{FractionalScaleManager, MonitorInfo, Surface, handle_output};
 use calloop::{EventIterator, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
 use glam::UVec2;
 use raw_window_handle::{
@@ -12,7 +12,6 @@ use std::{
     collections::HashMap,
     error::Error,
     ffi::CStr,
-    ops::Deref,
     pin::Pin,
     sync::{Arc, Mutex, RwLock},
 };
@@ -35,10 +34,10 @@ use wayland_client::{
 };
 use waywe_runtime::platform::{MonitorMap, PlatformEvent, PlatformEventSource, WaywePlatform};
 
-pub type MonitorId = WlObjectId;
+pub(crate) type MonitorId = WlObjectId;
 
 #[derive(Default, Debug, Clone, Copy)]
-pub struct Globals {
+pub(crate) struct Globals {
     pub compositor: WlObjectHandle<Compositor>,
     pub layer_shell: WlObjectHandle<LayerShell>,
     pub viewporter: WlObjectHandle<Viewporter>,
@@ -46,27 +45,15 @@ pub struct Globals {
 }
 
 #[derive(Default)]
-pub struct ClientState {
+pub(crate) struct ClientState {
     pub stored_events: Mutex<Vec<PlatformEvent>>,
     pub monitors: RwLock<HashMap<MonitorId, MonitorInfo>>,
     pub monitor_names: RwLock<MonitorMap<MonitorId>>,
     pub globals: Option<Globals>,
 }
 
-impl ClientState {
-    pub fn monitor_info(&self, name: &str) -> MonitorInfo {
-        let id = {
-            let names = self.monitor_names.read().unwrap();
-            names[name]
-        };
-
-        let monitors = self.monitors.read().unwrap();
-        monitors[&id].clone()
-    }
-}
-
 #[derive(Default)]
-pub struct Compositor;
+pub(crate) struct Compositor;
 
 impl HasObjectType for Compositor {
     const OBJECT_TYPE: WlObjectType = WlObjectType::Compositor;
@@ -77,7 +64,7 @@ impl Dispatch for Compositor {
     const ALLOW_EMPTY_DISPATCH: bool = true;
 }
 
-pub struct Seat {
+pub(crate) struct Seat {
     handle: WlObjectHandle<Self>,
     pointer: Option<WlObjectHandle<Pointer>>,
 }
@@ -124,7 +111,7 @@ impl Dispatch for Seat {
 }
 
 #[derive(Default)]
-pub struct Viewporter;
+pub(crate) struct Viewporter;
 
 impl HasObjectType for Viewporter {
     const OBJECT_TYPE: WlObjectType = WlObjectType::WpViewporter;
@@ -136,7 +123,7 @@ impl Dispatch for Viewporter {
 }
 
 #[derive(Default)]
-pub struct Viewport;
+pub(crate) struct Viewport;
 
 impl HasObjectType for Viewport {
     const OBJECT_TYPE: WlObjectType = WlObjectType::WpViewport;
@@ -148,7 +135,7 @@ impl Dispatch for Viewport {
 }
 
 #[derive(Default)]
-pub struct Pointer;
+pub(crate) struct Pointer;
 
 impl HasObjectType for Pointer {
     const OBJECT_TYPE: WlObjectType = WlObjectType::Pointer;
@@ -182,7 +169,7 @@ impl Dispatch for Pointer {
 }
 
 #[derive(Default)]
-pub struct LayerShell;
+pub(crate) struct LayerShell;
 
 impl HasObjectType for LayerShell {
     const OBJECT_TYPE: WlObjectType = WlObjectType::LayerShell;
@@ -193,7 +180,7 @@ impl Dispatch for LayerShell {
     const ALLOW_EMPTY_DISPATCH: bool = true;
 }
 
-pub struct Region;
+pub(crate) struct Region;
 
 impl Dispatch for Region {
     type State = ClientState;
@@ -267,9 +254,9 @@ pub(crate) fn registry_dispatch(
     }
 }
 
-pub const WLR_NAMESPACE: &CStr = c"waywe-runtime";
+pub(crate) const WLR_NAMESPACE: &CStr = c"waywe-runtime";
 
-pub trait SurfaceExtension {
+pub(crate) trait SurfaceExtension {
     fn raw_window_handle(&self) -> RawWindowHandle;
 }
 
@@ -279,28 +266,14 @@ impl SurfaceExtension for WlObject<Surface> {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct MonitorSurface {
-    pub surface: WlObjectHandle<Surface>,
-    pub layer_surface: WlObjectHandle<LayerSurface>,
-}
-
-pub struct WaylandInner {
+pub(crate) struct WaylandInner {
     pub client_state: Pin<Box<ClientState>>,
     pub main_queue: RwLock<Pin<Box<WlEventQueue<ClientState>>>>,
     pub display: WlDisplay<ClientState>,
-    pub registry: WlObjectHandle<WlRegistry<ClientState>>,
 }
 
 impl WaylandInner {
-    pub fn display_roundtrip(&self) {
-        let mut main_queue = self.main_queue.write().unwrap();
-
-        self.display
-            .roundtrip(main_queue.as_mut(), self.client_state.as_ref());
-    }
-
-    pub fn dispatch_pending(&self) -> usize {
+    pub(crate) fn dispatch_pending(&self) -> usize {
         let mut total_dispatched = 0;
 
         let mut main_queue = self.main_queue.write().unwrap();
@@ -321,7 +294,7 @@ impl WaylandInner {
     }
 
     #[track_caller]
-    pub fn prepare_poll(&self) -> usize {
+    pub(crate) fn prepare_poll(&self) -> usize {
         let mut main_queue = self.main_queue.write().unwrap();
 
         self.display
@@ -329,15 +302,15 @@ impl WaylandInner {
             .expect("failed to prepare poll")
     }
 
-    pub fn unprepare_poll(&self) {
+    pub(crate) fn unprepare_poll(&self) {
         self.display.cancel_read();
     }
 
-    pub fn flush(&self) -> Result<usize, Errno> {
+    pub(crate) fn flush(&self) -> Result<usize, Errno> {
         self.display.flush()
     }
 
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let mut client_state = Box::pin(ClientState::default());
         let display = WlDisplay::connect(client_state.as_ref()).unwrap();
         let mut queue = Box::pin(display.take_main_queue().unwrap());
@@ -389,11 +362,10 @@ impl WaylandInner {
             client_state,
             display,
             main_queue: RwLock::new(queue),
-            registry,
         }
     }
 
-    pub fn raw_display_handle(&self) -> RawDisplayHandle {
+    pub(crate) fn raw_display_handle(&self) -> RawDisplayHandle {
         self.display.display_handle().unwrap().as_raw()
     }
 }
@@ -407,14 +379,6 @@ impl Default for WaylandInner {
 #[derive(Clone, Default)]
 pub struct Wayland(Arc<WaylandInner>);
 
-impl Deref for Wayland {
-    type Target = WaylandInner;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 struct WaylandSurface {
     wayland: Wayland,
     surface: WlObjectHandle<Surface>,
@@ -422,14 +386,14 @@ struct WaylandSurface {
 
 impl HasDisplayHandle for WaylandSurface {
     fn display_handle(&self) -> Result<DisplayHandle<'static>, HandleError> {
-        Ok(unsafe { DisplayHandle::borrow_raw(self.wayland.raw_display_handle()) })
+        Ok(unsafe { DisplayHandle::borrow_raw(self.wayland.0.raw_display_handle()) })
     }
 }
 
 impl HasWindowHandle for WaylandSurface {
     fn window_handle(&self) -> Result<WindowHandle<'static>, HandleError> {
         let handle = {
-            let queue = self.wayland.main_queue.read().unwrap();
+            let queue = self.wayland.0.main_queue.read().unwrap();
             queue
                 .as_ref()
                 .storage()
@@ -444,11 +408,11 @@ impl HasWindowHandle for WaylandSurface {
 impl WaywePlatform for Wayland {
     fn get_surface(&self, monitor_name: &str) -> wgpu::SurfaceTarget<'static> {
         let monitor_id = {
-            let names = self.client_state.monitor_names.read().unwrap();
+            let names = self.0.client_state.monitor_names.read().unwrap();
             names[monitor_name]
         };
         let surface = {
-            let monitors = self.client_state.monitors.read().unwrap();
+            let monitors = self.0.client_state.monitors.read().unwrap();
             monitors[&monitor_id].surface
         };
 
@@ -464,7 +428,7 @@ impl WaywePlatform for Wayland {
     }
 
     fn drain_stored_events(&self, handle: &mut dyn FnMut(PlatformEvent)) {
-        let mut events = self.client_state.stored_events.lock().unwrap();
+        let mut events = self.0.client_state.stored_events.lock().unwrap();
 
         for event in events.drain(..) {
             handle(event);
@@ -472,13 +436,13 @@ impl WaywePlatform for Wayland {
     }
 }
 
-pub struct WaylandEventSource {
+pub(crate) struct WaylandEventSource {
     wayland: Wayland,
     token: Option<Token>,
 }
 
 impl WaylandEventSource {
-    pub const fn new(wayland: Wayland) -> Self {
+    pub(crate) const fn new(wayland: Wayland) -> Self {
         Self {
             wayland,
             token: None,
@@ -493,10 +457,10 @@ impl PlatformEventSource for WaylandEventSource {
         _: Token,
         callback: &mut dyn FnMut(PlatformEvent),
     ) -> Result<PostAction, Box<dyn Error + Send + Sync>> {
-        self.wayland.dispatch_pending();
+        self.wayland.0.dispatch_pending();
         self.wayland.drain_stored_events(callback);
 
-        match self.wayland.flush() {
+        match self.wayland.0.flush() {
             Ok(_) | Err(Errno::AGAIN) => {}
             Err(error) => panic!("failed to flush display: {error}"),
         }
@@ -512,7 +476,7 @@ impl PlatformEventSource for WaylandEventSource {
         let token = token_factory.token();
         self.token = Some(token);
 
-        unsafe { poll.register(&self.wayland.display, Interest::READ, Mode::Level, token) }
+        unsafe { poll.register(&self.wayland.0.display, Interest::READ, Mode::Level, token) }
     }
 
     fn reregister(
@@ -523,15 +487,15 @@ impl PlatformEventSource for WaylandEventSource {
         let token = token_factory.token();
         self.token = Some(token);
 
-        poll.reregister(&self.wayland.display, Interest::READ, Mode::Level, token)
+        poll.reregister(&self.wayland.0.display, Interest::READ, Mode::Level, token)
     }
 
     fn unregister(&mut self, poll: &mut Poll) -> calloop::Result<()> {
-        poll.unregister(&self.wayland.display)
+        poll.unregister(&self.wayland.0.display)
     }
 
     fn before_sleep(&mut self) -> calloop::Result<Option<(Readiness, Token)>> {
-        let n_dispatched = self.wayland.prepare_poll();
+        let n_dispatched = self.wayland.0.prepare_poll();
 
         if n_dispatched == 0 {
             return Ok(None);
@@ -552,11 +516,11 @@ impl PlatformEventSource for WaylandEventSource {
             .any(|(readiness, token)| readiness.readable && self.token == Some(token));
 
         if !contains_us {
-            self.wayland.unprepare_poll();
+            self.wayland.0.unprepare_poll();
             return;
         }
 
-        match self.wayland.display.read_events() {
+        match self.wayland.0.display.read_events() {
             Ok(()) | Err(Errno::AGAIN) => {}
             Err(error) => panic!("failed to read events: {error}"),
         }

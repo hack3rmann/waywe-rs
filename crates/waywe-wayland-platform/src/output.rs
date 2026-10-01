@@ -24,7 +24,7 @@ use wayland_client::{
 use waywe_runtime::platform::{MonitorName, PlatformEvent, Scale, SurfaceInfo};
 
 #[derive(Default, Debug, Clone)]
-pub struct MonitorInfo {
+pub(crate) struct MonitorInfo {
     pub monitor_id: MonitorId,
     pub name: MonitorName,
     pub logical_size: UVec2,
@@ -44,7 +44,7 @@ impl MonitorInfo {
 }
 
 #[derive(Default)]
-pub struct FractionalScaleManager;
+pub(crate) struct FractionalScaleManager;
 
 impl HasObjectType for FractionalScaleManager {
     const OBJECT_TYPE: WlObjectType = WlObjectType::WpFractionalScaleManagerV1;
@@ -56,7 +56,7 @@ impl Dispatch for FractionalScaleManager {
 }
 
 #[derive(Default)]
-pub struct FractionalScale {
+pub(crate) struct FractionalScale {
     output: WlObjectHandle<Output>,
 }
 
@@ -84,7 +84,7 @@ impl Dispatch for FractionalScale {
 }
 
 #[derive(Default)]
-pub struct Surface;
+pub(crate) struct Surface;
 
 impl HasObjectType for Surface {
     const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
@@ -95,7 +95,7 @@ impl Dispatch for Surface {
     const ALLOW_EMPTY_DISPATCH: bool = true;
 }
 
-pub struct LayerSurface {
+pub(crate) struct LayerSurface {
     pub output: WlObjectHandle<Output>,
 }
 
@@ -130,14 +130,14 @@ impl Dispatch for LayerSurface {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct WaylandScale {
+pub(crate) struct WaylandScale {
     pub value: Scale,
     pub object: WlObjectHandle<FractionalScale>,
     pub viewport: WlObjectHandle<Viewport>,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct OutputTransaction {
+pub(crate) struct OutputTransaction {
     is_create: bool,
     is_remove: bool,
     configure: Option<(u32, UVec2)>,
@@ -196,7 +196,7 @@ impl OutputTransaction {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum OutputAction {
+pub(crate) enum OutputAction {
     Create,
     Remove,
     Configure {
@@ -207,7 +207,7 @@ pub enum OutputAction {
 }
 
 #[derive(Debug)]
-pub enum Output {
+pub(crate) enum Output {
     Active {
         info: MonitorInfo,
         transaction: OutputTransaction,
@@ -735,7 +735,7 @@ impl Dispatch for Output {
     }
 }
 
-pub fn handle_output(
+pub(crate) fn handle_output(
     registry: WlObjectHandle<WlRegistry<ClientState>>,
     mut storage: Pin<&mut WlObjectStorage<ClientState>>,
     monitor_id: WlObjectId,
