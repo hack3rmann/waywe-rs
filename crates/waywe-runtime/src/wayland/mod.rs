@@ -1,19 +1,20 @@
 pub mod output;
 
-use crate::wayland::output::{
-    FractionalScaleManager, LayerSurface, MonitorInfo, Surface, handle_output,
+use crate::{
+    platform::{PlatformEvent, PlatformEventSource, WaywePlatform},
+    wayland::output::{FractionalScaleManager, LayerSurface, MonitorInfo, Surface, handle_output},
 };
-use calloop::{
-    EventIterator, EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory,
-};
+use calloop::{EventIterator, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
 use glam::UVec2;
 use raw_window_handle::{
-    HasDisplayHandle as _, RawDisplayHandle, RawWindowHandle, WaylandWindowHandle,
+    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawDisplayHandle,
+    RawWindowHandle, WaylandWindowHandle, WindowHandle,
 };
 use rustix::io::Errno;
 use smallstr::SmallString;
 use std::{
     collections::{BTreeMap, HashMap},
+    error::Error,
     ffi::CStr,
     ops::Deref,
     pin::Pin,
@@ -38,24 +39,6 @@ use wayland_client::{
     },
 };
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum WaylandEvent {
-    ResizeRequested {
-        monitor_name: MonitorName,
-        phisical_size: UVec2,
-    },
-    MonitorPlugged {
-        name: MonitorName,
-    },
-    MonitorUnplugged {
-        name: MonitorName,
-    },
-    // TODO(hack3rmann): implement approach from <https://github.com/cjacker/wl-find-cursor/blob/main/main.c>
-    CursorMoved {
-        position: UVec2,
-    },
-}
-
 pub type MonitorId = WlObjectId;
 pub type MonitorMap<T> = BTreeMap<MonitorName, T>;
 pub type MonitorName = SmallString<[u8; 24]>;
@@ -70,7 +53,7 @@ pub struct Globals {
 
 #[derive(Default)]
 pub struct ClientState {
-    pub stored_events: Mutex<Vec<WaylandEvent>>,
+    pub stored_events: Mutex<Vec<PlatformEvent>>,
     pub monitors: RwLock<HashMap<MonitorId, MonitorInfo>>,
     pub monitor_names: RwLock<MonitorMap<MonitorId>>,
     pub globals: Option<Globals>,
@@ -200,7 +183,7 @@ impl Dispatch for Pointer {
         );
 
         let mut events = state.stored_events.lock().unwrap();
-        events.push(WaylandEvent::CursorMoved { position });
+        events.push(PlatformEvent::CursorMoved { position });
     }
 }
 
@@ -420,7 +403,7 @@ impl WaylandInner {
         self.display.display_handle().unwrap().as_raw()
     }
 
-    pub fn drain_stored_events(&self, mut handle: impl FnMut(WaylandEvent)) {
+    pub fn drain_stored_events(&self, mut handle: impl FnMut(PlatformEvent)) {
         let mut events = self.client_state.stored_events.lock().unwrap();
 
         for event in events.drain(..) {
@@ -428,7 +411,7 @@ impl WaylandInner {
         }
     }
 
-    pub fn process_events(&self, mut handle: impl FnMut(WaylandEvent)) {
+    pub fn process_events(&self, mut handle: impl FnMut(PlatformEvent)) {
         self.drain_stored_events(&mut handle);
     }
 }
@@ -447,6 +430,55 @@ impl Deref for Wayland {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+pub struct WaylandSurface {
+    wayland: Wayland,
+    surface: WlObjectHandle<Surface>,
+}
+
+impl HasDisplayHandle for WaylandSurface {
+    fn display_handle(&self) -> Result<DisplayHandle<'static>, HandleError> {
+        Ok(unsafe { DisplayHandle::borrow_raw(self.wayland.raw_display_handle()) })
+    }
+}
+
+impl HasWindowHandle for WaylandSurface {
+    fn window_handle(&self) -> Result<WindowHandle<'static>, HandleError> {
+        let handle = {
+            let queue = self.wayland.main_queue.read().unwrap();
+            queue
+                .as_ref()
+                .storage()
+                .object(self.surface)
+                .raw_window_handle()
+        };
+
+        Ok(unsafe { WindowHandle::borrow_raw(handle) })
+    }
+}
+
+impl WaywePlatform for Wayland {
+    fn get_surface(&self, monitor_name: &str) -> wgpu::SurfaceTarget<'static> {
+        let monitor_id = {
+            let names = self.client_state.monitor_names.read().unwrap();
+            names[monitor_name]
+        };
+        let surface = {
+            let monitors = self.client_state.monitors.read().unwrap();
+            monitors[&monitor_id].surface
+        };
+
+        WaylandSurface {
+            wayland: self.clone(),
+            surface,
+        }
+        .into()
+    }
+
+    fn event_source(&self) -> Box<dyn PlatformEventSource> {
+        Box::new(WaylandEventSource::new(self.clone()))
     }
 }
 
@@ -470,26 +502,15 @@ pub enum WaylandProcessEventsError {
     FlushFailed(#[from] Errno),
 }
 
-impl EventSource for WaylandEventSource {
-    type Event = WaylandEvent;
-    type Metadata = ();
-    type Ret = ();
-    type Error = WaylandProcessEventsError;
-
-    const NEEDS_EXTRA_LIFECYCLE_EVENTS: bool = true;
-
-    fn process_events<F>(
+impl PlatformEventSource for WaylandEventSource {
+    fn process_events(
         &mut self,
         _: Readiness,
         _: Token,
-        mut callback: F,
-    ) -> Result<PostAction, Self::Error>
-    where
-        F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
-    {
+        callback: &mut dyn FnMut(PlatformEvent),
+    ) -> Result<PostAction, Box<dyn Error + Send + Sync>> {
         self.wayland.dispatch_pending();
-        self.wayland
-            .drain_stored_events(|event| callback(event, &mut ()));
+        self.wayland.drain_stored_events(callback);
 
         match self.wayland.flush() {
             Ok(_) | Err(Errno::AGAIN) => {}

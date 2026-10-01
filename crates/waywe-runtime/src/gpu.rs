@@ -1,5 +1,6 @@
 use super::wayland::{MonitorMap, SurfaceExtension};
 use crate::{
+    platform::{SurfaceInfo, WaywePlatform},
     shaders::{ShaderCache, ShaderDescriptor},
     wayland::{MonitorName, Wayland, output::MonitorInfo},
 };
@@ -240,6 +241,31 @@ fn create_device_and_queue(
     };
 
     unsafe { adapter.create_device_from_hal::<api::Vulkan>(open_device, &desc) }
+}
+
+fn create_surface_v2(
+    instance: &wgpu::Instance,
+    adapter: &wgpu::Adapter,
+    device: &wgpu::Device,
+    backend: &dyn WaywePlatform,
+    info: &SurfaceInfo,
+) -> Surface {
+    let surface = instance
+        .create_surface(backend.get_surface(&info.monitor_name))
+        .unwrap();
+
+    let Some(format) = surface.get_capabilities(adapter).formats.first().copied() else {
+        panic!("no surface format supported");
+    };
+
+    let config = get_surface_config(&surface, adapter, info.phisical_size);
+    surface.configure(device, &config);
+
+    Surface {
+        surface,
+        format,
+        config,
+    }
 }
 
 fn create_surface(

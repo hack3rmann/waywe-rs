@@ -31,7 +31,8 @@ use waywe_runtime::{
     event::{EventHandler, Handle, PostEventActions, TryReplicate},
     frame::{FrameError, FrameInfo},
     gpu::SurfaceResult,
-    wayland::{MonitorMap, MonitorName, WaylandEvent},
+    platform::PlatformEvent,
+    wayland::{MonitorMap, MonitorName},
 };
 
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -171,7 +172,7 @@ pub struct ConfigReloadEvent {
 impl App for WallpaperApp {
     fn populate_handler(&mut self, handler: &mut EventHandler<Self>) {
         handler
-            .add_event::<WaylandEvent>()
+            .add_event::<PlatformEvent>()
             .add_event::<NewWallpaperEvent>()
             .add_event::<WallpaperPreparedEvent>()
             .add_event::<WallpaperPauseEvent>()
@@ -354,10 +355,10 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
     }
 }
 
-impl Handle<WaylandEvent> for WallpaperApp {
-    async fn handle(&mut self, runtime: &mut Runtime, event: WaylandEvent) -> PostEventActions {
+impl Handle<PlatformEvent> for WallpaperApp {
+    async fn handle(&mut self, runtime: &mut Runtime, event: PlatformEvent) -> PostEventActions {
         match event {
-            WaylandEvent::ResizeRequested {
+            PlatformEvent::ResizeRequested {
                 monitor_name,
                 phisical_size: size,
             } => {
@@ -388,24 +389,26 @@ impl Handle<WaylandEvent> for WallpaperApp {
 
                 PostEventActions::REDRAW
             }
-            WaylandEvent::MonitorPlugged { name: monitor_name } => {
+            PlatformEvent::MonitorPlugged { info } => {
                 runtime
                     .wgpu
-                    .register_surface(&runtime.wayland, monitor_name.clone());
+                    .register_surface(&runtime.wayland, info.monitor_name.clone());
 
-                debug!(name = %monitor_name, "new monitor detected");
+                debug!(?info, "new monitor detected");
 
                 match SetupProfile::read() {
                     Ok(mut profile) => 'ok: {
                         debug!(?profile, "read setup profile");
 
-                        let Some(info) = profile.monitors.remove(monitor_name.as_str()) else {
+                        let Some(profile_info) =
+                            profile.monitors.remove(info.monitor_name.as_str())
+                        else {
                             break 'ok;
                         };
                         let event = NewWallpaperEvent {
-                            path: info.path,
-                            ty: info.wallpaper_type,
-                            target: WallpaperTarget::ForMonitor(monitor_name.clone()),
+                            path: profile_info.path,
+                            ty: profile_info.wallpaper_type,
+                            target: WallpaperTarget::ForMonitor(info.monitor_name.clone()),
                             sender_id: None,
                         };
 
@@ -418,16 +421,16 @@ impl Handle<WaylandEvent> for WallpaperApp {
                 }
 
                 let wall_config = runtime
-                    .wallpaper_config(&monitor_name)
-                    .unwrap_or_else(|| panic!("no config for '{monitor_name}'"));
+                    .wallpaper_config(&info.monitor_name)
+                    .unwrap_or_else(|| panic!("no config for '{}'", info.monitor_name));
 
                 let wallpapers = RunningWallpapers::new(wall_config, self.config.clone());
 
-                self.wallpapers.insert(monitor_name, wallpapers);
+                self.wallpapers.insert(info.monitor_name, wallpapers);
 
                 PostEventActions::empty()
             }
-            WaylandEvent::MonitorUnplugged { name } => {
+            PlatformEvent::MonitorUnplugged { monitor_name: name } => {
                 debug!(%name, "unplugged a monitor");
 
                 _ = self.wallpapers.remove(&name);
@@ -440,7 +443,7 @@ impl Handle<WaylandEvent> for WallpaperApp {
 
                 PostEventActions::empty()
             }
-            WaylandEvent::CursorMoved { position: _ } => PostEventActions::empty(),
+            PlatformEvent::CursorMoved { position: _ } => PostEventActions::empty(),
         }
     }
 }

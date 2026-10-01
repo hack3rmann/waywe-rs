@@ -1,5 +1,6 @@
-use crate::wayland::{
-    ClientState, Globals, MonitorId, MonitorName, Region, Viewport, WLR_NAMESPACE, WaylandEvent,
+use crate::{
+    platform::{PlatformEvent, SurfaceInfo},
+    wayland::{ClientState, Globals, MonitorId, MonitorName, Region, Viewport, WLR_NAMESPACE},
 };
 use glam::UVec2;
 use std::{fmt, mem, num::NonZeroU32, pin::Pin};
@@ -661,8 +662,12 @@ impl Output {
 
                 {
                     let mut events = state.stored_events.lock().unwrap();
-                    events.push(WaylandEvent::MonitorPlugged {
-                        name: info.name.clone(),
+                    events.push(PlatformEvent::MonitorPlugged {
+                        info: SurfaceInfo {
+                            monitor_name: info.name.clone(),
+                            phisical_size: info.phisical_size(),
+                            scale: info.scale.map(|s| s.value).unwrap_or_default(),
+                        },
                     });
                 }
             }
@@ -687,8 +692,8 @@ impl Output {
 
                 {
                     let mut events = state.stored_events.lock().unwrap();
-                    events.push(WaylandEvent::MonitorUnplugged {
-                        name: info.name.clone(),
+                    events.push(PlatformEvent::MonitorUnplugged {
+                        monitor_name: info.name.clone(),
                     });
                 }
             }
@@ -720,7 +725,7 @@ impl Output {
 
                 if old_phisical_size != info.phisical_size() {
                     let mut events = state.stored_events.lock().unwrap();
-                    events.push(WaylandEvent::ResizeRequested {
+                    events.push(PlatformEvent::ResizeRequested {
                         monitor_name: info.name.clone(),
                         phisical_size: info.phisical_size(),
                     });

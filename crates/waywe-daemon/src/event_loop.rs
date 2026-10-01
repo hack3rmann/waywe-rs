@@ -28,6 +28,7 @@ use waywe_runtime::{
     app::{App, DynApp},
     event::{Event, EventReceiver, IntoEvent, PostEventActions},
     frame::{FrameError, FrameInfo},
+    platform::{PlatformEventSource, WaywePlatform},
     tasks::Tasks,
     wayland::{MonitorName, Wayland, WaylandEventSource},
 };
@@ -133,12 +134,9 @@ impl EventLoop {
             .map_err(calloop::Error::from)?;
 
         handle
-            .insert_source(
-                WaylandEventSource::new(wayland),
-                move |event, &mut (), state| {
-                    state.event_queue.add(event);
-                },
-            )
+            .insert_source(wayland.event_source(), move |event, &mut (), state| {
+                state.event_queue.add(event);
+            })
             .map_err(calloop::Error::from)?;
 
         let ipc = IpcServer::<DaemonCommand, DaemonResult>::new(ipc_channel)?;

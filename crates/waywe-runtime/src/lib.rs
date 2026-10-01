@@ -12,6 +12,7 @@ pub mod effects;
 pub mod event;
 pub mod frame;
 pub mod gpu;
+pub mod platform;
 pub mod shaders;
 pub mod tasks;
 pub mod timer;
