@@ -46,9 +46,9 @@ pub(crate) struct Globals {
 
 #[derive(Default)]
 pub(crate) struct ClientState {
-    pub stored_events: Mutex<Vec<PlatformEvent>>,
-    pub monitors: RwLock<HashMap<MonitorId, MonitorInfo>>,
-    pub monitor_names: RwLock<MonitorMap<MonitorId>>,
+    pub stored_events: Vec<PlatformEvent>,
+    pub monitors: HashMap<MonitorId, MonitorInfo>,
+    pub monitor_names: MonitorMap<MonitorId>,
     pub globals: Option<Globals>,
 }
 
@@ -87,7 +87,7 @@ impl Dispatch for Seat {
 
     fn dispatch(
         &mut self,
-        _: &Self::State,
+        _: &mut Self::State,
         storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
@@ -146,7 +146,7 @@ impl Dispatch for Pointer {
 
     fn dispatch(
         &mut self,
-        state: &Self::State,
+        state: &mut Self::State,
         _: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
@@ -163,8 +163,9 @@ impl Dispatch for Pointer {
             motion.surface_y.to_int().cast_unsigned(),
         );
 
-        let mut events = state.stored_events.lock().unwrap();
-        events.push(PlatformEvent::CursorMoved { position });
+        state
+            .stored_events
+            .push(PlatformEvent::CursorMoved { position });
     }
 }
 
@@ -214,7 +215,7 @@ pub(crate) fn handle_global(
 
 pub(crate) fn handle_global_remove(
     registry: &mut WlRegistry<ClientState>,
-    state: &ClientState,
+    state: &mut ClientState,
     storage: &mut WlObjectStorage<ClientState>,
     global: WlRegistryGlobalRemoveEvent,
 ) {
@@ -225,10 +226,7 @@ pub(crate) fn handle_global_remove(
     }
 
     let monitor_id = global_name;
-    let Some(output) = ({
-        let monitors = state.monitors.read().unwrap();
-        monitors.get(&monitor_id).map(|i| i.output)
-    }) else {
+    let Some(output) = state.monitors.get(&monitor_id).map(|i| i.output) else {
         return;
     };
 
@@ -240,7 +238,7 @@ pub(crate) fn handle_global_remove(
 
 pub(crate) fn registry_dispatch(
     registry: &mut WlRegistry<ClientState>,
-    state: &ClientState,
+    state: &mut ClientState,
     storage: &mut WlObjectStorage<ClientState>,
     event: WlRegistryEvent<'_>,
 ) {
@@ -267,7 +265,7 @@ impl SurfaceExtension for WlObject<Surface> {
 }
 
 pub(crate) struct WaylandInner {
-    pub client_state: Pin<Box<ClientState>>,
+    pub client_state: Mutex<Pin<Box<ClientState>>>,
     pub main_queue: RwLock<Pin<Box<WlEventQueue<ClientState>>>>,
     pub display: WlDisplay<ClientState>,
 }
@@ -277,11 +275,12 @@ impl WaylandInner {
         let mut total_dispatched = 0;
 
         let mut main_queue = self.main_queue.write().unwrap();
+        let mut state = self.client_state.lock().unwrap();
 
         loop {
             let n_dispatched = self
                 .display
-                .dispatch_pending(main_queue.as_mut(), self.client_state.as_ref());
+                .dispatch_pending(main_queue.as_mut(), state.as_mut());
 
             if n_dispatched == 0 {
                 break;
@@ -296,9 +295,10 @@ impl WaylandInner {
     #[track_caller]
     pub(crate) fn prepare_poll(&self) -> usize {
         let mut main_queue = self.main_queue.write().unwrap();
+        let mut state = self.client_state.lock().unwrap();
 
         self.display
-            .prepare_poll(main_queue.as_mut(), self.client_state.as_ref())
+            .prepare_poll(main_queue.as_mut(), state.as_mut())
             .expect("failed to prepare poll")
     }
 
@@ -312,7 +312,7 @@ impl WaylandInner {
 
     pub(crate) fn new() -> Self {
         let mut client_state = Box::pin(ClientState::default());
-        let display = WlDisplay::connect(client_state.as_ref()).unwrap();
+        let display = WlDisplay::connect(client_state.as_mut()).unwrap();
         let mut queue = Box::pin(display.take_main_queue().unwrap());
 
         let mut buf = WlStackMessageBuffer::new();
@@ -323,7 +323,7 @@ impl WaylandInner {
             .handle();
 
         // fill the registry first
-        display.roundtrip(queue.as_mut(), client_state.as_ref());
+        display.roundtrip(queue.as_mut(), client_state.as_mut());
 
         let mut storage = queue.as_mut().storage_mut();
 
@@ -355,11 +355,11 @@ impl WaylandInner {
 
         // NOTE(hack3rmann): try to do the intial setup before anything else
         for _ in 0..N_INIT_ROUNDTRIPS {
-            display.roundtrip(queue.as_mut(), client_state.as_ref());
+            display.roundtrip(queue.as_mut(), client_state.as_mut());
         }
 
         Self {
-            client_state,
+            client_state: Mutex::new(client_state),
             display,
             main_queue: RwLock::new(queue),
         }
@@ -407,14 +407,9 @@ impl HasWindowHandle for WaylandSurface {
 
 impl WaywePlatform for Wayland {
     fn get_surface(&self, monitor_name: &str) -> wgpu::SurfaceTarget<'static> {
-        let monitor_id = {
-            let names = self.0.client_state.monitor_names.read().unwrap();
-            names[monitor_name]
-        };
-        let surface = {
-            let monitors = self.0.client_state.monitors.read().unwrap();
-            monitors[&monitor_id].surface
-        };
+        let state = self.0.client_state.lock().unwrap();
+        let monitor_id = state.monitor_names[monitor_name];
+        let surface = state.monitors[&monitor_id].surface;
 
         WaylandSurface {
             wayland: self.clone(),
@@ -428,9 +423,9 @@ impl WaywePlatform for Wayland {
     }
 
     fn drain_stored_events(&self, handle: &mut dyn FnMut(PlatformEvent)) {
-        let mut events = self.0.client_state.stored_events.lock().unwrap();
+        let mut state = self.0.client_state.lock().unwrap();
 
-        for event in events.drain(..) {
+        for event in state.stored_events.drain(..) {
             handle(event);
         }
     }

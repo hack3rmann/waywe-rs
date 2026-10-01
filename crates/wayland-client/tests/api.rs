@@ -44,7 +44,7 @@ macro_rules! define_empty_dispatchers {
 
                 fn dispatch(
                     &mut self,
-                    _state: &Self::State,
+                    _state: &mut Self::State,
                     _storage: &mut wayland_client::WlObjectStorage<Self::State>,
                     _message: wayland_client::WlMessage<'_>,
                 ) {
@@ -93,7 +93,7 @@ impl Dispatch for WlLayerSurface {
 
     fn dispatch(
         &mut self,
-        _: &Self::State,
+        _: &mut Self::State,
         storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
@@ -115,8 +115,8 @@ impl Dispatch for WlLayerSurface {
 fn just_connect_display() {
     _ = tracing_subscriber::fmt::try_init();
 
-    let state = pin!(NoState);
-    WlDisplay::connect(state.as_ref()).unwrap();
+    let mut state = pin!(NoState);
+    WlDisplay::connect(state.as_mut()).unwrap();
 }
 
 #[test]
@@ -126,8 +126,8 @@ fn get_protocol_error() {
 
     let mut buf = WlStackMessageBuffer::new();
 
-    let state = pin!(NoState);
-    let display = WlDisplay::connect(state.as_ref()).unwrap();
+    let mut state = pin!(NoState);
+    let display = WlDisplay::connect(state.as_mut()).unwrap();
     let mut queue = pin!(display.take_main_queue().unwrap());
     let registry = display
         .create_registry(&mut buf, queue.as_mut().storage_mut())
@@ -154,7 +154,7 @@ fn get_protocol_error() {
         .bind(&mut buf, queue.as_mut().storage_mut())
         .unwrap();
 
-    display.roundtrip(queue.as_mut(), state.as_ref());
+    display.roundtrip(queue.as_mut(), state.as_mut());
 
     assert!(
         queue
@@ -172,14 +172,14 @@ fn get_registry() {
 
     let mut buf = WlStackMessageBuffer::new();
 
-    let state = pin!(NoState);
-    let display = WlDisplay::connect(state.as_ref()).unwrap();
+    let mut state = pin!(NoState);
+    let display = WlDisplay::connect(state.as_mut()).unwrap();
     let mut queue = pin!(display.take_main_queue().unwrap());
     let registry = display
         .create_registry(&mut buf, queue.as_mut().storage_mut())
         .handle();
 
-    display.roundtrip(queue.as_mut(), state.as_ref());
+    display.roundtrip(queue.as_mut(), state.as_mut());
 
     assert!(
         queue
@@ -197,14 +197,14 @@ fn create_surface() {
 
     let mut buf = WlStackMessageBuffer::new();
 
-    let state = pin!(NoState);
-    let display = WlDisplay::connect(state.as_ref()).unwrap();
+    let mut state = pin!(NoState);
+    let display = WlDisplay::connect(state.as_mut()).unwrap();
     let mut queue = pin!(display.take_main_queue().unwrap());
     let registry = display
         .create_registry(&mut buf, queue.as_mut().storage_mut())
         .handle();
 
-    display.roundtrip(queue.as_mut(), state.as_ref());
+    display.roundtrip(queue.as_mut(), state.as_mut());
 
     let compositor = registry
         .bind::<Compositor>(&mut buf, queue.as_mut().storage_mut())
@@ -233,20 +233,20 @@ fn bind_wlr_shell() {
 
     let mut buf = WlStackMessageBuffer::new();
 
-    let state = pin!(NoState);
-    let display = WlDisplay::connect(state.as_ref()).unwrap();
+    let mut state = pin!(NoState);
+    let display = WlDisplay::connect(state.as_mut()).unwrap();
     let mut queue = pin!(display.take_main_queue().unwrap());
     let registry = display
         .create_registry(&mut buf, queue.as_mut().storage_mut())
         .handle();
 
-    display.roundtrip(queue.as_mut(), state.as_ref());
+    display.roundtrip(queue.as_mut(), state.as_mut());
 
     let _layer_shell = registry
         .bind::<LayerShell>(&mut buf, queue.as_mut().storage_mut())
         .unwrap();
 
-    display.roundtrip(queue.as_mut(), state.as_ref());
+    display.roundtrip(queue.as_mut(), state.as_mut());
 }
 
 fn open_shm() -> Result<(OwnedFd, String), rustix::io::Errno> {
@@ -273,14 +273,14 @@ fn white_rect() {
 
     let mut buf = WlStackMessageBuffer::new();
 
-    let state = pin!(NoState);
-    let display = WlDisplay::connect(state.as_ref()).unwrap();
+    let mut state = pin!(NoState);
+    let display = WlDisplay::connect(state.as_mut()).unwrap();
     let mut queue = pin!(display.take_main_queue().unwrap());
     let registry = display
         .create_registry(&mut buf, queue.as_mut().storage_mut())
         .handle();
 
-    display.roundtrip(queue.as_mut(), state.as_ref());
+    display.roundtrip(queue.as_mut(), state.as_mut());
 
     let shm = registry
         .bind::<Shm>(&mut buf, queue.as_mut().storage_mut())
@@ -388,7 +388,7 @@ fn white_rect() {
 
     surface.request(&mut buf, &queue.as_ref().storage(), WlSurfaceCommitRequest);
 
-    display.roundtrip(queue.as_mut(), state.as_ref());
+    display.roundtrip(queue.as_mut(), state.as_mut());
 
     let (shm_fd, shm_path) = open_shm().unwrap();
 
@@ -472,7 +472,7 @@ fn white_rect() {
 
     surface.request(&mut buf, &queue.as_ref().storage(), WlSurfaceCommitRequest);
 
-    display.roundtrip(queue.as_mut(), state.as_ref());
+    display.roundtrip(queue.as_mut(), state.as_mut());
 
     thread::sleep(Duration::from_millis(200));
 }

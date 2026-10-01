@@ -69,7 +69,7 @@ impl Dispatch for FractionalScale {
 
     fn dispatch(
         &mut self,
-        state: &Self::State,
+        state: &mut Self::State,
         storage: &mut WlObjectStorage<Self::State>,
         event: WlMessage<'_>,
     ) {
@@ -108,7 +108,7 @@ impl Dispatch for LayerSurface {
 
     fn dispatch(
         &mut self,
-        state: &Self::State,
+        state: &mut Self::State,
         storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
@@ -383,7 +383,7 @@ impl Output {
         surface.request(&mut buf, &storage.as_ref(), WlSurfaceCommitRequest);
     }
 
-    pub fn update(&mut self, state: &ClientState, storage: &mut WlObjectStorage<ClientState>) {
+    pub fn update(&mut self, state: &mut ClientState, storage: &mut WlObjectStorage<ClientState>) {
         match *self {
             Self::AwaitingOutputInfo {
                 monitor_id,
@@ -609,37 +609,22 @@ impl Output {
 
         match transaction {
             OutputAction::Create => {
-                {
-                    let mut monitors = state.monitors.write().unwrap();
-                    monitors.insert(info.monitor_id, info.clone());
-                }
+                state.monitors.insert(info.monitor_id, info.clone());
+                state
+                    .monitor_names
+                    .insert(info.name.clone(), info.monitor_id);
 
-                {
-                    let mut names = state.monitor_names.write().unwrap();
-                    names.insert(info.name.clone(), info.monitor_id);
-                }
-
-                {
-                    let mut events = state.stored_events.lock().unwrap();
-                    events.push(PlatformEvent::MonitorPlugged {
-                        info: SurfaceInfo {
-                            monitor_name: info.name.clone(),
-                            phisical_size: info.phisical_size(),
-                            scale: info.scale.map(|s| s.value).unwrap_or_default(),
-                        },
-                    });
-                }
+                state.stored_events.push(PlatformEvent::MonitorPlugged {
+                    info: SurfaceInfo {
+                        monitor_name: info.name.clone(),
+                        phisical_size: info.phisical_size(),
+                        scale: info.scale.map(|s| s.value).unwrap_or_default(),
+                    },
+                });
             }
             OutputAction::Remove => {
-                {
-                    let mut monitors = state.monitors.write().unwrap();
-                    monitors.remove(&info.monitor_id);
-                }
-
-                {
-                    let mut names = state.monitor_names.write().unwrap();
-                    names.remove(&info.name);
-                }
+                state.monitors.remove(&info.monitor_id);
+                state.monitor_names.remove(&info.name);
 
                 storage.release(info.surface).unwrap();
                 storage.release(info.layer).unwrap();
@@ -649,12 +634,9 @@ impl Output {
                     storage.release(scale.viewport).unwrap();
                 }
 
-                {
-                    let mut events = state.stored_events.lock().unwrap();
-                    events.push(PlatformEvent::MonitorUnplugged {
-                        monitor_name: info.name.clone(),
-                    });
-                }
+                state.stored_events.push(PlatformEvent::MonitorUnplugged {
+                    monitor_name: info.name.clone(),
+                });
             }
             OutputAction::Configure {
                 serial,
@@ -683,8 +665,7 @@ impl Output {
                 );
 
                 if old_phisical_size != info.phisical_size() {
-                    let mut events = state.stored_events.lock().unwrap();
-                    events.push(PlatformEvent::ResizeRequested {
+                    state.stored_events.push(PlatformEvent::ResizeRequested {
                         monitor_name: info.name.clone(),
                         phisical_size: info.phisical_size(),
                     });
@@ -703,7 +684,7 @@ impl Dispatch for Output {
 
     fn dispatch(
         &mut self,
-        state: &Self::State,
+        state: &mut Self::State,
         storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {

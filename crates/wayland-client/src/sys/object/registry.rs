@@ -21,7 +21,7 @@ use std::{marker::PhantomData, mem, pin::Pin, str};
 
 pub type WlRegistryDispatchFn<S> = fn(
     registry: &mut WlRegistry<S>,
-    state: &S,
+    state: &mut S,
     storage: &mut WlObjectStorage<S>,
     event: WlRegistryEvent<'_>,
 );
@@ -282,7 +282,7 @@ impl<S: State> Dispatch for WlRegistry<S> {
 
     fn dispatch(
         &mut self,
-        state: &Self::State,
+        state: &mut Self::State,
         storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
