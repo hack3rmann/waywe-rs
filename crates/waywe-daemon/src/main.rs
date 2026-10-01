@@ -15,6 +15,7 @@ use tracing::{debug, info, warn};
 use tracing_subscriber::EnvFilter;
 use wallpaper_app::WallpaperApp;
 use waywe_config::Config;
+use waywe_wayland_platform::Wayland;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -55,9 +56,11 @@ fn main() {
     });
     debug!(?config);
 
+    // NOTE(hack3rmann): the place to switch on backing platforms
+    let platform = Wayland::default();
     let app = WallpaperApp::from_config(config);
 
-    let mut event_loop = EventLoop::new(app).unwrap_or_else(|err| {
+    let mut event_loop = EventLoop::new(app, platform).unwrap_or_else(|err| {
         panic!("failed to construct event loop: {}", err.chain());
     });
 

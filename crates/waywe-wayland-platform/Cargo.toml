@@ -1,0 +1,17 @@
+[package]
+name = "waywe-wayland-platform"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+waywe-runtime.workspace = true
+wayland-client.workspace = true
+calloop.workspace = true
+glam.workspace = true
+rustix.workspace = true
+raw-window-handle = "0.6.2"
+wgpu.workspace = true

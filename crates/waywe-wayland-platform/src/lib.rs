@@ -1,25 +1,20 @@
-pub mod output;
+mod output;
 
-use crate::wayland::output::{
-    FractionalScaleManager, LayerSurface, MonitorInfo, Surface, handle_output,
-};
-use calloop::{
-    EventIterator, EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory,
-};
+use crate::output::{FractionalScaleManager, MonitorInfo, Surface, handle_output};
+use calloop::{EventIterator, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
 use glam::UVec2;
 use raw_window_handle::{
-    HasDisplayHandle as _, RawDisplayHandle, RawWindowHandle, WaylandWindowHandle,
+    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawDisplayHandle,
+    RawWindowHandle, WaylandWindowHandle, WindowHandle,
 };
 use rustix::io::Errno;
-use smallstr::SmallString;
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::HashMap,
+    error::Error,
     ffi::CStr,
-    ops::Deref,
     pin::Pin,
     sync::{Arc, Mutex, RwLock},
 };
-use thiserror::Error;
 use wayland_client::{
     interface::{
         WlPointerEvent, WlRegistryEvent, WlRegistryGlobalEvent, WlRegistryGlobalRemoveEvent,
@@ -37,33 +32,12 @@ use wayland_client::{
         wire::{WlMessage, WlStackMessageBuffer},
     },
 };
+use waywe_runtime::platform::{MonitorMap, PlatformEvent, PlatformEventSource, WaywePlatform};
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum WaylandEvent {
-    ResizeRequested {
-        monitor_id: MonitorId,
-        phisical_size: UVec2,
-    },
-    MonitorPlugged {
-        id: MonitorId,
-        name: MonitorName,
-    },
-    MonitorUnplugged {
-        id: MonitorId,
-        name: MonitorName,
-    },
-    // TODO(hack3rmann): implement approach from <https://github.com/cjacker/wl-find-cursor/blob/main/main.c>
-    CursorMoved {
-        position: UVec2,
-    },
-}
-
-pub type MonitorId = WlObjectId;
-pub type MonitorMap<T> = BTreeMap<MonitorId, T>;
-pub type MonitorName = SmallString<[u8; 24]>;
+pub(crate) type MonitorId = WlObjectId;
 
 #[derive(Default, Debug, Clone, Copy)]
-pub struct Globals {
+pub(crate) struct Globals {
     pub compositor: WlObjectHandle<Compositor>,
     pub layer_shell: WlObjectHandle<LayerShell>,
     pub viewporter: WlObjectHandle<Viewporter>,
@@ -71,49 +45,15 @@ pub struct Globals {
 }
 
 #[derive(Default)]
-pub struct ClientState {
-    pub stored_events: Mutex<Vec<WaylandEvent>>,
-    pub monitors: RwLock<MonitorMap<MonitorInfo>>,
-    pub monitor_names: RwLock<HashMap<MonitorName, MonitorId>>,
+pub(crate) struct ClientState {
+    pub stored_events: Vec<PlatformEvent>,
+    pub monitors: HashMap<MonitorId, MonitorInfo>,
+    pub monitor_names: MonitorMap<MonitorId>,
     pub globals: Option<Globals>,
 }
 
-impl ClientState {
-    pub fn monitor_size(&self, id: MonitorId) -> Option<UVec2> {
-        let monitors = self.monitors.read().unwrap();
-        monitors.get(&id).map(MonitorInfo::phisical_size)
-    }
-
-    pub fn monitor_name(&self, id: MonitorId) -> Option<MonitorName> {
-        let monitors = self.monitors.read().unwrap();
-        Some(monitors.get(&id)?.name.clone())
-    }
-
-    pub fn monitor_id(&self, name: &str) -> Option<MonitorId> {
-        let names = self.monitor_names.read().unwrap();
-        names.get(name).copied()
-    }
-
-    pub fn aspect_ratio(&self, id: MonitorId) -> Option<f32> {
-        let size = self.monitor_size(id)?;
-        Some(size.x as f32 / size.y as f32)
-    }
-
-    pub fn commit_monitor(&self, id: MonitorId, info: MonitorInfo) {
-        {
-            let mut names = self.monitor_names.write().unwrap();
-            names.insert(info.name.clone(), id);
-        }
-
-        {
-            let mut monitors = self.monitors.write().unwrap();
-            monitors.insert(id, info.clone());
-        }
-    }
-}
-
 #[derive(Default)]
-pub struct Compositor;
+pub(crate) struct Compositor;
 
 impl HasObjectType for Compositor {
     const OBJECT_TYPE: WlObjectType = WlObjectType::Compositor;
@@ -124,7 +64,7 @@ impl Dispatch for Compositor {
     const ALLOW_EMPTY_DISPATCH: bool = true;
 }
 
-pub struct Seat {
+pub(crate) struct Seat {
     handle: WlObjectHandle<Self>,
     pointer: Option<WlObjectHandle<Pointer>>,
 }
@@ -147,7 +87,7 @@ impl Dispatch for Seat {
 
     fn dispatch(
         &mut self,
-        _: &Self::State,
+        _: &mut Self::State,
         storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
@@ -171,7 +111,7 @@ impl Dispatch for Seat {
 }
 
 #[derive(Default)]
-pub struct Viewporter;
+pub(crate) struct Viewporter;
 
 impl HasObjectType for Viewporter {
     const OBJECT_TYPE: WlObjectType = WlObjectType::WpViewporter;
@@ -183,7 +123,7 @@ impl Dispatch for Viewporter {
 }
 
 #[derive(Default)]
-pub struct Viewport;
+pub(crate) struct Viewport;
 
 impl HasObjectType for Viewport {
     const OBJECT_TYPE: WlObjectType = WlObjectType::WpViewport;
@@ -195,7 +135,7 @@ impl Dispatch for Viewport {
 }
 
 #[derive(Default)]
-pub struct Pointer;
+pub(crate) struct Pointer;
 
 impl HasObjectType for Pointer {
     const OBJECT_TYPE: WlObjectType = WlObjectType::Pointer;
@@ -206,7 +146,7 @@ impl Dispatch for Pointer {
 
     fn dispatch(
         &mut self,
-        state: &Self::State,
+        state: &mut Self::State,
         _: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
@@ -223,13 +163,14 @@ impl Dispatch for Pointer {
             motion.surface_y.to_int().cast_unsigned(),
         );
 
-        let mut events = state.stored_events.lock().unwrap();
-        events.push(WaylandEvent::CursorMoved { position });
+        state
+            .stored_events
+            .push(PlatformEvent::CursorMoved { position });
     }
 }
 
 #[derive(Default)]
-pub struct LayerShell;
+pub(crate) struct LayerShell;
 
 impl HasObjectType for LayerShell {
     const OBJECT_TYPE: WlObjectType = WlObjectType::LayerShell;
@@ -240,7 +181,7 @@ impl Dispatch for LayerShell {
     const ALLOW_EMPTY_DISPATCH: bool = true;
 }
 
-pub struct Region;
+pub(crate) struct Region;
 
 impl Dispatch for Region {
     type State = ClientState;
@@ -274,7 +215,7 @@ pub(crate) fn handle_global(
 
 pub(crate) fn handle_global_remove(
     registry: &mut WlRegistry<ClientState>,
-    state: &ClientState,
+    state: &mut ClientState,
     storage: &mut WlObjectStorage<ClientState>,
     global: WlRegistryGlobalRemoveEvent,
 ) {
@@ -285,10 +226,7 @@ pub(crate) fn handle_global_remove(
     }
 
     let monitor_id = global_name;
-    let Some(output) = ({
-        let monitors = state.monitors.read().unwrap();
-        monitors.get(&monitor_id).map(|i| i.output)
-    }) else {
+    let Some(output) = state.monitors.get(&monitor_id).map(|i| i.output) else {
         return;
     };
 
@@ -300,7 +238,7 @@ pub(crate) fn handle_global_remove(
 
 pub(crate) fn registry_dispatch(
     registry: &mut WlRegistry<ClientState>,
-    state: &ClientState,
+    state: &mut ClientState,
     storage: &mut WlObjectStorage<ClientState>,
     event: WlRegistryEvent<'_>,
 ) {
@@ -314,9 +252,9 @@ pub(crate) fn registry_dispatch(
     }
 }
 
-pub const WLR_NAMESPACE: &CStr = c"waywe-runtime";
+pub(crate) const WLR_NAMESPACE: &CStr = c"waywe-runtime";
 
-pub trait SurfaceExtension {
+pub(crate) trait SurfaceExtension {
     fn raw_window_handle(&self) -> RawWindowHandle;
 }
 
@@ -326,36 +264,23 @@ impl SurfaceExtension for WlObject<Surface> {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct MonitorSurface {
-    pub surface: WlObjectHandle<Surface>,
-    pub layer_surface: WlObjectHandle<LayerSurface>,
-}
-
-pub struct WaylandInner {
-    pub client_state: Pin<Box<ClientState>>,
+pub(crate) struct WaylandInner {
+    pub client_state: Mutex<Pin<Box<ClientState>>>,
     pub main_queue: RwLock<Pin<Box<WlEventQueue<ClientState>>>>,
     pub display: WlDisplay<ClientState>,
-    pub registry: WlObjectHandle<WlRegistry<ClientState>>,
 }
 
 impl WaylandInner {
-    pub fn display_roundtrip(&self) {
-        let mut main_queue = self.main_queue.write().unwrap();
-
-        self.display
-            .roundtrip(main_queue.as_mut(), self.client_state.as_ref());
-    }
-
-    pub fn dispatch_pending(&self) -> usize {
+    pub(crate) fn dispatch_pending(&self) -> usize {
         let mut total_dispatched = 0;
 
         let mut main_queue = self.main_queue.write().unwrap();
+        let mut state = self.client_state.lock().unwrap();
 
         loop {
             let n_dispatched = self
                 .display
-                .dispatch_pending(main_queue.as_mut(), self.client_state.as_ref());
+                .dispatch_pending(main_queue.as_mut(), state.as_mut());
 
             if n_dispatched == 0 {
                 break;
@@ -368,25 +293,26 @@ impl WaylandInner {
     }
 
     #[track_caller]
-    pub fn prepare_poll(&self) -> usize {
+    pub(crate) fn prepare_poll(&self) -> usize {
         let mut main_queue = self.main_queue.write().unwrap();
+        let mut state = self.client_state.lock().unwrap();
 
         self.display
-            .prepare_poll(main_queue.as_mut(), self.client_state.as_ref())
+            .prepare_poll(main_queue.as_mut(), state.as_mut())
             .expect("failed to prepare poll")
     }
 
-    pub fn unprepare_poll(&self) {
+    pub(crate) fn unprepare_poll(&self) {
         self.display.cancel_read();
     }
 
-    pub fn flush(&self) -> Result<usize, Errno> {
+    pub(crate) fn flush(&self) -> Result<usize, Errno> {
         self.display.flush()
     }
 
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let mut client_state = Box::pin(ClientState::default());
-        let display = WlDisplay::connect(client_state.as_ref()).unwrap();
+        let display = WlDisplay::connect(client_state.as_mut()).unwrap();
         let mut queue = Box::pin(display.take_main_queue().unwrap());
 
         let mut buf = WlStackMessageBuffer::new();
@@ -397,7 +323,7 @@ impl WaylandInner {
             .handle();
 
         // fill the registry first
-        display.roundtrip(queue.as_mut(), client_state.as_ref());
+        display.roundtrip(queue.as_mut(), client_state.as_mut());
 
         let mut storage = queue.as_mut().storage_mut();
 
@@ -429,31 +355,18 @@ impl WaylandInner {
 
         // NOTE(hack3rmann): try to do the intial setup before anything else
         for _ in 0..N_INIT_ROUNDTRIPS {
-            display.roundtrip(queue.as_mut(), client_state.as_ref());
+            display.roundtrip(queue.as_mut(), client_state.as_mut());
         }
 
         Self {
-            client_state,
+            client_state: Mutex::new(client_state),
             display,
             main_queue: RwLock::new(queue),
-            registry,
         }
     }
 
-    pub fn raw_display_handle(&self) -> RawDisplayHandle {
+    pub(crate) fn raw_display_handle(&self) -> RawDisplayHandle {
         self.display.display_handle().unwrap().as_raw()
-    }
-
-    pub fn drain_stored_events(&self, mut handle: impl FnMut(WaylandEvent)) {
-        let mut events = self.client_state.stored_events.lock().unwrap();
-
-        for event in events.drain(..) {
-            handle(event);
-        }
-    }
-
-    pub fn process_events(&self, mut handle: impl FnMut(WaylandEvent)) {
-        self.drain_stored_events(&mut handle);
     }
 }
 
@@ -466,21 +379,65 @@ impl Default for WaylandInner {
 #[derive(Clone, Default)]
 pub struct Wayland(Arc<WaylandInner>);
 
-impl Deref for Wayland {
-    type Target = WaylandInner;
+struct WaylandSurface {
+    wayland: Wayland,
+    surface: WlObjectHandle<Surface>,
+}
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl HasDisplayHandle for WaylandSurface {
+    fn display_handle(&self) -> Result<DisplayHandle<'static>, HandleError> {
+        Ok(unsafe { DisplayHandle::borrow_raw(self.wayland.0.raw_display_handle()) })
     }
 }
 
-pub struct WaylandEventSource {
+impl HasWindowHandle for WaylandSurface {
+    fn window_handle(&self) -> Result<WindowHandle<'static>, HandleError> {
+        let handle = {
+            let queue = self.wayland.0.main_queue.read().unwrap();
+            queue
+                .as_ref()
+                .storage()
+                .object(self.surface)
+                .raw_window_handle()
+        };
+
+        Ok(unsafe { WindowHandle::borrow_raw(handle) })
+    }
+}
+
+impl WaywePlatform for Wayland {
+    fn get_surface(&self, monitor_name: &str) -> wgpu::SurfaceTarget<'static> {
+        let state = self.0.client_state.lock().unwrap();
+        let monitor_id = state.monitor_names[monitor_name];
+        let surface = state.monitors[&monitor_id].surface;
+
+        WaylandSurface {
+            wayland: self.clone(),
+            surface,
+        }
+        .into()
+    }
+
+    fn event_source(&self) -> Box<dyn PlatformEventSource> {
+        Box::new(WaylandEventSource::new(self.clone()))
+    }
+
+    fn drain_stored_events(&self, handle: &mut dyn FnMut(PlatformEvent)) {
+        let mut state = self.0.client_state.lock().unwrap();
+
+        for event in state.stored_events.drain(..) {
+            handle(event);
+        }
+    }
+}
+
+pub(crate) struct WaylandEventSource {
     wayland: Wayland,
     token: Option<Token>,
 }
 
 impl WaylandEventSource {
-    pub const fn new(wayland: Wayland) -> Self {
+    pub(crate) const fn new(wayland: Wayland) -> Self {
         Self {
             wayland,
             token: None,
@@ -488,34 +445,17 @@ impl WaylandEventSource {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum WaylandProcessEventsError {
-    #[error("WlDisplay::flush failed")]
-    FlushFailed(#[from] Errno),
-}
-
-impl EventSource for WaylandEventSource {
-    type Event = WaylandEvent;
-    type Metadata = ();
-    type Ret = ();
-    type Error = WaylandProcessEventsError;
-
-    const NEEDS_EXTRA_LIFECYCLE_EVENTS: bool = true;
-
-    fn process_events<F>(
+impl PlatformEventSource for WaylandEventSource {
+    fn process_events(
         &mut self,
         _: Readiness,
         _: Token,
-        mut callback: F,
-    ) -> Result<PostAction, Self::Error>
-    where
-        F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
-    {
-        self.wayland.dispatch_pending();
-        self.wayland
-            .drain_stored_events(|event| callback(event, &mut ()));
+        callback: &mut dyn FnMut(PlatformEvent),
+    ) -> Result<PostAction, Box<dyn Error + Send + Sync>> {
+        self.wayland.0.dispatch_pending();
+        self.wayland.drain_stored_events(callback);
 
-        match self.wayland.flush() {
+        match self.wayland.0.flush() {
             Ok(_) | Err(Errno::AGAIN) => {}
             Err(error) => panic!("failed to flush display: {error}"),
         }
@@ -531,7 +471,7 @@ impl EventSource for WaylandEventSource {
         let token = token_factory.token();
         self.token = Some(token);
 
-        unsafe { poll.register(&self.wayland.display, Interest::READ, Mode::Level, token) }
+        unsafe { poll.register(&self.wayland.0.display, Interest::READ, Mode::Level, token) }
     }
 
     fn reregister(
@@ -542,15 +482,15 @@ impl EventSource for WaylandEventSource {
         let token = token_factory.token();
         self.token = Some(token);
 
-        poll.reregister(&self.wayland.display, Interest::READ, Mode::Level, token)
+        poll.reregister(&self.wayland.0.display, Interest::READ, Mode::Level, token)
     }
 
     fn unregister(&mut self, poll: &mut Poll) -> calloop::Result<()> {
-        poll.unregister(&self.wayland.display)
+        poll.unregister(&self.wayland.0.display)
     }
 
     fn before_sleep(&mut self) -> calloop::Result<Option<(Readiness, Token)>> {
-        let n_dispatched = self.wayland.prepare_poll();
+        let n_dispatched = self.wayland.0.prepare_poll();
 
         if n_dispatched == 0 {
             return Ok(None);
@@ -571,11 +511,11 @@ impl EventSource for WaylandEventSource {
             .any(|(readiness, token)| readiness.readable && self.token == Some(token));
 
         if !contains_us {
-            self.wayland.unprepare_poll();
+            self.wayland.0.unprepare_poll();
             return;
         }
 
-        match self.wayland.display.read_events() {
+        match self.wayland.0.display.read_events() {
             Ok(()) | Err(Errno::AGAIN) => {}
             Err(error) => panic!("failed to read events: {error}"),
         }

@@ -51,14 +51,14 @@ async fn use_wgpu_to_draw_anything() {
 
     let mut buf = WlSmallVecMessageBuffer::<8>::new();
 
-    let state = pin!(NoState);
-    let display = WlDisplay::connect(state.as_ref()).unwrap();
+    let mut state = pin!(NoState);
+    let display = WlDisplay::connect(state.as_mut()).unwrap();
     let mut queue = pin!(display.take_main_queue().unwrap());
     let registry = display
         .create_registry(&mut buf, queue.as_mut().storage_mut())
         .handle();
 
-    display.roundtrip(queue.as_mut(), state.as_ref());
+    display.roundtrip(queue.as_mut(), state.as_mut());
 
     let compositor = registry
         .bind::<Compositor>(&mut buf, queue.as_mut().storage_mut())

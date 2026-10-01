@@ -212,7 +212,7 @@ impl Dispatch for ClientOutput {
 
     fn dispatch(
         &mut self,
-        _state: &Self::State,
+        _state: &mut Self::State,
         _storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
@@ -227,10 +227,10 @@ fn run_simple_client_for_custom_server() {
 
     unsafe { env::set_var("WAYLAND_DISPLAY", "wayland-2") };
 
-    let client_state = pin!(ClientState);
+    let mut client_state = pin!(ClientState);
     let mut buf = WlStackMessageBuffer::new();
 
-    let display = WlDisplay::connect(client_state.as_ref()).unwrap();
+    let display = WlDisplay::connect(client_state.as_mut()).unwrap();
 
     let mut main_queue = pin!(display.take_main_queue().unwrap());
 
@@ -238,7 +238,7 @@ fn run_simple_client_for_custom_server() {
         .create_registry(&mut buf, main_queue.as_mut().storage_mut())
         .handle();
 
-    display.roundtrip(main_queue.as_mut(), client_state.as_ref());
+    display.roundtrip(main_queue.as_mut(), client_state.as_mut());
 
     dbg!(main_queue.as_ref().storage().object_data(registry));
 
@@ -246,5 +246,5 @@ fn run_simple_client_for_custom_server() {
         .bind::<ClientOutput>(&mut buf, main_queue.as_mut().storage_mut())
         .unwrap();
 
-    display.roundtrip(main_queue.as_mut(), client_state.as_ref());
+    display.roundtrip(main_queue.as_mut(), client_state.as_mut());
 }

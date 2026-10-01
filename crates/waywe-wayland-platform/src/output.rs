@@ -1,8 +1,6 @@
-use crate::wayland::{
-    ClientState, Globals, MonitorId, MonitorName, Region, Viewport, WLR_NAMESPACE, WaylandEvent,
-};
+use crate::{ClientState, Globals, MonitorId, Region, Viewport, WLR_NAMESPACE};
 use glam::UVec2;
-use std::{fmt, mem, num::NonZeroU32, pin::Pin};
+use std::{mem, pin::Pin};
 use wayland_client::{
     interface::{
         WlCompositorCreateRegionRequest, WlCompositorCreateSurfaceRequest, WlOutputEvent,
@@ -23,48 +21,10 @@ use wayland_client::{
         wire::{WlMessage, WlStackMessageBuffer},
     },
 };
-
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Scale(NonZeroU32);
-
-impl Scale {
-    pub const ONE: Self = Self(NonZeroU32::new(120).unwrap());
-
-    pub const fn new(frac_120: u32) -> Self {
-        Self(match NonZeroU32::new(frac_120) {
-            Some(value) => value,
-            None => NonZeroU32::new(120).unwrap(),
-        })
-    }
-
-    pub const fn value(self) -> f32 {
-        self.0.get() as f32 / 120.0
-    }
-
-    pub fn to_phisical(self, logical_size: UVec2) -> UVec2 {
-        self.0.get() * logical_size / 120
-    }
-
-    pub fn to_logical(self, phisical_size: UVec2) -> UVec2 {
-        120 * phisical_size / self.0.get()
-    }
-}
-
-impl Default for Scale {
-    fn default() -> Self {
-        Self::ONE
-    }
-}
-
-impl fmt::Debug for Scale {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}/120", self.0)
-    }
-}
+use waywe_runtime::platform::{MonitorName, PlatformEvent, Scale, SurfaceInfo};
 
 #[derive(Default, Debug, Clone)]
-pub struct MonitorInfo {
+pub(crate) struct MonitorInfo {
     pub monitor_id: MonitorId,
     pub name: MonitorName,
     pub logical_size: UVec2,
@@ -84,7 +44,7 @@ impl MonitorInfo {
 }
 
 #[derive(Default)]
-pub struct FractionalScaleManager;
+pub(crate) struct FractionalScaleManager;
 
 impl HasObjectType for FractionalScaleManager {
     const OBJECT_TYPE: WlObjectType = WlObjectType::WpFractionalScaleManagerV1;
@@ -96,7 +56,7 @@ impl Dispatch for FractionalScaleManager {
 }
 
 #[derive(Default)]
-pub struct FractionalScale {
+pub(crate) struct FractionalScale {
     output: WlObjectHandle<Output>,
 }
 
@@ -109,7 +69,7 @@ impl Dispatch for FractionalScale {
 
     fn dispatch(
         &mut self,
-        state: &Self::State,
+        state: &mut Self::State,
         storage: &mut WlObjectStorage<Self::State>,
         event: WlMessage<'_>,
     ) {
@@ -124,7 +84,7 @@ impl Dispatch for FractionalScale {
 }
 
 #[derive(Default)]
-pub struct Surface;
+pub(crate) struct Surface;
 
 impl HasObjectType for Surface {
     const OBJECT_TYPE: WlObjectType = WlObjectType::Surface;
@@ -135,7 +95,7 @@ impl Dispatch for Surface {
     const ALLOW_EMPTY_DISPATCH: bool = true;
 }
 
-pub struct LayerSurface {
+pub(crate) struct LayerSurface {
     pub output: WlObjectHandle<Output>,
 }
 
@@ -148,7 +108,7 @@ impl Dispatch for LayerSurface {
 
     fn dispatch(
         &mut self,
-        state: &Self::State,
+        state: &mut Self::State,
         storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
@@ -170,14 +130,14 @@ impl Dispatch for LayerSurface {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct WaylandScale {
+pub(crate) struct WaylandScale {
     pub value: Scale,
     pub object: WlObjectHandle<FractionalScale>,
     pub viewport: WlObjectHandle<Viewport>,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct OutputTransaction {
+pub(crate) struct OutputTransaction {
     is_create: bool,
     is_remove: bool,
     configure: Option<(u32, UVec2)>,
@@ -236,7 +196,7 @@ impl OutputTransaction {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum OutputAction {
+pub(crate) enum OutputAction {
     Create,
     Remove,
     Configure {
@@ -247,7 +207,7 @@ pub enum OutputAction {
 }
 
 #[derive(Debug)]
-pub enum Output {
+pub(crate) enum Output {
     Active {
         info: MonitorInfo,
         transaction: OutputTransaction,
@@ -423,7 +383,7 @@ impl Output {
         surface.request(&mut buf, &storage.as_ref(), WlSurfaceCommitRequest);
     }
 
-    pub fn update(&mut self, state: &ClientState, storage: &mut WlObjectStorage<ClientState>) {
+    pub fn update(&mut self, state: &mut ClientState, storage: &mut WlObjectStorage<ClientState>) {
         match *self {
             Self::AwaitingOutputInfo {
                 monitor_id,
@@ -649,34 +609,22 @@ impl Output {
 
         match transaction {
             OutputAction::Create => {
-                {
-                    let mut monitors = state.monitors.write().unwrap();
-                    monitors.insert(info.monitor_id, info.clone());
-                }
+                state.monitors.insert(info.monitor_id, info.clone());
+                state
+                    .monitor_names
+                    .insert(info.name.clone(), info.monitor_id);
 
-                {
-                    let mut names = state.monitor_names.write().unwrap();
-                    names.insert(info.name.clone(), info.monitor_id);
-                }
-
-                {
-                    let mut events = state.stored_events.lock().unwrap();
-                    events.push(WaylandEvent::MonitorPlugged {
-                        id: info.monitor_id,
-                        name: info.name.clone(),
-                    });
-                }
+                state.stored_events.push(PlatformEvent::MonitorPlugged {
+                    info: SurfaceInfo {
+                        monitor_name: info.name.clone(),
+                        phisical_size: info.phisical_size(),
+                        scale: info.scale.map(|s| s.value).unwrap_or_default(),
+                    },
+                });
             }
             OutputAction::Remove => {
-                {
-                    let mut monitors = state.monitors.write().unwrap();
-                    monitors.remove(&info.monitor_id);
-                }
-
-                {
-                    let mut names = state.monitor_names.write().unwrap();
-                    names.remove(&info.name);
-                }
+                state.monitors.remove(&info.monitor_id);
+                state.monitor_names.remove(&info.name);
 
                 storage.release(info.surface).unwrap();
                 storage.release(info.layer).unwrap();
@@ -686,13 +634,9 @@ impl Output {
                     storage.release(scale.viewport).unwrap();
                 }
 
-                {
-                    let mut events = state.stored_events.lock().unwrap();
-                    events.push(WaylandEvent::MonitorUnplugged {
-                        id: info.monitor_id,
-                        name: info.name.clone(),
-                    });
-                }
+                state.stored_events.push(PlatformEvent::MonitorUnplugged {
+                    monitor_name: info.name.clone(),
+                });
             }
             OutputAction::Configure {
                 serial,
@@ -721,9 +665,8 @@ impl Output {
                 );
 
                 if old_phisical_size != info.phisical_size() {
-                    let mut events = state.stored_events.lock().unwrap();
-                    events.push(WaylandEvent::ResizeRequested {
-                        monitor_id: info.monitor_id,
+                    state.stored_events.push(PlatformEvent::ResizeRequested {
+                        monitor_name: info.name.clone(),
                         phisical_size: info.phisical_size(),
                     });
                 }
@@ -741,7 +684,7 @@ impl Dispatch for Output {
 
     fn dispatch(
         &mut self,
-        state: &Self::State,
+        state: &mut Self::State,
         storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
@@ -773,7 +716,7 @@ impl Dispatch for Output {
     }
 }
 
-pub fn handle_output(
+pub(crate) fn handle_output(
     registry: WlObjectHandle<WlRegistry<ClientState>>,
     mut storage: Pin<&mut WlObjectStorage<ClientState>>,
     monitor_id: WlObjectId,

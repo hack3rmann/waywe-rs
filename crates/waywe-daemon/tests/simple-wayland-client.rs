@@ -42,7 +42,7 @@ impl Dispatch for WlCompositor {
 
     fn dispatch(
         &mut self,
-        _state: &Self::State,
+        _state: &mut Self::State,
         _storage: &mut WlObjectStorage<Self::State>,
         _message: WlMessage<'_>,
     ) {
@@ -65,7 +65,7 @@ impl Dispatch for WlWmBase {
 
     fn dispatch(
         &mut self,
-        _state: &Self::State,
+        _state: &mut Self::State,
         storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
@@ -102,7 +102,7 @@ impl Dispatch for WlSurface {
 
     fn dispatch(
         &mut self,
-        _state: &Self::State,
+        _state: &mut Self::State,
         _storage: &mut WlObjectStorage<Self::State>,
         _message: WlMessage<'_>,
     ) {
@@ -125,7 +125,7 @@ impl Dispatch for WlXdgSurface {
 
     fn dispatch(
         &mut self,
-        state: &Self::State,
+        state: &mut Self::State,
         storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
@@ -164,7 +164,7 @@ impl Dispatch for WlToplevel {
 
     fn dispatch(
         &mut self,
-        state: &Self::State,
+        state: &mut Self::State,
         _storage: &mut WlObjectStorage<Self::State>,
         message: WlMessage<'_>,
     ) {
@@ -267,9 +267,9 @@ impl Swapchain {
 fn simple_wayland_client() {
     _ = tracing_subscriber::fmt::try_init();
 
-    let client_state = pin!(ClientState::default());
+    let mut client_state = pin!(ClientState::default());
 
-    let display = WlDisplay::connect(client_state.as_ref()).unwrap();
+    let display = WlDisplay::connect(client_state.as_mut()).unwrap();
 
     let mut buf = WlStackMessageBuffer::new();
     let mut queue = pin!(display.take_main_queue().unwrap());
@@ -278,7 +278,7 @@ fn simple_wayland_client() {
         .create_registry(&mut buf, queue.as_mut().storage_mut())
         .handle();
 
-    display.roundtrip(queue.as_mut(), client_state.as_ref());
+    display.roundtrip(queue.as_mut(), client_state.as_mut());
 
     let compositor = registry
         .bind::<WlCompositor>(&mut buf, queue.as_mut().storage_mut())
@@ -288,7 +288,7 @@ fn simple_wayland_client() {
         .bind::<WlWmBase>(&mut buf, queue.as_mut().storage_mut())
         .unwrap();
 
-    display.roundtrip(queue.as_mut(), client_state.as_ref());
+    display.roundtrip(queue.as_mut(), client_state.as_mut());
 
     let surface: WlObjectHandle<WlSurface> = compositor.create_object(
         &mut buf,
@@ -322,7 +322,7 @@ fn simple_wayland_client() {
     );
 
     surface.request(&mut buf, &queue.as_ref().storage(), WlSurfaceCommitRequest);
-    display.roundtrip(queue.as_mut(), client_state.as_ref());
+    display.roundtrip(queue.as_mut(), client_state.as_mut());
     surface.request(&mut buf, &queue.as_ref().storage(), WlSurfaceCommitRequest);
 
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -516,7 +516,7 @@ fn simple_wayland_client() {
 
         wgpu_queue.present(surface_texture);
 
-        display.roundtrip(queue.as_mut(), client_state.as_ref());
+        display.roundtrip(queue.as_mut(), client_state.as_mut());
     }
 }
 
@@ -539,10 +539,10 @@ unsafe fn wait_for_segv() {
 fn multithread_client() {
     _ = tracing_subscriber::fmt::try_init();
 
-    let client_state = pin!(ClientState::default());
+    let mut client_state = pin!(ClientState::default());
     let mut buf = WlStackMessageBuffer::new();
 
-    let display = WlDisplay::connect(client_state.as_ref()).unwrap();
+    let display = WlDisplay::connect(client_state.as_mut()).unwrap();
 
     let mut main_queue = pin!(display.take_main_queue().unwrap());
     let mut side_queue = pin!(display.create_queue().unwrap());
@@ -551,7 +551,7 @@ fn multithread_client() {
         .create_registry(&mut buf, main_queue.as_mut().storage_mut())
         .handle();
 
-    display.roundtrip(main_queue.as_mut(), client_state.as_ref());
+    display.roundtrip(main_queue.as_mut(), client_state.as_mut());
 
     let compositor = registry
         .bind::<WlCompositor>(&mut buf, main_queue.as_mut().storage_mut())
@@ -577,7 +577,7 @@ fn multithread_client() {
         let display = &display;
 
         scope.spawn(move || {
-            display.roundtrip(side_queue.as_mut(), client_state.as_ref());
+            display.roundtrip(side_queue.as_mut(), client_state.as_mut());
 
             let surface: WlObjectHandle<WlSurface> = compositor.create_object(
                 &mut buf,
@@ -617,7 +617,7 @@ fn multithread_client() {
                 WlSurfaceCommitRequest,
             );
 
-            display.roundtrip(side_queue.as_mut(), client_state.as_ref());
+            display.roundtrip(side_queue.as_mut(), client_state.as_mut());
         });
     });
 }
