@@ -17,6 +17,7 @@ members = [
     "crates/waywe-daemon",
     "crates/waywe-ipc",
     "crates/waywe-runtime",
+    "crates/waywe-wayland-platform",
     "crates/waywe-scene",
     "crates/waywe-spirv-derive",
     "crates/waywe-shader-rs/shaderc-rs",
@@ -49,6 +50,7 @@ wayland-server = { path = "crates/wayland-server" }
 wayland-sys = { path = "crates/wayland-sys" }
 waywe-ipc = { path = "crates/waywe-ipc" }
 waywe-runtime = { path = "crates/waywe-runtime" }
+waywe-wayland-platform = { path = "crates/waywe-wayland-platform" }
 waywe-scene = { path = "crates/waywe-scene" }
 waywe-spirv-derive = { path = "crates/waywe-spirv-derive" }
 waywe-rendering-api = { path = "crates/waywe-rendering-api" }

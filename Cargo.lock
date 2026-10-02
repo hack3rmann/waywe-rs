@@ -5357,6 +5357,7 @@ dependencies = [
  "waywe-runtime",
  "waywe-scene",
  "waywe-spirv-derive",
+ "waywe-wayland-platform",
  "wgpu",
 ]
 
@@ -5411,7 +5412,6 @@ dependencies = [
  "fxhash",
  "glam",
  "pollster",
- "raw-window-handle",
  "reusable-box",
  "rustix",
  "slab",
@@ -5422,7 +5422,6 @@ dependencies = [
  "tokio",
  "tracing",
  "video",
- "wayland-client",
  "waywe-config",
  "waywe-ipc",
  "waywe-spirv-derive",
@@ -5489,6 +5488,19 @@ dependencies = [
  "waywe-rendering-api",
  "waywe-runtime",
  "waywe-scene",
+ "wgpu",
+]
+
+[[package]]
+name = "waywe-wayland-platform"
+version = "0.0.16"
+dependencies = [
+ "calloop",
+ "glam",
+ "raw-window-handle",
+ "rustix",
+ "wayland-client",
+ "waywe-runtime",
  "wgpu",
 ]
 

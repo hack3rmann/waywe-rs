@@ -70,7 +70,7 @@ unsafe impl<S: Sync> Sync for WlDisplay<S> {}
 
 impl<S> WlDisplay<S> {
     /// Connect to libwayland backend
-    pub fn connect(state: Pin<&S>) -> Result<Self, DisplayConnectError>
+    pub fn connect(state: Pin<&mut S>) -> Result<Self, DisplayConnectError>
     where
         S: State,
     {
@@ -81,7 +81,7 @@ impl<S> WlDisplay<S> {
     /// Connect to Wayland display on an already open fd.
     /// The fd will be closed in case of failure.
     pub fn connect_to_fd(
-        state: Pin<&S>,
+        state: Pin<&mut S>,
         fd: impl IntoRawFd,
     ) -> Result<Self, DisplayConnectToFdError>
     where
@@ -102,7 +102,7 @@ impl<S> WlDisplay<S> {
             proxy,
             raw_fd,
             // Safety: constructing NonNull from pinned pointer is safe
-            state: NonNull::from(state.get_ref()),
+            state: NonNull::from(unsafe { state.get_unchecked_mut() }),
             main_queue_taken: AtomicBool::new(false),
         };
 
@@ -267,7 +267,7 @@ impl<S> WlDisplay<S> {
     /// This function blocks until the server has processed all currently
     /// issued requests by sending a request to the display server
     /// and waiting for a reply before returning.
-    pub fn roundtrip(&self, queue: Pin<&mut WlEventQueue<S>>, state: Pin<&S>) -> usize
+    pub fn roundtrip(&self, queue: Pin<&mut WlEventQueue<S>>, state: Pin<&mut S>) -> usize
     where
         S: State,
     {
@@ -286,7 +286,7 @@ impl<S> WlDisplay<S> {
     }
 
     /// Dispatch queue events without reading from the display fd
-    pub fn dispatch_pending(&self, queue: Pin<&mut WlEventQueue<S>>, state: Pin<&S>) -> usize
+    pub fn dispatch_pending(&self, queue: Pin<&mut WlEventQueue<S>>, state: Pin<&mut S>) -> usize
     where
         S: State,
     {
@@ -307,7 +307,7 @@ impl<S> WlDisplay<S> {
     pub fn prepare_poll(
         &self,
         mut queue: Pin<&mut WlEventQueue<S>>,
-        state: Pin<&S>,
+        mut state: Pin<&mut S>,
     ) -> Result<usize, Errno>
     where
         S: State,
@@ -320,7 +320,7 @@ impl<S> WlDisplay<S> {
             match self.prepare_read() {
                 Ok(()) => break,
                 Err(Errno::AGAIN) => {
-                    n_dispatched += self.dispatch_pending(queue.as_mut(), state);
+                    n_dispatched += self.dispatch_pending(queue.as_mut(), state.as_mut());
                 }
                 Err(errno) => return Err(errno),
             }

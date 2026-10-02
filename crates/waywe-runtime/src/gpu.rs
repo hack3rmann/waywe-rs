@@ -1,7 +1,6 @@
-use super::wayland::{MonitorId, MonitorMap, SurfaceExtension};
 use crate::{
+    platform::{MonitorMap, SurfaceInfo, WaywePlatform},
     shaders::{ShaderCache, ShaderDescriptor},
-    wayland::{Wayland, output::MonitorInfo},
 };
 use ash::vk;
 use glam::UVec2;
@@ -75,10 +74,10 @@ impl Wgpu {
         }
     }
 
-    pub fn resize_surface(&self, monitor_id: MonitorId, size: UVec2) {
+    pub fn resize_surface(&self, monitor_name: &str, size: UVec2) {
         let mut surfaces = self.surfaces.write().unwrap();
 
-        let Some(info) = surfaces.get_mut(&monitor_id) else {
+        let Some(info) = surfaces.get_mut(monitor_name) else {
             return;
         };
 
@@ -86,35 +85,25 @@ impl Wgpu {
         info.surface.configure(&self.device, &info.config);
     }
 
-    pub fn unregister_surface(&self, monitor_id: MonitorId) {
+    pub fn unregister_surface(&self, monitor_name: &str) {
         let mut surfaces = self.surfaces.write().unwrap();
-        _ = surfaces.remove(&monitor_id);
+        _ = surfaces.remove(monitor_name);
     }
 
-    pub fn register_surface(&self, wayland: &Wayland, monitor_id: MonitorId) {
-        let monitors = wayland.client_state.monitors.read().unwrap();
-        let info = &monitors[&monitor_id];
-
-        let surface = create_surface(
-            &self.instance,
-            &self.adapter,
-            &self.device,
-            wayland,
-            info,
-            monitor_id,
-        );
+    pub fn register_surface(&self, platform: &dyn WaywePlatform, info: &SurfaceInfo) {
+        let surface = create_surface(&self.instance, &self.adapter, &self.device, platform, info);
 
         let mut surfaces = self.surfaces.write().unwrap();
-        surfaces.insert(monitor_id, surface);
+        surfaces.insert(info.monitor_name.clone(), surface);
     }
 
     pub fn require_shader<S: ShaderDescriptor>(&self) {
         self.shader_cache.initialize::<S>(&self.device);
     }
 
-    pub fn reconfigure_surface(&self, monitor_id: MonitorId) {
+    pub fn reconfigure_surface(&self, monitor_name: &str) {
         let surfaces = self.surfaces.read().unwrap();
-        let Some(info) = surfaces.get(&monitor_id) else {
+        let Some(info) = surfaces.get(monitor_name) else {
             return;
         };
         info.surface.configure(&self.device, &info.config);
@@ -123,16 +112,20 @@ impl Wgpu {
     /// # Note
     ///
     /// Returns `None` if this frame should be skipped
-    pub fn get_current_surface(&self, wayland: &Wayland, monitor_id: MonitorId) -> SurfaceResult {
+    pub fn get_current_surface(
+        &self,
+        platform: &dyn WaywePlatform,
+        info: &SurfaceInfo,
+    ) -> SurfaceResult {
         const N_TRIES: usize = 4;
 
         let mut surfaces = self.surfaces.write().unwrap();
-        let Some(info) = surfaces.get_mut(&monitor_id) else {
+        let Some(surface_info) = surfaces.get_mut(&info.monitor_name) else {
             return SurfaceResult::Err;
         };
 
         for _ in 0..N_TRIES {
-            let surface_result = info.surface.get_current_texture();
+            let surface_result = surface_info.surface.get_current_texture();
 
             match surface_result {
                 wgpu::CurrentSurfaceTexture::Success(texture) => return SurfaceResult::Ok(texture),
@@ -143,22 +136,15 @@ impl Wgpu {
                     return SurfaceResult::Skip;
                 }
                 wgpu::CurrentSurfaceTexture::Outdated => {
-                    info.surface.configure(&self.device, &info.config);
+                    surface_info
+                        .surface
+                        .configure(&self.device, &surface_info.config);
                 }
                 wgpu::CurrentSurfaceTexture::Lost => {
-                    let monitors = wayland.client_state.monitors.read().unwrap();
-                    let monitor_info = &monitors[&monitor_id];
+                    let new_info =
+                        create_surface(&self.instance, &self.adapter, &self.device, platform, info);
 
-                    let new_info = create_surface(
-                        &self.instance,
-                        &self.adapter,
-                        &self.device,
-                        wayland,
-                        monitor_info,
-                        monitor_id,
-                    );
-
-                    *info = new_info;
+                    *surface_info = new_info;
                 }
                 wgpu::CurrentSurfaceTexture::Validation => return SurfaceResult::Err,
             }
@@ -257,36 +243,18 @@ fn create_surface(
     instance: &wgpu::Instance,
     adapter: &wgpu::Adapter,
     device: &wgpu::Device,
-    wayland: &Wayland,
-    info: &MonitorInfo,
-    id: MonitorId,
+    platform: &dyn WaywePlatform,
+    info: &SurfaceInfo,
 ) -> Surface {
-    let handle = {
-        let queue = wayland.main_queue.read().unwrap();
-        queue
-            .as_ref()
-            .storage()
-            .object(info.surface)
-            .raw_window_handle()
-    };
-
-    let surface = unsafe {
-        instance
-            .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
-                raw_display_handle: Some(wayland.raw_display_handle()),
-                raw_window_handle: handle,
-            })
-            .unwrap()
-    };
-
-    let screen_size = wayland.client_state.monitor_size(id).unwrap();
+    let surface = instance
+        .create_surface(platform.get_surface(&info.monitor_name))
+        .unwrap();
 
     let Some(format) = surface.get_capabilities(adapter).formats.first().copied() else {
         panic!("no surface format supported");
     };
 
-    let config = get_surface_config(&surface, adapter, screen_size);
-
+    let config = get_surface_config(&surface, adapter, info.phisical_size);
     surface.configure(device, &config);
 
     Surface {
