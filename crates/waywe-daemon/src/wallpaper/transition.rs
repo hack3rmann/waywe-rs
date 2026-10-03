@@ -713,6 +713,10 @@ impl RunningWallpapers {
         }
     }
 
+    pub fn set_pause(&mut self, state: PauseState) {
+        self.pause_state = state;
+    }
+
     pub fn toggle_pause(&mut self, mode: PauseMode) {
         self.pause_state = self.pause_state.toggled(mode);
     }
