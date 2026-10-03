@@ -12,7 +12,7 @@ pub(crate) fn socket_file_from_env() -> String {
         format!("/run/user/{}", uid.as_raw())
     });
 
-    let display = if let Ok(wayland_socket) = std::env::var("WAYLAND_DISPLAY") {
+    let display = if let Ok(wayland_socket) = env::var("WAYLAND_DISPLAY") {
         let mut i = 0;
         // if WAYLAND_DISPLAY is a full path, use only its final component
         for (j, ch) in wayland_socket.bytes().enumerate().rev() {
@@ -24,7 +24,7 @@ pub(crate) fn socket_file_from_env() -> String {
         wayland_socket[i..].to_owned()
     } else {
         warn!("WAYLAND_DISPLAY variable not set. Defaulting to wayland-0");
-        "wayland-0.sock".to_owned()
+        "wayland-0".to_owned()
     };
 
     format!("{runtime}/waywe-{display}.sock")

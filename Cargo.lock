@@ -5429,6 +5429,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "waywe-runtime-dir"
+version = "0.0.16"
+dependencies = [
+ "rustix",
+ "tracing",
+]
+
+[[package]]
 name = "waywe-scene"
 version = "0.0.16"
 dependencies = [

@@ -30,7 +30,7 @@ members = [
     "crates/daemonize/daemonize",
     "crates/waywe-dhall/dhall",
     "crates/waywe-dhall/dhall_proc_macros",
-    "crates/waywe-dhall/serde_dhall",
+    "crates/waywe-dhall/serde_dhall", "crates/waywe-runtime-dir",
 ]
 
 [workspace.package]
