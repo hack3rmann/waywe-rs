@@ -210,17 +210,23 @@ impl Video {
 
     /// Advance this video by `delta` time
     pub fn advance_by(&mut self, delta: Duration) {
-        // FIXME(hack3rmann): doesn't work for `delta > frame_time`
-        let duration = self.frame_duration();
+        let mut elapsed = self.update_delay + delta;
+        let mut duration = self.frame_duration();
 
-        if self.update_delay + delta >= duration {
-            self.next_frame();
-            self.n_frames_since_update = 0;
-            self.update_delay = self.update_delay + delta - duration;
-        } else {
+        if elapsed < duration {
             self.n_frames_since_update += 1;
             self.update_delay += delta;
+            return;
         }
+
+        while elapsed >= duration {
+            elapsed -= duration;
+            self.next_frame();
+            duration = self.frame_duration();
+        }
+
+        self.n_frames_since_update = 0;
+        self.update_delay = elapsed;
     }
 
     /// Get the size of video frames in pixels.
