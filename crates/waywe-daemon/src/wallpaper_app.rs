@@ -11,7 +11,7 @@ use glam::UVec2;
 use miette_diagnostic_chain::DiagnosticChain;
 use smallvec::{SmallVec, smallvec};
 use std::{
-    collections::{HashMap, btree_map::Entry},
+    collections::HashMap,
     io::ErrorKind,
     path::PathBuf,
     sync::Arc,
@@ -35,72 +35,8 @@ use waywe_runtime::{
 };
 
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum WallpaperStateKind {
-    #[default]
-    Running,
-    Paused {
-        needs_redraw: bool,
-    },
-}
-
-impl WallpaperStateKind {
-    pub const fn inverted(self) -> Self {
-        match self {
-            Self::Running => Self::Paused { needs_redraw: true },
-            Self::Paused { needs_redraw: _ } => Self::Running,
-        }
-    }
-
-    pub const fn paused(self) -> Self {
-        match self {
-            Self::Running => Self::Paused { needs_redraw: true },
-            Self::Paused { needs_redraw } => Self::Paused { needs_redraw },
-        }
-    }
-
-    pub const fn resumed(self) -> Self {
-        Self::Running
-    }
-
-    pub const fn altered(self, mode: PauseMode) -> Self {
-        match mode {
-            PauseMode::Toggle => self.inverted(),
-            PauseMode::On => self.paused(),
-            PauseMode::Off => self.resumed(),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct WallpaperState {
-    pub kind: WallpaperStateKind,
-    pub is_active: bool,
-}
-
-impl WallpaperState {
-    pub const ACTIVE_RUNNING: Self = Self {
-        kind: WallpaperStateKind::Running,
-        is_active: true,
-    };
-
-    pub const fn needs_redraw(self) -> bool {
-        if !self.is_active {
-            return false;
-        }
-
-        match self.kind {
-            WallpaperStateKind::Running => true,
-            WallpaperStateKind::Paused { needs_redraw } => needs_redraw,
-        }
-    }
-
-    pub const fn redraw_completed(mut self) -> Self {
-        if let WallpaperStateKind::Paused { needs_redraw } = &mut self.kind {
-            *needs_redraw = false;
-        }
-
-        self
-    }
+    pub needs_redraw: bool,
 }
 
 #[derive(Default)]
@@ -191,9 +127,9 @@ impl App for WallpaperApp {
             .unwrap_or_default();
         self.last_instant = Some(Instant::now());
 
-        for (monitor_name, wallpapers) in self.wallpapers.iter_mut() {
+        for (monitor_name, wall) in self.wallpapers.iter_mut() {
             if let Some(state) = self.wallpaper_states.get(monitor_name.as_str())
-                && !state.needs_redraw()
+                && !state.needs_redraw
             {
                 results.push(Err(FrameError::NoWorkToDo));
                 continue;
@@ -223,16 +159,20 @@ impl App for WallpaperApp {
                 .device
                 .create_command_encoder(&Default::default());
 
-            wallpapers.advance_time(time_delta);
-            let result = wallpapers.render(&runtime.wgpu, &surface.texture, &mut encoder);
+            wall.advance_time(time_delta);
+            let result = wall.render(&runtime.wgpu, &surface.texture, &mut encoder);
 
             results.push(result);
 
             runtime.wgpu.queue.submit([encoder.finish()]);
             runtime.wgpu.queue.present(surface);
 
-            if let Some(state) = self.wallpaper_states.get_mut(monitor_name.as_str()) {
-                *state = state.redraw_completed();
+            if !wall.needs_redraw() {
+                let state = self
+                    .wallpaper_states
+                    .get_mut(monitor_name.as_str())
+                    .unwrap();
+                state.needs_redraw = false;
             }
 
             if needs_reconfigure {
@@ -289,13 +229,20 @@ impl Handle<WallpaperPauseEvent> for WallpaperApp {
 
         match target {
             WallpaperTarget::ForAll => {
+                for wall in self.wallpapers.values_mut() {
+                    wall.toggle_pause(mode);
+                }
+
                 for state in self.wallpaper_states.values_mut() {
-                    state.kind = state.kind.altered(mode);
+                    state.needs_redraw = true;
                 }
             }
             WallpaperTarget::ForMonitor(name) => {
+                let wall = self.wallpapers.get_mut(&name).unwrap();
+                wall.toggle_pause(mode);
+
                 let state = self.wallpaper_states.get_mut(&name).unwrap();
-                state.kind = state.kind.altered(mode);
+                state.needs_redraw = true;
             }
         }
 
@@ -335,19 +282,10 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
         wallpaper.configure(&runtime.wgpu, config);
         run.enqueue_wallpaper(&runtime.wgpu, wallpaper);
 
-        match self.wallpaper_states.entry(monitor_name.clone()) {
-            Entry::Vacant(entry) => {
-                entry.insert(WallpaperState::ACTIVE_RUNNING);
-            }
-            Entry::Occupied(entry) => {
-                let state = entry.into_mut();
-                state.is_active = true;
-
-                if let WallpaperStateKind::Paused { needs_redraw } = &mut state.kind {
-                    *needs_redraw = true;
-                }
-            }
-        }
+        self.wallpaper_states
+            .entry(monitor_name.clone())
+            .and_modify(|s| s.needs_redraw = true)
+            .or_insert(WallpaperState { needs_redraw: true });
 
         self.wallpaper_paths.insert(monitor_name, path);
 
@@ -366,12 +304,8 @@ impl Handle<PlatformEvent> for WallpaperApp {
             } => {
                 runtime.wgpu.resize_surface(&monitor_name, size);
 
-                if let Some(WallpaperState {
-                    kind: WallpaperStateKind::Paused { needs_redraw },
-                    ..
-                }) = self.wallpaper_states.get_mut(&monitor_name)
-                {
-                    *needs_redraw = true;
+                if let Some(state) = self.wallpaper_states.get_mut(&monitor_name) {
+                    state.needs_redraw = true;
                 }
 
                 let Some(wall) = self.wallpapers.get_mut(&monitor_name) else {
@@ -392,14 +326,14 @@ impl Handle<PlatformEvent> for WallpaperApp {
                 PostEventActions::REDRAW
             }
             PlatformEvent::MonitorPlugged { info } => {
+                debug!(?info, "new monitor detected");
+
                 self.monitors
                     .insert(info.monitor_name.clone(), info.clone());
 
                 runtime
                     .wgpu
                     .register_surface(runtime.platform.as_ref(), &info);
-
-                debug!(?info, "new monitor detected");
 
                 match SetupProfile::read() {
                     Ok(mut profile) => 'ok: {
@@ -429,6 +363,7 @@ impl Handle<PlatformEvent> for WallpaperApp {
                     .wallpaper_config(&info)
                     .unwrap_or_else(|| panic!("no config for '{}'", info.monitor_name));
 
+                // TODO(hack3rmann): add pause rules here
                 let wallpapers = RunningWallpapers::new(wall_config, self.config.clone());
 
                 self.wallpapers.insert(info.monitor_name, wallpapers);
@@ -436,15 +371,11 @@ impl Handle<PlatformEvent> for WallpaperApp {
                 PostEventActions::empty()
             }
             PlatformEvent::MonitorUnplugged { monitor_name: name } => {
-                self.monitors.remove(name.as_str());
-
                 debug!(%name, "unplugged a monitor");
 
-                _ = self.wallpapers.remove(&name);
+                self.monitors.remove(name.as_str());
 
-                if let Some(state) = self.wallpaper_states.get_mut(&name) {
-                    state.is_active = false;
-                }
+                _ = self.wallpapers.remove(&name);
 
                 runtime.wgpu.unregister_surface(&name);
 

@@ -8,6 +8,7 @@ use waywe_config::{
     Angle, AnimationConfig, AnimationDirection, AnimationStyle, CenterPosition, Config,
     Interpolation, Transition,
 };
+use waywe_ipc::command::PauseMode;
 use waywe_runtime::{
     effects::{Effects, config::EffectsBuilder},
     frame::{FrameError, FrameInfo},
@@ -642,19 +643,36 @@ impl FadeoutTransition {
     }
 }
 
+#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
+pub enum PauseState {
+    #[default]
+    Running,
+    Paused,
+}
+
+impl PauseState {
+    pub const fn inverted(self) -> Self {
+        match self {
+            Self::Running => Self::Paused,
+            Self::Paused => Self::Running,
+        }
+    }
+
+    pub const fn toggled(self, mode: PauseMode) -> Self {
+        match mode {
+            PauseMode::Toggle => self.inverted(),
+            PauseMode::On => PauseState::Paused,
+            PauseMode::Off => PauseState::Running,
+        }
+    }
+}
+
 pub struct EffectWallpaper {
     pub wallpaper: OptimizedWallpaper,
     pub effects: Effects,
 }
 
 impl EffectWallpaper {
-    pub const fn new(wallpaper: OptimizedWallpaper) -> Self {
-        Self {
-            wallpaper,
-            effects: Effects::new(),
-        }
-    }
-
     pub fn frame(
         &mut self,
         gpu: &Wgpu,
@@ -668,13 +686,14 @@ impl EffectWallpaper {
 }
 
 pub struct RunningWallpapers {
-    pub executing: VecDeque<EffectWallpaper>,
-    pub ongoing_transitions: SmallVec<[OngoingTransition; 8]>,
-    pub transition_pipeline: Almost<WallpaperTransitionPipeline>,
-    pub textures: Almost<WallpaperTransitionState>,
-    pub config: Arc<Config>,
-    pub effects_builder: EffectsBuilder,
-    pub wallpaper_config: WallpaperConfig,
+    executing: VecDeque<EffectWallpaper>,
+    ongoing_transitions: SmallVec<[OngoingTransition; 8]>,
+    transition_pipeline: Almost<WallpaperTransitionPipeline>,
+    textures: Almost<WallpaperTransitionState>,
+    config: Arc<Config>,
+    effects_builder: EffectsBuilder,
+    wallpaper_config: WallpaperConfig,
+    pause_state: PauseState,
 }
 
 impl RunningWallpapers {
@@ -690,7 +709,16 @@ impl RunningWallpapers {
             config,
             effects_builder,
             wallpaper_config,
+            pause_state: PauseState::Running,
         }
+    }
+
+    pub fn toggle_pause(&mut self, mode: PauseMode) {
+        self.pause_state = self.pause_state.toggled(mode);
+    }
+
+    pub fn pause_state(&self) -> PauseState {
+        self.pause_state
     }
 
     pub fn reload_config(&mut self, gpu: &Wgpu, new_config: Arc<Config>) {
@@ -741,6 +769,10 @@ impl RunningWallpapers {
 
     pub fn is_transitioning(&self) -> bool {
         self.executing.len() >= 2
+    }
+
+    pub fn needs_redraw(&self) -> bool {
+        self.pause_state() != PauseState::Paused || self.is_transitioning()
     }
 
     pub fn init_transitions(&mut self, gpu: &Wgpu) {
@@ -845,6 +877,10 @@ impl Wallpaper for RunningWallpapers {
     fn advance_time(&mut self, delta: Duration) {
         for transition in &mut self.ongoing_transitions {
             transition.advance_time(delta);
+        }
+
+        if self.pause_state == PauseState::Paused {
+            return;
         }
 
         for effected in &mut self.executing {
