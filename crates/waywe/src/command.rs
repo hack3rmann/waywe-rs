@@ -20,6 +20,7 @@ use waywe_ipc::{
     command::{DaemonError, DaemonResponse, DaemonResult, PauseMode},
     detach::{BINCODE_CONFIG, SetupPipe},
 };
+use waywe_runtime_dir::runtime_dir;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum ExecuteError {
@@ -136,7 +137,7 @@ pub fn execute_pause(
 
 pub fn execute_start(mode: WaitMode, bin: Option<PathBuf>) -> DaemonSetupResult {
     let fifo = match mode {
-        WaitMode::Wait => Some(SetupPipe::new_in("/tmp/waywe")),
+        WaitMode::Wait => Some(SetupPipe::new_in(runtime_dir().join("setup"))),
         WaitMode::DontWait => None,
     };
 
@@ -195,7 +196,7 @@ pub enum ExecuteStopError {
 }
 
 pub fn execute_stop(mode: WaitMode) -> Result<(), ExecuteStopError> {
-    let mut pid_file = match File::open("/tmp/waywe/daemon.pid") {
+    let mut pid_file = match File::open(runtime_dir().join("daemon.pid")) {
         Ok(file) => file,
         Err(error) if error.kind() == ErrorKind::NotFound => return Ok(()),
         Err(error) => return Err(ExecuteStopError::OpenPidFile(error)),

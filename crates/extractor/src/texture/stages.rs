@@ -354,28 +354,27 @@ impl<'a, T: Read> TexReaderWithGifContainerMeta<'a, T> {
     fn read_frame_meta(&mut self) -> Result<TexGifFrameMeta, TexExtractError> {
         let image_id = self.reader.read_int()?;
         let frame_time = self.reader.read_float()?;
-        let x;
-        let y;
-        let width;
-        let width_y;
-        let height_x;
-        let height;
 
-        if self.gif_container.version == GifContainerVersion::Texs0001 {
-            x = self.reader.read_int()? as f32;
-            y = self.reader.read_int()? as f32;
-            width = self.reader.read_int()? as f32;
-            width_y = self.reader.read_int()? as f32;
-            height_x = self.reader.read_int()? as f32;
-            height = self.reader.read_int()? as f32;
-        } else {
-            x = self.reader.read_float()?;
-            y = self.reader.read_float()?;
-            width = self.reader.read_float()?;
-            width_y = self.reader.read_float()?;
-            height_x = self.reader.read_float()?;
-            height = self.reader.read_float()?;
-        }
+        let (x, y, width, width_y, height_x, height) =
+            if self.gif_container.version == GifContainerVersion::Texs0001 {
+                (
+                    self.reader.read_int()? as f32,
+                    self.reader.read_int()? as f32,
+                    self.reader.read_int()? as f32,
+                    self.reader.read_int()? as f32,
+                    self.reader.read_int()? as f32,
+                    self.reader.read_int()? as f32,
+                )
+            } else {
+                (
+                    self.reader.read_float()?,
+                    self.reader.read_float()?,
+                    self.reader.read_float()?,
+                    self.reader.read_float()?,
+                    self.reader.read_float()?,
+                    self.reader.read_float()?,
+                )
+            };
 
         Ok(TexGifFrameMeta {
             image_id,

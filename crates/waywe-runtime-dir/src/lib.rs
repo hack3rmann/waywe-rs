@@ -1,25 +1,28 @@
-use std::{env, path::PathBuf, sync::LazyLock};
-use tracing::warn;
+use std::{
+    env,
+    path::{Path, PathBuf},
+    sync::LazyLock,
+};
 
 /// # The Waywe runtime directory
 ///
 /// Uses `XDG_RUNTIME_DIR` and `WAYLAND_DISPLAY` to construct one.
 /// e.g. `/run/user/1000/waywe-wayland-1`
-pub static RUNTIME_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
+static RUNTIME_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     make_runtime_dir(
         env::var("XDG_RUNTIME_DIR").ok(),
         env::var("WAYLAND_DISPLAY").ok(),
     )
 });
 
+pub fn runtime_dir() -> &'static Path {
+    &RUNTIME_DIR
+}
+
 fn make_runtime_dir(xdg_runtime_dir: Option<String>, wayland_display: Option<String>) -> PathBuf {
     let runtime = xdg_runtime_dir.unwrap_or_else(|| {
         let uid = rustix::process::getuid();
-        let fallback = format!("/run/user/{}", uid.as_raw());
-
-        warn!(fallback, "XDG_RUNTIME_DIR env variable is missing");
-
-        fallback
+        format!("/run/user/{}", uid.as_raw())
     });
 
     let mut waywe = wayland_display
@@ -32,11 +35,7 @@ fn make_runtime_dir(xdg_runtime_dir: Option<String>, wayland_display: Option<Str
             };
             head.to_owned()
         })
-        .unwrap_or_else(|| {
-            let fallback = "wayland-0".to_owned();
-            warn!(fallback, "WAYLAND_DISPLAY env variable is missing");
-            fallback
-        });
+        .unwrap_or_else(|| "wayland-0".to_owned());
 
     waywe.insert_str(0, "waywe-");
 
