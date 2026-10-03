@@ -13,6 +13,7 @@ use wayland_client::{
         ZwlrLayerSurfaceConfigureEvent, ZwlrLayerSurfaceKeyboardInteractivity,
         ZwlrLayerSurfaceSetAnchorRequest, ZwlrLayerSurfaceSetExclusiveZoneRequest,
         ZwlrLayerSurfaceSetKeyboardInteractivityRequest, ZwlrLayerSurfaceSetMarginRequest,
+        ZwlrLayerSurfaceSetSizeRequest,
     },
     object::{HasObjectType, WlObjectId, WlObjectType},
     sys::{
@@ -140,7 +141,8 @@ pub(crate) struct WaylandScale {
 pub(crate) struct OutputTransaction {
     is_create: bool,
     is_remove: bool,
-    configure: Option<(u32, UVec2)>,
+    configure_serial: Option<u32>,
+    size: Option<UVec2>,
     scale: Option<Scale>,
 }
 
@@ -148,7 +150,8 @@ impl OutputTransaction {
     pub const EMPTY: Self = Self {
         is_create: false,
         is_remove: false,
-        configure: None,
+        configure_serial: None,
+        size: None,
         scale: None,
     };
 
@@ -161,8 +164,13 @@ impl OutputTransaction {
         self.scale = Some(scale);
     }
 
+    pub fn set_size(&mut self, size: UVec2) {
+        self.size = Some(size);
+    }
+
     pub fn set_configure(&mut self, serial: u32, size: UVec2) {
-        self.configure = Some((serial, size));
+        self.configure_serial = Some(serial);
+        self.size = Some(size);
     }
 
     pub fn set_remove(&mut self) {
@@ -180,13 +188,21 @@ impl OutputTransaction {
             Self {
                 is_create: false,
                 is_remove: false,
-                configure: Some((serial, size)),
+                configure_serial: Some(serial),
+                size: Some(size),
                 scale,
             } => OutputAction::Configure {
                 serial,
                 size,
                 scale,
             },
+            Self {
+                is_create: false,
+                is_remove: false,
+                configure_serial: None,
+                size: Some(size),
+                scale: _,
+            } => OutputAction::RequestResize { size },
             _ => return None,
         };
 
@@ -203,6 +219,9 @@ pub(crate) enum OutputAction {
         serial: u32,
         size: UVec2,
         scale: Option<Scale>,
+    },
+    RequestResize {
+        size: UVec2,
     },
 }
 
@@ -282,7 +301,7 @@ impl Output {
 
     pub fn set_size(&mut self, size: UVec2) -> &mut Self {
         match self {
-            Self::Active { .. } => unimplemented!("monitor resize without configure"),
+            Self::Active { transaction, .. } => transaction.set_size(size),
             Self::AwaitingConfigure { logical_size, .. }
             | Self::AwaitingScale { logical_size, .. } => *logical_size = size,
             Self::AwaitingOutputInfo { logical_size, .. } => *logical_size = Some(size),
@@ -608,6 +627,21 @@ impl Output {
         };
 
         match transaction {
+            OutputAction::RequestResize { size } => {
+                let mut buf = WlStackMessageBuffer::new();
+
+                info.layer.request(
+                    &mut buf,
+                    storage,
+                    ZwlrLayerSurfaceSetSizeRequest {
+                        width: size.x,
+                        height: size.y,
+                    },
+                );
+
+                info.surface
+                    .request(&mut buf, storage, WlSurfaceCommitRequest);
+            }
             OutputAction::Create => {
                 state.monitors.insert(info.monitor_id, info.clone());
                 state
