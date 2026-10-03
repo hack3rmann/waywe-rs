@@ -5290,6 +5290,7 @@ dependencies = [
  "unicode-width 0.2.2",
  "waywe-config",
  "waywe-ipc",
+ "waywe-runtime-dir",
 ]
 
 [[package]]
@@ -5355,6 +5356,7 @@ dependencies = [
  "waywe-ipc",
  "waywe-rendering-api",
  "waywe-runtime",
+ "waywe-runtime-dir",
  "waywe-scene",
  "waywe-spirv-derive",
  "waywe-wayland-platform",
@@ -5384,6 +5386,7 @@ dependencies = [
  "toml 0.8.23",
  "tracing",
  "uuid",
+ "waywe-runtime-dir",
 ]
 
 [[package]]
@@ -5426,6 +5429,14 @@ dependencies = [
  "waywe-ipc",
  "waywe-spirv-derive",
  "wgpu",
+]
+
+[[package]]
+name = "waywe-runtime-dir"
+version = "0.0.16"
+dependencies = [
+ "rustix",
+ "tracing",
 ]
 
 [[package]]

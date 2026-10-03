@@ -10,6 +10,7 @@ use std::{
 use tap::Pipe;
 use thiserror::Error;
 use waywe_ipc::{DaemonSetupError, DaemonSetupResult, detach::BINCODE_CONFIG};
+use waywe_runtime_dir::runtime_dir;
 
 pub use daemonize::Error as DaemonizeError;
 
@@ -36,7 +37,7 @@ impl Drop for DaemonResultPipe {
             return;
         }
 
-        let message = fs::read_to_string("/tmp/waywe/daemon-stderr.log").unwrap_or_default();
+        let message = fs::read_to_string(runtime_dir().join("stderr.log")).unwrap_or_default();
 
         _ = self.write(Err(DaemonSetupError::Panicked { message }));
     }
@@ -66,13 +67,13 @@ impl DaemonSetupReporter {
 }
 
 pub fn detach() -> Result<(), DetachError> {
-    fs::create_dir_all("/tmp/waywe")?;
+    fs::create_dir_all(runtime_dir())?;
 
-    let stdout = File::create("/tmp/waywe/daemon-stdout.log")?;
-    let stderr = File::create("/tmp/waywe/daemon-stderr.log")?;
+    let stdout = File::create(runtime_dir().join("stdout.log"))?;
+    let stderr = File::create(runtime_dir().join("stderr.log"))?;
 
     Daemonize::default()
-        .pid_file("/tmp/waywe/daemon.pid")
+        .pid_file(runtime_dir().join("daemon.pid"))
         .stdout(stdout)
         .stderr(stderr)
         .start()?;

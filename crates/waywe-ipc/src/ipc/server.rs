@@ -244,7 +244,7 @@ impl<T, R> IpcServer<T, R> {
                 Ok(()) => break,
                 Err(Errno::ADDRINUSE) => {
                     warn!(
-                        path = ipc::socket_file(),
+                        path = %ipc::socket_file().display(),
                         "socket address already in use, trying to remove",
                     );
                     // NOTE(hack3rmann): we're holding `waywe-daemon.lock` so no other daemon
@@ -274,7 +274,7 @@ impl<T, R> IpcServer<T, R> {
 
 impl<T, R> Drop for IpcServer<T, R> {
     fn drop(&mut self) {
-        debug!(path = ipc::socket_file(), "removing daemon socket");
+        debug!(path = %ipc::socket_file().display(), "removing daemon socket");
         _ = rustix::fs::unlink(ipc::socket_file());
     }
 }

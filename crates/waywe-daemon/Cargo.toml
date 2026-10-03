@@ -25,6 +25,7 @@ waywe-runtime.workspace = true
 waywe-wayland-platform.workspace = true
 waywe-scene.workspace = true
 waywe-config.workspace = true
+waywe-runtime-dir.workspace = true
 image.workspace = true
 smallvec.workspace = true
 clap.workspace = true
