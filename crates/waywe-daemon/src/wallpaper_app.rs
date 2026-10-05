@@ -1,9 +1,12 @@
 use crate::{
     event_loop::{DisableConfigWatcher, EnableConfigWatcher, WallpaperTarget},
     wallpaper::{
-        self, Wallpaper, WallpaperConfig, optimized::OptimizedWallpaper,
-        package_registry::PackageRegistry, pause_rules::PauseRules, preview::PreviewPipeline,
-        transition::RunningWallpapers,
+        self, Wallpaper, WallpaperConfig,
+        optimized::OptimizedWallpaper,
+        package_registry::PackageRegistry,
+        pause_rules::PauseRules,
+        preview::PreviewPipeline,
+        transition::{RunningWallpapers, SubmissionId},
     },
 };
 use calloop::channel::Sender;
@@ -50,6 +53,7 @@ pub struct WallpaperApp {
     pub last_instant: Option<Instant>,
     pub monitors: MonitorMap<SurfaceInfo>,
     pub pause_rules: PauseRules,
+    pub waiting_submissions: HashMap<SubmissionId, ClientId>,
 }
 
 impl WallpaperApp {
@@ -66,6 +70,7 @@ pub struct WallpaperPreparedEvent {
     pub wallpaper: OptimizedWallpaper,
     pub monitor_name: MonitorName,
     pub sender_id: Option<ClientId>,
+    pub wait_transition: bool,
 }
 
 impl TryReplicate for WallpaperPreparedEvent {}
@@ -181,6 +186,11 @@ impl App for WallpaperApp {
             if needs_reconfigure {
                 runtime.wgpu.reconfigure_surface(monitor_name);
             }
+
+            for id in wall.drain_finished_submissions() {
+                let client_id = self.waiting_submissions.remove(&id);
+                send_response(&runtime.ipc, client_id, DaemonResponse::WallpaperSet);
+            }
         }
 
         let no_work = results
@@ -268,6 +278,7 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
             path,
             monitor_name,
             sender_id,
+            wait_transition,
         } = event;
 
         let monitor_info = &self.monitors[monitor_name.as_str()];
@@ -285,7 +296,7 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
         // NOTE(hack3rmann): we may get outdated wallpaper configuration if resize event comes
         // before WallpaperPreparedEvent and after NewWallpaperEvent
         wallpaper.configure(&runtime.wgpu, config);
-        run.enqueue_wallpaper(&runtime.wgpu, wallpaper);
+        let submission_id = run.enqueue_wallpaper(&runtime.wgpu, wallpaper);
 
         let pause_state = self.pause_rules.get(&monitor_name);
         run.set_pause(pause_state);
@@ -297,7 +308,13 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
 
         self.wallpaper_paths.insert(monitor_name, path);
 
-        send_response(&runtime.ipc, sender_id, DaemonResponse::WallpaperSet);
+        if let Some(sender_id) = sender_id {
+            if wait_transition {
+                self.waiting_submissions.insert(submission_id, sender_id);
+            } else {
+                send_response(&runtime.ipc, Some(sender_id), DaemonResponse::WallpaperSet);
+            }
+        }
 
         PostEventActions::REDRAW
     }
@@ -406,7 +423,7 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
             ty,
             target,
             sender_id,
-            wait_transition: _,
+            wait_transition,
         } = event;
 
         let monitor_names: SmallVec<[_; 4]> = match target {
@@ -448,6 +465,7 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
                             wallpaper,
                             monitor_name,
                             sender_id,
+                            wait_transition,
                         }),
                         Err(error) => report_error(&ipc, sender_id, error.clone()),
                     }
