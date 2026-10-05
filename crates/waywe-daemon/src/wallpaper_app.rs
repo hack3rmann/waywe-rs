@@ -499,12 +499,6 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
         const MAX_PREVIEW_SIZE: u32 = 8192;
 
         if size.x > MAX_PREVIEW_SIZE || size.y > MAX_PREVIEW_SIZE {
-            error!(
-                ?size,
-                max_size = MAX_PREVIEW_SIZE,
-                "max preview size exceeded"
-            );
-
             report_error(
                 &ipc,
                 Some(sender_id),
@@ -515,6 +509,8 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
                     max_height: MAX_PREVIEW_SIZE,
                 },
             );
+
+            return PostEventActions::empty();
         }
 
         let config = WallpaperConfig {
