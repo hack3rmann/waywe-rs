@@ -2,8 +2,7 @@ use crate::wallpaper::{Wallpaper, WallpaperConfig, optimized::OptimizedWallpaper
 use bytemuck::{Pod, Zeroable};
 use for_sure::prelude::*;
 use glam::Vec2;
-use smallvec::SmallVec;
-use std::{collections::VecDeque, f32::consts::PI, mem, sync::Arc, time::Duration};
+use std::{f32::consts::PI, mem, sync::Arc, time::Duration, vec::Drain};
 use waywe_config::{
     Angle, AnimationConfig, AnimationDirection, AnimationStyle, CenterPosition, Config,
     Interpolation, Transition,
@@ -685,9 +684,64 @@ impl EffectWallpaper {
     }
 }
 
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
+pub struct SubmissionId(u64);
+
+impl SubmissionId {
+    pub const MAX: Self = Self(u64::MAX);
+
+    pub const fn next(self) -> Self {
+        Self(self.0.wrapping_add(1))
+    }
+}
+
+impl Default for SubmissionId {
+    fn default() -> Self {
+        Self::MAX
+    }
+}
+
+#[derive(Default, Clone, Debug)]
+pub struct Submissions {
+    submissions: Vec<SubmissionId>,
+    finished_submissions: Vec<SubmissionId>,
+    last_submission: SubmissionId,
+}
+
+impl Submissions {
+    pub fn submit(&mut self) -> SubmissionId {
+        let id = self.last_submission.next();
+        self.last_submission = id;
+
+        self.submissions.push(id);
+
+        id
+    }
+
+    pub fn submit_finished(&mut self) -> SubmissionId {
+        let id = self.last_submission.next();
+        self.last_submission = id;
+
+        self.finished_submissions.push(id);
+
+        id
+    }
+
+    pub fn complete_first_n(&mut self, count: usize) {
+        self.finished_submissions
+            .extend(self.submissions.drain(..count))
+    }
+
+    pub fn drain_finished(&mut self) -> Drain<'_, SubmissionId> {
+        self.finished_submissions.drain(..)
+    }
+}
+
 pub struct RunningWallpapers {
-    executing: VecDeque<EffectWallpaper>,
-    ongoing_transitions: SmallVec<[OngoingTransition; 8]>,
+    executing: Vec<EffectWallpaper>,
+    ongoing_transitions: Vec<OngoingTransition>,
+    submissions: Submissions,
     transition_pipeline: Almost<WallpaperTransitionPipeline>,
     textures: Almost<WallpaperTransitionState>,
     config: Arc<Config>,
@@ -698,12 +752,15 @@ pub struct RunningWallpapers {
 
 impl RunningWallpapers {
     pub fn new(wallpaper_config: WallpaperConfig, config: Arc<Config>) -> Self {
+        const TRANSITION_CAPACITY: usize = 4;
+
         let mut effects_builder = EffectsBuilder::new();
         effects_builder.add_builtins(&config.effects);
 
         Self {
-            executing: VecDeque::new(),
-            ongoing_transitions: SmallVec::new_const(),
+            executing: Vec::with_capacity(TRANSITION_CAPACITY),
+            ongoing_transitions: Vec::with_capacity(TRANSITION_CAPACITY),
+            submissions: Submissions::default(),
             transition_pipeline: Nil,
             textures: Nil,
             config,
@@ -741,8 +798,8 @@ impl RunningWallpapers {
         self.config = new_config;
     }
 
-    pub fn enqueue_wallpaper(&mut self, gpu: &Wgpu, wallpaper: OptimizedWallpaper) {
-        self.executing.push_back(EffectWallpaper {
+    pub fn enqueue_wallpaper(&mut self, gpu: &Wgpu, wallpaper: OptimizedWallpaper) -> SubmissionId {
+        self.executing.push(EffectWallpaper {
             wallpaper,
             effects: self.effects_builder.build(gpu, self.wallpaper_config),
         });
@@ -752,7 +809,15 @@ impl RunningWallpapers {
                 self.wallpaper_config.aspect_ratio(),
                 &self.config.animation,
             ));
+
+            self.submissions.submit()
+        } else {
+            self.submissions.submit_finished()
         }
+    }
+
+    pub fn drain_finished_submissions(&mut self) -> Drain<'_, SubmissionId> {
+        self.submissions.drain_finished()
     }
 
     pub fn remove_finished(&mut self) {
@@ -761,6 +826,8 @@ impl RunningWallpapers {
             .iter()
             .take_while(|t| t.is_finished())
             .count();
+
+        self.submissions.complete_first_n(n_finished);
 
         _ = self.ongoing_transitions.drain(..n_finished);
         _ = self.executing.drain(..n_finished);
@@ -780,16 +847,18 @@ impl RunningWallpapers {
     }
 
     pub fn init_transitions(&mut self, gpu: &Wgpu) {
-        if self.is_transitioning() && Almost::is_nil(&self.transition_pipeline) {
-            let pipeline = WallpaperTransitionPipeline::new(
-                gpu,
-                self.wallpaper_config,
-                self.config.animation.style.animation(),
-            );
-
-            self.textures = Value(WallpaperTransitionState::new(gpu, &pipeline));
-            self.transition_pipeline = Value(pipeline);
+        if !self.is_transitioning() || Almost::is_value(&self.transition_pipeline) {
+            return;
         }
+
+        let pipeline = WallpaperTransitionPipeline::new(
+            gpu,
+            self.wallpaper_config,
+            self.config.animation.style.animation(),
+        );
+
+        self.textures = Value(WallpaperTransitionState::new(gpu, &pipeline));
+        self.transition_pipeline = Value(pipeline);
     }
 
     pub fn render(
@@ -799,14 +868,13 @@ impl RunningWallpapers {
         encoder: &mut wgpu::CommandEncoder,
     ) -> Result<FrameInfo, FrameError> {
         self.init_transitions(gpu);
-        self.remove_finished();
 
         let surface_view = surface.create_view(&Default::default());
 
         if self.executing.is_empty() {
             return Err(FrameError::NoWorkToDo);
         } else if self.executing.len() == 1 {
-            let Some(wallpaper) = self.executing.front_mut() else {
+            let Some(wallpaper) = self.executing.first_mut() else {
                 unreachable!()
             };
             return Ok(wallpaper.frame(gpu, &surface_view, encoder));
@@ -844,10 +912,6 @@ impl RunningWallpapers {
             target_frame_time: Some(frame_result.target_frame_time.unwrap_or(FrameInfo::MAX_FPS)),
         })
     }
-
-    pub fn wallpapers_mut(&mut self) -> &mut [EffectWallpaper] {
-        self.executing.make_contiguous()
-    }
 }
 
 impl Wallpaper for RunningWallpapers {
@@ -883,6 +947,8 @@ impl Wallpaper for RunningWallpapers {
             transition.advance_time(delta);
         }
 
+        self.remove_finished();
+
         if self.pause_state == PauseState::Paused {
             return;
         }
@@ -890,5 +956,37 @@ impl Wallpaper for RunningWallpapers {
         for effected in &mut self.executing {
             effected.wallpaper.advance_time(delta);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn first_submission() {
+        let mut subs = Submissions::default();
+
+        let id = subs.submit_finished();
+        let finished = subs.drain_finished().collect::<Vec<_>>();
+
+        assert_eq!(finished, [id]);
+    }
+
+    #[test]
+    fn first_2_subs() {
+        let mut subs = Submissions::default();
+
+        let first = subs.submit_finished();
+        let second = subs.submit();
+
+        let first_poll = subs.drain_finished().collect::<Vec<_>>();
+
+        subs.complete_first_n(1);
+
+        let second_poll = subs.drain_finished().collect::<Vec<_>>();
+
+        assert_eq!(first_poll, [first]);
+        assert_eq!(second_poll, [second]);
     }
 }

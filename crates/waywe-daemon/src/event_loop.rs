@@ -290,11 +290,17 @@ impl LoopState {
         };
 
         let event = match command.event {
-            DaemonCommand::Show { path, monitor, ty } => NewWallpaperEvent {
+            DaemonCommand::Show {
+                path,
+                monitor,
+                ty,
+                wait_transition,
+            } => NewWallpaperEvent {
                 path,
                 ty,
                 target: get_target(monitor.as_deref()),
                 sender_id: Some(command.sender_id),
+                wait_transition,
             }
             .into_event(),
             DaemonCommand::Preview {

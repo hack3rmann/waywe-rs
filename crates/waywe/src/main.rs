@@ -9,8 +9,8 @@ pub mod status;
 use crate::{
     args::{Args, Command},
     command::{
-        WaitMode, execute_current, execute_pause, execute_preview, execute_show, execute_start,
-        execute_stop,
+        ShowWaitMode, WaitMode, execute_current, execute_pause, execute_preview, execute_show,
+        execute_start, execute_stop,
     },
     config::execute_config,
     diagnostics::DaemonSetupDiagnostics,
@@ -49,7 +49,12 @@ fn main() -> miette::Result<()> {
             path,
             monitor,
             dont_wait,
-        } => execute_show(&path, monitor, WaitMode::from_dont(dont_wait))?,
+            wait_transition,
+        } => execute_show(
+            &path,
+            monitor,
+            ShowWaitMode::from_args(dont_wait, wait_transition),
+        )?,
         Command::Pause {
             monitor,
             on,

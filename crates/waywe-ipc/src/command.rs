@@ -35,6 +35,7 @@ pub enum DaemonCommand {
         ty: WallpaperType,
         path: PathBuf,
         monitor: Option<String>,
+        wait_transition: bool,
     },
     Preview {
         ty: WallpaperType,
