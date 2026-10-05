@@ -76,6 +76,7 @@ pub struct NewWallpaperEvent {
     pub ty: WallpaperType,
     pub target: WallpaperTarget,
     pub sender_id: Option<ClientId>,
+    pub wait_transition: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -356,6 +357,7 @@ impl Handle<PlatformEvent> for WallpaperApp {
                             ty: profile_info.wallpaper_type,
                             target: WallpaperTarget::ForMonitor(info.monitor_name.clone()),
                             sender_id: None,
+                            wait_transition: false,
                         };
 
                         runtime.tasks.emitter.emit(event);
@@ -404,6 +406,7 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
             ty,
             target,
             sender_id,
+            wait_transition: _,
         } = event;
 
         let monitor_names: SmallVec<[_; 4]> = match target {

@@ -307,10 +307,28 @@ fn file_kind_to_wall_type(kind: Kind) -> Option<WallpaperType> {
     })
 }
 
+#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
+pub enum ShowWaitMode {
+    DontWait,
+    #[default]
+    WaitSubmission,
+    WaitTransition,
+}
+
+impl ShowWaitMode {
+    pub const fn from_args(dont_wait: bool, wait_transition: bool) -> Self {
+        match (!dont_wait, wait_transition) {
+            (_, true) => Self::WaitTransition,
+            (true, false) => Self::WaitSubmission,
+            (false, false) => Self::DontWait,
+        }
+    }
+}
+
 pub fn execute_show(
     path: &Path,
     monitor_name: Option<String>,
-    wait_mode: WaitMode,
+    wait_mode: ShowWaitMode,
 ) -> Result<(), ExecuteError> {
     let file_kind = FileFormat::from_file(path)?.kind();
     let absolute_path = path.canonicalize()?;
@@ -322,13 +340,14 @@ pub fn execute_show(
         path: absolute_path,
         monitor: monitor_name,
         ty,
+        wait_transition: wait_mode == ShowWaitMode::WaitTransition,
     };
 
     let socket = connect_daemon()?;
 
     socket.send(command)?;
 
-    if wait_mode == WaitMode::DontWait {
+    if wait_mode == ShowWaitMode::DontWait {
         return Ok(());
     }
 

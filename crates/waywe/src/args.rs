@@ -18,8 +18,11 @@ pub enum Command {
         /// Path to an image, video, or scene package (.ww)
         path: PathBuf,
         /// Don't wait for the daemon to respond
-        #[arg(long)]
+        #[arg(long, overrides_with = "wait-transition")]
         dont_wait: bool,
+        /// Wait for the transition to complete
+        #[arg(long, short)]
+        wait_transition: bool,
     },
     /// Start the daemon process
     Start {
