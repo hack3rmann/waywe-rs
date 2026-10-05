@@ -130,10 +130,9 @@ impl App for WallpaperApp {
 
         let time_delta = self
             .last_instant
-            .as_ref()
-            .map(Instant::elapsed)
+            .replace(Instant::now())
+            .map(|i| i.elapsed())
             .unwrap_or_default();
-        self.last_instant = Some(Instant::now());
 
         for (monitor_name, wall) in self.wallpapers.iter_mut() {
             if let Some(state) = self.wallpaper_states.get(monitor_name.as_str())
