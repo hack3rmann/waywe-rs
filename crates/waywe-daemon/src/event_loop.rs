@@ -175,11 +175,7 @@ fn add_config_watcher_source(state: &mut LoopState) -> Result<(), calloop::Error
                 }
             };
 
-            state.event_queue.add(ConfigReloadEvent {
-                path: None,
-                sender_id: None,
-                config: Some(config),
-            });
+            state.event_queue.add(ConfigReloadEvent::Local(config));
         },
     )?;
 
@@ -332,10 +328,9 @@ impl LoopState {
                 sender_id: command.sender_id,
             }
             .into_event(),
-            DaemonCommand::ConfigReload { path } => ConfigReloadEvent {
+            DaemonCommand::ConfigReload { path } => ConfigReloadEvent::External {
                 path,
-                sender_id: Some(command.sender_id),
-                config: None,
+                sender_id: command.sender_id,
             }
             .into_event(),
         };

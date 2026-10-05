@@ -107,10 +107,12 @@ pub struct CurrentWallpaperEvent {
 }
 
 #[derive(Clone, Debug)]
-pub struct ConfigReloadEvent {
-    pub path: Option<PathBuf>,
-    pub sender_id: Option<ClientId>,
-    pub config: Option<Config>,
+pub enum ConfigReloadEvent {
+    Local(Config),
+    External {
+        path: Option<PathBuf>,
+        sender_id: ClientId,
+    },
 }
 
 impl App for WallpaperApp {
@@ -599,12 +601,13 @@ impl Handle<ConfigReloadEvent> for WallpaperApp {
     async fn handle(
         &mut self,
         runtime: &mut Runtime,
-        ConfigReloadEvent {
-            path,
-            sender_id,
-            config,
-        }: ConfigReloadEvent,
+        event: ConfigReloadEvent,
     ) -> PostEventActions {
+        let (config, path, sender_id) = match event {
+            ConfigReloadEvent::Local(config) => (Some(config), None, None),
+            ConfigReloadEvent::External { path, sender_id } => (None, path, Some(sender_id)),
+        };
+
         let config = match config {
             Some(config) => config,
             None => match Config::read_from(path.as_ref()) {
