@@ -540,6 +540,13 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
                 let pipeline = PreviewPipeline::new(&gpu, config);
 
                 pipeline.render_async(&gpu, &mut wallpaper, move |buffer| {
+                    let buffer = match buffer {
+                        Ok(b) => b,
+                        Err(error) => {
+                            report_error(&ipc, Some(sender_id), DaemonError::from_generic(error));
+                            return;
+                        }
+                    };
                     let rgba = buffer.get_mapped_range(..).unwrap().to_vec();
 
                     send_response(

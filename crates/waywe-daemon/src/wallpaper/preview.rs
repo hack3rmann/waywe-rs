@@ -145,7 +145,7 @@ impl PreviewPipeline {
         &self,
         gpu: &Wgpu,
         wallpaper: &mut OptimizedWallpaper,
-        on_success: impl FnOnce(wgpu::Buffer) + Send + 'static,
+        on_map: impl FnOnce(Result<wgpu::Buffer, wgpu::BufferAsyncError>) + Send + 'static,
     ) {
         let surface_view = self.surface.create_view(&Default::default());
         let mut encoder = gpu.device.create_command_encoder(&Default::default());
@@ -164,8 +164,7 @@ impl PreviewPipeline {
         let buffer = self.stage_buffer.clone();
 
         encoder.map_buffer_on_submit(&self.stage_buffer, wgpu::MapMode::Read, .., move |result| {
-            result.unwrap();
-            on_success(buffer);
+            on_map(result.map(|()| buffer));
         });
 
         gpu.queue.submit([encoder.finish()]);
