@@ -2,7 +2,8 @@ use crate::{
     event_loop::{DisableConfigWatcher, EnableConfigWatcher, WallpaperTarget},
     wallpaper::{
         self, Wallpaper, WallpaperConfig, optimized::OptimizedWallpaper,
-        package_registry::PackageRegistry, preview::PreviewPipeline, transition::RunningWallpapers,
+        package_registry::PackageRegistry, pause_rules::PauseRules, preview::PreviewPipeline,
+        transition::RunningWallpapers,
     },
 };
 use calloop::channel::Sender;
@@ -48,6 +49,7 @@ pub struct WallpaperApp {
     pub package_registry: PackageRegistry,
     pub last_instant: Option<Instant>,
     pub monitors: MonitorMap<SurfaceInfo>,
+    pub pause_rules: PauseRules,
 }
 
 impl WallpaperApp {
@@ -227,6 +229,8 @@ impl Handle<WallpaperPauseEvent> for WallpaperApp {
             sender_id,
         } = event;
 
+        self.pause_rules.toggle(target.clone(), mode);
+
         match target {
             WallpaperTarget::ForAll => {
                 for wall in self.wallpapers.values_mut() {
@@ -281,6 +285,9 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
         // before WallpaperPreparedEvent and after NewWallpaperEvent
         wallpaper.configure(&runtime.wgpu, config);
         run.enqueue_wallpaper(&runtime.wgpu, wallpaper);
+
+        let pause_state = self.pause_rules.get(&monitor_name);
+        run.set_pause(pause_state);
 
         self.wallpaper_states
             .entry(monitor_name.clone())

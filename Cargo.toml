@@ -31,6 +31,7 @@ members = [
     "crates/waywe-dhall/dhall",
     "crates/waywe-dhall/dhall_proc_macros",
     "crates/waywe-dhall/serde_dhall",
+    "crates/waywe-runtime-dir",
 ]
 
 [workspace.package]
@@ -56,6 +57,7 @@ waywe-spirv-derive = { path = "crates/waywe-spirv-derive" }
 waywe-rendering-api = { path = "crates/waywe-rendering-api" }
 waywe-scene-macros = { path = "crates/waywe-scene-macros" }
 waywe-config = { path = "crates/waywe-config" }
+waywe-runtime-dir = { path = "crates/waywe-runtime-dir" }
 daemonize = { path = "crates/daemonize/daemonize" }
 transmute-extra = { path = "crates/transmute-extra" }
 video = { path = "crates/video" }

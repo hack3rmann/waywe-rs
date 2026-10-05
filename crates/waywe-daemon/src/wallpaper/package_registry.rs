@@ -1,7 +1,6 @@
 use flate2::bufread::GzDecoder;
 use std::{
     collections::{HashMap, hash_map::Entry},
-    env,
     fmt::{self, Debug},
     fs::{self, File},
     io::BufReader,
@@ -11,6 +10,7 @@ use std::{
 use tap::Pipe;
 use tar::Archive;
 use uuid::Uuid;
+use waywe_runtime_dir::runtime_dir;
 
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct WallpaperPackage {
@@ -69,26 +69,7 @@ impl Drop for WallpaperPackage {
     }
 }
 
-pub static PACKAGES_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
-    let mut runtime_dir = match env::var_os("XDG_RUNTIME_DIR") {
-        Some(path) => PathBuf::from(path),
-        None => {
-            tracing::warn!("XDG_RUNTIME_DIR is not set, using '/tmp' as fallback ");
-            PathBuf::from("/tmp")
-        }
-    };
-
-    let packages_dir = {
-        runtime_dir.push("waywe-packages");
-        runtime_dir
-    };
-
-    if !packages_dir.exists() {
-        fs::create_dir_all(&packages_dir).unwrap();
-    }
-
-    packages_dir
-});
+pub static PACKAGES_DIR: LazyLock<PathBuf> = LazyLock::new(|| runtime_dir().join("packages"));
 
 #[derive(Clone, Default, Debug)]
 pub struct PackageRegistryInner {

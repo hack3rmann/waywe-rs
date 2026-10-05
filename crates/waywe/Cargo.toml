@@ -15,6 +15,7 @@ path = "src/main.rs"
 clap.workspace = true
 waywe-ipc.workspace = true
 waywe-config.workspace = true
+waywe-runtime-dir.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 rustix.workspace = true
