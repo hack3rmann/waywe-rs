@@ -13,14 +13,15 @@ use std::{
 use thiserror::Error;
 
 #[derive(Clone, PartialEq, PartialOrd, Debug, Hash, Eq, Ord, Encode, Decode)]
-pub struct Monitor {
-    pub wallpaper_type: WallpaperType,
+pub struct ProfileInfo {
+    pub ty: WallpaperType,
     pub path: PathBuf,
 }
 
 #[derive(Clone, Default, PartialEq, Debug, Eq, Encode, Decode)]
 pub struct SetupProfile {
-    pub monitors: HashMap<String, Monitor>,
+    for_all: Option<ProfileInfo>,
+    per_monitor: HashMap<String, ProfileInfo>,
 }
 
 impl SetupProfile {
@@ -39,23 +40,24 @@ impl SetupProfile {
         )?)
     }
 
-    pub fn with(mut self, name: String, monitor: Monitor) -> Self {
-        self.monitors.insert(name, monitor);
+    pub fn all(&mut self, info: ProfileInfo) -> &mut Self {
+        self.for_all = Some(info);
+        self.per_monitor.clear();
         self
     }
 
-    pub fn store(&self) -> Result<(), SetupProfileError> {
-        let profile = match Self::read() {
-            Ok(mut profile) => {
-                for (key, value) in &self.monitors {
-                    profile.monitors.insert(key.clone(), value.clone());
-                }
+    pub fn with(&mut self, name: String, info: ProfileInfo) -> &mut Self {
+        self.per_monitor.insert(name, info);
+        self
+    }
 
-                profile
-            }
-            Err(_) => self.clone(),
-        };
+    pub fn take(&mut self, name: &str) -> Option<ProfileInfo> {
+        self.per_monitor
+            .remove(name)
+            .or_else(|| self.for_all.take())
+    }
 
+    pub fn save(&self) -> Result<(), SetupProfileError> {
         let cache_directory = cache_dir().ok_or(SetupProfileError::NoHomeDirectory)?;
 
         fs::create_dir_all(&cache_directory)?;
@@ -72,7 +74,7 @@ impl SetupProfile {
             .truncate(true)
             .open(&profile_path)?;
 
-        bincode::encode_into_std_write(&profile, &mut file, config::standard())?;
+        bincode::encode_into_std_write(self, &mut file, config::standard())?;
 
         Ok(())
     }

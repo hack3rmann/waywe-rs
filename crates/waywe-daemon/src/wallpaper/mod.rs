@@ -1,7 +1,7 @@
 pub mod optimized;
 pub mod package_registry;
-pub mod pause_rules;
 pub mod preview;
+pub mod rules;
 pub mod transition;
 
 use crate::wallpaper::{

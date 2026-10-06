@@ -19,8 +19,15 @@ impl PauseRules {
     pub fn toggle_all(&mut self, mode: PauseMode) {
         self.for_all = self.for_all.toggled(mode);
 
-        for state in self.per_monitor.values_mut() {
-            *state = state.toggled(mode);
+        match mode {
+            PauseMode::Toggle => {
+                for state in self.per_monitor.values_mut() {
+                    *state = state.toggled(mode);
+                }
+            }
+            PauseMode::On | PauseMode::Off => {
+                self.per_monitor.clear();
+            }
         }
     }
 

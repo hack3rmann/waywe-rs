@@ -4,8 +4,8 @@ use crate::{
         self, Wallpaper, WallpaperConfig,
         optimized::OptimizedWallpaper,
         package_registry::PackageRegistry,
-        pause_rules::PauseRules,
         preview::PreviewPipeline,
+        rules::PauseRules,
         transition::{RunningWallpapers, SubmissionId},
     },
 };
@@ -27,7 +27,7 @@ use waywe_ipc::{
     WallpaperType,
     command::{DaemonError, DaemonResponse, DaemonResult, PauseMode},
     ipc::server::{ClientId, IpcResponse},
-    profile::{Monitor, SetupProfile, SetupProfileError},
+    profile::{ProfileInfo, SetupProfile, SetupProfileError},
 };
 use waywe_runtime::{
     Runtime,
@@ -365,14 +365,14 @@ impl Handle<PlatformEvent> for WallpaperApp {
                     Ok(mut profile) => 'ok: {
                         debug!(?profile, "read setup profile");
 
-                        let Some(profile_info) =
-                            profile.monitors.remove(info.monitor_name.as_str())
+                        let Some(ProfileInfo { ty, path }) =
+                            profile.take(info.monitor_name.as_str())
                         else {
                             break 'ok;
                         };
                         let event = NewWallpaperEvent {
-                            path: profile_info.path,
-                            ty: profile_info.wallpaper_type,
+                            path,
+                            ty,
                             target: WallpaperTarget::ForMonitor(info.monitor_name.clone()),
                             sender_id: None,
                             wait_transition: false,
@@ -427,6 +427,21 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
             wait_transition,
         } = event;
 
+        let mut profile = SetupProfile::read().unwrap_or_default();
+        let profile_info = ProfileInfo {
+            ty,
+            path: path.clone(),
+        };
+
+        match &target {
+            WallpaperTarget::ForAll => profile.all(profile_info),
+            WallpaperTarget::ForMonitor(name) => profile.with(name.to_string(), profile_info),
+        };
+
+        if let Err(error) = profile.save() {
+            error!(error = %error.chain(), "failed to save setup profile");
+        }
+
         let monitor_names: SmallVec<[_; 4]> = match target {
             WallpaperTarget::ForAll => self.monitors.keys().cloned().collect(),
             WallpaperTarget::ForMonitor(name) => smallvec![name],
@@ -435,18 +450,6 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
         for monitor_name in monitor_names {
             let path = path.clone();
             let gpu = Arc::clone(&runtime.wgpu);
-
-            let monitor_profile = Monitor {
-                wallpaper_type: ty,
-                path: path.clone(),
-            };
-
-            if let Err(error) = SetupProfile::default()
-                .with(monitor_name.to_string(), monitor_profile)
-                .store()
-            {
-                error!(?error, "failed to save setup profile");
-            }
 
             let monitor_info = &self.monitors[monitor_name.as_str()];
 
