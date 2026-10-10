@@ -26,7 +26,7 @@ mod needs_clear {
     }
 
     pub fn erase_line_if_needed(stderr: &mut AutoStream<io::Stderr>) {
-        _ = NEEDS_CLEAR.fetch_update(SeqCst, SeqCst, |needs_clear| {
+        _ = NEEDS_CLEAR.try_update(SeqCst, SeqCst, |needs_clear| {
             if needs_clear {
                 _ = stderr.write_all(b"\x1B[K");
             }

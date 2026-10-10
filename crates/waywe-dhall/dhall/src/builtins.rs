@@ -210,10 +210,7 @@ pub fn type_of_builtin<'cx>(cx: Ctxt<'cx>, b: Builtin) -> Hir<'cx> {
         DoubleShow => make_type!(Double -> Text),
         TextShow => make_type!(Text -> Text),
         TextReplace => make_type!(
-            forall (needle: Text) ->
-            forall (replacement: Text) ->
-            forall (haystack: Text) ->
-            Text
+            forall(needle: Text) -> forall(replacement: Text) -> forall(haystack: Text) -> Text
         ),
         ListBuild => make_type!(
             forall (a: Type) ->
