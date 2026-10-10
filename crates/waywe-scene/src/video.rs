@@ -260,6 +260,7 @@ impl Video {
                             panic!("failed to repeat video stream: {error}");
                         }
 
+                        self.codec_context.flush();
                         continue;
                     }
                     Err(error) => {

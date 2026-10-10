@@ -8,14 +8,13 @@ pub mod time;
 use bitflags::bitflags;
 use ffi::va;
 use ffmpeg_sys_next::{
-    AV_PROFILE_UNKNOWN, AVDiscard, AVFormatContext, AVFrame, AVMediaType, AVPacket,
-    AVPixFmtDescriptor, AVProfile, AVStream, SEEK_SET, SWS_PARAM_DEFAULT, SWS_SRC_V_CHR_DROP_MASK,
+    AV_NOPTS_VALUE, AV_PROFILE_UNKNOWN, AVDiscard, AVFormatContext, AVFrame, AVMediaType, AVPacket,
+    AVPixFmtDescriptor, AVProfile, AVStream, SWS_PARAM_DEFAULT, SWS_SRC_V_CHR_DROP_MASK,
     SWS_SRC_V_CHR_DROP_SHIFT, SwsContext, SwsFlags, av_buffer_get_ref_count, av_codec_iterate,
     av_dict_free, av_dict_set, av_find_best_stream, av_frame_alloc, av_frame_free,
     av_frame_get_buffer, av_frame_unref, av_new_packet, av_packet_alloc, av_packet_free,
     av_packet_ref, av_packet_unref, av_read_frame, avdevice_register_all, avformat_close_input,
-    avformat_find_stream_info, avformat_open_input, avformat_seek_file, avio_seek, sws_getContext,
-    sws_scale,
+    avformat_find_stream_info, avformat_open_input, avformat_seek_file, sws_getContext, sws_scale,
 };
 use glam::UVec2;
 use std::{
@@ -324,18 +323,20 @@ impl FormatContext {
         })
     }
 
-    /// Seeks to the start of the input file
-    pub fn repeat_stream(&mut self, index: usize) -> Result<(), BackendError> {
-        let io_context_ptr = unsafe { (*self.as_raw().as_ptr()).pb };
-        let _new_pos =
-            BackendError::result_or_u64(unsafe { avio_seek(io_context_ptr, 0, SEEK_SET) })?;
+    /// Seeks to the start of the input file.
+    ///
+    /// Uses the same seek pattern as FFmpeg's `-stream_loop` handling.
+    /// Callers should flush their decoder after a successful seek.
+    pub fn repeat_stream(&mut self, _index: usize) -> Result<(), BackendError> {
+        let ctx = self.as_raw().as_ptr();
+        let start_time = unsafe { (*ctx).start_time };
+        let ts = if start_time == AV_NOPTS_VALUE {
+            0
+        } else {
+            start_time
+        };
 
-        let stream = &self.streams()[index];
-        let duration = unsafe { (*stream.as_raw().as_ptr()).duration };
-
-        BackendError::result_of(unsafe {
-            avformat_seek_file(self.as_raw().as_ptr(), index as i32, 0, 0, duration, 0)
-        })
+        BackendError::result_of(unsafe { avformat_seek_file(ctx, -1, i64::MIN, ts, ts, 0) })
     }
 }
 

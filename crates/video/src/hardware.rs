@@ -310,6 +310,7 @@ mod tests {
                         Ok(packet) => packet,
                         Err(BackendError::EOF) => {
                             format_context.repeat_stream(best_stream_index).unwrap();
+                            codec_context.flush();
                             continue;
                         }
                         result @ Err(..) => result.unwrap(),

@@ -8,10 +8,10 @@ use crate::{
 use bitflags::bitflags;
 use ffmpeg_sys_next::{
     AV_PROFILE_UNKNOWN, AVCodec, AVCodecContext, AVCodecID, AVCodecParameters, av_codec_is_decoder,
-    av_codec_is_encoder, avcodec_alloc_context3, avcodec_find_decoder, avcodec_free_context,
-    avcodec_get_hw_config, avcodec_open2, avcodec_parameters_alloc, avcodec_parameters_copy,
-    avcodec_parameters_free, avcodec_parameters_to_context, avcodec_receive_frame,
-    avcodec_send_packet,
+    av_codec_is_encoder, avcodec_alloc_context3, avcodec_find_decoder, avcodec_flush_buffers,
+    avcodec_free_context, avcodec_get_hw_config, avcodec_open2, avcodec_parameters_alloc,
+    avcodec_parameters_copy, avcodec_parameters_free, avcodec_parameters_to_context,
+    avcodec_receive_frame, avcodec_send_packet,
 };
 use glam::UVec2;
 use std::{
@@ -447,6 +447,11 @@ impl CodecContext {
         BackendError::result_of(unsafe {
             avcodec_receive_frame(self.as_raw().as_ptr(), frame.as_raw().as_ptr())
         })
+    }
+
+    /// Reset the decoder/encoder state after a seek.
+    pub fn flush(&mut self) {
+        unsafe { avcodec_flush_buffers(self.as_raw().as_ptr()) };
     }
 
     /// `libva` display associated with [`CodecContext`]
