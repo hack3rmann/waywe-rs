@@ -2,7 +2,16 @@ use crate::wallpaper::{Wallpaper, WallpaperConfig, optimized::OptimizedWallpaper
 use bytemuck::{Pod, Zeroable};
 use for_sure::prelude::*;
 use glam::Vec2;
-use std::{f32::consts::PI, mem, sync::Arc, time::Duration, vec::Drain};
+use std::{
+    f32::consts::PI,
+    mem,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering::Relaxed},
+    },
+    time::Duration,
+    vec::Drain,
+};
 use waywe_config::{
     Angle, AnimationConfig, AnimationDirection, AnimationStyle, CenterPosition, Config,
     Interpolation, Transition,
@@ -685,6 +694,16 @@ impl EffectWallpaper {
 }
 
 #[repr(transparent)]
+#[derive(Default, Debug)]
+pub struct SubmissionIdGenerator(AtomicU64);
+
+impl SubmissionIdGenerator {
+    pub fn next(&self) -> SubmissionId {
+        SubmissionId(self.0.fetch_add(1, Relaxed))
+    }
+}
+
+#[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct SubmissionId(u64);
 
@@ -702,17 +721,24 @@ impl Default for SubmissionId {
     }
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct Submissions {
+    id_generator: Arc<SubmissionIdGenerator>,
     submissions: Vec<SubmissionId>,
     finished_submissions: Vec<SubmissionId>,
-    last_submission: SubmissionId,
 }
 
 impl Submissions {
+    pub fn new(id_generator: Arc<SubmissionIdGenerator>) -> Self {
+        Self {
+            id_generator,
+            submissions: vec![],
+            finished_submissions: vec![],
+        }
+    }
+
     pub fn submit(&mut self) -> SubmissionId {
-        let id = self.last_submission.next();
-        self.last_submission = id;
+        let id = self.id_generator.next();
 
         self.submissions.push(id);
 
@@ -720,8 +746,7 @@ impl Submissions {
     }
 
     pub fn submit_finished(&mut self) -> SubmissionId {
-        let id = self.last_submission.next();
-        self.last_submission = id;
+        let id = self.id_generator.next();
 
         self.finished_submissions.push(id);
 
@@ -751,7 +776,11 @@ pub struct RunningWallpapers {
 }
 
 impl RunningWallpapers {
-    pub fn new(wallpaper_config: WallpaperConfig, config: Arc<Config>) -> Self {
+    pub fn new(
+        wallpaper_config: WallpaperConfig,
+        config: Arc<Config>,
+        id_generator: Arc<SubmissionIdGenerator>,
+    ) -> Self {
         const TRANSITION_CAPACITY: usize = 4;
 
         let mut effects_builder = EffectsBuilder::new();
@@ -760,7 +789,7 @@ impl RunningWallpapers {
         Self {
             executing: Vec::with_capacity(TRANSITION_CAPACITY),
             ongoing_transitions: Vec::with_capacity(TRANSITION_CAPACITY),
-            submissions: Submissions::default(),
+            submissions: Submissions::new(id_generator),
             transition_pipeline: Nil,
             textures: Nil,
             config,
@@ -965,7 +994,7 @@ mod tests {
 
     #[test]
     fn first_submission() {
-        let mut subs = Submissions::default();
+        let mut subs = Submissions::new(Arc::new(SubmissionIdGenerator::default()));
 
         let id = subs.submit_finished();
         let finished = subs.drain_finished().collect::<Vec<_>>();
@@ -975,7 +1004,7 @@ mod tests {
 
     #[test]
     fn first_2_subs() {
-        let mut subs = Submissions::default();
+        let mut subs = Submissions::new(Arc::new(SubmissionIdGenerator::default()));
 
         let first = subs.submit_finished();
         let second = subs.submit();

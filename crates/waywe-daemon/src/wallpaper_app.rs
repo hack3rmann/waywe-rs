@@ -6,7 +6,7 @@ use crate::{
         package_registry::PackageRegistry,
         preview::PreviewPipeline,
         rules::PauseRules,
-        transition::{RunningWallpapers, SubmissionId},
+        transition::{RunningWallpapers, SubmissionId, SubmissionIdGenerator},
     },
 };
 use calloop::channel::Sender;
@@ -43,6 +43,75 @@ pub struct WallpaperState {
     pub needs_redraw: bool,
 }
 
+#[derive(Default, Debug)]
+pub struct TransitionSubmissions {
+    pub id_generator: Arc<SubmissionIdGenerator>,
+    pub client_counters: HashMap<ClientId, usize>,
+    pub waiting_submissions: HashMap<SubmissionId, ClientId>,
+    pub client_submissions: HashMap<ClientId, SmallVec<[SubmissionId; 4]>>,
+}
+
+impl TransitionSubmissions {
+    pub fn set_client_submissions(&mut self, client: ClientId, count: usize) {
+        self.client_counters.insert(client, count);
+    }
+
+    pub fn remove_client(&mut self, client: ClientId) {
+        self.client_counters.remove(&client);
+
+        let Some(submissions) = self.client_submissions.remove(&client) else {
+            return;
+        };
+
+        for submsission in submissions {
+            self.waiting_submissions.remove(&submsission);
+        }
+    }
+
+    pub fn submit(&mut self, client: ClientId, submission: SubmissionId) {
+        self.waiting_submissions.insert(submission, client);
+
+        self.client_submissions
+            .entry(client)
+            .and_modify(|s| {
+                let index = s.partition_point(|&a| a <= submission);
+                s.insert(index, submission);
+            })
+            .or_insert_with(|| smallvec![submission]);
+
+        let Some(counter) = self.client_counters.get_mut(&client) else {
+            return;
+        };
+
+        *counter = counter.saturating_sub(1);
+
+        if *counter == 0 {
+            self.client_counters.remove(&client);
+        }
+    }
+
+    pub fn complete(&mut self, submission: SubmissionId) -> Option<ClientId> {
+        let client = self.waiting_submissions.remove(&submission)?;
+
+        if self.client_counters.contains_key(&client) {
+            return None;
+        }
+
+        let submissions = self.client_submissions.get_mut(&client)?;
+
+        let index = submissions.binary_search(&submission).ok()?;
+        submissions.remove(index);
+
+        let is_complete = submissions.is_empty();
+
+        if is_complete {
+            self.client_submissions.remove(&client);
+        }
+
+        is_complete.then_some(client)
+    }
+}
+
 #[derive(Default)]
 pub struct WallpaperApp {
     pub wallpapers: MonitorMap<RunningWallpapers>,
@@ -53,7 +122,7 @@ pub struct WallpaperApp {
     pub last_instant: Option<Instant>,
     pub monitors: MonitorMap<SurfaceInfo>,
     pub pause_rules: PauseRules,
-    pub waiting_submissions: HashMap<SubmissionId, ClientId>,
+    pub submissions: TransitionSubmissions,
 }
 
 impl WallpaperApp {
@@ -188,9 +257,10 @@ impl App for WallpaperApp {
                 runtime.wgpu.reconfigure_surface(monitor_name);
             }
 
-            for id in wall.drain_finished_submissions() {
-                let client_id = self.waiting_submissions.remove(&id);
-                send_response(&runtime.ipc, client_id, DaemonResponse::WallpaperSet);
+            for submission_id in wall.drain_finished_submissions() {
+                if let Some(client_id) = self.submissions.complete(submission_id) {
+                    send_response(&runtime.ipc, Some(client_id), DaemonResponse::WallpaperSet);
+                }
             }
         }
 
@@ -286,11 +356,17 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
 
         // NOTE(hack3rmann): wallpaper may be prepared after monitor is disconnected
         let Some(config) = runtime.wallpaper_config(monitor_info) else {
+            if let Some(client_id) = sender_id {
+                self.submissions.remove_client(client_id);
+            }
             return PostEventActions::empty();
         };
 
         // NOTE(hack3rmann): monitor could be unplugged when this event arrives
         let Some(run) = self.wallpapers.get_mut(&monitor_name) else {
+            if let Some(client_id) = sender_id {
+                self.submissions.remove_client(client_id);
+            }
             return PostEventActions::empty();
         };
 
@@ -311,7 +387,7 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
 
         if let Some(sender_id) = sender_id {
             if wait_transition {
-                self.waiting_submissions.insert(submission_id, sender_id);
+                self.submissions.submit(sender_id, submission_id);
             } else {
                 send_response(&runtime.ipc, Some(sender_id), DaemonResponse::WallpaperSet);
             }
@@ -390,8 +466,11 @@ impl Handle<PlatformEvent> for WallpaperApp {
                     .wallpaper_config(&info)
                     .unwrap_or_else(|| panic!("no config for '{}'", info.monitor_name));
 
-                // TODO(hack3rmann): add pause rules here
-                let wallpapers = RunningWallpapers::new(wall_config, self.config.clone());
+                let wallpapers = RunningWallpapers::new(
+                    wall_config,
+                    self.config.clone(),
+                    self.submissions.id_generator.clone(),
+                );
 
                 self.wallpapers.insert(info.monitor_name, wallpapers);
 
@@ -446,6 +525,13 @@ impl Handle<NewWallpaperEvent> for WallpaperApp {
             WallpaperTarget::ForAll => self.monitors.keys().cloned().collect(),
             WallpaperTarget::ForMonitor(name) => smallvec![name],
         };
+
+        if let Some(id) = sender_id
+            && wait_transition
+        {
+            self.submissions
+                .set_client_submissions(id, monitor_names.len());
+        }
 
         for monitor_name in monitor_names {
             let path = path.clone();
