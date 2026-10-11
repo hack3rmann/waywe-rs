@@ -352,7 +352,12 @@ impl Handle<WallpaperPreparedEvent> for WallpaperApp {
             wait_transition,
         } = event;
 
-        let monitor_info = &self.monitors[monitor_name.as_str()];
+        let Some(monitor_info) = self.monitors.get(monitor_name.as_str()) else {
+            if let Some(client_id) = sender_id {
+                self.submissions.remove_client(client_id);
+            }
+            return PostEventActions::empty();
+        };
 
         // NOTE(hack3rmann): wallpaper may be prepared after monitor is disconnected
         let Some(config) = runtime.wallpaper_config(monitor_info) else {
