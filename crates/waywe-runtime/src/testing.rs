@@ -423,8 +423,8 @@ pub fn readback_rgba8(gpu: &Wgpu, texture: &wgpu::Texture) -> RgbaImage {
                 pixels.extend_from_slice(row_bytes);
             }
             wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb => {
-                for chunk in row_bytes.chunks_exact(4) {
-                    pixels.extend_from_slice(&[chunk[2], chunk[1], chunk[0], chunk[3]]);
+                for &[r, g, b, a] in row_bytes.as_chunks::<4>().0 {
+                    pixels.extend_from_slice(&[b, g, r, a]);
                 }
             }
             other => panic!("unsupported readback format: {other:?}"),
