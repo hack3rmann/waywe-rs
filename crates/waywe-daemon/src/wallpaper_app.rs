@@ -443,11 +443,11 @@ impl Handle<PlatformEvent> for WallpaperApp {
                     .register_surface(runtime.platform.as_ref(), &info);
 
                 match SetupProfile::read() {
-                    Ok(mut profile) => 'ok: {
+                    Ok(profile) => 'ok: {
                         debug!(?profile, "read setup profile");
 
                         let Some(ProfileInfo { ty, path }) =
-                            profile.take(info.monitor_name.as_str())
+                            profile.get(info.monitor_name.as_str())
                         else {
                             break 'ok;
                         };

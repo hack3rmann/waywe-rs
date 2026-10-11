@@ -51,10 +51,11 @@ impl SetupProfile {
         self
     }
 
-    pub fn take(&mut self, name: &str) -> Option<ProfileInfo> {
+    pub fn get(&self, name: &str) -> Option<ProfileInfo> {
         self.per_monitor
-            .remove(name)
-            .or_else(|| self.for_all.take())
+            .get(name)
+            .cloned()
+            .or_else(|| self.for_all.clone())
     }
 
     pub fn save(&self) -> Result<(), SetupProfileError> {
