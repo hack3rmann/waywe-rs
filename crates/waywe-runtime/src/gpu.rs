@@ -1,5 +1,7 @@
 use crate::{
-    platform::{MonitorMap, SurfaceInfo, WaywePlatform},
+    platform::{
+        CurrentSurfaceTexture, MonitorMap, SurfaceInfo, SurfaceTexture, WaywePlatform, WayweSurface,
+    },
     shaders::{ShaderCache, ShaderDescriptor},
 };
 use ash::vk;
@@ -8,7 +10,7 @@ use std::sync::RwLock;
 use wgpu::hal::{DeviceError, api};
 
 pub struct Surface {
-    pub surface: wgpu::Surface<'static>,
+    pub surface: Box<dyn WayweSurface>,
     pub config: wgpu::SurfaceConfiguration,
     pub format: wgpu::TextureFormat,
 }
@@ -81,7 +83,7 @@ impl Wgpu {
             return;
         };
 
-        info.config = get_surface_config(&info.surface, &self.adapter, size);
+        info.config = info.surface.get_config(&self.adapter, size);
         info.surface.configure(&self.device, &info.config);
     }
 
@@ -125,28 +127,26 @@ impl Wgpu {
         };
 
         for _ in 0..N_TRIES {
-            let surface_result = surface_info.surface.get_current_texture();
-
-            match surface_result {
-                wgpu::CurrentSurfaceTexture::Success(texture) => return SurfaceResult::Ok(texture),
-                wgpu::CurrentSurfaceTexture::Suboptimal(texture) => {
+            match surface_info.surface.get_current_texture() {
+                CurrentSurfaceTexture::Success(texture) => return SurfaceResult::Ok(texture),
+                CurrentSurfaceTexture::Suboptimal(texture) => {
                     return SurfaceResult::Reconfigure(texture);
                 }
-                wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => {
+                CurrentSurfaceTexture::Timeout | CurrentSurfaceTexture::Occluded => {
                     return SurfaceResult::Skip;
                 }
-                wgpu::CurrentSurfaceTexture::Outdated => {
+                CurrentSurfaceTexture::Outdated => {
                     surface_info
                         .surface
                         .configure(&self.device, &surface_info.config);
                 }
-                wgpu::CurrentSurfaceTexture::Lost => {
+                CurrentSurfaceTexture::Lost => {
                     let new_info =
                         create_surface(&self.instance, &self.adapter, &self.device, platform, info);
 
                     *surface_info = new_info;
                 }
-                wgpu::CurrentSurfaceTexture::Validation => return SurfaceResult::Err,
+                CurrentSurfaceTexture::Validation => return SurfaceResult::Err,
             }
         }
 
@@ -160,10 +160,9 @@ impl Default for Wgpu {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
 pub enum SurfaceResult {
-    Ok(wgpu::SurfaceTexture),
-    Reconfigure(wgpu::SurfaceTexture),
+    Ok(Box<dyn SurfaceTexture>),
+    Reconfigure(Box<dyn SurfaceTexture>),
     Skip,
     Err,
 }
@@ -246,15 +245,10 @@ fn create_surface(
     platform: &dyn WaywePlatform,
     info: &SurfaceInfo,
 ) -> Surface {
-    let surface = instance
-        .create_surface(platform.get_surface(&info.monitor_name))
-        .unwrap();
+    let surface = platform.create_surface(instance, &info.monitor_name);
+    let format = surface.get_format(adapter);
+    let config = surface.get_config(adapter, info.physical_size);
 
-    let Some(format) = surface.get_capabilities(adapter).formats.first().copied() else {
-        panic!("no surface format supported");
-    };
-
-    let config = get_surface_config(&surface, adapter, info.phisical_size);
     surface.configure(device, &config);
 
     Surface {
@@ -264,29 +258,70 @@ fn create_surface(
     }
 }
 
-fn get_surface_config(
-    surface: &wgpu::Surface,
-    adapter: &wgpu::Adapter,
-    screen_size: UVec2,
-) -> wgpu::SurfaceConfiguration {
-    let Some(format) = surface.get_capabilities(adapter).formats.first().copied() else {
-        panic!("no surface format supported");
-    };
+impl SurfaceTexture for wgpu::SurfaceTexture {
+    fn texture(&self) -> &wgpu::Texture {
+        &self.texture
+    }
 
-    let config = surface
-        .get_default_config(adapter, screen_size.x, screen_size.y)
-        .unwrap();
+    fn present(self: Box<Self>, queue: &wgpu::Queue) {
+        let texture = *self;
+        queue.present(texture);
+    }
+}
 
-    // TODO(hack3rmann): configure surface with
-    // `usage |= wgt::TextureUsages::STORAGE_BINDING`
-    // to render to it using compute shaders
-    wgpu::SurfaceConfiguration {
-        // NOTE(hack3rmann): `COPY_SRC` used to allow transitions between wallpapers
-        usage: config.usage
-            | wgpu::TextureUsages::COPY_SRC
-            | wgpu::TextureUsages::COPY_DST
-            | wgpu::TextureUsages::TEXTURE_BINDING,
-        view_formats: vec![format.remove_srgb_suffix()],
-        ..config
+impl WayweSurface for wgpu::Surface<'static> {
+    fn get_current_texture(&self) -> CurrentSurfaceTexture {
+        match wgpu::Surface::get_current_texture(self) {
+            wgpu::CurrentSurfaceTexture::Success(texture) => {
+                CurrentSurfaceTexture::Success(Box::new(texture))
+            }
+            wgpu::CurrentSurfaceTexture::Suboptimal(texture) => {
+                CurrentSurfaceTexture::Suboptimal(Box::new(texture))
+            }
+            wgpu::CurrentSurfaceTexture::Timeout => CurrentSurfaceTexture::Timeout,
+            wgpu::CurrentSurfaceTexture::Occluded => CurrentSurfaceTexture::Occluded,
+            wgpu::CurrentSurfaceTexture::Outdated => CurrentSurfaceTexture::Outdated,
+            wgpu::CurrentSurfaceTexture::Lost => CurrentSurfaceTexture::Lost,
+            wgpu::CurrentSurfaceTexture::Validation => CurrentSurfaceTexture::Validation,
+        }
+    }
+
+    fn configure(&self, device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) {
+        wgpu::Surface::configure(self, device, config)
+    }
+
+    fn get_format(&self, adapter: &wgpu::Adapter) -> wgpu::TextureFormat {
+        self.get_capabilities(adapter)
+            .formats
+            .first()
+            .copied()
+            .unwrap_or_else(|| panic!("no surface format supported"))
+    }
+
+    fn get_config(
+        &self,
+        adapter: &wgpu::Adapter,
+        physical_size: UVec2,
+    ) -> wgpu::SurfaceConfiguration {
+        let Some(format) = self.get_capabilities(adapter).formats.first().copied() else {
+            panic!("no surface format supported");
+        };
+
+        let config = self
+            .get_default_config(adapter, physical_size.x, physical_size.y)
+            .unwrap();
+
+        // TODO(hack3rmann): configure surface with
+        // `usage |= wgt::TextureUsages::STORAGE_BINDING`
+        // to render to it using compute shaders
+        wgpu::SurfaceConfiguration {
+            // NOTE(hack3rmann): `COPY_SRC` used to allow transitions between wallpapers
+            usage: config.usage
+                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: vec![format.remove_srgb_suffix()],
+            ..config
+        }
     }
 }

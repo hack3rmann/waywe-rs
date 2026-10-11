@@ -50,7 +50,7 @@ impl Runtime {
         };
 
         Some(WallpaperConfig {
-            surface_size: info.phisical_size,
+            surface_size: info.physical_size,
             surface_format,
         })
     }

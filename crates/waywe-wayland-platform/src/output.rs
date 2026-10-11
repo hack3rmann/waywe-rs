@@ -651,7 +651,7 @@ impl Output {
                 state.stored_events.push(PlatformEvent::MonitorPlugged {
                     info: SurfaceInfo {
                         monitor_name: info.name.clone(),
-                        phisical_size: info.phisical_size(),
+                        physical_size: info.phisical_size(),
                         scale: info.scale.map(|s| s.value).unwrap_or_default(),
                     },
                 });

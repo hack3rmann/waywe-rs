@@ -32,7 +32,9 @@ use wayland_client::{
         wire::{WlMessage, WlStackMessageBuffer},
     },
 };
-use waywe_runtime::platform::{MonitorMap, PlatformEvent, PlatformEventSource, WaywePlatform};
+use waywe_runtime::platform::{
+    MonitorMap, PlatformEvent, PlatformEventSource, WaywePlatform, WayweSurface,
+};
 
 pub(crate) type MonitorId = WlObjectId;
 
@@ -406,16 +408,23 @@ impl HasWindowHandle for WaylandSurface {
 }
 
 impl WaywePlatform for Wayland {
-    fn get_surface(&self, monitor_name: &str) -> wgpu::SurfaceTarget<'static> {
+    fn create_surface(
+        &self,
+        instance: &wgpu::Instance,
+        monitor_name: &str,
+    ) -> Box<dyn WayweSurface> {
         let state = self.0.client_state.lock().unwrap();
         let monitor_id = state.monitor_names[monitor_name];
         let surface = state.monitors[&monitor_id].surface;
 
-        WaylandSurface {
-            wayland: self.clone(),
-            surface,
-        }
-        .into()
+        Box::new(
+            instance
+                .create_surface(WaylandSurface {
+                    wayland: self.clone(),
+                    surface,
+                })
+                .unwrap(),
+        )
     }
 
     fn event_source(&self) -> Box<dyn PlatformEventSource> {
