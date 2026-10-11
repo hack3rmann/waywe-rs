@@ -1,1 +1,0 @@
-[] : { x = List Bool }.x

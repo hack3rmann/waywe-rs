@@ -1,1 +1,0 @@
-TypeError { message: Custom("error: InvalidVariantType\n --> <current file>:1:7\n  |\n1 | < x : True >\n  |       ^^^^ InvalidVariantType\n  |") }

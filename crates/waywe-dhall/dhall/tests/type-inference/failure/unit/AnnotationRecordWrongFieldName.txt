@@ -1,1 +1,0 @@
-TypeError { message: Custom("error: annot mismatch: { x : Natural } != { y : Natural }\n --> <current file>:1:1\n  |\n1 | { x = 1 } : { y : Natural }\n  | ^^^^^^^^^ annot mismatch: { x : Natural } != { y : Natural }\n  |") }

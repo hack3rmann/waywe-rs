@@ -1,5 +1,0 @@
-	  	''
-	  	hai
-	  	there
-	   ok
-	  	''

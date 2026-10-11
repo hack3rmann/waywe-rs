@@ -2,7 +2,6 @@ use glam::Vec2;
 use miette::Diagnostic;
 use rand::distr::{Distribution as _, Uniform};
 use serde::{Deserialize, Serialize};
-use serde_dhall::StaticType;
 use smallvec::SmallVec;
 use static_assertions::assert_impl_all;
 use std::{
@@ -12,6 +11,7 @@ use std::{
     time::Duration,
 };
 use thiserror::Error;
+use waywe_serde_dhall::StaticType;
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize, StaticType)]
 pub struct Config {
@@ -60,7 +60,7 @@ impl Config {
     pub fn read(path: impl AsRef<Path>) -> Result<Self, ReadConfigError> {
         let path = path.as_ref();
 
-        serde_dhall::from_file(path)
+        waywe_serde_dhall::from_file(path)
             .parse::<Self>()
             .map_err(|error| DhallErrorSource {
                 path: path.to_owned(),
@@ -83,7 +83,7 @@ impl Config {
         for mut path in Self::config_paths() {
             path.push("config.dhall");
 
-            match serde_dhall::from_file(&path).parse::<Self>() {
+            match waywe_serde_dhall::from_file(&path).parse::<Self>() {
                 Ok(config) => return Ok(config),
                 Err(error) => errors.push(DhallErrorSource { path, error }),
             }
@@ -93,7 +93,7 @@ impl Config {
             if let Some(actual_config_error_index) = errors.iter_mut().position(|source| {
                 !matches!(
                     source.error,
-                    serde_dhall::Error::Dhall(dhall::error::Error::Io(_))
+                    waywe_serde_dhall::Error::Dhall(waywe_dhall::error::Error::Io(_))
                 )
             }) {
                 let actual_error = errors.swap_remove(actual_config_error_index);
@@ -111,12 +111,12 @@ pub struct ConfigOpts {
 }
 
 #[derive(Debug, Error, Diagnostic)]
-#[diagnostic(code(waywe::dhall::error))]
+#[diagnostic(code(waywe::waywe_dhall::error))]
 #[error("failed to run Dhall '{path}'")]
 pub struct DhallErrorSource {
     pub path: PathBuf,
     #[source]
-    pub error: serde_dhall::Error,
+    pub error: waywe_serde_dhall::Error,
 }
 
 impl Borrow<dyn Diagnostic> for Box<DhallErrorSource> {
@@ -418,7 +418,7 @@ mod tests {
                 disable_hot_reload: true,
             },
         };
-        let string = serde_dhall::serialize(&config)
+        let string = waywe_serde_dhall::serialize(&config)
             .static_type_annotation()
             .to_string()
             .unwrap();

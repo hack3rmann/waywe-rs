@@ -1,1 +1,0 @@
-TypeError { message: Custom("error: Merge2ArgMustBeUnionOrOptional\n --> <current file>:1:1\n  |\n1 | merge { x = λ(_ : Bool) → _ } <> : Bool\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Merge2ArgMustBeUnionOrOptional\n  |") }
