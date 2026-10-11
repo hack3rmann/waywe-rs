@@ -64,7 +64,7 @@ pub enum EncodeError {
 
 /// A structured type error
 #[derive(Debug, Error)]
-#[error("type error: {message}")]
+#[error("{message}")]
 pub struct TypeError {
     message: TypeMessage,
 }
