@@ -5300,6 +5300,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "waywe-clear-scene"
+version = "0.0.16"
+dependencies = [
+ "glam",
+ "waywe-rendering-api",
+ "waywe-scene",
+]
+
+[[package]]
 name = "waywe-config"
 version = "0.0.16"
 dependencies = [
@@ -5420,6 +5429,7 @@ dependencies = [
  "futures-util",
  "fxhash",
  "glam",
+ "image",
  "pollster",
  "reusable-box",
  "rustix",

@@ -379,3 +379,54 @@ pub fn map_wgpu_format(format: wgpu::TextureFormat) -> Option<vk::Format> {
         },
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ash::vk;
+    use wgpu::TextureFormat;
+
+    #[test]
+    fn extent_roundtrip() {
+        let extent = wgpu::Extent3d {
+            width: 64,
+            height: 32,
+            depth_or_array_layers: 1,
+        };
+        assert_eq!(map_vk_extent(map_wgpu_extent(extent)), extent);
+    }
+
+    #[test]
+    fn dimension_roundtrip() {
+        for dim in [
+            wgpu::TextureDimension::D1,
+            wgpu::TextureDimension::D2,
+            wgpu::TextureDimension::D3,
+        ] {
+            assert_eq!(map_vk_dimension(map_wgpu_dimension(dim)), dim);
+        }
+    }
+
+    #[test]
+    fn format_roundtrip_common() {
+        for format in [
+            TextureFormat::Rgba8Unorm,
+            TextureFormat::Bgra8Unorm,
+            TextureFormat::Rgba8UnormSrgb,
+            TextureFormat::Bgra8UnormSrgb,
+        ] {
+            let vk = map_wgpu_format(format).expect("map to vk");
+            match format {
+                TextureFormat::Rgba8Unorm => assert_eq!(vk, vk::Format::R8G8B8A8_UNORM),
+                TextureFormat::Bgra8Unorm => assert_eq!(vk, vk::Format::B8G8R8A8_UNORM),
+                _ => {}
+            }
+        }
+    }
+
+    #[test]
+    fn label_roundtrip() {
+        assert_eq!(map_ffi_label(map_wgpu_label(None)), None);
+        assert_eq!(map_ffi_label(map_wgpu_label(Some("x"))), Some("x"));
+    }
+}

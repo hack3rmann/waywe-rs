@@ -31,3 +31,9 @@ image.workspace = true
 thiserror.workspace = true
 pollster.workspace = true
 display-error-chain.workspace = true
+
+[dev-dependencies]
+image.workspace = true
+pollster.workspace = true
+wgpu.workspace = true
+glam.workspace = true

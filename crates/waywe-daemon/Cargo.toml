@@ -61,6 +61,10 @@ libc = "0.2.171"
 tracing-test.workspace = true
 wayland-sys.workspace = true
 scopeguard = "1.2.0"
+bytemuck.workspace = true
+image.workspace = true
+glam.workspace = true
+waywe-config.workspace = true
 
 [features]
 spirv-shaders = ["waywe-spirv-derive/spirv", "wgpu/spirv"]

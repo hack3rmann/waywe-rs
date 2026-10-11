@@ -15,6 +15,7 @@ pub mod gpu;
 pub mod platform;
 pub mod shaders;
 pub mod tasks;
+pub mod testing;
 pub mod timer;
 
 pub struct Runtime {
