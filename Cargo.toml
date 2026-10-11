@@ -38,7 +38,7 @@ members = [
 version = "0.0.16"
 edition = "2024"
 license = "MIT"
-rust-version = "1.89"
+rust-version = "1.95"
 authors = [
     "Varov Svyatoslav <slava-varov3@mail.ru>",
     "Alexander Filimonov <arnodarkrose@duck.com>",
