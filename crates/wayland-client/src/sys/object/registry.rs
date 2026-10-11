@@ -7,7 +7,7 @@ use crate::{
         WlObjectType, WlRegistryBindRequest, WlRegistryEvent, WlRegistryGlobalEvent,
         WlRegistryGlobalRemoveEvent,
     },
-    object::{HasObjectType, WlObjectId},
+    object::{HasObjectType, InterfaceMessageArgument, WlObjectId},
     sys::{
         object_storage::WlObjectStorage,
         proxy::WlProxy,
@@ -107,6 +107,16 @@ impl<S> WlRegistry<S> {
     /// The type of global with id `name`
     pub fn type_of(&self, name: WlObjectId) -> Option<WlObjectType> {
         self.names.get(&name).copied()
+    }
+
+    /// Server-advertised version for the global with id `name`
+    pub fn version_of(&self, name: WlObjectId) -> Option<u32> {
+        let object_type = self.type_of(name)?;
+        self.interfaces
+            .get(&object_type)?
+            .iter()
+            .find(|info| info.name == name)
+            .map(|info| info.version)
     }
 
     /// # Safety
@@ -255,11 +265,20 @@ impl<S: State> WlObjectHandle<WlRegistry<S>> {
         T: Dispatch<State = S>,
         F: FnOnce(&mut B, Pin<&mut WlObjectStorage<S>>, &WlProxy) -> T,
     {
+        let advertised_version = storage.get_object(self)?.version_of(global_name)?;
+        let version = InterfaceMessageArgument {
+            object_type: T::OBJECT_TYPE,
+            name: global_name,
+        }
+        .negotiated_version(advertised_version)
+        .get();
+
         let registry = storage.get_proxy(self.id()).unwrap();
 
         // Safety: `WlRegistry` is the parent for this request
-        let proxy =
-            unsafe { WlRegistryBindRequest::<T>::new().send::<S>(registry, buf, global_name)? };
+        let proxy = unsafe {
+            WlRegistryBindRequest::<T>::new().send::<S>(registry, buf, global_name, version)?
+        };
 
         let data = make_data(buf, storage.as_mut(), &proxy);
 

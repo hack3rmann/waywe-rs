@@ -88,12 +88,26 @@ impl InterfaceMessageArgument {
         self.object_type.interface().name
     }
 
-    /// Minimal version supported by this crate
-    pub const fn min_supported_version(self) -> NonZeroU32 {
+    /// Highest version this crate is willing to bind for this object type.
+    pub const fn max_supported_version(self) -> NonZeroU32 {
         match self.object_type {
             WlObjectType::Shm => const { NonZeroU32::new(1).unwrap() },
             WlObjectType::LayerShell => const { NonZeroU32::new(4).unwrap() },
             _ => self.version(),
+        }
+    }
+
+    /// Negotiate a bind version against the server-advertised global version.
+    pub const fn negotiated_version(self, advertised: u32) -> NonZeroU32 {
+        let max = self.max_supported_version().get();
+        let version = if advertised == 0 || advertised > max {
+            max
+        } else {
+            advertised
+        };
+        match NonZeroU32::new(version) {
+            Some(version) => version,
+            None => self.max_supported_version(),
         }
     }
 

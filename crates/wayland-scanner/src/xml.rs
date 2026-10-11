@@ -87,27 +87,24 @@ impl Message<'_> {
     pub const MAX_N_ARGS: usize = 8;
 
     pub fn signature(&self) -> CString {
-        use smallvec::smallvec;
+        use std::io::Write;
 
-        let since_version = self
-            .since
-            .iter()
-            .map(|version| u8::try_from(version.get()).unwrap())
-            .map(|version| version + b'0');
+        let mut bytes = Vec::new();
 
-        let arguments = self.arg.iter().flat_map(|arg| -> SmallVec<[_; 2]> {
+        if let Some(version) = self.since {
+            // Versions can be multi-digit (e.g. wl_pointer.warp since="11" -> "11ff").
+            write!(&mut bytes, "{}", version.get()).unwrap();
+        }
+
+        for arg in &self.arg {
             if arg.allow_null {
-                smallvec![b'?', arg.ty.byte()]
-            } else {
-                smallvec![arg.ty.byte()]
+                bytes.push(b'?');
             }
-        });
+            bytes.push(arg.ty.byte());
+        }
 
-        let bytes = since_version
-            .chain(arguments)
-            // Safety: required by the argument below
-            .chain([0])
-            .collect::<Vec<_>>();
+        // Safety: required by the argument below
+        bytes.push(0);
 
         // # Safety
         //

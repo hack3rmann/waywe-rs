@@ -257,10 +257,60 @@ fn mkexpr(kind: UnspannedExpr) -> Expr {
     Expr::new(kind, Span::Artificial)
 }
 
-// TODO: error handling
 #[cfg(all(not(target_arch = "wasm32"), feature = "reqwest"))]
 pub(crate) fn download_http_text(url: Url) -> Result<String, Error> {
-    Ok(reqwest::blocking::get(url).unwrap().text().unwrap())
+    // `test.dhall-lang.org` occasionally returns transient Cloudflare 5xx
+    // responses; retry those so remote import tests stay reliable.
+    const MAX_ATTEMPTS: u32 = 5;
+    let mut last_reason = String::from("unknown error");
+
+    for attempt in 0..MAX_ATTEMPTS {
+        if attempt > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(100 * u64::from(attempt)));
+        }
+
+        match download_http_text_once(&url) {
+            Ok(text) => return Ok(text),
+            Err(err) => {
+                last_reason = err.reason;
+                if !err.retryable {
+                    break;
+                }
+            }
+        }
+    }
+
+    Err(ImportError::DownloadError {
+        url: url.to_string(),
+        reason: last_reason,
+    }
+    .into())
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "reqwest"))]
+struct DownloadAttemptError {
+    reason: String,
+    retryable: bool,
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "reqwest"))]
+fn download_http_text_once(url: &Url) -> Result<String, DownloadAttemptError> {
+    let response = reqwest::blocking::get(url.clone()).map_err(|e| DownloadAttemptError {
+        reason: e.to_string(),
+        retryable: true,
+    })?;
+    let status = response.status();
+    if !status.is_success() {
+        return Err(DownloadAttemptError {
+            reason: format!("HTTP status {}", status),
+            // Retry server-side/transient failures; fail fast on client errors like 404.
+            retryable: status.is_server_error(),
+        });
+    }
+    response.text().map_err(|e| DownloadAttemptError {
+        reason: e.to_string(),
+        retryable: true,
+    })
 }
 #[cfg(all(not(target_arch = "wasm32"), not(feature = "reqwest")))]
 pub(crate) fn download_http_text(_url: Url) -> Result<String, Error> {

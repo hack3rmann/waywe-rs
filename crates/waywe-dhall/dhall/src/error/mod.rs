@@ -46,6 +46,8 @@ pub enum ImportError {
     },
     #[error("failed to parse url")]
     Url(#[from] url::ParseError),
+    #[error("failed to download `{url}`: {reason}")]
+    DownloadError { url: String, reason: String },
 }
 
 #[derive(Debug, Error)]

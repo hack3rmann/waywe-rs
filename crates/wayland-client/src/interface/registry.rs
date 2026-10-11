@@ -58,13 +58,21 @@ pub mod request {
         const OPCODE: OpCode = 0;
         const OUTGOING_INTERFACE: WlObjectType = T::OBJECT_TYPE;
 
-        fn build_message(self, buf: &mut impl WlMessageBuffer, name: WlObjectId) -> WlMessage<'_> {
+        fn build_message(
+            self,
+            buf: &mut impl WlMessageBuffer,
+            name: WlObjectId,
+            version: u32,
+        ) -> WlMessage<'_> {
             WlMessage::builder(buf)
                 .opcode(Self::OPCODE)
-                .interface(InterfaceMessageArgument {
-                    object_type: T::OBJECT_TYPE,
-                    name,
-                })
+                .interface(
+                    InterfaceMessageArgument {
+                        object_type: T::OBJECT_TYPE,
+                        name,
+                    },
+                    version,
+                )
                 .build()
         }
 
@@ -78,8 +86,9 @@ pub mod request {
             registry: &WlProxy,
             buf: &mut impl WlMessageBuffer,
             global_name: WlObjectId,
+            version: u32,
         ) -> Option<WlProxy> {
-            let message = self.build_message(buf, global_name);
+            let message = self.build_message(buf, global_name, version);
             let interface = &raw const *Self::OUTGOING_INTERFACE.backend_interface();
 
             let raw_proxy = unsafe {
