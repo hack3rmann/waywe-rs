@@ -28,7 +28,6 @@ members = [
     "crates/examples/waywe-test-scene",
     "crates/examples/waywe-clear-scene",
     "crates/examples/shadertoy-computer-were-made-for-cubes",
-    "crates/daemonize/daemonize",
     "crates/waywe-runtime-dir",
 ]
 
@@ -56,7 +55,7 @@ waywe-rendering-api = { path = "crates/waywe-rendering-api" }
 waywe-scene-macros = { path = "crates/waywe-scene-macros" }
 waywe-config = { path = "crates/waywe-config" }
 waywe-runtime-dir = { path = "crates/waywe-runtime-dir" }
-daemonize = { path = "crates/daemonize/daemonize" }
+waywe_daemonize = "0.5.0"
 transmute-extra = { path = "crates/transmute-extra" }
 video = { path = "crates/video" }
 waywe_serde_dhall = "0.13.0"

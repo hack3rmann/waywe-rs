@@ -1115,15 +1115,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "daemonize"
-version = "0.5.0"
-dependencies = [
- "libc",
- "rustix",
- "thiserror",
-]
-
-[[package]]
 name = "deploy-tool"
 version = "0.0.16"
 dependencies = [
@@ -4984,7 +4975,6 @@ dependencies = [
  "bytemuck",
  "calloop",
  "clap",
- "daemonize",
  "display-error-chain",
  "flate2",
  "for-sure",
@@ -5021,6 +5011,7 @@ dependencies = [
  "waywe-scene",
  "waywe-spirv-derive",
  "waywe-wayland-platform",
+ "waywe_daemonize",
  "waywe_dhall",
  "waywe_serde_dhall",
  "wgpu",
@@ -5177,6 +5168,17 @@ dependencies = [
  "wayland-client",
  "waywe-runtime",
  "wgpu",
+]
+
+[[package]]
+name = "waywe_daemonize"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e3814919311e7c61a3a3675e23bff5f53d0d39954b3c876d2a22a02f8425322"
+dependencies = [
+ "libc",
+ "rustix",
+ "thiserror",
 ]
 
 [[package]]
