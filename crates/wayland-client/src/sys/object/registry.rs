@@ -253,11 +253,10 @@ impl<S: State + std::fmt::Debug> WlObjectHandle<WlRegistry<S>> {
     }
 
     #[must_use]
-    #[tracing::instrument(level = "debug", skip(self, buf, storage, make_data), ret)]
     pub fn bind_from_fn_by_id<B, T, F>(
         self,
         buf: &mut B,
-        mut storage: Pin<&mut WlObjectStorage<S>>,
+        storage: Pin<&mut WlObjectStorage<S>>,
         global_name: WlObjectId,
         make_data: F,
     ) -> Option<WlObjectHandle<T>>
@@ -266,10 +265,35 @@ impl<S: State + std::fmt::Debug> WlObjectHandle<WlRegistry<S>> {
         T: Dispatch<State = S>,
         F: FnOnce(&mut B, Pin<&mut WlObjectStorage<S>>, &WlProxy) -> T,
     {
-        let result = storage.get_object(self);
-        tracing::debug!(?result, "get_object");
+        let advertised_version = storage.get_object(self)?.version_of(global_name)?;
+        self.bind_from_fn_by_id_with_version(
+            buf,
+            storage,
+            global_name,
+            advertised_version,
+            make_data,
+        )
+    }
 
-        let advertised_version = result?.version_of(global_name)?;
+    /// Bind a global by name using a caller-supplied advertised version.
+    ///
+    /// Prefer this when the registry object is acquired (e.g. inside a
+    /// `wl_registry` dispatcher), since [`Self::bind_from_fn_by_id`] cannot
+    /// call [`WlObjectStorage::get_object`] on the registry in that state.
+    #[must_use]
+    pub fn bind_from_fn_by_id_with_version<B, T, F>(
+        self,
+        buf: &mut B,
+        mut storage: Pin<&mut WlObjectStorage<S>>,
+        global_name: WlObjectId,
+        advertised_version: u32,
+        make_data: F,
+    ) -> Option<WlObjectHandle<T>>
+    where
+        B: WlMessageBuffer,
+        T: Dispatch<State = S>,
+        F: FnOnce(&mut B, Pin<&mut WlObjectStorage<S>>, &WlProxy) -> T,
+    {
         let version = InterfaceMessageArgument {
             object_type: T::OBJECT_TYPE,
             name: global_name,
@@ -279,13 +303,10 @@ impl<S: State + std::fmt::Debug> WlObjectHandle<WlRegistry<S>> {
 
         let registry = storage.get_proxy(self.id()).unwrap();
 
-        let result = unsafe {
-            WlRegistryBindRequest::<T>::new().send::<S>(registry, buf, global_name, version)
-        };
-        tracing::debug!(?result, "send");
-
         // Safety: `WlRegistry` is the parent for this request
-        let proxy = result?;
+        let proxy = unsafe {
+            WlRegistryBindRequest::<T>::new().send::<S>(registry, buf, global_name, version)?
+        };
 
         let data = make_data(buf, storage.as_mut(), &proxy);
 

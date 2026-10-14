@@ -212,7 +212,7 @@ pub(crate) fn handle_global(
 
     let monitor_id = unsafe { WlObjectId::new_unchecked(global.name) };
 
-    handle_output(registry.handle(), Pin::new(storage), monitor_id);
+    handle_output(registry, Pin::new(storage), monitor_id, global.version);
 }
 
 pub(crate) fn handle_global_remove(
