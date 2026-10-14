@@ -617,6 +617,15 @@ impl Handle<WallpaperPreviewEvent> for WallpaperApp {
         runtime
             .tasks
             .spawn_blocking(move |_| {
+                debug!(
+                    ?ty,
+                    path = %path.display(),
+                    width = size.x,
+                    height = size.y,
+                    thread = ?std::thread::current().id(),
+                    "preview starting"
+                );
+
                 let mut wallpaper =
                     match wallpaper::create(Arc::clone(&gpu), &path, ty, config, packages) {
                         Ok(wallpaper) => wallpaper,

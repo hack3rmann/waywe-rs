@@ -171,7 +171,7 @@ impl<S> WlRegistry<S> {
     }
 }
 
-impl<S: State> WlObjectHandle<WlRegistry<S>> {
+impl<S: State + std::fmt::Debug> WlObjectHandle<WlRegistry<S>> {
     /// Bind request on [`WlRegistry`]
     #[must_use]
     pub fn bind<T>(
@@ -253,6 +253,7 @@ impl<S: State> WlObjectHandle<WlRegistry<S>> {
     }
 
     #[must_use]
+    #[tracing::instrument(level = "debug", skip(self, buf, storage, make_data), ret)]
     pub fn bind_from_fn_by_id<B, T, F>(
         self,
         buf: &mut B,
@@ -265,7 +266,10 @@ impl<S: State> WlObjectHandle<WlRegistry<S>> {
         T: Dispatch<State = S>,
         F: FnOnce(&mut B, Pin<&mut WlObjectStorage<S>>, &WlProxy) -> T,
     {
-        let advertised_version = storage.get_object(self)?.version_of(global_name)?;
+        let result = storage.get_object(self);
+        tracing::debug!(?result, "get_object");
+
+        let advertised_version = result?.version_of(global_name)?;
         let version = InterfaceMessageArgument {
             object_type: T::OBJECT_TYPE,
             name: global_name,
@@ -275,10 +279,13 @@ impl<S: State> WlObjectHandle<WlRegistry<S>> {
 
         let registry = storage.get_proxy(self.id()).unwrap();
 
-        // Safety: `WlRegistry` is the parent for this request
-        let proxy = unsafe {
-            WlRegistryBindRequest::<T>::new().send::<S>(registry, buf, global_name, version)?
+        let result = unsafe {
+            WlRegistryBindRequest::<T>::new().send::<S>(registry, buf, global_name, version)
         };
+        tracing::debug!(?result, "send");
+
+        // Safety: `WlRegistry` is the parent for this request
+        let proxy = result?;
 
         let data = make_data(buf, storage.as_mut(), &proxy);
 
