@@ -7,6 +7,9 @@ rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 wgpu.workspace = true
 ash.workspace = true
@@ -14,7 +17,6 @@ glam.workspace = true
 waywe-ipc.workspace = true
 waywe-spirv-derive.workspace = true
 waywe-config.workspace = true
-for-sure = "0.1.1"
 bitflags.workspace = true
 smallvec.workspace = true
 tracing.workspace = true

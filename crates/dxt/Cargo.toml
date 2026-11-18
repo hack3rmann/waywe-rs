@@ -7,7 +7,12 @@ rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 safe-transmute.workspace = true
 rayon.workspace = true
-transmute-extra = { path = "../transmute-extra" }
+
+[dev-dependencies]
+transmute-extra.workspace = true

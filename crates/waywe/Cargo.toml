@@ -7,6 +7,9 @@ rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "waywe"
 path = "src/main.rs"
@@ -19,7 +22,6 @@ waywe-runtime-dir.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 rustix.workspace = true
-transmute-extra.workspace = true
 thiserror.workspace = true
 file-format = { version = "0.28.0", features = ["reader-mp4"] }
 tar.workspace = true

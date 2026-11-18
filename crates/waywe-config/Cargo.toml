@@ -7,12 +7,14 @@ rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 thiserror.workspace = true
 smallvec.workspace = true
 glam.workspace = true
 serde.workspace = true
-display-error-chain.workspace = true
 miette.workspace = true
 static_assertions.workspace = true
 waywe_serde_dhall.workspace = true

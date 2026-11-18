@@ -7,6 +7,9 @@ rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 waywe-scene.workspace = true
 waywe-rendering-api.workspace = true

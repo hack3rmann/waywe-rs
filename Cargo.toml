@@ -35,12 +35,15 @@ members = [
 version = "0.0.16"
 edition = "2024"
 license = "MIT"
-rust-version = "1.95"
+rust-version = "1.100"
 authors = [
     "Varov Svyatoslav <slava-varov3@mail.ru>",
     "Alexander Filimonov <arnodarkrose@duck.com>",
 ]
 repository = "https://www.github.com/hack3rmann/waywe-rs"
+
+[workspace.lints.cargo]
+unused_dependencies = "warn"
 
 [workspace.dependencies]
 wayland-client = { path = "crates/wayland-client", features = ["smallvec"] }
@@ -79,7 +82,6 @@ bincode = "2.0.1"
 clap = { version = "4.5.40", features = ["derive"] }
 tokio = { version = "1.43.0", features = ["full"] }
 serde = { version = "1.0.219", features = ["derive"] }
-toml = "0.8.23"
 fxhash = "0.2.1"
 box_into_inner = "0.1.0"
 futures-util = { version = "0.3.31", features = ["alloc"] }
