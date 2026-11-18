@@ -25,7 +25,6 @@ fxhash.workspace = true
 reusable-box = "0.1.0"
 rustix.workspace = true
 thiserror.workspace = true
-box_into_inner.workspace = true
 video.workspace = true
 futures-util.workspace = true
 derive_more = { version = "2.0.1", features = ["full"] }

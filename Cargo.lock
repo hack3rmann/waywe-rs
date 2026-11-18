@@ -703,12 +703,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "box_into_inner"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "455335846aa0221f9e58c538fc20985e50d64241154a6fb5739267c0d776f784"
-
-[[package]]
 name = "built"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5369,7 +5363,6 @@ version = "0.0.16"
 dependencies = [
  "ash",
  "bitflags 2.13.1",
- "box_into_inner",
  "bytemuck",
  "calloop",
  "derive_more",
@@ -5408,7 +5401,6 @@ dependencies = [
  "ash",
  "bevy_ecs",
  "bitflags 2.13.1",
- "box_into_inner",
  "bytemuck",
  "crossbeam",
  "derive_more",
