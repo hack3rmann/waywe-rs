@@ -338,7 +338,7 @@ mod tests {
 
         let res = decompress_image(16, 24, &input, DxtFormat::Dxt5);
 
-        for (i, (res, gt)) in res.into_iter().zip(gt.into_iter()).enumerate() {
+        for (i, (res, gt)) in res.into_iter().zip(gt).enumerate() {
             assert_eq!(res, gt, "i: {i}")
         }
     }

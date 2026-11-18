@@ -9,6 +9,9 @@ readme = "README.md"
 repository = "https://github.com/Nadrieril/dhall-rust"
 edition = "2024"
 
+[lints]
+workspace = true
+
 [lib]
 proc-macro = true
 doctest = false

@@ -12,6 +12,9 @@ keywords = ["shader", "compiler", "spirv", "glsl", "hlsl"]
 links = "shaderc"
 edition = "2024"
 
+[lints]
+workspace = true
+
 [lib]
 name = "shaderc_sys"
 

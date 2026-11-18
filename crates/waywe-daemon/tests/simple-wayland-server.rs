@@ -1,8 +1,7 @@
-use scopeguard::defer;
 use std::{
     env,
     ffi::c_void,
-    mem::MaybeUninit,
+    mem::{DropGuard, MaybeUninit},
     pin::pin,
     ptr,
     sync::atomic::{AtomicPtr, Ordering},
@@ -183,9 +182,9 @@ fn run_simple_unsafe_server() {
         )
     };
 
-    defer! {
-        unsafe { wl_global_destroy(output_global) };
-    }
+    let _drop_wl_global = DropGuard::new((), |()| unsafe {
+        wl_global_destroy(output_global);
+    });
 
     unsafe { wl_display_run(display.as_raw().as_ptr()) };
 

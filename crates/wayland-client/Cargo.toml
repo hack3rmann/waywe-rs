@@ -7,6 +7,9 @@ rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 raw-window-handle = "0.6.2"
 rustix.workspace = true
