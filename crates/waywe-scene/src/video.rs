@@ -42,7 +42,6 @@ use std::{
     ptr,
     time::Duration,
 };
-use tracing::{debug, error};
 use transmute_extra::pathbuf_into_cstring;
 use video::{
     BackendError, Codec, CodecContext, FormatContext, Frame, FrameDuration, MediaType, Packet,
@@ -112,10 +111,6 @@ pub struct Video {
     pub n_frames_since_update: usize,
     /// Incremented on every decoded frame; used to detect when GPU export is needed.
     pub frame_epoch: u64,
-    /// How many times the demuxer has looped back to the start.
-    pub loops_completed: u64,
-    /// Decoded frames since the most recent loop (including the current one).
-    pub frames_since_loop: u64,
 }
 
 impl Asset for Video {}
@@ -184,18 +179,10 @@ impl Video {
             update_delay: Duration::ZERO,
             n_frames_since_update: 0,
             frame_epoch: 0,
-            loops_completed: 0,
-            frames_since_loop: 0,
         };
 
         this.next_frame();
         this.n_frames_since_update = 1;
-
-        debug!(
-            path = %this.path.to_string_lossy(),
-            thread = ?std::thread::current().id(),
-            "video decoder created"
-        );
 
         Ok(this)
     }
@@ -274,14 +261,6 @@ impl Video {
                         }
 
                         self.codec_context.flush();
-                        self.loops_completed = self.loops_completed.wrapping_add(1);
-                        self.frames_since_loop = 0;
-                        debug!(
-                            path = %self.path.to_string_lossy(),
-                            loops_completed = self.loops_completed,
-                            frame_epoch = self.frame_epoch,
-                            "video stream looped"
-                        );
                         continue;
                     }
                     Err(error) => {
@@ -307,7 +286,6 @@ impl Video {
         }
 
         self.frame_epoch = self.frame_epoch.wrapping_add(1);
-        self.frames_since_loop = self.frames_since_loop.wrapping_add(1);
     }
 }
 
@@ -571,52 +549,14 @@ impl RenderVideo {
         };
 
         let surface_id = unsafe { video.frame.surface_id() };
-        let frame_format = video.frame.format().map(|f| f as i32);
-        let frame_size = video.frame.size();
-        let data0_null = unsafe { (*video.frame.as_raw().as_ptr()).data[0].is_null() };
-        let data3 = unsafe { (*video.frame.as_raw().as_ptr()).data[3] as usize };
 
         if let Err(error) = va_display.sync_surface(surface_id) {
-            error!(
-                path = %video.path.to_string_lossy(),
-                surface_id,
-                data3,
-                ?frame_format,
-                width = frame_size.x,
-                height = frame_size.y,
-                data0_null,
-                frame_epoch = video.frame_epoch,
-                loops_completed = video.loops_completed,
-                frames_since_loop = video.frames_since_loop,
-                error = %error.chain(),
-                error_code = error.status(),
-                thread = ?std::thread::current().id(),
-                "failed to sync libva surface"
-            );
             panic!("failed to sync libva surface: {}", error.chain());
         }
 
         let surface_handle = match va_display.export_surface_handle(surface_id) {
             Ok(handle) => handle,
-            Err(error) => {
-                error!(
-                    path = %video.path.to_string_lossy(),
-                    surface_id,
-                    data3,
-                    ?frame_format,
-                    width = frame_size.x,
-                    height = frame_size.y,
-                    data0_null,
-                    frame_epoch = video.frame_epoch,
-                    loops_completed = video.loops_completed,
-                    frames_since_loop = video.frames_since_loop,
-                    error = %error.chain(),
-                    error_code = error.status(),
-                    thread = ?std::thread::current().id(),
-                    "failed to export libva surface handle"
-                );
-                panic!("failed to export surface handle: {}", error.chain());
-            }
+            Err(error) => panic!("failed to export surface handle: {}", error.chain()),
         };
 
         let texture = Self::create_texture(adapter, device, surface_handle);

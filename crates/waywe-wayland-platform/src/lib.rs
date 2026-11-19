@@ -46,7 +46,7 @@ pub(crate) struct Globals {
     pub fractional_scale_manager: Option<WlObjectHandle<FractionalScaleManager>>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub(crate) struct ClientState {
     pub stored_events: Vec<PlatformEvent>,
     pub monitors: HashMap<MonitorId, MonitorInfo>,

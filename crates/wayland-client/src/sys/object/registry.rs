@@ -171,7 +171,7 @@ impl<S> WlRegistry<S> {
     }
 }
 
-impl<S: State + std::fmt::Debug> WlObjectHandle<WlRegistry<S>> {
+impl<S: State> WlObjectHandle<WlRegistry<S>> {
     /// Bind request on [`WlRegistry`]
     #[must_use]
     pub fn bind<T>(
