@@ -142,8 +142,35 @@ fn build_from_source(target_os: &str, target_env: &str) {
         });
 
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-    let _shaderc_dir = Path::new(&manifest_dir).join("build");
     let shaderc_dir = PathBuf::from(env::var("OUT_DIR").unwrap()).join("shaders");
+
+    fs::create_dir_all(&shaderc_dir).unwrap();
+    fs::copy(
+        Path::new(&manifest_dir).join("build/CMakeLists.txt"),
+        shaderc_dir.join("CMakeLists.txt"),
+    )
+    .unwrap();
+
+    clone_modules(
+        "glslang",
+        "https://github.com/KhronosGroup/glslang.git",
+        "9593cbf4e6ba7be79a8d58792714adb16904cfb7",
+    );
+    clone_modules(
+        "shaderc",
+        "https://github.com/google/shaderc.git",
+        "5ccedd3fdc9146f7dcb5b1acb200d7203b54d5ca",
+    );
+    clone_modules(
+        "spirv-headers",
+        "https://github.com/KhronosGroup/SPIRV-Headers.git",
+        "ad9184e76a66b1001c29db9b0a3e87f646c64de0",
+    );
+    clone_modules(
+        "spirv-tools",
+        "https://github.com/KhronosGroup/SPIRV-Tools.git",
+        "7f88e7df21e7e6d8bf0a9bd684e5b70c427db013",
+    );
 
     let mut lib_path = if target_env == "msvc" {
         finder.must_have("ninja");
@@ -291,37 +318,6 @@ fn clone_modules(repo_name: &str, repo_url: &str, commit_hash: &str) {
 }
 
 fn main() {
-    let out_dir = env::var("OUT_DIR").unwrap();
-    let build_dir = format!("{out_dir}/shaders");
-
-    fs::create_dir_all(&build_dir).unwrap();
-    fs::copy(
-        "./build/CMakeLists.txt",
-        format!("{build_dir}/CMakeLists.txt"),
-    )
-    .unwrap();
-
-    clone_modules(
-        "glslang",
-        "https://github.com/KhronosGroup/glslang.git",
-        "9593cbf4e6ba7be79a8d58792714adb16904cfb7",
-    );
-    clone_modules(
-        "shaderc",
-        "https://github.com/google/shaderc.git",
-        "5ccedd3fdc9146f7dcb5b1acb200d7203b54d5ca",
-    );
-    clone_modules(
-        "spirv-headers",
-        "https://github.com/KhronosGroup/SPIRV-Headers.git",
-        "ad9184e76a66b1001c29db9b0a3e87f646c64de0",
-    );
-    clone_modules(
-        "spirv-tools",
-        "https://github.com/KhronosGroup/SPIRV-Tools.git",
-        "7f88e7df21e7e6d8bf0a9bd684e5b70c427db013",
-    );
-
     // Don't attempt to build shaderc native library on docs.rs when cross-compiling.
     if env::var("DOCS_RS").is_ok() {
         let is_cross_compiling = env::var("TARGET").unwrap() != host_target();
