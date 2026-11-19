@@ -1,1 +1,0 @@
-TypeError { message: Custom("error: InvalidOptionalType\n --> <current file>:1:1\n  |\n1 | Some ({=} with x = Bool)\n  | ^^^^^^^^^^^^^^^^^^^^^^^^ InvalidOptionalType\n  |") }

@@ -1,1 +1,0 @@
-{ bar : Type, foo : Natural }

@@ -1,1 +1,0 @@
-∀(xs : List Natural) → Natural

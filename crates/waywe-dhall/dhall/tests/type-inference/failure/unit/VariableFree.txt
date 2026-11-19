@@ -1,1 +1,0 @@
-TypeError { message: Custom("error: unbound variable `x`\n --> <current file>:1:1\n  |\n1 | x\n  | ^ not found in this scope\n  |") }

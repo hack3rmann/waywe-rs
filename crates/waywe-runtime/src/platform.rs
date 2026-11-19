@@ -3,7 +3,6 @@ use glam::UVec2;
 use smallstr::SmallString;
 use static_assertions::assert_obj_safe;
 use std::{collections::BTreeMap, error::Error, fmt, num::NonZeroU32};
-use wgpu::SurfaceTarget;
 
 pub type MonitorMap<T> = BTreeMap<MonitorName, T>;
 pub type MonitorName = SmallString<[u8; 24]>;
@@ -47,8 +46,67 @@ impl fmt::Debug for Scale {
     }
 }
 
+/// Result of a call to [`Surface::get_current_texture`].
+///
+/// See variant documentation for how to handle each case.
+pub enum CurrentSurfaceTexture {
+    /// Successfully acquired a surface texture with no issues.
+    Success(Box<dyn SurfaceTexture>),
+    /// Successfully acquired a surface texture, but texture no longer matches the properties of the underlying surface.
+    /// It's highly recommended to call [`Surface::configure`] again for optimal performance.
+    Suboptimal(Box<dyn SurfaceTexture>),
+    /// A timeout was encountered while trying to acquire the next frame.
+    ///
+    /// Applications should skip the current frame and try again later.
+    Timeout,
+    /// The window is occluded (e.g. minimized or behind another window).
+    ///
+    /// Applications should skip the current frame and try again once the window
+    /// is no longer occluded.
+    Occluded,
+    /// The underlying surface has changed, and therefore the surface configuration is outdated.
+    ///
+    /// Call [`Surface::configure()`] and try again.
+    Outdated,
+    /// The surface has been lost and needs to be recreated.
+    ///
+    /// If the device as a whole is lost (see [`set_device_lost_callback()`][crate::Device::set_device_lost_callback]), then
+    /// you need to recreate the device and all resources.
+    /// Otherwise, call [`Instance::create_surface()`] to recreate the surface,
+    /// then [`Surface::configure()`], and try again.
+    Lost,
+    /// A validation error inside [`Surface::get_current_texture()`] was raised
+    /// and caught by an [error scope](crate::Device::push_error_scope) or
+    /// [`on_uncaptured_error()`][crate::Device::on_uncaptured_error].
+    ///
+    /// Applications should attend to the validation error and try again.
+    Validation,
+}
+
+pub trait SurfaceTexture {
+    fn texture(&self) -> &wgpu::Texture;
+    fn present(self: Box<Self>, queue: &wgpu::Queue);
+}
+assert_obj_safe!(SurfaceTexture);
+
+pub trait WayweSurface: Send + Sync {
+    fn get_current_texture(&self) -> CurrentSurfaceTexture;
+    fn configure(&self, device: &wgpu::Device, config: &wgpu::SurfaceConfiguration);
+    fn get_format(&self, adapter: &wgpu::Adapter) -> wgpu::TextureFormat;
+    fn get_config(
+        &self,
+        adapter: &wgpu::Adapter,
+        physical_size: UVec2,
+    ) -> wgpu::SurfaceConfiguration;
+}
+assert_obj_safe!(WayweSurface);
+
 pub trait WaywePlatform: Send + Sync + 'static {
-    fn get_surface(&self, monitor_name: &str) -> SurfaceTarget<'static>;
+    fn create_surface(
+        &self,
+        instance: &wgpu::Instance,
+        monitor_name: &str,
+    ) -> Box<dyn WayweSurface>;
     fn event_source(&self) -> Box<dyn PlatformEventSource>;
     fn drain_stored_events(&self, handle: &mut dyn FnMut(PlatformEvent));
 }
@@ -57,13 +115,13 @@ assert_obj_safe!(WaywePlatform);
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
 pub struct SurfaceInfo {
     pub monitor_name: MonitorName,
-    pub phisical_size: UVec2,
+    pub physical_size: UVec2,
     pub scale: Scale,
 }
 
 impl SurfaceInfo {
     pub fn logical_size(&self) -> UVec2 {
-        self.scale.to_logical(self.phisical_size)
+        self.scale.to_logical(self.physical_size)
     }
 }
 

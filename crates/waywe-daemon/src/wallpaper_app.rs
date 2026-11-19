@@ -238,12 +238,12 @@ impl App for WallpaperApp {
                 .create_command_encoder(&Default::default());
 
             wall.advance_time(time_delta);
-            let result = wall.render(&runtime.wgpu, &surface.texture, &mut encoder);
+            let result = wall.render(&runtime.wgpu, surface.texture(), &mut encoder);
 
             results.push(result);
 
             runtime.wgpu.queue.submit([encoder.finish()]);
-            runtime.wgpu.queue.present(surface);
+            surface.present(&runtime.wgpu.queue);
 
             if !wall.needs_redraw() {
                 let state = self

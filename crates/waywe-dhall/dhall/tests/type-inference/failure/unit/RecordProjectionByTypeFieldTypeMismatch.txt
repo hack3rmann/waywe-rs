@@ -1,1 +1,0 @@
-TypeError { message: Custom("error: ProjectionWrongType\n --> <current file>:1:1\n  |\n1 | { y = {=} }.( {y : Natural} )\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ProjectionWrongType\n  |") }

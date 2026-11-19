@@ -1,5 +1,4 @@
 use bincode::error::EncodeError;
-use daemonize::Daemonize;
 use std::error::Error;
 use std::{
     fs::{self, File},
@@ -9,10 +8,11 @@ use std::{
 };
 use tap::Pipe;
 use thiserror::Error;
+use waywe_daemonize::Daemonize;
 use waywe_ipc::{DaemonSetupError, DaemonSetupResult, detach::BINCODE_CONFIG};
 use waywe_runtime_dir::runtime_dir;
 
-pub use daemonize::Error as DaemonizeError;
+pub use waywe_daemonize::Error as DaemonizeError;
 
 pub struct DaemonResultPipe {
     file: BufWriter<File>,

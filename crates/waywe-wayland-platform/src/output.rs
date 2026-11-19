@@ -651,7 +651,7 @@ impl Output {
                 state.stored_events.push(PlatformEvent::MonitorPlugged {
                     info: SurfaceInfo {
                         monitor_name: info.name.clone(),
-                        phisical_size: info.phisical_size(),
+                        physical_size: info.phisical_size(),
                         scale: info.scale.map(|s| s.value).unwrap_or_default(),
                     },
                 });
@@ -751,17 +751,20 @@ impl Dispatch for Output {
 }
 
 pub(crate) fn handle_output(
-    registry: WlObjectHandle<WlRegistry<ClientState>>,
+    registry: &WlRegistry<ClientState>,
     mut storage: Pin<&mut WlObjectStorage<ClientState>>,
     monitor_id: WlObjectId,
+    advertised_version: u32,
 ) {
     let mut buf = WlStackMessageBuffer::new();
 
     registry
-        .bind_from_fn_by_id(
+        .handle()
+        .bind_from_fn_by_id_with_version(
             &mut buf,
             storage.as_mut(),
             monitor_id,
+            advertised_version,
             move |_, _, proxy| Output::new(monitor_id, WlObjectHandle::new(proxy.id())),
         )
         .unwrap();

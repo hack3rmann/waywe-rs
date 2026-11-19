@@ -65,7 +65,7 @@ impl Default for ConfigEventSource {
 
 fn loop_read_config(mut n_tries: usize) -> Result<Config, ReadConfigError> {
     let is_enoent = |related: &[DhallErrorSource]| -> bool {
-        related.iter().all(|error| matches!(&error.error, serde_dhall::Error::Dhall(dhall::error::Error::Io(error)) if error.kind() == ErrorKind::NotFound))
+        related.iter().all(|error| matches!(&error.error, waywe_serde_dhall::Error::Dhall(waywe_dhall::error::Error::Io(error)) if error.kind() == ErrorKind::NotFound))
     };
 
     loop {

@@ -1,1 +1,0 @@
-True : { x = Bool }.x

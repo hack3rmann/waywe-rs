@@ -15,6 +15,7 @@ pub mod gpu;
 pub mod platform;
 pub mod shaders;
 pub mod tasks;
+pub mod testing;
 pub mod timer;
 
 pub struct Runtime {
@@ -50,7 +51,7 @@ impl Runtime {
         };
 
         Some(WallpaperConfig {
-            surface_size: info.phisical_size,
+            surface_size: info.physical_size,
             surface_format,
         })
     }

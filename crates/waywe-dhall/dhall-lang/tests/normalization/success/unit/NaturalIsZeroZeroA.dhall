@@ -1,1 +1,0 @@
-Natural/isZero 0

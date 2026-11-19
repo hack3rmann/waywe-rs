@@ -346,10 +346,10 @@ impl<'s, Buffer: WlMessageBuffer> WlMessageBuilder<'s, Buffer> {
     }
 
     /// Passes interface information to the message
-    pub fn interface(self, value: InterfaceMessageArgument) -> Self {
+    pub fn interface(self, value: InterfaceMessageArgument, version: u32) -> Self {
         self.uint(value.name().into())
             .str(value.interface())
-            .uint(value.min_supported_version().get())
+            .uint(version)
             .new_id()
     }
 

@@ -1,1 +1,0 @@
-TypeError { message: Custom("error: EquivalenceTypeMismatch\n --> <current file>:1:1\n  |\n1 | 1 === False\n  | ^^^^^^^^^^^ EquivalenceTypeMismatch\n  |") }

@@ -1,1 +1,0 @@
-TypeError { message: Custom("error: AssertMustTakeEquivalence\n --> <current file>:1:1\n  |\n1 | assert : Bool\n  | ^^^^^^^^^^^^^ AssertMustTakeEquivalence\n  |") }

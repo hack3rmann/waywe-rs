@@ -36,7 +36,7 @@ thiserror.workspace = true
 raw-window-handle = "0.6.2"
 wgpu.workspace = true
 ash.workspace = true
-daemonize.workspace = true
+waywe_daemonize.workspace = true
 for-sure = "0.1.1"
 bevy_ecs.workspace = true
 waywe-spirv-derive.workspace = true
@@ -54,14 +54,18 @@ calloop.workspace = true
 inotify = "0.11.4"
 miette.workspace = true
 miette-diagnostic-chain.workspace = true
-serde_dhall.workspace = true
-dhall.workspace = true
+waywe_serde_dhall.workspace = true
+waywe_dhall.workspace = true
 
 [dev-dependencies]
 wayland-server.workspace = true
 libc = "0.2.171"
 tracing-test.workspace = true
 wayland-sys.workspace = true
+bytemuck.workspace = true
+image.workspace = true
+glam.workspace = true
+waywe-config.workspace = true
 
 [features]
 spirv-shaders = ["waywe-spirv-derive/spirv", "wgpu/spirv"]

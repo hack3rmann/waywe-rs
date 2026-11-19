@@ -1,1 +1,0 @@
-forall(x :T) -> x

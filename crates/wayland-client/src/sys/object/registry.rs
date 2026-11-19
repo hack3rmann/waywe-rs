@@ -7,7 +7,7 @@ use crate::{
         WlObjectType, WlRegistryBindRequest, WlRegistryEvent, WlRegistryGlobalEvent,
         WlRegistryGlobalRemoveEvent,
     },
-    object::{HasObjectType, WlObjectId},
+    object::{HasObjectType, InterfaceMessageArgument, WlObjectId},
     sys::{
         object_storage::WlObjectStorage,
         proxy::WlProxy,
@@ -107,6 +107,16 @@ impl<S> WlRegistry<S> {
     /// The type of global with id `name`
     pub fn type_of(&self, name: WlObjectId) -> Option<WlObjectType> {
         self.names.get(&name).copied()
+    }
+
+    /// Server-advertised version for the global with id `name`
+    pub fn version_of(&self, name: WlObjectId) -> Option<u32> {
+        let object_type = self.type_of(name)?;
+        self.interfaces
+            .get(&object_type)?
+            .iter()
+            .find(|info| info.name == name)
+            .map(|info| info.version)
     }
 
     /// # Safety
@@ -246,7 +256,7 @@ impl<S: State> WlObjectHandle<WlRegistry<S>> {
     pub fn bind_from_fn_by_id<B, T, F>(
         self,
         buf: &mut B,
-        mut storage: Pin<&mut WlObjectStorage<S>>,
+        storage: Pin<&mut WlObjectStorage<S>>,
         global_name: WlObjectId,
         make_data: F,
     ) -> Option<WlObjectHandle<T>>
@@ -255,11 +265,48 @@ impl<S: State> WlObjectHandle<WlRegistry<S>> {
         T: Dispatch<State = S>,
         F: FnOnce(&mut B, Pin<&mut WlObjectStorage<S>>, &WlProxy) -> T,
     {
+        let advertised_version = storage.get_object(self)?.version_of(global_name)?;
+        self.bind_from_fn_by_id_with_version(
+            buf,
+            storage,
+            global_name,
+            advertised_version,
+            make_data,
+        )
+    }
+
+    /// Bind a global by name using a caller-supplied advertised version.
+    ///
+    /// Prefer this when the registry object is acquired (e.g. inside a
+    /// `wl_registry` dispatcher), since [`Self::bind_from_fn_by_id`] cannot
+    /// call [`WlObjectStorage::get_object`] on the registry in that state.
+    #[must_use]
+    pub fn bind_from_fn_by_id_with_version<B, T, F>(
+        self,
+        buf: &mut B,
+        mut storage: Pin<&mut WlObjectStorage<S>>,
+        global_name: WlObjectId,
+        advertised_version: u32,
+        make_data: F,
+    ) -> Option<WlObjectHandle<T>>
+    where
+        B: WlMessageBuffer,
+        T: Dispatch<State = S>,
+        F: FnOnce(&mut B, Pin<&mut WlObjectStorage<S>>, &WlProxy) -> T,
+    {
+        let version = InterfaceMessageArgument {
+            object_type: T::OBJECT_TYPE,
+            name: global_name,
+        }
+        .negotiated_version(advertised_version)
+        .get();
+
         let registry = storage.get_proxy(self.id()).unwrap();
 
         // Safety: `WlRegistry` is the parent for this request
-        let proxy =
-            unsafe { WlRegistryBindRequest::<T>::new().send::<S>(registry, buf, global_name)? };
+        let proxy = unsafe {
+            WlRegistryBindRequest::<T>::new().send::<S>(registry, buf, global_name, version)?
+        };
 
         let data = make_data(buf, storage.as_mut(), &proxy);
 

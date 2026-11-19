@@ -1,1 +1,0 @@
-{ x = True } ∧ { y = True }

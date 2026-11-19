@@ -1,1 +1,0 @@
-TypeError { message: Custom("error: `toMap` only accepts records of type `Type`\n --> <current file>:1:1\n  |\n1 | toMap { x = Bool }\n  | ^^^^^^^^^^^^^^^^^^ `toMap` only accepts records of type `Type`\n  |") }

@@ -36,10 +36,10 @@
 //! struct ClientState {}
 //!
 //! // State has to be pinned
-//! let state = pin!(ClientState {});
+//! let mut state = pin!(ClientState {});
 //!
 //! // Connect to Wayland
-//! let display = WlDisplay::connect(state.as_ref()).unwrap();
+//! let display = WlDisplay::connect(state.as_mut()).unwrap();
 //!
 //! // Take the main display event queue, pin it
 //! let mut queue = pin!(display.take_main_queue().unwrap());
@@ -71,7 +71,7 @@
 //!     fn dispatch(
 //!         &mut self,
 //!         // Global client state to be used
-//!         _state: &Self::State,
+//!         _state: &mut Self::State,
 //!         // Storage this object belongs to
 //!         _storage: &mut WlObjectStorage<Self::State>,
 //!         // Message to be dispatched
@@ -171,8 +171,8 @@
 //! #     type State = ClientState;
 //! #     const ALLOW_EMPTY_DISPATCH: bool = true;
 //! # }
-//! # let state = pin!(ClientState {});
-//! # let display = WlDisplay::connect(state.as_ref()).unwrap();
+//! # let mut state = pin!(ClientState {});
+//! # let display = WlDisplay::connect(state.as_mut()).unwrap();
 //! # let mut queue = pin!(display.take_main_queue().unwrap());
 //! use wayland_client::{FromProxy, WlProxy};
 //!
@@ -191,7 +191,7 @@
 //! let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut()).handle();
 //!
 //! // We should wait the registry to be filled.
-//! display.roundtrip(queue.as_mut(), state.as_ref());
+//! display.roundtrip(queue.as_mut(), state.as_mut());
 //!
 //! // If Wayland-Server has this global present, it creates
 //! // a new object on the storage of the main `WlEventQueue` `queue`
@@ -228,14 +228,14 @@
 //! #     const ALLOW_EMPTY_DISPATCH: bool = true;
 //! # }
 //! # let mut buf = WlStackMessageBuffer::new();
-//! # let state = pin!(ClientState {});
-//! # let display = WlDisplay::connect(state.as_ref()).unwrap();
+//! # let mut state = pin!(ClientState {});
+//! # let display = WlDisplay::connect(state.as_mut()).unwrap();
 //! # let mut queue = pin!(display.take_main_queue().unwrap());
 //! # impl FromProxy for Compositor {
 //! #     fn from_proxy(_proxy: &WlProxy) -> Self { Self }
 //! # }
 //! # let registry = display.create_registry(&mut buf, queue.as_mut().storage_mut()).handle();
-//! # display.roundtrip(queue.as_mut(), state.as_ref());
+//! # display.roundtrip(queue.as_mut(), state.as_mut());
 //! # let compositor = registry
 //! #     .bind::<Compositor>(&mut buf, queue.as_mut().storage_mut())
 //! #     .unwrap();

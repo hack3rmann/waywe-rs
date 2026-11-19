@@ -1,1 +1,0 @@
-TypeError { message: Custom("error: MergeEmptyNeedsAnnotation\n --> <current file>:1:14\n  |\n1 | \\(x: <>) -> (merge {=} x) : Bool\n  |              ^^^^^^^^^^^ MergeEmptyNeedsAnnotation\n  |") }
