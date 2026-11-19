@@ -9,7 +9,6 @@ use bevy_ecs::{
     entity::{EntityHash, EntityHasher},
     prelude::*,
 };
-use box_into_inner::IntoInner;
 use crossbeam::channel::Sender;
 use smallvec::SmallVec;
 use std::{
@@ -171,7 +170,7 @@ pub struct DynamicAsset {
 impl DynamicAsset {
     pub fn downcast_into<A: Asset>(self) -> Result<(AssetId, A), Self> {
         match self.data.downcast::<A>() {
-            Ok(data) => Ok((self.id, data.into_inner())),
+            Ok(data) => Ok((self.id, *data)),
             Err(data) => Err(Self { id: self.id, data }),
         }
     }

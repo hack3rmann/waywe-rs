@@ -59,7 +59,7 @@ pub enum DecodeError {
 #[derive(Debug, Error)]
 pub enum EncodeError {
     #[error(transparent)]
-    CBORError(#[from] minicbor::encode::Error<core::convert::Infallible>),
+    CBORError(#[from] minicbor::encode::Error<!>),
 }
 
 /// A structured type error

@@ -11,6 +11,9 @@ edition = "2024"
 build = "build.rs"
 include = ["src/**/*", "README.md", "build.rs"]
 
+[lints]
+workspace = true
+
 [features]
 default = [ "reqwest" ]
 

@@ -1,6 +1,5 @@
 use crate::{Runtime, app::App};
 use bitflags::bitflags;
-use box_into_inner::IntoInner;
 use bytemuck::{Contiguous, NoUninit};
 use calloop::{EventSource, Interest, Mode, Poll, PostAction, Readiness, Token, TokenFactory};
 use fxhash::FxHashMap;
@@ -164,7 +163,7 @@ impl Event {
     pub unsafe fn downcast_unchecked<E: IntoEvent>(self) -> E {
         let any = unsafe { self.0.unwrap_unchecked() };
         let boxed = unsafe { any.downcast::<E>().unwrap_unchecked() };
-        boxed.into_inner()
+        *boxed
     }
 
     pub async fn handle<T: IntoEvent>(
@@ -186,8 +185,7 @@ impl Event {
             }
         };
 
-        let value = boxed_value.into_inner();
-        f(value).await
+        f(*boxed_value).await
     }
 
     pub fn handle_sync<T: IntoEvent>(
@@ -209,8 +207,7 @@ impl Event {
             }
         };
 
-        let value = boxed_value.into_inner();
-        f(value)
+        f(*boxed_value)
     }
 }
 

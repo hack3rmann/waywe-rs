@@ -703,12 +703,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "box_into_inner"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "455335846aa0221f9e58c538fc20985e50d64241154a6fb5739267c0d776f784"
-
-[[package]]
 name = "built"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4647,18 +4641,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "toml"
-version = "0.8.23"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc1beb996b9d83529a9e75c17a1686767d148d70663143c7854d8b4a09ced362"
-dependencies = [
- "serde",
- "serde_spanned",
- "toml_datetime 0.6.11",
- "toml_edit 0.22.27",
-]
-
-[[package]]
 name = "toml_datetime"
 version = "0.6.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4691,20 +4673,6 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
-version = "0.22.27"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41fe8c660ae4257887cf66394862d21dbca4a6ddd26f04a3560410406a2f819a"
-dependencies = [
- "indexmap 2.14.0",
- "serde",
- "serde_spanned",
- "toml_datetime 0.6.11",
- "toml_write",
- "winnow 0.7.15",
-]
-
-[[package]]
-name = "toml_edit"
 version = "0.23.10+spec-1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "84c8b9f757e028cee9fa244aea147aab2a9ec09d5325a9b01e0a49730c2b5269"
@@ -4723,12 +4691,6 @@ checksum = "a2abe9b86193656635d2411dc43050282ca48aa31c2451210f4202550afb7526"
 dependencies = [
  "winnow 1.0.4",
 ]
-
-[[package]]
-name = "toml_write"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
 
 [[package]]
 name = "tower-service"
@@ -5043,7 +5005,7 @@ dependencies = [
  "regex",
  "semver",
  "syn 2.0.119",
- "toml 0.7.8",
+ "toml",
  "url",
 ]
 
@@ -5292,7 +5254,6 @@ dependencies = [
  "thiserror",
  "tracing",
  "tracing-subscriber",
- "transmute-extra",
  "unicode-width 0.2.2",
  "waywe-config",
  "waywe-ipc",
@@ -5304,7 +5265,6 @@ name = "waywe-config"
 version = "0.0.16"
 dependencies = [
  "dhall",
- "display-error-chain",
  "glam",
  "miette",
  "rand 0.9.5",
@@ -5341,7 +5301,6 @@ dependencies = [
  "miette-diagnostic-chain",
  "raw-window-handle",
  "rustix",
- "scopeguard",
  "serde_dhall",
  "smallvec",
  "static_assertions",
@@ -5349,7 +5308,6 @@ dependencies = [
  "tar",
  "thiserror",
  "tokio",
- "toml 0.8.23",
  "tracing",
  "tracing-subscriber",
  "tracing-test",
@@ -5377,19 +5335,13 @@ dependencies = [
  "bytemuck",
  "calloop",
  "display-error-chain",
- "glam",
  "libc",
  "miette",
- "rand 0.9.5",
  "rustix",
  "serde",
- "serde_dhall",
  "slab",
- "smallstr",
  "smallvec",
- "static_assertions",
  "thiserror",
- "toml 0.8.23",
  "tracing",
  "uuid",
  "waywe-runtime-dir",
@@ -5411,12 +5363,10 @@ version = "0.0.16"
 dependencies = [
  "ash",
  "bitflags 2.13.1",
- "box_into_inner",
  "bytemuck",
  "calloop",
  "derive_more",
  "display-error-chain",
- "for-sure",
  "futures-util",
  "fxhash",
  "glam",
@@ -5442,7 +5392,6 @@ name = "waywe-runtime-dir"
 version = "0.0.16"
 dependencies = [
  "rustix",
- "tracing",
 ]
 
 [[package]]
@@ -5452,7 +5401,6 @@ dependencies = [
  "ash",
  "bevy_ecs",
  "bitflags 2.13.1",
- "box_into_inner",
  "bytemuck",
  "crossbeam",
  "derive_more",
